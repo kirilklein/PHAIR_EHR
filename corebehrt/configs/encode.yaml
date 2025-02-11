@@ -1,0 +1,17 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+## INPUTS  
+  finetune_model: ./outputs/finetuning
+
+## OUTPUTS
+  encoded_data: ./outputs/encoding # Save encoded data to this folder
+
+loader:
+  batch_size: 8
+  num_workers: 4
+    
+
+ 
