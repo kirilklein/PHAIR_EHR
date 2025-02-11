@@ -45,3 +45,8 @@ jobs:
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.finetune_cv
+
+            - name: main.encode
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.encode

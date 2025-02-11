@@ -36,7 +36,7 @@ data:
   predefined_folds: false # using predefined folds, ignore cv_folds if true
   truncation_len: 30
   min_len: 2 # 0 by default
-
+  save_processed: true
 
 outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
   n_hours_censoring: -10 # censor time after index date (negative means before)

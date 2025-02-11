@@ -8,6 +8,7 @@ from corebehrt.constants.paths import (
     CHECKPOINTS_DIR,
     COHORT_CFG,
     DATA_CFG,
+    ENCODE_CFG,
     FINETUNE_CFG,
     OUTCOMES_CFG,
     PRETRAIN_CFG,
@@ -347,6 +348,23 @@ class DirectoryPreparer:
         if "tokenized" not in self.cfg.paths:
             logger.info("Tokenized dir not in config. Adding from pretrain config.")
             self.cfg.paths.tokenized = data_cfg.paths.tokenized
+
+    def setup_encode(self) -> None:
+        """
+        Validates path config and sets up directories for encode.
+        """
+        # Setup logging
+        self.setup_logging("encode")
+
+        # Validate and create directories
+        self.check_directory("finetune_model")
+        self.create_directory("encoded_data")
+
+        # Write config in output directory.
+        self.write_config("encoded_data", source="finetune_model", name=PRETRAIN_CFG)
+        self.write_config("encoded_data", source="finetune_model", name=FINETUNE_CFG)
+        self.write_config("encoded_data", source="finetune_model", name=DATA_CFG)
+        self.write_config("encoded_data", name=ENCODE_CFG)
 
     #
     # Directory naming generators
