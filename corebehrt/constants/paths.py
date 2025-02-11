@@ -17,6 +17,7 @@ INDEX_DATES_FILE = "index_dates.csv"
 PID_FILE = "pids.pt"
 TEST_PIDS_FILE = "test_pids.pt"
 FOLDS_FILE = "folds.pt"
+ENCODINGS_FILE = "encodings.pt"
 
 ### File Patterns ###
 CONCEPT_FORMAT = "concept.*"

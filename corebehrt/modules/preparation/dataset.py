@@ -92,6 +92,11 @@ class PatientDataset:
         os.makedirs(save_dir, exist_ok=True)
         torch.save(self.patients, join(save_dir, f"patients{suffix}.pt"))
 
+    @classmethod
+    def load(cls, load_dir: str, suffix: str = "") -> "PatientDataset":
+        patients = torch.load(join(load_dir, f"patients{suffix}.pt"))
+        return cls(patients)
+
     def filter_by_pids(self, pids: List[str]) -> "PatientDataset":
         pids_set = set(pids)
         return PatientDataset([p for p in self.patients if p.pid in pids_set])

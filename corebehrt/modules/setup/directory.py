@@ -70,7 +70,7 @@ class DirectoryPreparer:
                 "tokenized": DATA_CFG,
                 "outcomes": OUTCOMES_CFG,
                 "model": PRETRAIN_CFG,
-                "cohort": COHORT_CFG, 
+                "cohort": COHORT_CFG,
             }[directory]
 
         path = self.check_path(directory, use_root=True)
@@ -361,8 +361,9 @@ class DirectoryPreparer:
         self.create_directory("encoded_data")
 
         # Write config in output directory.
+        self.write_config("encoded_data", source="finetune_model", name=PRETRAIN_CFG)
         self.write_config("encoded_data", source="finetune_model", name=FINETUNE_CFG)
-        self.write_config("encoded_data", source="finetune_model", name=DATA_CFG )
+        self.write_config("encoded_data", source="finetune_model", name=DATA_CFG)
         self.write_config("encoded_data", name=ENCODE_CFG)
 
     #

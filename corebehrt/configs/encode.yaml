@@ -10,8 +10,9 @@ paths:
   encoded_data: ./outputs/encoding # Save encoded data to this folder
 
 loader:
-  batch_size: 8
-  num_workers: 4
+  batch_size: 256
+  num_workers: 1
+  pin_memory: true
     
 
  

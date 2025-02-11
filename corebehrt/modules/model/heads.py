@@ -48,6 +48,8 @@ class BiGRU(torch.nn.Module):
         classifier_input_size = hidden_size * 2
         self.classifier = torch.nn.Linear(classifier_input_size, 1)
 
+        self.last_pooled_output = None
+
     def forward(
         self, hidden_states: torch.Tensor, attention_mask: torch.Tensor
     ) -> torch.Tensor:
@@ -70,6 +72,7 @@ class BiGRU(torch.nn.Module):
         backward_output = output[
             :, 0, self.hidden_size :
         ]  # First output from the backward pass
-        x = torch.cat((forward_output, backward_output), dim=-1)
-        x = self.classifier(x)
+        pooled_output = torch.cat((forward_output, backward_output), dim=-1)
+        self.last_pooled_output = pooled_output
+        x = self.classifier(pooled_output)
         return x
