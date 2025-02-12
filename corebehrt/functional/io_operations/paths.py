@@ -8,6 +8,7 @@ def get_fold_folders(finetune_folder: str) -> list[str]:
     """Get the fold folders inside the finetune folder."""
     return [f for f in os.listdir(finetune_folder) if f.startswith("fold_")]
 
+
 def get_checkpoint_predictions_path(
     file_type: str, fold_dir: str, mode: str, epoch: int
 ) -> str:
