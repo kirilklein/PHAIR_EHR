@@ -8,8 +8,11 @@ OUTCOMES_CFG = "outcomes_config.yaml"
 
 PRETRAIN_CFG = "pretrain_config.yaml"
 FINETUNE_CFG = "finetune_config.yaml"
+
+## Causal ## 
 ENCODE_CFG = "encode_config.yaml"
 SIMULATE_CFG = "simulate_config.yaml"
+CALIBRATE_CFG = "calibrate_config.yaml"
 
 ### Files ###
 VOCABULARY_FILE = "vocabulary.pt"

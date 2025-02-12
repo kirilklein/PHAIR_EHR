@@ -3,12 +3,13 @@ from typing import List
 
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from corebehrt.constants.paths import CHECKPOINTS_DIR, ENCODINGS_FILE, PID_FILE
-from corebehrt.functional.setup.model import get_last_checkpoint_epoch
+from corebehrt.constants.data import VAL_KEY
+from corebehrt.constants.paths import ENCODINGS_FILE, PID_FILE
+from corebehrt.functional.io_operations.paths import get_fold_folders
 from corebehrt.functional.trainer.collate import dynamic_padding
 from corebehrt.modules.model.model import BertForFineTuning
-from corebehrt.modules.monitoring.logger import get_tqdm
 from corebehrt.modules.preparation.dataset import BinaryOutcomeDataset, PatientDataset
 from corebehrt.modules.setup.loader import ModelLoader
 
@@ -34,10 +35,13 @@ def encode_loop(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     encodings, pids = [], []
 
-    for i, fold in enumerate(folds):
-        logger.info(f"Encoding fold {i+1}")
+    fold_folders = get_fold_folders(model_dir)
+
+    for fold_folder, fold in tqdm(zip(fold_folders, folds), desc="Encoding folds"):
+        fold_dir = join(model_dir, fold_folder)
+        logger.info(f"Encoding fold {fold_folder}")
         fold_pids, fold_encodings = encode_fold(
-            model_dir, data, fold, i, device, loader_cfg
+            fold_dir, data, fold, device, loader_cfg
         )
         pids.extend(fold_pids)
         encodings.append(fold_encodings)
@@ -48,23 +52,22 @@ def encode_loop(
 
 
 def encode_fold(
-    model_dir: str,
+    fold_dir: str,
     data: PatientDataset,
     fold: dict,
-    fold_idx: int,
     device: torch.device,
     loader_cfg: dict,
 ):
     """Encodes a single fold."""
-    val_data = data.filter_by_pids(fold["val"])
+    val_data = data.filter_by_pids(fold[VAL_KEY])
     val_dataset = BinaryOutcomeDataset(val_data.patients)
     val_loader = DataLoader(val_dataset, collate_fn=dynamic_padding, **loader_cfg)
 
-    model: BertForFineTuning = load_model(model_dir, fold_idx, device)
+    model: BertForFineTuning = load_model(fold_dir, device)
 
     encodings, pids = [], val_data.get_pids()
     with torch.no_grad():
-        for batch in get_tqdm(val_loader):
+        for batch in tqdm(val_loader, desc="Encoding fold"):
             batch = {k: v.to(device) for k, v in batch.items()}
             model(batch)
             encodings.append(model.cls.pool.last_pooled_output)
@@ -72,14 +75,9 @@ def encode_fold(
     return pids, torch.cat(encodings, dim=0)
 
 
-def load_model(
-    model_dir: str, fold_idx: int, device: torch.device
-) -> BertForFineTuning:
+def load_model(fold_dir: str, device: torch.device) -> BertForFineTuning:
     """Loads the trained model for a specific fold."""
-    fold_model_dir = join(model_dir, f"fold_{fold_idx+1}")
-    epoch = get_last_checkpoint_epoch(join(fold_model_dir, CHECKPOINTS_DIR))
-
-    model = ModelLoader(fold_model_dir, epoch).load_model(BertForFineTuning)
+    model = ModelLoader(fold_dir).load_model(BertForFineTuning)
     model.eval().to(device)
     return model
 
