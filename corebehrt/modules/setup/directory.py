@@ -12,6 +12,7 @@ from corebehrt.constants.paths import (
     FINETUNE_CFG,
     OUTCOMES_CFG,
     PRETRAIN_CFG,
+    SIMULATE_CFG,
 )
 from corebehrt.functional.setup.checks import check_categories
 from corebehrt.modules.setup.config import Config, load_config
@@ -365,6 +366,25 @@ class DirectoryPreparer:
         self.write_config("encoded_data", source="finetune_model", name=FINETUNE_CFG)
         self.write_config("encoded_data", source="finetune_model", name=DATA_CFG)
         self.write_config("encoded_data", name=ENCODE_CFG)
+
+    def setup_simulate(self) -> None:
+        """
+        Validates path config and sets up directories for simulate.
+        """
+        # Setup logging
+        self.setup_logging("simulate")
+
+        # Validate and create directories
+        self.check_directory("finetune_model")
+        self.check_directory("encoded_data")
+        self.create_directory("simulated_outcome")
+
+        # Write config in output directory.
+        self.write_config(
+            "simulated_outcome", source="finetune_model", name=FINETUNE_CFG
+        )
+        self.write_config("simulated_outcome", source="encoded_data", name=ENCODE_CFG)
+        self.write_config("simulated_outcome", name=SIMULATE_CFG)
 
     #
     # Directory naming generators
