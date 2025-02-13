@@ -11,7 +11,7 @@ from corebehrt.modules.setup.directory import DirectoryPreparer
 CONFIG_PATH = "./corebehrt/configs/calibrate.yaml"
 
 
-def main_encode(config_path):
+def main_calibrate(config_path):
     cfg = load_config(config_path)
 
     # Setup directories
@@ -33,4 +33,4 @@ def main_encode(config_path):
 
 if __name__ == "__main__":
     args = get_args(CONFIG_PATH)
-    main_encode(args.config_path)
+    main_calibrate(args.config_path)
