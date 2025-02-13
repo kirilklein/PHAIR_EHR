@@ -16,7 +16,7 @@ from corebehrt.main.helper.causal.simulate import simulate
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 
-CONFIG_PATH = "./corebehrt/configs/simulate.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/simulate.yaml"
 
 
 def main_simulate(config_path):

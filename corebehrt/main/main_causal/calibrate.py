@@ -8,7 +8,7 @@ from corebehrt.main.helper.causal.calibrate import (
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 
-CONFIG_PATH = "./corebehrt/configs/calibrate.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/calibrate.yaml"
 
 
 def main_calibrate(config_path):

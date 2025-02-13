@@ -9,7 +9,7 @@ from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 from corebehrt.main.helper.causal.encode import encode_loop
 
-CONFIG_PATH = "./corebehrt/configs/encode.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/encode.yaml"
 
 
 def main_encode(config_path):
