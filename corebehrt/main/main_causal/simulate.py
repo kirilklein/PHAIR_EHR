@@ -2,14 +2,13 @@ import logging
 from os.path import join
 
 import pandas as pd
-import torch
 
 from corebehrt.constants.causal import (
     CALIBRATED_PREDICTIONS_FILE,
     SIMULATION_RESULTS_FILE,
     TIMESTAMP_OUTCOME_FILE,
 )
-from corebehrt.constants.paths import ENCODINGS_FILE, PID_FILE
+from corebehrt.functional.causal.load import load_encodings_and_pids_from_encoded_dir
 from corebehrt.functional.causal.data_utils import align_df_with_pids
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main.helper.causal.simulate import simulate
@@ -29,8 +28,7 @@ def main_simulate(config_path):
     logger = logging.getLogger("simulate")
 
     logger.info("Load data")
-    encodings = torch.load(join(cfg.paths.encoded_data, ENCODINGS_FILE)).numpy()
-    pids = torch.load(join(cfg.paths.encoded_data, PID_FILE))
+    encodings, pids = load_encodings_and_pids_from_encoded_dir(cfg.paths.encoded_data)
 
     logger.info("Load calibrated predictions")
     predictions = pd.read_csv(
