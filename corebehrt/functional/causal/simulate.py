@@ -12,6 +12,7 @@ def simulate_outcome_from_encodings(
     intercept: float,
     enc_sparsity: float = 0.7,
     enc_scale: float = 0.1,
+    random_state: int = 42,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Simulate binary outcomes using patient encodings and exposure status with sparse feature coefficients.
@@ -33,7 +34,9 @@ def simulate_outcome_from_encodings(
 
     # Generate sparse feature coefficients
     n_enc = encodings.shape[1]
-    rng = np.random.RandomState(42)  # Set fixed random state for reproducibility
+    rng = np.random.RandomState(
+        random_state
+    )  # Set fixed random state for reproducibility
     W_enc = rng.normal(
         0, enc_scale, size=n_enc
     )  # Small coefficients from normal distribution
