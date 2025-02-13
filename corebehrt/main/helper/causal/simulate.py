@@ -5,7 +5,10 @@ import pandas as pd
 
 from corebehrt.constants.causal import CF_OUTCOMES, CF_PROBAS, OUTCOMES, PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
-from corebehrt.functional.causal.simulate import simulate_outcome_from_encodings
+from corebehrt.functional.causal.simulate import (
+    combine_counterfactuals,
+    simulate_outcome_from_encodings,
+)
 
 DATE_FUTURE = pd.Timestamp("2100-01-01")
 
@@ -60,22 +63,3 @@ def get_timestamp_df(results_df: pd.DataFrame) -> pd.DataFrame:
             TIMESTAMP_COL: DATE_FUTURE,
         }
     )
-
-
-def combine_counterfactuals(exposure, exposed_values, control_values):
-    """Combines counterfactual values based on exposure status.
-
-    For each individual, returns the opposite of their actual exposure:
-    - If exposed (exposure=1), returns their control value
-    - If not exposed (exposure=0), returns their exposed value
-
-    Args:
-        exposure (numpy.ndarray): Binary array indicating exposure status (1=exposed, 0=control)
-        exposed_values (numpy.ndarray): Values under exposure condition
-        control_values (numpy.ndarray): Values under control condition
-
-    Returns:
-        numpy.ndarray: Combined array where each element is the counterfactual value
-            based on the opposite of the actual exposure status
-    """
-    return np.where(exposure == 1, control_values, exposed_values)
