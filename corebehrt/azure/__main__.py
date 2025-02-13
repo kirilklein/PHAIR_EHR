@@ -16,7 +16,7 @@ from corebehrt.azure.components import (
     select_cohort,
 )
 
-from corebehrt.azure.components.causal import encode
+from corebehrt.azure.components.causal import encode, simulate, calibrate
 
 
 from . import environment, util
@@ -28,6 +28,8 @@ COMPONENTS = {
     "finetune_cv": finetune,
     "select_cohort": select_cohort,
     "encode": encode,
+    "simulate": simulate,
+    "calibrate": calibrate,
 }
 
 
