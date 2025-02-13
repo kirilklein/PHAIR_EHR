@@ -5,19 +5,15 @@ logging:
 paths:
 ## INPUTS  
   encoded_data: ./outputs/encoding
-  finetune_model: ./outputs/finetuning
+  calibrated_predictions: ./outputs/calibrated_predictions
 
 ## OUTPUTS
   simulated_outcome: ./outputs/simulated_outcome
 
 simulation:
   exposure_coef: 1 # exposure coefficient
-  treatment_coef: .5 # treatment patient embeddings coefficient
+  enc_coef: .5 # treatment patient embeddings coefficient
   intercept: .3 # intercept
-  treatment_sparsity: 0.7 # proportion of treatment patient embeddings that will have non-zero coefficients
-  treatment_scale: 0.1 # scale of the normal distribution for treatment patient embeddings coefficients
-
-# Outcome timeline 
-days_offset: 1 # days to offset outcome timestamp from index date
-max_years: 3 # maximum number of years to simulate outcome
+  enc_sparsity: 0.7 # proportion of treatment patient embeddings that will have non-zero coefficients
+  enc_scale: 0.1 # scale of the normal distribution for treatment patient embeddings coefficients
  
