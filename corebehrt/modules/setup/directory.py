@@ -376,13 +376,16 @@ class DirectoryPreparer:
         self.setup_logging("simulate")
 
         # Validate and create directories
-        self.check_directory("finetune_model")
+        self.check_directory("calibrated_predictions")
         self.check_directory("encoded_data")
         self.create_directory("simulated_outcome")
 
         # Write config in output directory.
         self.write_config(
-            "simulated_outcome", source="finetune_model", name=FINETUNE_CFG
+            "simulated_outcome", source="calibrated_predictions", name=CALIBRATE_CFG
+        )
+        self.write_config(
+            "simulated_outcome", source="calibrated_predictions", name=FINETUNE_CFG
         )
         self.write_config("simulated_outcome", source="encoded_data", name=ENCODE_CFG)
         self.write_config("simulated_outcome", name=SIMULATE_CFG)
