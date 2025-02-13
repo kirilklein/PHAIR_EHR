@@ -13,6 +13,7 @@ FINETUNE_CFG = "finetune_config.yaml"
 ENCODE_CFG = "encode_config.yaml"
 SIMULATE_CFG = "simulate_config.yaml"
 CALIBRATE_CFG = "calibrate_config.yaml"
+TRAIN_MLP_CFG = "train_mlp_config.yaml"
 
 ### Files ###
 VOCABULARY_FILE = "vocabulary.pt"

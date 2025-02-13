@@ -1,0 +1,16 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+## INPUTS  
+  encoded_data: ./outputs/encoding
+  calibrated_predictions: ./outputs/calibrated_predictions
+  cohort: ./outputs/cohort
+
+  outcomes: ./outputs/outcomes/TEST_OUTCOME.csv
+  
+
+## OUTPUTS
+  trained_mlp: ./outputs/trained_mlp
+
