@@ -1,0 +1,19 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+## INPUTS  
+  encoded_data: ./outputs/encoding
+  calibrated_predictions: ./outputs/calibrated_predictions
+
+## OUTPUTS
+  simulated_outcome: ./outputs/simulated_outcome
+
+simulation:
+  exposure_coef: 1 # exposure coefficient
+  enc_coef: .5 # treatment patient embeddings coefficient
+  intercept: .3 # intercept
+  enc_sparsity: 0.7 # proportion of treatment patient embeddings that will have non-zero coefficients
+  enc_scale: 0.1 # scale of the normal distribution for treatment patient embeddings coefficients
+ 

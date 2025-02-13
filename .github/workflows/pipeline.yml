@@ -46,7 +46,18 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.finetune_cv
 
+            # Causal 
+            - name: main.calibrate
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.calibrate
+
             - name: main.encode
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.encode
+
+            - name: main.simulate
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.simulate
