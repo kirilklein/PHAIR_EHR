@@ -1,7 +1,11 @@
 import logging
 from os.path import join
 
-from corebehrt.constants.causal import SIMULATION_RESULTS_FILE, TIMESTAMP_OUTCOME_FILE
+from corebehrt.constants.causal import (
+    SIMULATION_RESULTS_FILE,
+    TARGETS,
+    TIMESTAMP_OUTCOME_FILE,
+)
 from corebehrt.functional.causal.load import (
     load_and_align_calibrated_predictions,
     load_encodings_and_pids_from_encoded_dir,
@@ -30,9 +34,12 @@ def main_simulate(config_path):
     predictions = load_and_align_calibrated_predictions(
         cfg.paths.calibrated_predictions, pids
     )
+    exposure = predictions[TARGETS]
 
     logger.info("Simulate")
-    result_df, timestamp_df = simulate(logger, encodings, predictions, cfg.simulation)
+    result_df, timestamp_df = simulate(
+        logger, pids, encodings, exposure, cfg.simulation
+    )
     logger.info("Done")
 
     logger.info("Save results")

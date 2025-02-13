@@ -14,10 +14,8 @@ DATE_FUTURE = pd.Timestamp("2100-01-01")
 
 
 def simulate(
-    logger, encodings: np.ndarray, predictions: pd.DataFrame, simulate_cfg: dict
+    logger, pids: list, encodings: np.ndarray, exposure: np.ndarray, simulate_cfg: dict
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-
-    exposure = predictions[TARGETS]
 
     logger.info("simulate actual outcome")
     outcome, proba = simulate_outcome_from_encodings(
@@ -44,7 +42,7 @@ def simulate(
 
     results_df = pd.DataFrame(
         {
-            PID_COL: predictions[PID_COL],
+            PID_COL: pids,
             OUTCOMES: outcome,
             CF_OUTCOMES: cf_outcome,
             PROBAS: proba,
