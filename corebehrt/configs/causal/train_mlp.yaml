@@ -5,7 +5,7 @@ logging:
 paths:
 ## INPUTS  
   encoded_data: ./outputs/encoding
-  calibrated_predictions: ./outputs/calibrated_predictions
+  calibrated_predictions: ./outputs/calibrated_predictions # to extract exposure
   cohort: ./outputs/cohort
 
   outcomes: ./outputs/outcomes/TEST_OUTCOME.csv
@@ -14,3 +14,7 @@ paths:
 ## OUTPUTS
   trained_mlp: ./outputs/trained_mlp
 
+outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
+  n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+  
