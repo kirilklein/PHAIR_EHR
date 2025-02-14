@@ -1,18 +1,17 @@
 from os.path import join
 from typing import Tuple
 
-import numpy as np
 import pandas as pd
 import torch
 
-from corebehrt.constants.causal import CALIBRATED_PREDICTIONS_FILE
+from corebehrt.constants.causal import CALIBRATED_PREDICTIONS_FILE, TARGETS
 from corebehrt.constants.paths import ENCODINGS_FILE, PID_FILE
 from corebehrt.functional.causal.data_utils import align_df_with_pids
 
 
 def load_encodings_and_pids_from_encoded_dir(
     encoded_dir: str,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[torch.Tensor, list]:
     """Load encodings and patient IDs from the encoded directory.
 
     Args:
@@ -21,14 +20,23 @@ def load_encodings_and_pids_from_encoded_dir(
     Returns:
         Tuple of (encodings array, patient IDs array)
     """
-    encodings = torch.load(join(encoded_dir, ENCODINGS_FILE)).numpy()
+    encodings = torch.load(join(encoded_dir, ENCODINGS_FILE))
     pids = torch.load(join(encoded_dir, PID_FILE))
     return encodings, pids
 
 
+def load_exposure_from_predictions(
+    calibrated_predictions_dir: str, pids: list
+) -> torch.Tensor:
+    predictions = load_and_align_calibrated_predictions(
+        calibrated_predictions_dir, pids
+    )
+    return torch.tensor(predictions[TARGETS].values)
+
+
 def load_and_align_calibrated_predictions(
     calibrated_predictions_dir: str,
-    pids: np.ndarray,
+    pids: list,
 ) -> pd.DataFrame:
     """Load calibrated predictions and align them with patient IDs.
 
