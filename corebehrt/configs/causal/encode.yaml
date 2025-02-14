@@ -4,10 +4,10 @@ logging:
 
 paths:
 ## INPUTS  
-  finetune_model: ./outputs/finetuning
+  finetune_model: ./outputs/causal/finetuning_exposure
 
 ## OUTPUTS
-  encoded_data: ./outputs/encoding # Save encoded data to this folder
+  encoded_data: ./outputs/causal/encoding # Save encoded data to this folder
 
 loader:
   batch_size: 256
