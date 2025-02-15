@@ -46,11 +46,26 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.finetune_cv
 
-            # Causal 
+            ### Causal ###
+            - name: main.create_outcomes
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.create_outcomes --config_path ./corebehrt/configs/causal/outcomes.yaml
+
+            - name: main.select_cohort_exposure
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.select_cohort --config_path ./corebehrt/configs/causal/select_cohort_exposure.yaml
+
+            - name: main.finetune_exposure
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/causal/finetune_exposure.yaml
+
             - name: main.calibrate
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.main_causal.calibrate
+                python -m corebehrt.main.main_causal.calibrate 
 
             - name: main.encode
               run: |

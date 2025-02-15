@@ -14,6 +14,7 @@ from corebehrt.constants.paths import (
     PRETRAIN_CFG,
     SIMULATE_CFG,
     CALIBRATE_CFG,
+    TRAIN_MLP_CFG,
 )
 from corebehrt.functional.setup.checks import check_categories
 from corebehrt.modules.setup.config import Config, load_config
@@ -406,6 +407,27 @@ class DirectoryPreparer:
             "calibrated_predictions", source="finetune_model", name=FINETUNE_CFG
         )
         self.write_config("calibrated_predictions", name=CALIBRATE_CFG)
+
+    def setup_train_mlp(self) -> None:
+        """
+        Validates path config and sets up directories for train_mlp.
+        """
+        # Setup logging
+        self.setup_logging("train_mlp")
+
+        # Validate and create directories
+        self.check_directory("encoded_data")
+        self.check_directory("calibrated_predictions")
+        self.check_directory("cohort")
+        self.create_run_directory("trained_mlp", base="runs")
+
+        # Write config in output directory.
+        self.write_config("trained_mlp", source="encoded_data", name=ENCODE_CFG)
+        self.write_config(
+            "trained_mlp", source="calibrated_predictions", name=CALIBRATE_CFG
+        )
+        self.write_config("trained_mlp", source="cohort", name=COHORT_CFG)
+        self.write_config("trained_mlp", name=TRAIN_MLP_CFG)
 
     #
     # Directory naming generators

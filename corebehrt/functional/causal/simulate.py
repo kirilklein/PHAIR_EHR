@@ -1,19 +1,18 @@
-import numpy as np
 from typing import Tuple
-from scipy.stats import bernoulli
-from scipy.special import expit as sigmoid
+
+import torch
 
 
 def simulate_outcome_from_encodings(
-    encodings: np.ndarray,
-    exposure: np.ndarray,
+    encodings: torch.Tensor,
+    exposure: torch.Tensor,
     exposure_coef: float,
     enc_coef: float,
     intercept: float,
     enc_sparsity: float = 0.7,
     enc_scale: float = 0.1,
     random_state: int = 42,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Simulate binary outcomes using patient encodings and exposure status with sparse feature coefficients.
 
@@ -27,27 +26,24 @@ def simulate_outcome_from_encodings(
         enc_scale: Standard deviation of the normal distribution used to generate feature weights
 
     Returns:
-        Tuple[np.ndarray, np.ndarray]: A tuple containing:
-            - Binary outcomes array of shape (n_samples,)
-            - Outcome probabilities array of shape (n_samples,)
+        Tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+            - Binary outcomes tensor of shape (n_samples,)
+            - Outcome probabilities tensor of shape (n_samples,)
     """
+    # Set random seed for reproducibility
+    torch.manual_seed(random_state)
 
     # Generate sparse feature coefficients
     n_enc = encodings.shape[1]
-    rng = np.random.RandomState(
-        random_state
-    )  # Set fixed random state for reproducibility
-    W_enc = rng.normal(
-        0, enc_scale, size=n_enc
-    )  # Small coefficients from normal distribution
-    zero_mask_enc = rng.random(n_enc) < enc_sparsity
-
+    W_enc = torch.normal(0, enc_scale, size=(n_enc,))
+    zero_mask_enc = torch.rand(n_enc) < enc_sparsity
     W_enc[zero_mask_enc] = 0  # Set random subset of coefficients to zero
 
     # Calculate probability using feature combination
     s_enc = encodings @ W_enc
-    probability = sigmoid(exposure_coef * exposure + enc_coef * s_enc + intercept)
-    binary_outcome = bernoulli.rvs(probability)
+    probability = torch.sigmoid(exposure_coef * exposure + enc_coef * s_enc + intercept)
+    binary_outcome = torch.bernoulli(probability)
+
     return binary_outcome, probability
 
 
@@ -67,4 +63,4 @@ def combine_counterfactuals(exposure, exposed_values, control_values):
         numpy.ndarray: Combined array where each element is the counterfactual value
             based on the opposite of the actual exposure status
     """
-    return np.where(exposure == 1, control_values, exposed_values)
+    return torch.where(exposure == 1, control_values, exposed_values)

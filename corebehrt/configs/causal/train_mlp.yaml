@@ -1,0 +1,63 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+## INPUTS  
+  encoded_data: ./outputs/causal/encoding
+  calibrated_predictions: ./outputs/causal/calibrated_predictions # to extract exposure
+  cohort: ./outputs/causal/exposure_cohort
+
+  outcomes: ./outputs/causal/outcomes/OUTCOME.csv
+  
+
+## OUTPUTS
+  trained_mlp: ./outputs/causal/trained_mlp
+
+outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
+  n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+  
+model:
+  hidden_dims: [32]
+
+trainer_args:
+  sampler: true
+  sample_weight_function:
+    _target_: corebehrt.evaluation.utils.inverse_sqrt # function to calculate sample weights
+  
+  epochs: 2
+  gradient_clip: 
+    clip_value: 1.0
+  shuffle: true
+  early_stopping: 20
+
+  monitor: 
+    metric: val_roc_auc # stopping criterion
+    mode: max
+
+  val_loader_kwargs:
+    batch_size: 256
+    num_workers: 0
+    pin_memory: false
+    persistent_workers: false
+    
+  train_loader_kwargs:
+    batch_size: 256
+    num_workers: 0
+    pin_memory: false
+    persistent_workers: false
+    
+  
+optimizer:
+  lr: 5e-4
+
+scheduler:
+  _target_: transformers.get_constant_schedule_with_warmup
+  num_warmup_epochs: 1  
+
+metrics:
+  roc_auc:
+    _target_: corebehrt.modules.monitoring.metrics.ROC_AUC
+  pr_auc:
+    _target_: corebehrt.modules.monitoring.metrics.PR_AUC  

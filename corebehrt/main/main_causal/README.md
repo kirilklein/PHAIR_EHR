@@ -6,7 +6,7 @@ This guide walks through the steps required to **estimate treatment effects** us
 
 1. [**Encode**](#1-encode)
 2. [**Simulate Outcome**](#2-simulate-outcome)
-3. [**Train on Encodings**](#3-train-on-encodings)
+3. [**Train MLP (on encodings)**](#3-train-mlp-on-encodings)
 4. [**Estimate Treatment Effects**](#4-estimate-treatment-effects)
 
 ---
@@ -58,9 +58,9 @@ counterfactual:
 
 ---
 
-## 3. Train on Encodings
+## 3. Train MLP (on encodings)
 
-The `train_on_encodings` script trains shallow **multi-layer perceptrons (MLPs)** on the patient encodings to predict:
+The `train_mlp` script trains shallow **multi-layer perceptrons (MLPs)** on the patient encodings to predict:
 
 - **Simulated outcomes** (or)
 - **Real target outcomes**
@@ -71,11 +71,15 @@ Edit the **training configuration file**:
 
 ```yaml
 # Model Parameters
+model_args:
+  num_layers: 3
+  hidden_dims: [256, 128, 64] # input is determined by the encoding size, output is one
+
 trainer_args:
   batch_size: 128
   epochs: 50
   early_stopping: 5
-  optimizer: adam
+  optimizer: adamw
   loss_function: binary_cross_entropy
 ```
 
@@ -118,6 +122,7 @@ The script supports multiple causal inference techniques:
 | **2. Simulate Outcome** | `simulate` | Outcome simulation, counterfactuals | `simulated_outcomes.csv`, `counterfactual_probas.csv` |
 | **3. Finetune Fast** | `finetune_fast` | MLP parameters, early stopping | `mlp_probas.pt`, `mlp_predictions.pt` |
 | **4. Estimate Effects** | `estimate` | Causal inference methods, bootstrap | `treatment_effects.csv`, `bootstrap_results.pt` |
+| **5. Train MLP** | `train_mlp` | MLP parameters, early stopping | `mlp_probas.pt`, `mlp_predictions.pt` |
 
 ---
 

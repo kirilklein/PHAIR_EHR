@@ -1,0 +1,29 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  data: ./example_data/example_data_w_labs
+  features: ./outputs/features
+  outcomes: ./outputs/causal/outcomes
+
+loader:
+  concepts: [
+    diagnose,
+    medication
+  ]
+  batchsize: 10_000
+  chunksize: 10_000
+
+outcomes:
+  EXPOSURE: 
+    type: [CONCEPT]
+    match: [['695', '227', '896', '818', '715', '16', '569', '613', '962', '248', '91', '483', '701', '840']]
+    match_how: contains
+    case_sensitive: true
+  OUTCOME:
+    type: [CONCEPT]
+    match: [['989', '224', '931', '762', '29', '173', '792', '747', '22', '670', '709', '433', '239', '537', '515', '612', '288', '741', '499', '993']]
+    match_how: startswith
+    case_sensitive: false
+    

@@ -1,0 +1,18 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+## INPUTS  
+  finetune_model: ./outputs/causal/finetuning_exposure
+
+## OUTPUTS
+  encoded_data: ./outputs/causal/encoding # Save encoded data to this folder
+
+loader:
+  batch_size: 256
+  num_workers: 0
+  pin_memory: false
+    
+
+ 
