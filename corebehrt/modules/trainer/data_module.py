@@ -108,13 +108,6 @@ class EncodedDataModule:
             i for i, pid in enumerate(self.pids) if pid in train_fold_pids
         ]
 
-        print("X", len(self.X))
-        print("y", len(self.y))
-        print("train_fold_ids", len(train_fold_ids))
-        print("val_fold_ids", len(val_fold_ids))
-        print("validation pids", len(val_fold_pids))
-        print("train pids", len(train_fold_pids))
-
         X_train = self.X[train_fold_ids]
         X_val = self.X[val_fold_ids]
         y_train = self.y[train_fold_ids]
