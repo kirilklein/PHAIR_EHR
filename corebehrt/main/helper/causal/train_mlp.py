@@ -3,22 +3,25 @@ from datetime import datetime
 from os.path import join
 from typing import Dict, List, Tuple
 
+import lightning as pl
 import pandas as pd
 import torch
+from torch.utils.data import DataLoader
 
-from corebehrt.constants.data import ABSPOS_COL, TIMESTAMP_COL, VAL_KEY
+from corebehrt.constants.data import ABSPOS_COL, TIMESTAMP_COL, TRAIN_KEY, VAL_KEY
 from corebehrt.constants.paths import DATA_CFG, FOLDS_FILE, INDEX_DATES_FILE
 from corebehrt.functional.causal.load import (
     load_encodings_and_pids_from_encoded_dir,
     load_exposure_from_predictions,
 )
 from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
+from corebehrt.functional.trainer.setup import replace_steps_with_epochs
 from corebehrt.functional.utils.time import get_abspos_from_origin_point
-from corebehrt.main.helper.causal.train_mlp import (
-    check_val_fold_pids,
-    combine_encodings_and_exposures,
-)
+from corebehrt.modules.model.mlp import LitMLP
 from corebehrt.modules.setup.config import load_config
+from corebehrt.modules.setup.initializer import Initializer
+from corebehrt.modules.trainer.checkpoint import ModelCheckpoint
+from corebehrt.modules.trainer.dataset import SimpleDataset
 
 
 def combine_encodings_and_exposures(
@@ -134,3 +137,79 @@ def _prepare_outcomes(
     )
     binary_outcomes = binary_outcomes.loc[pids]
     return torch.tensor(binary_outcomes.values, dtype=torch.float32)
+
+
+def setup_model(cfg: Dict, X_train: torch.Tensor) -> pl.LightningModule:
+    """Sets up the model with the given configuration and training data."""
+    cfg.scheduler = replace_steps_with_epochs(
+        cfg.scheduler, cfg.trainer_args.train_loader_kwargs.batch_size, len(X_train)
+    )
+    model = LitMLP(
+        input_dim=X_train.shape[1],
+        hidden_dims=cfg.model.hidden_dims,
+        output_dim=1,
+        dropout_rate=cfg.model.get("dropout_rate", 0.1),
+        lr=cfg.optimizer.lr,
+        scheduler_cfg=cfg.scheduler,
+    )
+    # Compile the model
+    if torch.cuda.is_available() and cfg.trainer_args.get("compile", False):
+        model = torch.compile(model)
+    return model
+
+
+def setup_data_loaders(
+    cfg: Dict,
+    train_data: Tuple[torch.Tensor, torch.Tensor],
+    val_data: Tuple[torch.Tensor, torch.Tensor],
+) -> Tuple[DataLoader, DataLoader]:
+    """Sets up the data loaders with the given configuration and training data."""
+    initializer = Initializer(cfg)
+    sampler, _ = initializer.initialize_sampler(train_data[1])
+
+    train_dataset = SimpleDataset(*train_data)
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        sampler=sampler,  # use your custom sampler
+        shuffle=(sampler is None),  # if you provide a sampler, disable shuffling
+        **cfg.trainer_args.train_loader_kwargs,
+    )
+
+    val_dataset = SimpleDataset(*val_data)
+    val_loader = DataLoader(dataset=val_dataset, **cfg.trainer_args.val_loader_kwargs)
+    return train_loader, val_loader
+
+
+def split_fold_data(
+    X: torch.Tensor, y: torch.Tensor, fold: Dict, pids: List[str]
+) -> Tuple[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+    """Splits the data into training and validation sets based on the fold."""
+    val_fold_pids = fold[VAL_KEY]
+    train_fold_pids = fold[TRAIN_KEY]
+    val_fold_ids = [i for i, pid in enumerate(pids) if pid in val_fold_pids]
+    train_fold_ids = [i for i, pid in enumerate(pids) if pid in train_fold_pids]
+
+    X_val = X[val_fold_ids]
+    X_train = X[train_fold_ids]
+    y_val = y[val_fold_ids]
+    y_train = y[train_fold_ids]
+    train_data = (X_train, y_train)
+    val_data = (X_val, y_val)
+    return train_data, val_data
+
+
+def setup_trainer(root_folder, trainer_args):
+    return pl.Trainer(
+        max_epochs=trainer_args.epochs,
+        callbacks=[
+            ModelCheckpoint(
+                monitor=trainer_args.monitor.metric,
+                mode=trainer_args.monitor.mode,
+                save_top_k=1,
+            ),
+        ],
+        precision=trainer_args.get("precision", 16),
+        default_root_dir=root_folder,
+        gradient_clip_val=trainer_args.get("gradient_clip", {}).get("clip_value", None),
+        log_every_n_steps=1,
+    )
