@@ -6,7 +6,7 @@ from os.path import join
 import lightning as pl
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 
 from corebehrt.constants.data import (ABSPOS_COL, TIMESTAMP_COL, TRAIN_KEY,
                                       VAL_KEY)
@@ -23,6 +23,8 @@ from corebehrt.modules.model.mlp import LitMLP
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 from corebehrt.modules.setup.initializer import Initializer
+from corebehrt.modules.trainer.dataset import SimpleDataset
+from corebehrt.modules.trainer.checkpoint import ModelCheckpoint
 
 CONFIG_PATH = "./corebehrt/configs/causal/train_mlp.yaml"
 
@@ -134,44 +136,7 @@ def main_train(config_path):
         trainer.fit(model, train_loader, val_loader)
 
 
-class ModelCheckpoint(pl.Callback):
-    def __init__(self, monitor="val_loss", mode="min", save_top_k=1):
-        self.monitor = monitor
-        self.mode = mode
-        self.save_top_k = save_top_k
-        self.best_score = None
 
-    def on_validation_epoch_end(
-        self, trainer: pl.Trainer, pl_module: pl.LightningModule
-    ) -> None:
-        current_score = trainer.callback_metrics[self.monitor]
-        if (
-            self.best_score is None
-            or self.mode == "min"
-            and current_score < self.best_score
-        ):
-            self.best_score = current_score
-
-
-class SimpleDataset(Dataset):
-    def __init__(self, X, y):
-        self.X = (
-            X.to(torch.float32)
-            if isinstance(X, torch.Tensor)
-            else torch.tensor(X, dtype=torch.float32)
-        )
-        self.y = (
-            y.to(torch.float32)
-            if isinstance(y, torch.Tensor)
-            else torch.tensor(y, dtype=torch.float32)
-        )
-
-    def __len__(self):
-        return len(self.X)
-
-    def __getitem__(self, idx):
-        # Return (features, label)
-        return self.X[idx], self.y[idx]
 
 
 
