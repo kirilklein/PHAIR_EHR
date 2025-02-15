@@ -2,12 +2,11 @@ from typing import Tuple
 
 import pandas as pd
 import torch
+
 from corebehrt.constants.causal import CF_OUTCOMES, CF_PROBAS, OUTCOMES, PROBAS
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
-from corebehrt.functional.causal.simulate import (
-    combine_counterfactuals,
-    simulate_outcome_from_encodings,
-)
+from corebehrt.functional.causal.counterfactuals import combine_counterfactuals
+from corebehrt.functional.causal.simulate import simulate_outcome_from_encodings
 
 DATE_FUTURE = pd.Timestamp("2100-01-01")
 
