@@ -81,3 +81,8 @@ jobs:
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/finetune_predefined.yaml
+
+            - name: main.estimate
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.estimate
