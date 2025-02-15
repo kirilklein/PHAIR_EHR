@@ -2,7 +2,7 @@ from typing import Tuple
 
 import pandas as pd
 import torch
-from corebehrt.constants.causal import CF_OUTCOMES, CF_PROBAS, OUTCOMES, PROBAS, TARGETS
+from corebehrt.constants.causal import CF_OUTCOMES, CF_PROBAS, OUTCOMES, PROBAS
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 from corebehrt.functional.causal.simulate import (
     combine_counterfactuals,

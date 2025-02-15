@@ -1,4 +1,6 @@
 import lightning as pl
+
+
 class ModelCheckpoint(pl.Callback):
     def __init__(self, monitor="val_loss", mode="min", save_top_k=1):
         self.monitor = monitor

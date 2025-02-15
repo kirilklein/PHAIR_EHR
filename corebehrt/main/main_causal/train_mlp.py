@@ -1,17 +1,13 @@
 import logging
 import os
-from os.path import join, split
+from os.path import join
 
+from corebehrt.constants.data import TRAIN_KEY
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main.helper.causal.train_mlp import (
-    prepare_data,
-    setup_data_loaders,
-    setup_model,
-    setup_trainer,
-    split_fold_data,
-)
+from corebehrt.main.helper.causal.train_mlp import setup_model, setup_trainer
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
+from corebehrt.modules.trainer.data_module import EncodedDataModule
 
 CONFIG_PATH = "./corebehrt/configs/causal/train_mlp.yaml"
 
@@ -25,20 +21,23 @@ def main_train(config_path):
     # Logger
     logger = logging.getLogger("train_mlp")
 
-    X, y, pids, folds = prepare_data(cfg, logger)
+    data_module = EncodedDataModule(cfg, logger)
+    data_module.setup()
 
-    for i, fold in enumerate(folds):
-        fold_folder = join(cfg.paths.trained_mlp, f"fold_{i+1}")
+    for fold_idx, fold in enumerate(data_module.folds):
+        fold_folder = join(cfg.paths.trained_mlp, f"fold_{fold_idx+1}")
         os.makedirs(fold_folder, exist_ok=True)
-        logger.info(f"Training {split(fold_folder)[-1]} of {len(folds)}")
-
-        logger.info("Splitting data")
-        train_data, val_data = split_fold_data(X, y, fold, pids)
+        logger.info(f"Training {fold_idx+1} of {len(data_module.folds)}")
 
         logger.info("Setting up model")
-        model = setup_model(cfg, train_data[0])
+        model = setup_model(
+            cfg,
+            num_features=data_module.input_dim,
+            num_train_samples=len(fold[TRAIN_KEY]),
+        )
 
-        train_loader, val_loader = setup_data_loaders(cfg, train_data, val_data)
+        logger.info("Splitting data")
+        train_loader, val_loader = data_module.get_fold_dataloaders(fold)
 
         trainer = setup_trainer(fold_folder, cfg.trainer_args)
         trainer.fit(model, train_loader, val_loader)

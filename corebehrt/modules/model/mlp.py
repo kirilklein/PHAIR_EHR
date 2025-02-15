@@ -32,6 +32,7 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.layers(x)
 
+
 class LitMLP(pl.LightningModule):
     def __init__(
         self,
