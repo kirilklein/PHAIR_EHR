@@ -14,7 +14,7 @@ ENCODE_CFG = "encode_config.yaml"
 SIMULATE_CFG = "simulate_config.yaml"
 CALIBRATE_CFG = "calibrate_config.yaml"
 TRAIN_MLP_CFG = "train_mlp_config.yaml"
-
+ESTIMATE_CFG = "estimate_config.yaml"
 ### Files ###
 VOCABULARY_FILE = "vocabulary.pt"
 PROCESSED_DATA_DIR = "processed_data"
