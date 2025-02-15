@@ -34,6 +34,7 @@ data:
   truncation_len: 256
   save_processed: true
   test_split: 0
+  min_len: 0
 
 outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
   n_hours_censoring: -10 # censor time after index date (negative means before)
