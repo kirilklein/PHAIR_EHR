@@ -13,6 +13,7 @@ from corebehrt.functional.causal.load import (
     load_exposure_from_predictions,
 )
 from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
+from corebehrt.functional.utils.filter import filter_folds_by_pids
 from corebehrt.functional.utils.time import get_abspos_from_origin_point
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.trainer.dataset import SimpleDataset
@@ -66,7 +67,7 @@ class EncodedDataModule:
 
         self.logger.info("Loading index dates and folds")
         index_dates, folds, pids = self._load_index_dates_and_folds()
-        self.folds = folds
+        self.folds = filter_folds_by_pids(folds, pids)
         self.pids = pids
 
         self.logger.info("Loading outcomes")
@@ -107,6 +108,13 @@ class EncodedDataModule:
             i for i, pid in enumerate(self.pids) if pid in train_fold_pids
         ]
 
+        print("X", len(self.X))
+        print("y", len(self.y))
+        print("train_fold_ids", len(train_fold_ids))
+        print("val_fold_ids", len(val_fold_ids))
+        print("validation pids", len(val_fold_pids))
+        print("train pids", len(train_fold_pids))
+
         X_train = self.X[train_fold_ids]
         X_val = self.X[val_fold_ids]
         y_train = self.y[train_fold_ids]
@@ -121,6 +129,7 @@ class EncodedDataModule:
         )
         val_loader = DataLoader(
             dataset=val_dataset,
+            shuffle=False,  # Never shuffle validation set
             **self.cfg.trainer_args.val_loader_kwargs,
         )
         return train_loader, val_loader
