@@ -6,26 +6,21 @@ from os.path import join
 import lightning as pl
 import pandas as pd
 import torch
-import torch.nn as nn
-from torcheval.metrics.functional.classification import binary_auroc
-from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset
 
-from corebehrt.constants.data import ABSPOS_COL, TIMESTAMP_COL, TRAIN_KEY, VAL_KEY
+from corebehrt.constants.data import (ABSPOS_COL, TIMESTAMP_COL, TRAIN_KEY,
+                                      VAL_KEY)
 from corebehrt.constants.paths import DATA_CFG, FOLDS_FILE, INDEX_DATES_FILE
 from corebehrt.functional.causal.load import (
-    load_encodings_and_pids_from_encoded_dir,
-    load_exposure_from_predictions,
-)
+    load_encodings_and_pids_from_encoded_dir, load_exposure_from_predictions)
 from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
 from corebehrt.functional.setup.args import get_args
 from corebehrt.functional.trainer.setup import replace_steps_with_epochs
 from corebehrt.functional.utils.time import get_abspos_from_origin_point
 from corebehrt.main.helper.causal.train_mlp import (
-    check_val_fold_pids,
-    combine_encodings_and_exposures,
-)
-from corebehrt.modules.setup.config import instantiate_class, load_config
+    check_val_fold_pids, combine_encodings_and_exposures)
+from corebehrt.modules.model.mlp import LitMLP
+from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 from corebehrt.modules.setup.initializer import Initializer
 
@@ -158,33 +153,6 @@ class ModelCheckpoint(pl.Callback):
             self.best_score = current_score
 
 
-class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dims, output_dim, dropout_rate=0.0):
-        super().__init__()
-        layers = []
-        layers.append(nn.Linear(input_dim, hidden_dims[0]))
-        layers.append(nn.ReLU())
-        layers.append(nn.Dropout(dropout_rate))
-
-        for i in range(len(hidden_dims) - 1):
-            layers.extend(
-                [
-                    nn.Linear(hidden_dims[i], hidden_dims[i + 1]),
-                    nn.ReLU() if i < len(hidden_dims) - 2 else nn.Identity(),
-                    (
-                        nn.Dropout(dropout_rate)
-                        if i < len(hidden_dims) - 2
-                        else nn.Identity()
-                    ),
-                ]
-            )
-        layers.append(nn.Linear(hidden_dims[-1], output_dim))
-        self.layers = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.layers(x)
-
-
 class SimpleDataset(Dataset):
     def __init__(self, X, y):
         self.X = (
@@ -205,56 +173,6 @@ class SimpleDataset(Dataset):
         # Return (features, label)
         return self.X[idx], self.y[idx]
 
-
-class LitMLP(pl.LightningModule):
-    def __init__(
-        self,
-        input_dim,
-        hidden_dims,
-        output_dim=1,
-        dropout_rate=0.0,
-        lr=1e-3,
-        scheduler_cfg=None,
-    ):
-        super().__init__()
-        self.scheduler_cfg = scheduler_cfg
-        self.save_hyperparameters()
-
-        self.model = MLP(input_dim, hidden_dims, output_dim, dropout_rate)
-
-        self.criterion = nn.BCEWithLogitsLoss()  # for binary classification
-
-    def forward(self, x):
-        return self.model(x)
-
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x).squeeze(-1)
-        loss = self.criterion(logits, y)
-        self.log("train_loss", loss, on_step=True, on_epoch=True)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x).squeeze(-1)
-        loss = self.criterion(logits, y)
-        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
-        self.log(
-            "val_roc_auc",
-            binary_auroc(logits, y),
-            prog_bar=True,
-            on_step=False,
-            on_epoch=True,
-        )
-        return loss
-
-    def configure_optimizers(self):
-        optimizer = AdamW(self.parameters(), lr=self.hparams.lr)
-        # Instantiate scheduler from your config
-        scheduler = instantiate_class(self.scheduler_cfg, optimizer=optimizer)
-
-        # Return as a dict to ensure the scheduler is called per step or per epoch as needed.
-        return [optimizer], [scheduler]
 
 
 if __name__ == "__main__":
