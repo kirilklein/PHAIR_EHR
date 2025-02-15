@@ -45,7 +45,7 @@ def main_train(config_path):
         )
         logger.info("Model input dim: %d", data_module.input_dim)
         logger.info("Data loaders...")
-        train_loader, val_loader = data_module.get_fold_dataloaders(fold)
+        train_loader, val_loader, val_cf_loader = data_module.get_fold_dataloaders(fold)
         logger.info(f"Train loader size: {len(train_loader.dataset)}")
         logger.info(f"Validation loader size: {len(val_loader.dataset)}")
 
@@ -56,7 +56,11 @@ def main_train(config_path):
 
         logger.info("Calibrating predictions...")
         fold_results = calibrate_predictions(
-            model, train_loader, val_loader, val_pids=fold[VAL_KEY]
+            model,
+            train_loader,
+            val_loader,
+            val_cf_loader,
+            val_pids=fold[VAL_KEY],
         )
         all_fold_results.append(fold_results)
 

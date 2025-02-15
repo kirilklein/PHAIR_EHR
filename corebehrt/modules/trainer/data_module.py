@@ -60,9 +60,13 @@ class EncodedDataModule:
         exposure = load_exposure_from_predictions(
             self.cfg.paths.calibrated_predictions, pids
         )
-        self.X = torch.cat(
-            [encodings, exposure.unsqueeze(1) - 0.5], dim=1
-        )  # center exposure at 0
+
+        # Create factual and counterfactual features
+        centered_exposure = exposure.unsqueeze(1) - 0.5
+        self.X = torch.cat([encodings, centered_exposure], dim=1)
+        self.X_cf = torch.cat(
+            [encodings, -centered_exposure], dim=1
+        )  # Flip the centered exposure/ counterfactual
         self.input_dim = self.X.shape[1]
 
         self.logger.info("Loading index dates and folds")
@@ -100,7 +104,9 @@ class EncodedDataModule:
         binary_outcomes = binary_outcomes.loc[pids]
         return torch.tensor(binary_outcomes.values, dtype=torch.float32)
 
-    def get_fold_dataloaders(self, fold: Dict) -> Tuple[DataLoader, DataLoader]:
+    def get_fold_dataloaders(
+        self, fold: Dict
+    ) -> Tuple[DataLoader, DataLoader, DataLoader]:
         val_fold_pids = fold[VAL_KEY]
         train_fold_pids = fold[TRAIN_KEY]
         val_fold_ids = [i for i, pid in enumerate(self.pids) if pid in val_fold_pids]
@@ -108,13 +114,20 @@ class EncodedDataModule:
             i for i, pid in enumerate(self.pids) if pid in train_fold_pids
         ]
 
+        # Prepare factual data
         X_train = self.X[train_fold_ids]
         X_val = self.X[val_fold_ids]
+        X_val_counter = self.X_cf[
+            val_fold_ids
+        ]  # Counterfactual features for validation
         y_train = self.y[train_fold_ids]
         y_val = self.y[val_fold_ids]
 
         train_dataset = SimpleDataset(X_train, y_train)
         val_dataset = SimpleDataset(X_val, y_val)
+        val_counter_dataset = SimpleDataset(
+            X_val_counter, y_val
+        )  # Dataset for counterfactual predictions
 
         train_loader = DataLoader(
             dataset=train_dataset,
@@ -125,4 +138,10 @@ class EncodedDataModule:
             shuffle=False,  # Never shuffle validation set
             **self.cfg.trainer_args.val_loader_kwargs,
         )
-        return train_loader, val_loader
+
+        val_cf_loader = DataLoader(
+            dataset=val_counter_dataset,
+            shuffle=False,
+            **self.cfg.trainer_args.val_loader_kwargs,
+        )
+        return train_loader, val_loader, val_cf_loader

@@ -1,17 +1,17 @@
 from typing import Tuple
 
-import torch
-import pandas as pd
 import numpy as np
-from sklearn.isotonic import IsotonicRegression
+import pandas as pd
 import pytorch_lightning as pl
+import torch
+from sklearn.isotonic import IsotonicRegression
 from torch.utils.data import DataLoader
 
+from corebehrt.constants.causal import CF_PROBAS, PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL
-from corebehrt.constants.causal import PROBAS, TARGETS
 from corebehrt.main.helper.causal.calibrate import (
-    train_isotonic_regression,
     calibrate_probas,
+    train_isotonic_regression,
 )
 
 
@@ -90,7 +90,8 @@ def calibrate_predictions(
     model: pl.LightningModule,
     train_loader: DataLoader,
     val_loader: DataLoader,
-    val_pids: torch.Tensor,
+    val_cf_loader: DataLoader,
+    val_pids: list,
     epsilon: float = 1e-8,
 ) -> pd.DataFrame:
     """
@@ -101,8 +102,8 @@ def calibrate_predictions(
         model: The trained LightningModule.
         train_loader: DataLoader for the training set.
         val_loader: DataLoader for the validation set.
-        fold_idx: Current fold index.
-        fold_folder: Folder path to save CSV file.
+        val_cf_loader: DataLoader for the counterfactual validation set.
+        val_pids: List of patient IDs for the validation set.
         epsilon: Clipping epsilon for calibration.
 
     Returns:
@@ -120,11 +121,18 @@ def calibrate_predictions(
         calibrator, val_preds, epsilon=epsilon
     )
 
+    # Collect counterfactual validation predictions and targets
+    val_cf_preds, _ = collect_predictions(model, val_cf_loader, device)
+    calibrated_cf = apply_calibration_to_predictions(
+        calibrator, val_cf_preds, epsilon=epsilon
+    )
+
     # Create a DataFrame for validation results
     val_df = pd.DataFrame(
         {
             PID_COL: val_pids,
             PROBAS: calibrated_val,
+            CF_PROBAS: calibrated_cf,
             TARGETS: val_targets,
         }
     )
