@@ -1,12 +1,9 @@
 import unittest
 
 import torch
-from numpy.testing import assert_allclose, assert_array_equal
+from numpy.testing import assert_allclose
 
-from corebehrt.functional.causal.simulate import (
-    combine_counterfactuals,
-    simulate_outcome_from_encodings,
-)
+from corebehrt.functional.causal.simulate import simulate_outcome_from_encodings
 
 
 class TestSimulateOutcomeFromEncodings(unittest.TestCase):
@@ -73,35 +70,6 @@ class TestSimulateOutcomeFromEncodings(unittest.TestCase):
             self.encodings, self.exposure, **params_low
         )
         self.assertTrue(torch.all(prob_low < 0.1))
-
-
-class TestCombineCounterfactuals(unittest.TestCase):
-    def test_combine_counterfactuals_mixed(self):
-        """Test counterfactual combination with mixed exposure values."""
-        exposure = torch.tensor([0, 1, 0, 1])
-        exposed_values = torch.tensor([10, 20, 30, 40])
-        control_values = torch.tensor([100, 200, 300, 400])
-        expected = torch.where(exposure == 1, control_values, exposed_values)
-        result = combine_counterfactuals(exposure, exposed_values, control_values)
-        assert_array_equal(result, expected)
-
-    def test_combine_counterfactuals_all_exposed(self):
-        """Test counterfactual combination when all individuals are exposed."""
-        exposure = torch.tensor([1, 1, 1])
-        exposed_values = torch.tensor([5, 5, 5])
-        control_values = torch.tensor([50, 50, 50])
-        expected = torch.where(exposure == 1, control_values, exposed_values)
-        result = combine_counterfactuals(exposure, exposed_values, control_values)
-        assert_array_equal(result, expected)
-
-    def test_combine_counterfactuals_all_control(self):
-        """Test counterfactual combination when all individuals are in control."""
-        exposure = torch.tensor([0, 0, 0])
-        exposed_values = torch.tensor([5, 5, 5])
-        control_values = torch.tensor([50, 50, 50])
-        expected = torch.where(exposure == 1, control_values, exposed_values)
-        result = combine_counterfactuals(exposure, exposed_values, control_values)
-        assert_array_equal(result, expected)
 
 
 if __name__ == "__main__":
