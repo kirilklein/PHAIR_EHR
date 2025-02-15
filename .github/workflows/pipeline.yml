@@ -60,7 +60,7 @@ jobs:
             - name: main.finetune_exposure
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.finetune --config_path ./corebehrt/configs/causal/finetune_exposure.yaml
+                python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/causal/finetune_exposure.yaml
 
             - name: main.calibrate
               run: |
