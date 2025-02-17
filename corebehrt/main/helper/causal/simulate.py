@@ -9,7 +9,6 @@ from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.causal.counterfactuals import combine_counterfactuals
 from corebehrt.functional.causal.simulate import simulate_outcome_from_encodings
 from corebehrt.functional.utils.time import get_abspos_from_origin_point
-from corebehrt.modules.setup.config import load_config
 
 DATE_FUTURE = pd.Timestamp("2100-01-01")
 
