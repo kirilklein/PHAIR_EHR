@@ -46,6 +46,11 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.finetune_cv
 
+            - name: main.finetune_predefined
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/finetune_predefined.yaml
+
             ### Causal ###
             - name: main.create_outcomes
               run: |
@@ -77,10 +82,10 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.simulate
 
-            - name: main.finetune_predefined
+            - name: main.train_mlp
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/finetune_predefined.yaml
+                python -m corebehrt.main.main_causal.train_mlp
 
             - name: main.estimate
               run: |
