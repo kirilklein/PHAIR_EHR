@@ -67,27 +67,35 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/causal/finetune_exposure.yaml
 
-            - name: main.calibrate
+            - name: calibrate
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.calibrate 
 
-            - name: main.encode
+            - name: encode
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.encode
 
-            - name: main.simulate
-              run: |
-                source .venv/bin/activate
-                python -m corebehrt.main.main_causal.simulate
-
-            - name: main.train_mlp
+            - name: train_mlp
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.train_mlp
 
-            - name: main.estimate
+            - name: estimate
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.estimate
+
+            # With counterfactual outcomes
+
+            - name: simulate
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.simulate
+
+            - name: train_mlp_simulated
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.train_mlp --config_path ./corebehrt/configs/causal/train_mlp_simulated.yaml
+
