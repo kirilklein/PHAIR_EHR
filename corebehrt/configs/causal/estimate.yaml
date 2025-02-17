@@ -5,7 +5,7 @@ logging:
 paths:
 ## INPUTS  
   exposure_predictions: ./outputs/causal/calibrated_predictions # containing predictions_and_targets_calibrated.csv
-  outcome_predictions: ./outputs/causal/trained_mlp # containing predictions_and_targets_calibrated.csv
+  outcome_predictions: ./outputs/causal/trained_mlp # containing predictions_and_targets_calibrated.csv 
 
   # counterfactual_outcomes: ./outputs/causal/counterfactual_outcomes # optional
 
@@ -13,7 +13,7 @@ paths:
   estimate: ./outputs/causal/estimate
 
 estimator:
-  methods: ["IPW"]
+  methods: ["IPW", "AIPW", "TMLE"]
   effect_type: "ATE"
   n_bootstrap: 30
   common_support_threshold: 0.01
