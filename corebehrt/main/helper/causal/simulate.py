@@ -1,12 +1,15 @@
+from datetime import datetime
 from typing import Tuple
 
 import pandas as pd
 import torch
 
 from corebehrt.constants.causal import CF_OUTCOMES, CF_PROBAS, OUTCOMES, PROBAS
-from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
+from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.causal.counterfactuals import combine_counterfactuals
 from corebehrt.functional.causal.simulate import simulate_outcome_from_encodings
+from corebehrt.functional.utils.time import get_abspos_from_origin_point
+from corebehrt.modules.setup.config import load_config
 
 DATE_FUTURE = pd.Timestamp("2100-01-01")
 
@@ -52,7 +55,16 @@ def simulate(
         }
     )
     timestamp_df = get_timestamp_df(results_df)
+
     return results_df, timestamp_df
+
+
+def add_abspos_to_df(df: pd.DataFrame, origin_point: dict) -> pd.DataFrame:
+    """Add abspos to df. Use origin point."""
+    df[ABSPOS_COL] = get_abspos_from_origin_point(
+        df[TIMESTAMP_COL], datetime(**origin_point)
+    )
+    return df
 
 
 def get_timestamp_df(results_df: pd.DataFrame) -> pd.DataFrame:
