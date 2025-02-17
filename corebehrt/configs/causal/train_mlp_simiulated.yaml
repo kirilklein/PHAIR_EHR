@@ -12,7 +12,7 @@ paths:
   
 
 ## OUTPUTS
-  trained_mlp: ./outputs/causal/trained_mlp
+  trained_mlp: ./outputs/causal/trained_mlp_simulated
 
 outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
   n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)
