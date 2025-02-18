@@ -2,6 +2,7 @@ from os.path import join
 from typing import Any, Dict
 
 import pandas as pd
+from CausalEstimate.filter.propensity import filter_common_support
 from CausalEstimate.interface.estimator import Estimator
 from CausalEstimate.stats.stats import compute_treatment_outcome_table
 
@@ -13,13 +14,16 @@ from corebehrt.constants.causal import (
     EXPERIMENT_STATS_FILE,
     EXPOSURE_COL,
     PROBAS,
-    PROBAS_CONTROL_COL,
-    PROBAS_EXPOSED_COL,
+    PROBAS_CONTROL,
+    PROBAS_EXPOSED,
     PS_COL,
+    SIMULATION_RESULTS_FILE,
     TARGETS,
+    TRUE_EFFECT_COL,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.counterfactuals import expand_counterfactuals
+from corebehrt.functional.causal.effect import compute_effect_from_counterfactuals
 from corebehrt.modules.setup.config import Config
 
 
@@ -30,6 +34,7 @@ class EffectEstimator:
         self.exp_dir = self.cfg.paths.estimate
         self.exposure_pred_dir = self.cfg.paths.exposure_predictions
         self.outcome_pred_dir = self.cfg.paths.outcome_predictions
+        self.counterfactual_outcomes_dir = self.cfg.paths.get("counterfactual_outcomes")
         self.estimator_cfg = self.cfg.get("estimator")
         self.estimation_args = self._initialize_estimation_args()
 
@@ -40,8 +45,8 @@ class EffectEstimator:
         """
         method_args = {
             method: {
-                "predicted_outcome_treated_col": PROBAS_EXPOSED_COL,
-                "predicted_outcome_control_col": PROBAS_CONTROL_COL,
+                "predicted_outcome_treated_col": PROBAS_EXPOSED,
+                "predicted_outcome_control_col": PROBAS_CONTROL,
                 "predicted_outcome_col": PROBAS,
             }
             for method in ["AIPW", "TMLE"]
@@ -69,11 +74,19 @@ class EffectEstimator:
 
         # Expand counterfactual values in the data
         df = expand_counterfactuals(
-            df, EXPOSURE_COL, CF_PROBAS, PROBAS_CONTROL_COL, PROBAS_EXPOSED_COL
+            df, EXPOSURE_COL, CF_PROBAS, PROBAS_CONTROL, PROBAS_EXPOSED
         )
 
         self.logger.info("Estimating causal effect")
         effect_df = self._compute_causal_effect(df)
+
+        if self.counterfactual_outcomes_dir:
+            counterfactual_outcomes = pd.read_csv(
+                join(self.counterfactual_outcomes_dir, SIMULATION_RESULTS_FILE)
+            )
+            effect_df[TRUE_EFFECT_COL] = self._compute_true_effect_from_counterfactuals(
+                df, counterfactual_outcomes
+            )
 
         self._save_estimate_results(effect_df)
 
@@ -99,6 +112,32 @@ class EffectEstimator:
         )
 
         return self._convert_effect_to_dataframe(effect)
+
+    def _compute_true_effect_from_counterfactuals(
+        self, df: pd.DataFrame, counterfactual_outcomes: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        Takes the counterfactual outcomes, the original dataframe with PS (for common suport filtering), and computes the true effect
+        Returns a column with the true effect for each row.
+        """
+        if self.estimation_args["common_support"]:
+            counterfactual_outcomes = pd.merge(
+                counterfactual_outcomes,
+                df[[PID_COL, PS_COL]],
+                on=PID_COL,
+                validate="1:1",  # Enforce one-to-one merge
+            )
+
+            counterfactual_outcomes = filter_common_support(
+                counterfactual_outcomes,
+                ps_col=PS_COL,
+                treatment_col=EXPOSURE_COL,
+                threshold=self.estimation_args["common_support_threshold"],
+            )
+
+        return compute_effect_from_counterfactuals(
+            counterfactual_outcomes, self.estimator_cfg.effect_type
+        )
 
     def _load_data(self) -> pd.DataFrame:
         """Load exposure and outcome predictions and merge them."""
