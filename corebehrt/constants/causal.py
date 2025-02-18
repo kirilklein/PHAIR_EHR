@@ -3,11 +3,11 @@ PROBAS = "probas"
 TARGETS = "targets"
 
 OUTCOMES = "outcomes"
-CF_OUTCOMES = "cf_outcomes"
-CF_PROBAS = "cf_probas"
 
-PROBAS_CONTROL_COL = "probas_control"
-PROBAS_EXPOSED_COL = "probas_exposed"
+OUTCOME_EXPOSED = "Y0"
+OUTCOME_CONTROL = "Y1"
+PROBAS_EXPOSED = "P0"
+PROBAS_CONTROL = "P1"
 
 EXPOSURE_COL = "exposure"
 PS_COL = "ps"

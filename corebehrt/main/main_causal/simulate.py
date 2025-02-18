@@ -35,9 +35,9 @@ def main_simulate(config_path):
         logger, pids, encodings, exposure, cfg.simulation
     )
 
+    # Post-process timestamps using the provided origin point.
     data_cfg = load_config(join(cfg.paths.encoded_data, DATA_CFG))
     timestamp_df = add_abspos_to_df(timestamp_df, data_cfg.features.origin_point)
-    logger.info("Done")
 
     logger.info("Save results")
     result_df.to_csv(
@@ -46,6 +46,8 @@ def main_simulate(config_path):
     timestamp_df.to_csv(
         join(cfg.paths.simulated_outcome, TIMESTAMP_OUTCOME_FILE), index=False
     )
+
+    logger.info("Done")
 
 
 if __name__ == "__main__":
