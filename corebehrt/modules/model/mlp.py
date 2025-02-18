@@ -1,7 +1,7 @@
 import lightning as pl
 import torch.nn as nn
+from sklearn.metrics import roc_auc_score
 from torch.optim import AdamW
-from torcheval.metrics.functional.classification import binary_auroc
 
 from corebehrt.modules.setup.config import instantiate_class
 
@@ -40,7 +40,7 @@ class LitMLP(pl.LightningModule):
         hidden_dims,
         output_dim=1,
         dropout_rate=0.0,
-        lr=1e-3,
+        lr=1e-3,  # accessed internally by the optimizer
         scheduler_cfg=None,
     ):
         super().__init__()
@@ -68,7 +68,7 @@ class LitMLP(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
         self.log(
             "val_roc_auc",
-            binary_auroc(logits, y),
+            roc_auc_score(y.cpu().float().numpy(), logits.cpu().float().numpy()),
             prog_bar=True,
             on_step=False,
             on_epoch=True,

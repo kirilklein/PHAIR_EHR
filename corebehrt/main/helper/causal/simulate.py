@@ -1,13 +1,22 @@
+from datetime import datetime
 from typing import Tuple
 
 import pandas as pd
 import torch
-from corebehrt.constants.causal import CF_OUTCOMES, CF_PROBAS, OUTCOMES, PROBAS
-from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
-from corebehrt.functional.causal.simulate import (
-    combine_counterfactuals,
-    simulate_outcome_from_encodings,
+
+from corebehrt.constants.causal import (
+    EXPOSURE_COL,
+    OUTCOMES,
+    PROBAS,
+    SIMULATED_OUTCOME_CONTROL,
+    SIMULATED_OUTCOME_EXPOSED,
+    SIMULATED_PROBAS_CONTROL,
+    SIMULATED_PROBAS_EXPOSED,
 )
+from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
+from corebehrt.functional.causal.counterfactuals import get_true_outcome
+from corebehrt.functional.causal.simulate import simulate_outcome_from_encodings
+from corebehrt.functional.utils.time import get_abspos_from_origin_point
 
 DATE_FUTURE = pd.Timestamp("2100-01-01")
 
@@ -19,12 +28,24 @@ def simulate(
     exposure: torch.Tensor,
     simulate_cfg: dict,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Simulates outcomes under both exposed and control conditions for a set of patients.
 
-    logger.info("simulate actual outcome")
-    outcome, proba = simulate_outcome_from_encodings(
-        encodings, exposure, **simulate_cfg
-    )
+    This function takes patient encodings and exposure status and simulates counterfactual
+    outcomes - what would have happened if each patient was exposed vs not exposed.
 
+    Args:
+        logger: Logger object for tracking simulation progress and debugging
+        pids (list): List of patient IDs
+        encodings (torch.Tensor): Encoded patient features/characteristics
+        exposure (torch.Tensor): Binary tensor indicating actual exposure status
+        simulate_cfg (dict): Configuration parameters for the simulation model
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: Two dataframes containing:
+            1. Results dataframe with simulated outcomes and probabilities
+            2. Timestamp dataframe with temporal information
+    """
     logger.info("simulate under exposure")
     all_exposed = torch.ones_like(exposure)
     all_exposed_outcome, all_exposed_proba = simulate_outcome_from_encodings(
@@ -36,24 +57,31 @@ def simulate(
     all_control_outcome, all_control_proba = simulate_outcome_from_encodings(
         encodings, all_control, **simulate_cfg
     )
-
-    logger.info("combine into cf outcome")
-    cf_outcome = combine_counterfactuals(
-        exposure, all_exposed_outcome, all_control_outcome
-    )
-    cf_proba = combine_counterfactuals(exposure, all_exposed_proba, all_control_proba)
-
+    probas = get_true_outcome(exposure, all_exposed_proba, all_control_proba)
+    outcomes = get_true_outcome(exposure, all_exposed_outcome, all_control_outcome)
     results_df = pd.DataFrame(
         {
             PID_COL: pids,
-            OUTCOMES: outcome,
-            CF_OUTCOMES: cf_outcome,
-            PROBAS: proba,
-            CF_PROBAS: cf_proba,
+            SIMULATED_OUTCOME_EXPOSED: all_exposed_outcome,
+            SIMULATED_OUTCOME_CONTROL: all_control_outcome,
+            SIMULATED_PROBAS_EXPOSED: all_exposed_proba,
+            SIMULATED_PROBAS_CONTROL: all_control_proba,
+            EXPOSURE_COL: exposure,
+            PROBAS: probas,
+            OUTCOMES: outcomes,
         }
     )
     timestamp_df = get_timestamp_df(results_df)
+
     return results_df, timestamp_df
+
+
+def add_abspos_to_df(df: pd.DataFrame, origin_point: dict) -> pd.DataFrame:
+    """Add abspos to df. Use origin point."""
+    df[ABSPOS_COL] = get_abspos_from_origin_point(
+        df[TIMESTAMP_COL], datetime(**origin_point)
+    )
+    return df
 
 
 def get_timestamp_df(results_df: pd.DataFrame) -> pd.DataFrame:

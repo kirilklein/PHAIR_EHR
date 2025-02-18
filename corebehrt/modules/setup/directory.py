@@ -15,6 +15,7 @@ from corebehrt.constants.paths import (
     SIMULATE_CFG,
     CALIBRATE_CFG,
     TRAIN_MLP_CFG,
+    ESTIMATE_CFG,
 )
 from corebehrt.functional.setup.checks import check_categories
 from corebehrt.modules.setup.config import Config, load_config
@@ -428,6 +429,27 @@ class DirectoryPreparer:
         )
         self.write_config("trained_mlp", source="cohort", name=COHORT_CFG)
         self.write_config("trained_mlp", name=TRAIN_MLP_CFG)
+
+    def setup_estimate(self) -> None:
+        """
+        Validates path config and sets up directories for estimate.
+        """
+        # Setup logging
+        self.setup_logging("estimate")
+
+        # Validate and create directories
+        self.check_directory("exposure_predictions")
+        self.check_directory("outcome_predictions")
+
+        # Optional counterfactual outcomes check
+        if self.cfg.paths.get("counterfactual_outcomes", False):
+            self.check_directory("counterfactual_outcomes")
+
+        # Create estimate directory
+        self.create_run_directory("estimate", base="runs")
+
+        # Write config in output directory
+        self.write_config("estimate", name=ESTIMATE_CFG)
 
     #
     # Directory naming generators

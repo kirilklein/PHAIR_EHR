@@ -1,119 +1,120 @@
 import unittest
 from unittest.mock import patch
 
-import pandas as pd
+import numpy as np
 import torch
 
-from corebehrt.constants.causal import CF_OUTCOMES, CF_PROBAS, OUTCOMES, PROBAS, TARGETS
+from corebehrt.constants.causal import (
+    EXPOSURE_COL,
+    OUTCOMES,
+    PROBAS,
+    SIMULATED_OUTCOME_CONTROL,
+    SIMULATED_OUTCOME_EXPOSED,
+    SIMULATED_PROBAS_CONTROL,
+    SIMULATED_PROBAS_EXPOSED,
+)
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
-
-# Import the simulate function and related constants.
 from corebehrt.main.helper.causal.simulate import DATE_FUTURE, simulate
 
 
-# Define a simple dummy logger.
+# A simple dummy logger that does nothing.
 class DummyLogger:
-    def __init__(self):
-        self.messages = []
-
-    def info(self, message):
-        self.messages.append(message)
+    def info(self, msg):
+        pass
 
 
-class TestSimulateFunction(unittest.TestCase):
-    @patch("corebehrt.main.helper.causal.simulate.combine_counterfactuals")
-    @patch("corebehrt.main.helper.causal.simulate.simulate_outcome_from_encodings")
-    def test_simulate(self, mock_simulate_outcome, mock_combine_cf):
-        def col_to_tensor(df: pd.DataFrame, column: str) -> torch.Tensor:
-            return torch.tensor(df[column].values)
+# Dummy implementation for simulate_outcome_from_encodings.
+def dummy_simulate_outcome_from_encodings(encodings, exposure, **simulate_cfg):
+    # For an input tensor of ones, return ones as outcomes and 0.9 for probabilities.
+    # For an input tensor of zeros, return zeros as outcomes and 0.1 for probabilities.
+    if torch.all(exposure == 1):
+        outcome = torch.ones_like(exposure)
+        proba = torch.full_like(exposure, 0.9, dtype=torch.float)
+    elif torch.all(exposure == 0):
+        outcome = torch.zeros_like(exposure)
+        proba = torch.full_like(exposure, 0.1, dtype=torch.float)
+    else:
+        # For mixed values, choose element-wise.
+        outcome = exposure.clone()
+        proba = torch.where(exposure == 1, torch.tensor(0.9), torch.tensor(0.1))
+    return outcome, proba
 
-        # Set up controlled returns for the three calls to simulate_outcome_from_encodings.
-        # First call: actual outcomes and probabilities.
-        actual_outcome = torch.tensor([0, 1, 0])
-        actual_proba = torch.tensor([0.3, 0.7, 0.4])
-        # Second call: simulation under full exposure.
-        all_exposed_outcome = torch.tensor([1, 1, 1])
-        all_exposed_proba = torch.tensor([0.8, 0.9, 0.85])
-        # Third call: simulation under control.
-        all_control_outcome = torch.tensor([0, 0, 0])
-        all_control_proba = torch.tensor([0.2, 0.1, 0.15])
 
-        # Arrange that each call to simulate_outcome_from_encodings returns the next tuple.
-        mock_simulate_outcome.side_effect = [
-            (actual_outcome, actual_proba),
-            (all_exposed_outcome, all_exposed_proba),
-            (all_control_outcome, all_control_proba),
-        ]
+# Dummy implementation for get_true_outcome.
+def dummy_get_true_outcome(exposure, outcome_exposed, outcome_control):
+    # Return outcome_exposed where exposure==1 and outcome_control otherwise.
+    return torch.where(exposure == 1, outcome_exposed, outcome_control)
 
-        # Define a side effect for combine_counterfactuals that mimics its np.where behavior.
-        def combine_side_effect(exposure, exposed_values, control_values):
-            # According to the logic: if exposure==1, choose control_values; otherwise choose exposed_values.
-            return torch.where(exposure == 1, control_values, exposed_values)
 
-        mock_combine_cf.side_effect = combine_side_effect
+class TestSimulate(unittest.TestCase):
 
-        # Create a dummy logger.
+    @patch(
+        "corebehrt.main.helper.causal.simulate.simulate_outcome_from_encodings",
+        side_effect=dummy_simulate_outcome_from_encodings,
+    )
+    @patch(
+        "corebehrt.main.helper.causal.simulate.get_true_outcome",
+        side_effect=dummy_get_true_outcome,
+    )
+    def test_simulate(self, mock_get_true_outcome, mock_simulate_outcome):
         logger = DummyLogger()
-        # Create a dummy encodings array.
-        encodings = torch.tensor([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]])
-        # Build a dummy predictions DataFrame containing the required columns.
-        predictions = pd.DataFrame(
-            {PID_COL: ["p1", "p2", "p3"], TARGETS: torch.tensor([0, 1, 0])}
-        )
-        # A minimal simulation configuration.
-        simulate_cfg = {"exposure_coef": 1.0, "enc_coef": 1.0, "intercept": 0.0}
+        pids = ["p1", "p2", "p3"]
+        # Dummy encodings (content not used in dummy function).
+        encodings = torch.zeros((3, 10))
+        # Create a binary exposure tensor.
+        exposure = torch.tensor([1, 0, 1])
+        simulate_cfg = {"intercept": 1.0, "exposure_coef": 0.0, "enc_coef": 0.0}
 
-        # Call the simulate function.
         results_df, timestamp_df = simulate(
-            logger,
-            predictions[PID_COL],
-            encodings,
-            torch.tensor(predictions[TARGETS].values),
-            simulate_cfg,
+            logger, pids, encodings, exposure, simulate_cfg
         )
 
-        # Verify that simulate_outcome_from_encodings was called three times.
-        self.assertEqual(mock_simulate_outcome.call_count, 3)
-        # And that combine_counterfactuals was called twice.
-        self.assertEqual(mock_combine_cf.call_count, 2)
+        # Verify that results_df contains the expected columns.
+        expected_columns = [
+            PID_COL,
+            SIMULATED_OUTCOME_EXPOSED,
+            SIMULATED_OUTCOME_CONTROL,
+            SIMULATED_PROBAS_EXPOSED,
+            SIMULATED_PROBAS_CONTROL,
+            EXPOSURE_COL,
+            PROBAS,
+            OUTCOMES,
+        ]
+        for col in expected_columns:
+            self.assertIn(col, results_df.columns)
 
-        # Verify that the results DataFrame has the expected columns.
-        expected_columns = {PID_COL, OUTCOMES, CF_OUTCOMES, PROBAS, CF_PROBAS}
-        self.assertEqual(set(results_df.columns), expected_columns)
-        # Check that the PID column matches the input.
-        self.assertTrue((results_df[PID_COL] == predictions[PID_COL]).all())
-        # Verify that the actual outcomes and probabilities are as expected.
-        torch.testing.assert_close(col_to_tensor(results_df, OUTCOMES), actual_outcome)
-        torch.testing.assert_close(col_to_tensor(results_df, PROBAS), actual_proba)
-
-        # Manually compute expected counterfactual outcomes and probabilities:
-        # For each row, if TARGETS (exposure) == 1, then cf value should come from control simulation,
-        # otherwise from the exposed simulation.
-        exposure = torch.tensor(predictions[TARGETS].values)
-        expected_cf_outcomes = torch.where(
-            exposure == 1, all_control_outcome, all_exposed_outcome
+        # Check that simulated outcomes/probabilities match the dummy behavior.
+        self.assertListEqual(results_df[SIMULATED_OUTCOME_EXPOSED].tolist(), [1, 1, 1])
+        self.assertListEqual(results_df[SIMULATED_OUTCOME_CONTROL].tolist(), [0, 0, 0])
+        self.assertListEqual(
+            [round(val, 4) for val in results_df[SIMULATED_PROBAS_EXPOSED].tolist()],
+            [0.9, 0.9, 0.9],
         )
-        expected_cf_probas = torch.where(
-            exposure == 1, all_control_proba, all_exposed_proba
-        )
-        torch.testing.assert_close(
-            col_to_tensor(results_df, CF_OUTCOMES), expected_cf_outcomes
-        )
-        torch.testing.assert_close(
-            col_to_tensor(results_df, CF_PROBAS), expected_cf_probas
+        self.assertListEqual(
+            [round(val, 4) for val in results_df[SIMULATED_PROBAS_CONTROL].tolist()],
+            [0.1, 0.1, 0.1],
         )
 
-        # Check that the timestamp DataFrame contains only those rows where actual outcome == 1
-        expected_timestamp_pids = predictions[PID_COL][predictions[TARGETS] == 1].values
-        self.assertTrue((timestamp_df[PID_COL].values == expected_timestamp_pids).all())
-        # And that every timestamp is set to DATE_FUTURE.
-        self.assertTrue((timestamp_df[TIMESTAMP_COL] == DATE_FUTURE).all())
+        # Check the final probabilities: if exposure==1, then 0.9; else 0.1.
+        expected_final_probas = torch.where(
+            exposure == 1, torch.tensor(0.9), torch.tensor(0.1)
+        )
+        self.assertTrue(
+            np.allclose(
+                results_df[PROBAS].astype(float).values, expected_final_probas.numpy()
+            )
+        )
 
-        # Optionally, verify that the logger recorded the key log messages.
-        self.assertIn("simulate actual outcome", logger.messages)
-        self.assertIn("simulate under exposure", logger.messages)
-        self.assertIn("simulate under control", logger.messages)
-        self.assertIn("combine into cf outcome", logger.messages)
+        # Check the final outcomes: with our dummy, they match the exposure.
+        self.assertListEqual(results_df[OUTCOMES].tolist(), exposure.tolist())
+
+        # Test the timestamp_df: it should contain only patient IDs where outcomes are positive.
+        expected_pids_timestamp = [
+            pids[i] for i, val in enumerate(exposure.tolist()) if val == 1
+        ]
+        self.assertListEqual(timestamp_df[PID_COL].tolist(), expected_pids_timestamp)
+        # And the TIMESTAMP_COL should be set to DATE_FUTURE for all rows.
+        self.assertTrue(all(ts == DATE_FUTURE for ts in timestamp_df[TIMESTAMP_COL]))
 
 
 if __name__ == "__main__":

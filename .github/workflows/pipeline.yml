@@ -46,6 +46,11 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.finetune_cv
 
+            - name: main.finetune_predefined
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/finetune_predefined.yaml
+
             ### Causal ###
             - name: main.create_outcomes
               run: |
@@ -62,22 +67,40 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/causal/finetune_exposure.yaml
 
-            - name: main.calibrate
+            - name: calibrate
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.calibrate 
 
-            - name: main.encode
+            - name: encode
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.encode
 
-            - name: main.simulate
+            - name: train_mlp
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.train_mlp
+
+            - name: estimate
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.estimate
+
+            # With counterfactual outcomes
+
+            - name: simulate
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.simulate
 
-            - name: main.finetune_predefined
+            - name: train_mlp_simulated
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/finetune_predefined.yaml
+                python -m corebehrt.main.main_causal.train_mlp --config_path ./corebehrt/configs/causal/train_mlp_simulated.yaml
+
+            - name: estimate_with_true
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.estimate --config_path ./corebehrt/configs/causal/estimate_with_true.yaml
+
