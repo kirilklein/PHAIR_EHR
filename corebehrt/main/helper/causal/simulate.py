@@ -28,7 +28,24 @@ def simulate(
     exposure: torch.Tensor,
     simulate_cfg: dict,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Simulates outcomes under both exposed and control conditions for a set of patients.
 
+    This function takes patient encodings and exposure status and simulates counterfactual
+    outcomes - what would have happened if each patient was exposed vs not exposed.
+
+    Args:
+        logger: Logger object for tracking simulation progress and debugging
+        pids (list): List of patient IDs
+        encodings (torch.Tensor): Encoded patient features/characteristics
+        exposure (torch.Tensor): Binary tensor indicating actual exposure status
+        simulate_cfg (dict): Configuration parameters for the simulation model
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: Two dataframes containing:
+            1. Results dataframe with simulated outcomes and probabilities
+            2. Timestamp dataframe with temporal information
+    """
     logger.info("simulate under exposure")
     all_exposed = torch.ones_like(exposure)
     all_exposed_outcome, all_exposed_proba = simulate_outcome_from_encodings(
