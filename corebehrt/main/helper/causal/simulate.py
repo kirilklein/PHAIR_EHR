@@ -6,12 +6,12 @@ import torch
 
 from corebehrt.constants.causal import (
     EXPOSURE_COL,
-    OUTCOME_CONTROL,
-    OUTCOME_EXPOSED,
     OUTCOMES,
     PROBAS,
-    PROBAS_CONTROL,
-    PROBAS_EXPOSED,
+    SIMULATED_OUTCOME_CONTROL,
+    SIMULATED_OUTCOME_EXPOSED,
+    SIMULATED_PROBAS_CONTROL,
+    SIMULATED_PROBAS_EXPOSED,
 )
 from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.causal.counterfactuals import get_true_outcome
@@ -45,10 +45,10 @@ def simulate(
     results_df = pd.DataFrame(
         {
             PID_COL: pids,
-            OUTCOME_EXPOSED: all_exposed_outcome,
-            OUTCOME_CONTROL: all_control_outcome,
-            PROBAS_EXPOSED: all_exposed_proba,
-            PROBAS_CONTROL: all_control_proba,
+            SIMULATED_OUTCOME_EXPOSED: all_exposed_outcome,
+            SIMULATED_OUTCOME_CONTROL: all_control_outcome,
+            SIMULATED_PROBAS_EXPOSED: all_exposed_proba,
+            SIMULATED_PROBAS_CONTROL: all_control_proba,
             EXPOSURE_COL: exposure,
             PROBAS: probas,
             OUTCOMES: outcomes,
