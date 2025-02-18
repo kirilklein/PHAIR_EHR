@@ -99,3 +99,8 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.main_causal.train_mlp --config_path ./corebehrt/configs/causal/train_mlp_simulated.yaml
 
+            - name: estimate_with_true
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.main_causal.estimate --config_path ./corebehrt/configs/causal/estimate_with_true.yaml
+
