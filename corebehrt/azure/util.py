@@ -3,6 +3,7 @@ from os.path import join
 from datetime import datetime
 from typing import Tuple
 from corebehrt.modules.setup.config import Config, load_config
+from corebehrt.azure import log
 
 AZURE_CONFIG_FILE = "azure_job_config.yaml"
 AZURE_AVAILABLE = False
@@ -89,7 +90,7 @@ def setup_job(
         command=cmd,
         inputs=input_values,
         outputs=output_values,
-        environment="CoreBEHRT@latest",
+        environment="PHAIR_EHR@latest",
         compute=compute,
         name=f"{job}_{ts}",
     )
@@ -101,6 +102,25 @@ def run_job(job, experiment: str):
     """
     check_azure()
     ml_client().create_or_update(job, experiment_name=experiment)
+
+
+def run_main(main: callable, inputs: dict, outputs: dict) -> None:
+    """
+    Implements a wrapper for running CoreBEHRT scrips on the cluster.
+    Prepares input and outputs, sets up logging on Azure using MLFlow
+    (if available), and finally calls the main script.
+
+    :param main: The main callable.
+    :param inputs: inputs configuration.
+    :param outputs: outputs configuration.
+    """
+    log.start_run()
+
+    prepare_config(inputs, outputs)
+
+    main(AZURE_CONFIG_FILE)
+
+    log.end_run()
 
 
 def prepare_config(inputs: dict, outputs: dict) -> None:
