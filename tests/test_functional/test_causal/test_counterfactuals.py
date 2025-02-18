@@ -1,42 +1,8 @@
 import unittest
 
 import pandas as pd
-import torch
-from numpy.testing import assert_array_equal
 
-from corebehrt.functional.causal.counterfactuals import (
-    combine_counterfactuals,
-    expand_counterfactuals,
-)
-
-
-class TestCombineCounterfactuals(unittest.TestCase):
-    def test_combine_counterfactuals_mixed(self):
-        """Test counterfactual combination with mixed exposure values."""
-        exposure = torch.tensor([0, 1, 0, 1])
-        exposed_values = torch.tensor([10, 20, 30, 40])
-        control_values = torch.tensor([100, 200, 300, 400])
-        expected = torch.where(exposure == 1, control_values, exposed_values)
-        result = combine_counterfactuals(exposure, exposed_values, control_values)
-        assert_array_equal(result, expected)
-
-    def test_combine_counterfactuals_all_exposed(self):
-        """Test counterfactual combination when all individuals are exposed."""
-        exposure = torch.tensor([1, 1, 1])
-        exposed_values = torch.tensor([5, 5, 5])
-        control_values = torch.tensor([50, 50, 50])
-        expected = torch.where(exposure == 1, control_values, exposed_values)
-        result = combine_counterfactuals(exposure, exposed_values, control_values)
-        assert_array_equal(result, expected)
-
-    def test_combine_counterfactuals_all_control(self):
-        """Test counterfactual combination when all individuals are in control."""
-        exposure = torch.tensor([0, 0, 0])
-        exposed_values = torch.tensor([5, 5, 5])
-        control_values = torch.tensor([50, 50, 50])
-        expected = torch.where(exposure == 1, control_values, exposed_values)
-        result = combine_counterfactuals(exposure, exposed_values, control_values)
-        assert_array_equal(result, expected)
+from corebehrt.functional.causal.counterfactuals import expand_counterfactuals
 
 
 class TestExpandCounterfactuals(unittest.TestCase):
