@@ -1,7 +1,7 @@
 import logging
 
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main.helper.causal.calibrate import (
+from corebehrt.main_causal.helper.calibrate import (
     compute_and_save_calibration,
     save_combined_predictions,
 )

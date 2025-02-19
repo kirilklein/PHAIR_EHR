@@ -7,7 +7,7 @@ from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.constants.paths import FOLDS_FILE, PROCESSED_DATA_DIR
 from corebehrt.functional.setup.args import get_args
 from corebehrt.functional.utils.filter import filter_folds_by_pids
-from corebehrt.main.helper.causal.encode import encode_loop
+from corebehrt.main_causal.helper.encode import encode_loop
 from corebehrt.modules.preparation.dataset import PatientDataset
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
