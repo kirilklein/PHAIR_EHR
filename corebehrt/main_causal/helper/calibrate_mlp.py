@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from corebehrt.constants.causal import CF_PROBAS, PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL
-from corebehrt.main.helper.causal.calibrate import (
+from corebehrt.main_causal.helper.calibrate import (
     calibrate_probas,
     train_isotonic_regression,
 )
