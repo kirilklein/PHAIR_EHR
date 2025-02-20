@@ -8,7 +8,7 @@ from corebehrt.functional.causal.load import (
     load_exposure_from_predictions,
 )
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main.helper.causal.simulate import add_abspos_to_df, simulate
+from corebehrt.main_causal.helper.simulate import add_abspos_to_df, simulate
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 

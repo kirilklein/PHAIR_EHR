@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 from sklearn.isotonic import IsotonicRegression
-from corebehrt.main.helper.causal.calibrate import (
+from corebehrt.main_causal.helper.calibrate import (
     train_isotonic_regression,
     calibrate_probas,
     split_data,

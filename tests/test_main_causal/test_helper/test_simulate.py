@@ -14,7 +14,7 @@ from corebehrt.constants.causal import (
     SIMULATED_PROBAS_EXPOSED,
 )
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
-from corebehrt.main.helper.causal.simulate import DATE_FUTURE, simulate
+from corebehrt.main_causal.helper.simulate import DATE_FUTURE, simulate
 
 
 # A simple dummy logger that does nothing.
@@ -49,11 +49,11 @@ def dummy_get_true_outcome(exposure, outcome_exposed, outcome_control):
 class TestSimulate(unittest.TestCase):
 
     @patch(
-        "corebehrt.main.helper.causal.simulate.simulate_outcome_from_encodings",
+        "corebehrt.main_causal.helper.simulate.simulate_outcome_from_encodings",
         side_effect=dummy_simulate_outcome_from_encodings,
     )
     @patch(
-        "corebehrt.main.helper.causal.simulate.get_true_outcome",
+        "corebehrt.main_causal.helper.simulate.get_true_outcome",
         side_effect=dummy_get_true_outcome,
     )
     def test_simulate(self, mock_get_true_outcome, mock_simulate_outcome):
