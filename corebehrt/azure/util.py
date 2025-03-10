@@ -2,11 +2,13 @@ import argparse
 from os.path import join
 from datetime import datetime
 from typing import Tuple
-from corebehrt.modules.setup.config import Config, load_config
+import yaml
 from corebehrt.azure import log
+import importlib
 
 AZURE_CONFIG_FILE = "azure_job_config.yaml"
 AZURE_AVAILABLE = False
+CURRENT_RUN = None
 
 try:
     #
@@ -30,6 +32,14 @@ def is_azure_available() -> bool:
     return AZURE_AVAILABLE
 
 
+def get_current_run():
+    """
+    Get the current run object, if available.
+    """
+    global CURRENT_RUN
+    return CURRENT_RUN
+
+
 def check_azure() -> None:
     """
     Checks if Azure modules are available, raises an exception if not.
@@ -46,13 +56,40 @@ def ml_client() -> "MLClient":
     return MLClient.from_config(DefaultAzureCredential())
 
 
+def create_job(
+    name: str,
+    config: dict,
+    compute: str,
+    register_output: dict = dict(),
+    log_system_metrics: bool = False,
+) -> "command":  # noqa: F821
+    """
+    Creates the Azure command/job object. Job input/output
+    configuration is loaded from the components module.
+    """
+
+    # Load component
+    component = importlib.import_module(f"corebehrt.azure.components.{name}")
+
+    return setup_job(
+        name,
+        inputs=component.INPUTS,
+        outputs=component.OUTPUTS,
+        config=config,
+        compute=compute,
+        register_output=register_output,
+        log_system_metrics=log_system_metrics,
+    )
+
+
 def setup_job(
     job: str,
     inputs: dict,
     outputs: dict,
-    config: Config,
+    config: dict,
     compute: str,
     register_output: dict = dict(),
+    log_system_metrics: bool = False,
 ):
     """
     Sets up the Azure job.
@@ -65,6 +102,7 @@ def setup_job(
     :param compute: The azure compute to use for the job.
     :register_output: A mapping from output id to name, if the output should be
         registered as a data asset.
+    :log_system_metrics: If true, logs GPU/CPU/mem usage
     """
     check_azure()
 
@@ -72,7 +110,8 @@ def setup_job(
     cmd = f"python -m corebehrt.azure.components.{job}"
 
     # Make sure config is read-able -> save it in the root folder.
-    config.save_to_yaml(AZURE_CONFIG_FILE)
+    with open(AZURE_CONFIG_FILE, "w") as cfg_file:
+        yaml.dump(config, cfg_file)
 
     # Prepare input and output paths
     input_values, input_cmds = prepare_job_command_args(config, inputs, "inputs")
@@ -82,6 +121,10 @@ def setup_job(
 
     # Add input and output arguments to cmd.
     cmd += input_cmds + output_cmds
+
+    # Add log_system_metrics if set
+    if log_system_metrics:
+        cmd += " --log_system_metrics"
 
     # Create job
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -114,16 +157,16 @@ def run_main(main: callable, inputs: dict, outputs: dict) -> None:
     :param inputs: inputs configuration.
     :param outputs: outputs configuration.
     """
-    log.start_run()
+    # Parse command line args
+    args = parse_args(inputs | outputs)
+    global CURRENT_RUN
+    with log.start_run(log_system_metrics=args.pop("log_system_metrics", False)) as run:
+        CURRENT_RUN = run
+        prepare_config(args, inputs, outputs)
+        main(AZURE_CONFIG_FILE)
 
-    prepare_config(inputs, outputs)
 
-    main(AZURE_CONFIG_FILE)
-
-    log.end_run()
-
-
-def prepare_config(inputs: dict, outputs: dict) -> None:
+def prepare_config(args: dict, inputs: dict, outputs: dict) -> None:
     """
     Prepares the config on the cluster by substituing any input/output directories
     passed as arguments in the job setup configuration file:
@@ -132,14 +175,14 @@ def prepare_config(inputs: dict, outputs: dict) -> None:
     -> Arguments are substituted into the configuration.
     -> The file is re-written.
 
+    :param args: parsed arguments.
     :param inputs: input argument configuration/mapping.
     :param outputs: output argument configuration/mapping.
     """
+    from corebehrt.modules.setup.config import load_config
+
     # Read the config file
     cfg = load_config(AZURE_CONFIG_FILE)
-
-    # Parse command line args
-    args = parse_args(inputs | outputs)
 
     # Update input arguments in config file
     for arg, arg_cfg in (inputs | outputs).items():
@@ -170,17 +213,18 @@ def parse_args(args: set) -> dict:
     parser = argparse.ArgumentParser()
     for arg in args:
         parser.add_argument(f"--{arg}", type=str)
+    parser.add_argument("--log_system_metrics", action="store_true", default=False)
     return vars(parser.parse_args())
 
 
 def prepare_job_command_args(
-    config: Config, args: dict, _type: str, register_output: dict = dict()
+    config: dict, args: dict, _type: str, register_output: dict = dict()
 ) -> Tuple[dict, str]:
     """
     Prepare the input/output dictionary and construct the input/output
     part of the job command string.
 
-    :param config: Configuration object.
+    :param config: Configuration dictionary.
     :param args: Job args configuration.
     :param _type: "inputs" or "outputs"
     :param register_output: Register output mapping for _type="outputs"
@@ -206,7 +250,7 @@ def prepare_job_command_args(
     return job_args, cmd
 
 
-def get_path_from_cfg(cfg: Config, arg: str, arg_cfg: dict):
+def get_path_from_cfg(cfg: dict, arg: str, arg_cfg: dict):
     """
     Helper for reading a config value from config (cfg), given
     the argument name (arg) and configuration (arg_cfg)

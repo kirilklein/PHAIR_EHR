@@ -36,11 +36,35 @@ For example, you might have:
 
 These files feed into the **Create Data** pipeline, which merges, tokenizes, and structures the data for subsequent **Pretrain** and **Finetune** steps.
 
-## 2. Pretrain
+## 2. Prepare training data (pretrain)
+
+The `prepare_training_data` prepares data before training. For pre-training this includes truncating the data, cutoffs data (optional), excludes short sequences (optional), and then normalises segments. If the cutoff date is defined in the config file, then the data will be cutoff at that date. This can be used for a simulated prospective validation. A specific cohort created using `select_cohort` can also be used here, where splits from the cohort will be used if predefined_folds is set to True. 
+
+
+### Prepare data for pretrain configuration
+
+Edit the **prepare_pretrain configuration file**:
+
+```yaml
+data:
+  type: "pretrain"
+  predefined_splits: false # set to true if you want to use predefined splits for reproducibility. Expects a list (of length 1) of dicts with train, val created by select_cohort
+  val_ratio: 0.2 # only used if predefined_splits is false
+  truncation_len: 512
+  min_len: 2
+  
+  # Cutoff date for simulated prospective validation
+  cutoff_date:
+    year: 2020
+    month: 1
+    day: 1
+```
+
+## 3. Pretrain
 
 The `pretrain` script trains a base BERT model on the tokenized medical data.
 
-## 3. Create Outcome Definition
+## 4. Create Outcome Definition
 
 The `create_outcomes` script defines and extracts patient outcomes from structured data.
 
@@ -64,7 +88,7 @@ case_sensitive: false    # Case sensitivity for matching
 
 ---
 
-## 4. Define Study Cohort
+## 5. Define Study Cohort
 
 The `select_cohort` script selects patients based on predefined criteria.
 
@@ -115,7 +139,28 @@ index_date:
 
 ---
 
-## 5. Finetune Model
+## 6. Prepare training data (fine-tuning)
+
+The `prepare_training_data` script prepares data. Should be used to prepare data before fine-tuning. 
+This includes assigning binary outcomes, excluding short sequences, truncation, and normalising segments. 
+
+### Prepare data for finetune configuration
+
+Edit the **prepare_finetune configuration file**:
+
+```yaml
+data:
+  type: "finetune"
+  truncation_len: 512
+  min_len: 2 # 0 by default
+
+outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
+  n_hours_censoring: -10 # censor time after index date (negative means before)
+  n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+```
+
+## 7. Finetune Model
 
 The `finetune_cv` script trains a model using the selected cohort.
 
@@ -147,42 +192,95 @@ trainer_args:
 
 ---
 
-## 6. Out-of-Time Evaluation (Temporal Validation)
+## 8. Out-of-Time Evaluation (Temporal Validation)
 
-To test generalization across time, models are evaluated on **data from different time periods**.
+Our pipeline simulates a real-world deployment scenario by distinguishing the data available for training from that used during testing.
 
-### Step 1: Create Temporal Splits
+### Out-of-Time Evaluation with Absolute Index Dates
 
-Use `select_cohort` to separate training and test sets based on time.
+1. **Fixed Reference Date & Censoring:**  
+   All patients are assigned an absolute index date (e.g., January 1, 2020). This date serves as the reference for training, though it isn’t necessarily the last available date since we may censor outcomes relative to it (using the `n_hours_censoring` parameter, however for absolute index dates it makes most sense to set `n_hours_censoring` to 0).
 
+2. **Cohort Splitting After Index Date Creation:**  
+   Once index dates are computed (and any censoring logic is in place), the cohort is split into training/validation and test sets. This ensures the split reflects the final, fully defined cohort.
+
+3. **Test Shift to Simulate Future Prediction:**  
+   To mimic a scenario where the model is trained with data up to the cutoff but then deployed later, we apply a shift (using `test_shift_hours`) exclusively to test patients. For example, with a 1 year test shift, training is performed using data up to January 1, 2020 (with outcomes censored relative to that date), while test patients are assigned a shifted index date of January 1, 2021. This simulates that the model is being applied to predict outcomes in a future time period.
+
+4. **Follow-up Window:**
+   The follow-up window is defined by the `n_hours_start_follow_up` and `n_hours_end_follow_up` parameters. For example, with a 1 year follow-up window, the model will predict outcomes in the period from January 1, 2020 to January 1, 2021 for train patients and from January 1, 2021 to January 1, 2022 for test patients.
+
+**Example Configuration:**
+
+With this example config we fine-tune the model using data available up to 01/01/2020, predicting outcomes from 01/01/2020-01/01/2021. For testing, we use data up to 01/01/2021 to predict outcomes from 01/01/2021-01/01/2022.
+
+In select cohort:
+
+- **Absolute Index Date:** January 1, 2020  
+- **test_shift_hours:** 365 * 24 (1 year)
+
+Fine-tuning configuration (outcome):
+
+- **n_hours_censoring:** 0 (censor outcomes occurring within 24 hours before the index date)  
+- **n_hours_start_follow_up:** 0
+- **n_hours_end_follow_up:** 365 * 24 (1 year)
+
+**Process Overview:**
+
+- All patients are assigned an index date of January 1, 2020.
+- The cohort is split into training/validation and test sets after index date creation.
+- For test patients, the index date is shifted by one year (to January 1, 2021), so that:
+  - The model is trained using input data available up to January 1, 2020.
+  - Outcomes for training/validation are observed from January 1, 2020 to January 1, 2021, while outcomes for testing are observed from January 1, 2021 to January 1, 2022.
+
+This approach ensures that our evaluation mimics prospective deployment, where the model’s training and testing data reflect distinct time periods.
+
+### Step-by-Step Process
+
+#### Step 1: Pretrain Model on cutoff data
+
+Use the cutoff date option in the pretrain config to pretrain a model on data from a specific time period.
+E.g.
+
+```yaml
+data:
+  cutoff_date:
+    year: 2020
+    month: 1
+    day: 1
+```
+
+#### Step 2: Create Temporal Splits
+
+Use `select_cohort` to define the study cohort with absolute index dates and then split the cohort into training/validation and test sets.
+
+- All patients are assigned an absolute index date (e.g., January 1, 2020).
 Example **absolute index date** for test data:
+- A test shift is applied to test patients using test_shift_hours (e.g., 365 * 24 for a 1-year shift).
+  - Training/Validation: Retain the original index date (e.g., January 1, 2020).
+  - Test: The index date is shifted (e.g., to January 1, 2021), simulating that predictions are made on data from a later time period.
+Example Configuration:
 
 ```yaml
 absolute:
-  year: 2015
+  year: 2020
   month: 1
-  day: 26
+  day: 1
+test_shift_hours: 365 * 24
 ```
 
-### Step 2: Train Model with Temporal Constraints
+#### Step 3: Train Model with Temporal Constraints
 
-Adjust **validation** and **test** windows:
+For training, use the input data defined relative to the original index date.
+For example, set:
 
 ```yaml
-n_hours_censoring: 0        # Censor at index_date
-n_hours_start_follow_up: 100    # Start 100 hours after index_date
-n_hours_end_follow_up: 10_000    # End 10k hours after index_date
+n_hours_censoring: 0 
+n_hours_start_follow_up: 0   
+n_hours_end_follow_up: 365 * 24    
 ```
 
-### Step 3: Validate Model on Future Data
-
-Shift follow-up periods for evaluation:
-
-```yaml
-n_hours_censoring: 10_000    # Ignore outcomes before training cutoff
-n_hours_start_follow_up: 10_100  # Start after training input period ends
-n_hours_end_follow_up: null     # Extend follow-up indefinitely
-```
+This configuration ensures that the model is trained on data available up to the fixed cutoff date, while test patients receive a shifted index date (e.g., shifted by 1 year) that defines their outcome follow-up window. This effectively simulates a future prediction scenario.
 
 ---
 

@@ -36,12 +36,10 @@ class EHRTrainer:
         sampler: callable = None,
         cfg=None,
         logger=None,
-        run=None,
         accumulate_logits: bool = False,
         run_folder: str = None,
         last_epoch: int = None,
     ):
-
         self._initialize_basic_attributes(
             model,
             train_dataset,
@@ -52,7 +50,6 @@ class EHRTrainer:
             metrics,
             sampler,
             cfg,
-            run,
             accumulate_logits,
             last_epoch,
         )
@@ -63,6 +60,7 @@ class EHRTrainer:
         self.metrics = (
             {k: instantiate_class(v) for k, v in metrics.items()} if metrics else {}
         )
+        self.scaler = torch.GradScaler(device=self.device.type)
 
         self._initialize_early_stopping()
 
@@ -77,7 +75,6 @@ class EHRTrainer:
         metrics,
         sampler,
         cfg,
-        run,
         accumulate_logits,
         last_epoch,
     ):
@@ -95,7 +92,6 @@ class EHRTrainer:
         )
         self.sampler = sampler
         self.cfg = cfg
-        self.run = run
         self.accumulate_logits = accumulate_logits
         self.continue_epoch = last_epoch + 1 if last_epoch is not None else 0
 
@@ -147,16 +143,15 @@ class EHRTrainer:
         train_loop.set_description(f"Train {epoch}")
         epoch_loss = []
         step_loss = 0
+        metrics = []
         for i, batch in enumerate(train_loop):
             step_loss += self._train_step(batch).item()
             if (i + 1) % self.accumulation_steps == 0:
                 self._clip_gradients()
-                self._update_and_log(step_loss, train_loop, epoch_loss)
+                self._update()
+                self._accumulate_metrics(metrics, step_loss, epoch_loss, step=i)
                 step_loss = 0
-
-            if (i % 100 == 0) and self.device == "cuda":
-                self.run_log_gpu(step=i)
-
+        self._log_batch(metrics)
         self.validate_and_log(epoch, epoch_loss, train_loop)
         torch.cuda.empty_cache()
         del train_loop
@@ -165,6 +160,7 @@ class EHRTrainer:
     def _clip_gradients(self):
         # Then clip them if needed
         if self.cfg.trainer_args.get("gradient_clip", False):
+            self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
                 max_norm=self.cfg.trainer_args.gradient_clip.get("max_norm", 1.0),
@@ -174,27 +170,34 @@ class EHRTrainer:
         self.optimizer.zero_grad()
         self.batch_to_device(batch)
 
-        outputs = self.model(batch)
-        unscaled_loss = outputs.loss
-        unscaled_loss.backward()
+        with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+            loss = self.model(batch).loss
+        self.scaler.scale(loss).backward()
 
-        return unscaled_loss
+        return loss
 
-    def _update_and_log(self, step_loss, train_loop, epoch_loss):
+    def _update(self):
+        """Updates the model (optimizer and scheduler)"""
         """Updates the model and logs the loss"""
-        self.optimizer.step()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
 
         if self.scheduler is not None:
             self.scheduler.step()
-        train_loop.set_postfix(loss=step_loss / self.accumulation_steps)
+
+    def _accumulate_metrics(self, metrics, step_loss, epoch_loss, step):
+        """Accumulates the metrics"""
+
         epoch_loss.append(step_loss / self.accumulation_steps)
+        metrics.append(
+            azure.metric("Train loss", step_loss / self.accumulation_steps, step)
+        )
 
         if self.args["info"]:
             for param_group in self.optimizer.param_groups:
                 current_lr = param_group["lr"]
-                self.run_log(name="Learning Rate", value=current_lr)
+                metrics.append(azure.metric("Learning Rate", current_lr, step))
                 break
-        self.run_log(name="Train loss", value=step_loss / self.accumulation_steps)
 
     def validate_and_log(
         self, epoch: int, epoch_loss: float, train_loop: DataLoader
@@ -341,11 +344,14 @@ class EHRTrainer:
         with torch.no_grad():
             for batch in loop:
                 self.batch_to_device(batch)
-                outputs = self.model(batch)
+                with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+                    outputs = self.model(batch)
                 loss += outputs.loss.item()
 
                 if self.accumulate_logits:
-                    logits_list.append(outputs.logits.cpu())
+                    logits_list.append(
+                        outputs.logits.float().cpu()
+                    )  # .float to convert to float32 (from bfloat16)
                     targets_list.append(batch["target"].cpu())
                 else:
                     for name, func in self.metrics.items():
@@ -411,32 +417,17 @@ class EHRTrainer:
         else:
             print(message)
 
-    def run_log_gpu(self, step=None):
-        """Logs the GPU memory usage to the run"""
-        memory_allocated = torch.cuda.memory_allocated(device=self.device) / 1e9
-        max_memory_reserved = torch.cuda.max_memory_reserved(device=self.device) / 1e9
-        memory_cached = torch.cuda.memory_reserved(device=self.device) / 1e9
-        self.run_log(
-            name="GPU Memory",
-            value=memory_allocated,
-            step=step,
-        )
-        self.run_log(
-            name="GPU Max Memory",
-            value=max_memory_reserved,
-            step=step,
-        )
-        self.run_log(
-            name="GPU Cached Memory",
-            value=memory_cached,
-            step=step,
-        )
-
     def run_log(self, name, value, step=None):
         if azure.is_mlflow_available():
             azure.log_metric(name, value, step=step)
         else:
             self.log(f"{name}: {value}")
+
+    def _log_batch(self, metrics: list):
+        if azure.is_mlflow_available():
+            azure.log_batch(metrics=metrics)
+        else:
+            self.log(metrics)
 
     def save_setup(self) -> None:
         """Saves the config and model config"""
