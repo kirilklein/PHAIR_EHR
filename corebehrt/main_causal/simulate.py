@@ -36,8 +36,7 @@ def main_simulate(config_path):
     )
 
     # Post-process timestamps using the provided origin point.
-    data_cfg = load_config(join(cfg.paths.encoded_data, DATA_CFG))
-    timestamp_df = add_abspos_to_df(timestamp_df, data_cfg.features.origin_point)
+    timestamp_df = add_abspos_to_df(timestamp_df, {"year": 2020, "month": 1, "day": 26})
 
     logger.info("Save results")
     result_df.to_csv(

@@ -81,9 +81,7 @@ class EncodedDataModule:
         index_dates = pd.read_csv(
             join(self.cfg.paths.cohort, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
         )
-        origin_point = load_config(
-            join(self.cfg.paths.encoded_data, DATA_CFG)
-        ).features.origin_point
+        origin_point = {"year": 2020, "month": 1, "day": 26}
         index_dates[ABSPOS_COL] = get_abspos_from_origin_point(
             index_dates[TIMESTAMP_COL], datetime(**origin_point)
         )
