@@ -386,7 +386,6 @@ class DirectoryPreparer:
         # Write config in output directory.
         self.write_config("encoded_data", source="finetune_model", name=PRETRAIN_CFG)
         self.write_config("encoded_data", source="finetune_model", name=FINETUNE_CFG)
-        self.write_config("encoded_data", source="finetune_model", name=DATA_CFG)
         self.write_config("encoded_data", name=ENCODE_CFG)
 
     def setup_simulate(self) -> None:
