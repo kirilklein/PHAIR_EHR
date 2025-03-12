@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from corebehrt.constants.data import ABSPOS_COL, TIMESTAMP_COL, TRAIN_KEY, VAL_KEY
-from corebehrt.constants.paths import DATA_CFG, FOLDS_FILE, INDEX_DATES_FILE
+from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE
 from corebehrt.functional.causal.load import (
     load_encodings_and_pids_from_encoded_dir,
     load_exposure_from_predictions,
@@ -15,7 +15,6 @@ from corebehrt.functional.causal.load import (
 from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
 from corebehrt.functional.utils.filter import filter_folds_by_pids
 from corebehrt.functional.utils.time import get_abspos_from_origin_point
-from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.trainer.dataset import SimpleDataset
 
 

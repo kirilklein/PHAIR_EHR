@@ -2,7 +2,6 @@ import logging
 from os.path import join
 
 from corebehrt.constants.causal import SIMULATION_RESULTS_FILE, TIMESTAMP_OUTCOME_FILE
-from corebehrt.constants.paths import DATA_CFG
 from corebehrt.functional.causal.load import (
     load_encodings_and_pids_from_encoded_dir,
     load_exposure_from_predictions,
