@@ -8,9 +8,9 @@ paths:
   tokenized: ./outputs/tokenized
   cohort: ./outputs/causal/exposure_cohort # path to cohort directory
   outcome: ./outputs/causal/outcomes/EXPOSURE.csv
-
+  
 ## OUTPUTS
-  prepared_data: ./outputs/finetuning/processed_data/ # Save model/outputs to this folder
+  prepared_data: ./outputs/causal/finetuning/processed_data/exposure # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
   
 
