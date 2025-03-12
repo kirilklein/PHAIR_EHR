@@ -4,26 +4,17 @@ logging:
 
 paths:
 ## INPUTS
-  features: ./outputs/features
-  tokenized: ./outputs/tokenized
-  cohort: ./outputs/cohort # path to cohort directory
-  # test_pids: pids_path # path to file with pids to use for test set
-
-  # tokenized_file: "features_finetune.pt" # can also be a list
-  # tokenized_pids: "pids_finetune.pt" # can also be a list
- 
+  prepared_data: ./outputs/finetuning/processed_data/
+  cohort: ./outputs/cohort
   pretrain_model: ./outputs/pretraining
  
-  # restart_model: ... # Use for restarting from checkpoint
-  
-  outcome: ./outputs/outcomes/TEST_OUTCOME.csv
-  
-  
+  # restart_model: ... # Use for restarting from checkpoint  
 
 ## OUTPUTS
   model: ./outputs/finetuning # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
   
+evaluate: true # evaluate best model on test sets
 model:
   cls:
     _target_: ehr2vec.model.heads.ClassifierGRU
@@ -48,10 +39,10 @@ trainer_args:
   sampler: true
   sample_weight_function:
     _target_: corebehrt.evaluation.utils.inverse_sqrt # function to calculate sample weights
-  batch_size: 8
-  val_batch_size: 16
-  effective_batch_size: 16
-  epochs: 3
+  batch_size: 128
+  val_batch_size: 128
+  effective_batch_size: 128
+  epochs: 1
   info: true
   gradient_clip: 
     clip_value: 1.0

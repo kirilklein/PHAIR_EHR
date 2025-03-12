@@ -15,11 +15,11 @@ from corebehrt.functional.features.split import split_into_test_and_train_val_pi
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main.helper.finetune_cv import cv_loop, get_n_folds
 from corebehrt.main.helper.pretrain import get_splits_path
+from corebehrt.main.helper.finetune_cv import check_for_overlap
 from corebehrt.modules.monitoring.metric_aggregation import (
     compute_and_save_scores_mean_std,
 )
 from corebehrt.modules.preparation.dataset import PatientDataset
-from corebehrt.modules.preparation.prepare_data import DatasetPreparer
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 
@@ -35,17 +35,37 @@ def main_finetune(config_path):
     # Logger
     logger = logging.getLogger("finetune_cv")
 
-    data: PatientDataset = DatasetPreparer(cfg).prepare_finetune_data()
+    loaded_data = torch.load(join(cfg.paths.prepared_data, "patients.pt"))
+    data = PatientDataset(loaded_data)
 
-    if cfg.paths.get("test_pids", None) is not None:
-        logger.info("Using predefined test data")
-        test_pids = torch.load(cfg.paths.test_pids)
-        train_val_pids = [pid for pid in data.get_pids() if pid not in test_pids]
-    else:
-        logger.info("Randomly splitting test data")
-        test_pids, train_val_pids = split_into_test_and_train_val_pids(
-            data.get_pids(), cfg.data.get("test_split", 0)
-        )
+    test_data = PatientDataset([])
+
+    # Initialize test and train/val pid lists
+    test_pids = []
+    train_val_pids = data.get_pids()
+
+    # If evaluation is desired, then:
+    #   - If test_pids are predefined in the config (i.e., saved from cohort creation), load them.
+    #   - Otherwise, if folds are NOT predefined, split the full cohort randomly into test and train/val.
+    #   - However, if folds are predefined but no test_pids are provided, then run CV only.
+    if cfg.get("evaluate", False):
+        if cfg.paths.get("test_pids", None) is not None:
+            logger.info("Using predefined test data")
+            test_pids = torch.load(cfg.paths.test_pids)
+        else:
+            if not cfg.data.get("predefined_folds", False):
+                logger.info("Randomly splitting test data")
+                test_pids, train_val_pids = split_into_test_and_train_val_pids(
+                    data.get_pids(), cfg.data.get("test_split", 0)
+                )
+            else:
+                logger.info(
+                    "Predefined folds provided without separate test data; running CV only"
+                )
+                test_pids = []  # No separate test set; use full cohort for CV
+                train_val_pids = data.get_pids()
+
+    # Save test_pids to processed data directory (even if empty, for consistency)
     processed_data_dir = join(cfg.paths.model, PROCESSED_DATA_DIR)
     os.makedirs(processed_data_dir, exist_ok=True)
     torch.save(test_pids, join(processed_data_dir, TEST_PIDS_FILE))
@@ -58,6 +78,7 @@ def main_finetune(config_path):
     if cfg.data.get("predefined_folds", False):
         folds_path = get_splits_path(cfg.paths)
         folds = torch.load(folds_path)
+        check_for_overlap(folds, test_pids, logger)
         n_folds = len(folds)
         logger.info(f"Using {n_folds} predefined folds")
 

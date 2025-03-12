@@ -10,5 +10,5 @@ setuptools==75.6.0
 torch==2.5.1
 tqdm==4.67.1
 transformers>=4.48.0
-CausalEstimate>=0.6.0
+CausalEstimate==0.6.1
 lightning>=2.4.0

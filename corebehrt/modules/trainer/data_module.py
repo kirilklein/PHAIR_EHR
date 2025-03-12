@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from corebehrt.constants.data import ABSPOS_COL, TIMESTAMP_COL, TRAIN_KEY, VAL_KEY
-from corebehrt.constants.paths import DATA_CFG, FOLDS_FILE, INDEX_DATES_FILE
+from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE
 from corebehrt.functional.causal.load import (
     load_encodings_and_pids_from_encoded_dir,
     load_exposure_from_predictions,
@@ -15,7 +15,6 @@ from corebehrt.functional.causal.load import (
 from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
 from corebehrt.functional.utils.filter import filter_folds_by_pids
 from corebehrt.functional.utils.time import get_abspos_from_origin_point
-from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.trainer.dataset import SimpleDataset
 
 
@@ -81,9 +80,7 @@ class EncodedDataModule:
         index_dates = pd.read_csv(
             join(self.cfg.paths.cohort, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
         )
-        origin_point = load_config(
-            join(self.cfg.paths.encoded_data, DATA_CFG)
-        ).features.origin_point
+        origin_point = {"year": 2020, "month": 1, "day": 26}
         index_dates[ABSPOS_COL] = get_abspos_from_origin_point(
             index_dates[TIMESTAMP_COL], datetime(**origin_point)
         )
