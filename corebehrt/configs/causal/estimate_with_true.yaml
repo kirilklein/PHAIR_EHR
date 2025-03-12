@@ -13,7 +13,7 @@ paths:
   estimate: ./outputs/causal/estimate_with_true
 
 estimator:
-  methods: ["IPW", "AIPW", "TMLE"]
+  methods: ["IPW", "AIPW"]
   effect_type: "ATE"
   n_bootstrap: 30
-  common_support_threshold: 0.05
+  common_support_threshold: 0.01

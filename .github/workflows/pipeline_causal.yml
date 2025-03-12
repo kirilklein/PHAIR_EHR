@@ -26,10 +26,17 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.create_data
             
+            - name: main.prepare_training_data
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.prepare_training_data --config_path ./corebehrt/configs/prepare_pretrain.yaml
+
             - name: main.pretrain
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.pretrain
+
+            ############# Same as pipeline up to here #############
             
             - name: main.create_outcomes
               run: |
@@ -41,11 +48,17 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main.select_cohort --config_path ./corebehrt/configs/causal/select_cohort_exposure.yaml
 
+            - name: main.prepare_training_data
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main.prepare_training_data --config_path ./corebehrt/configs/causal/prepare_finetune_exposure.yaml
+
             - name: main.finetune_exposure
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/causal/finetune_exposure.yaml
 
+            ############# Causal related steps #############
             - name: calibrate
               run: |
                 source .venv/bin/activate
