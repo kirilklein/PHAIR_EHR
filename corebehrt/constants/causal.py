@@ -29,3 +29,7 @@ SIMULATION_RESULTS_FILE = "probas_and_outcomes.csv"
 EXPERIMENT_DATA_FILE = "experiment_data.parquet"
 EXPERIMENT_STATS_FILE = "experiment_stats.csv"
 ESTIMATE_RESULTS_FILE = "estimate_results.csv"
+
+PROB_KEY = "prob"  # Overall predicted outcome probability
+PROB_T_KEY = "prob_t"  # Predicted outcome probability under treatment
+PROB_C_KEY = "prob_c"  # Predicted outcome probability under control
