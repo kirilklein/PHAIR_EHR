@@ -9,7 +9,7 @@ from corebehrt.constants.data import VAL_KEY
 from corebehrt.constants.paths import ENCODINGS_FILE, PID_FILE
 from corebehrt.functional.io_operations.paths import get_fold_folders
 from corebehrt.functional.trainer.collate import dynamic_padding
-from corebehrt.modules.model.model import BertForFineTuning
+from corebehrt.modules.model.model import CorebehrtForFineTuning
 from corebehrt.modules.preparation.dataset import BinaryOutcomeDataset, PatientDataset
 from corebehrt.modules.setup.loader import ModelLoader
 
@@ -63,7 +63,7 @@ def encode_fold(
     val_dataset = BinaryOutcomeDataset(val_data.patients)
     val_loader = DataLoader(val_dataset, collate_fn=dynamic_padding, **loader_cfg)
 
-    model: BertForFineTuning = load_model(fold_dir, device)
+    model: CorebehrtForFineTuning = load_model(fold_dir, device)
 
     encodings, pids = [], val_data.get_pids()
     with torch.no_grad():
@@ -75,9 +75,9 @@ def encode_fold(
     return pids, torch.cat(encodings, dim=0)
 
 
-def load_model(fold_dir: str, device: torch.device) -> BertForFineTuning:
+def load_model(fold_dir: str, device: torch.device) -> CorebehrtForFineTuning:
     """Loads the trained model for a specific fold."""
-    model = ModelLoader(fold_dir).load_model(BertForFineTuning)
+    model = ModelLoader(fold_dir).load_model(CorebehrtForFineTuning)
     model.eval().to(device)
     return model
 
