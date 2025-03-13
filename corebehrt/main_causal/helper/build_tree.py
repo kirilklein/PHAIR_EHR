@@ -28,7 +28,6 @@ class Node:
         return f"Node(code={self.code}, text={self.text}, level={self.level})"
 
 
-
 def is_chapter(text):
     """
     Returns True if the text starts with a chapter keyword (e.g. "Chap.", "Ch.", "Chapter")
@@ -44,7 +43,6 @@ def is_subchapter(text):
     """
     pattern = r"^.*\[[^]]+\]\s*$"
     return (not is_chapter(text)) and (re.match(pattern, text.strip()) is not None)
-
 
 
 def build_tree(csv_file, delimiter=";"):
