@@ -1,7 +1,7 @@
 """Utils for loading data"""
 
 import logging
-from os.path import join
+from os.path import join, exists
 from typing import Dict, List, Set, Union
 
 import pandas as pd
@@ -45,3 +45,14 @@ def load_vocabulary(dir_: str) -> Dict:
     Load a vocabulary from the given directory.
     """
     return torch.load(join(dir_, VOCABULARY_FILE), weights_only=True)
+
+
+def get_pids_file(split_dir: str, mode: str) -> str:
+    """Get pids file from predefined splits.
+    The file can be named pids_{mode}.pt or {mode}_pids.pt."""
+    if exists(join(split_dir, f"{mode}_pids.pt")):
+        return join(split_dir, f"{mode}_pids.pt")
+    elif exists(join(split_dir, f"pids_{mode}.pt")):
+        return join(split_dir, f"pids_{mode}.pt")
+    else:
+        raise ValueError(f"No pids file found for mode {mode} in {split_dir}")
