@@ -1,8 +1,5 @@
 import csv
-import pickle
 import re
-
-# -- Node Class for Tree Structure --
 
 
 class Node:
@@ -31,8 +28,6 @@ class Node:
         return f"Node(code={self.code}, text={self.text}, level={self.level})"
 
 
-# -- Helpers for Chapter and Subchapter Detection --
-
 
 def is_chapter(text):
     """
@@ -50,8 +45,6 @@ def is_subchapter(text):
     pattern = r"^.*\[[^]]+\]\s*$"
     return (not is_chapter(text)) and (re.match(pattern, text.strip()) is not None)
 
-
-# -- Tree Building --
 
 
 def build_tree(csv_file, delimiter=";"):
