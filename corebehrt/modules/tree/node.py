@@ -2,21 +2,6 @@ import torch
 from typing import List
 
 
-def flatten(data: List) -> List:
-    """
-    Recursively flattens a nested list.
-    """
-
-    def _flatten(data):
-        for element in data:
-            if isinstance(element, list):
-                yield from _flatten(element)
-            else:
-                yield element
-
-    return list(_flatten(data))
-
-
 class Node:
     def __init__(self, name: str, parent: "Node" = None):
         self.name: str = name
@@ -89,7 +74,7 @@ class Node:
                 self.children = [
                     child.cutoff_at_level(cutoff_level - 1) for child in self.children
                 ]
-                self.children = flatten(self.children)
+                self.children = self._flatten(self.children)
                 for child in self.children:
                     child.parent = self
                 return self
@@ -149,7 +134,7 @@ class Node:
             )
         if level == 0:
             return [self]
-        return flatten([child.get_level(level - 1) for child in self.children])
+        return self._flatten([child.get_level(level - 1) for child in self.children])
 
     def get_max_level(self) -> int:
         """
@@ -180,5 +165,22 @@ class Node:
         Returns a flat list of all nodes (excluding the root).
         """
         if not self.parent:  # Exclude the root node and category nodes
-            return flatten([child.get_all_nodes() for child in self.children])
-        return [self] + flatten([child.get_all_nodes() for child in self.children])
+            return self._flatten([child.get_all_nodes() for child in self.children])
+        return [self] + self._flatten(
+            [child.get_all_nodes() for child in self.children]
+        )
+
+    @staticmethod
+    def _flatten(data: List) -> List:
+        """
+        Recursively flattens a nested list.
+        """
+
+        def _flatten(data):
+            for element in data:
+                if isinstance(element, list):
+                    yield from _flatten(element)
+                else:
+                    yield element
+
+        return list(_flatten(data))

@@ -24,7 +24,7 @@ def parse_arguments() -> argparse.Namespace:
         "--level",
         type=int,
         default=3,
-        choices=[1, 2, 3, 4, 5],
+        choices=[1, 2, 3, 4, 5, 6, 7, 8],
         help=(
             "Target level for grouping. "
             "1: Chapters, 2: Subchapters, 3: Detailed diagnosis, "

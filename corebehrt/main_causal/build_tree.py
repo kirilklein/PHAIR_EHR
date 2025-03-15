@@ -21,7 +21,11 @@ def main() -> None:
     csv_file = get_csv_file(args.type)
 
     # Build the tree
-    tree = TreeBuilder(file=csv_file).build()
+    cutoff_level = 8
+    extend_level = args.level + 1
+    tree = TreeBuilder(
+        file=csv_file, cutoff_level=cutoff_level, extend_level=extend_level
+    ).build()
     tree_dict = TreeBuilder.tree_to_dict_at_level(tree, args.level)
 
     save_tree_dict(tree_dict, args.type, args.level)
