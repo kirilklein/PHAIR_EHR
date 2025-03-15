@@ -1,132 +1,105 @@
-import csv
-import re
+"""
+Builds a tree of diagnoses or medications at a specified level.
+Saves the resulting tree as a pickle file.
+"""
+
+import argparse
+import pickle
+from typing import Any, Dict
+
+from corebehrt.constants.causal import SKS_DUMP_DIR, SKS_TREES_DIR
 
 
-class Node:
-    def __init__(self, code, text, level):
-        self.code = (
-            code  # e.g. "DA00", or a derived code like "DA00-DB99" from a chapter row.
-        )
-        self.text = text  # e.g. "Cholera" or "Chap. I: Certain infectious..."
-        self.level = level  # Explicit level in our hierarchy.
-        self.children = []
-
-    def add_child(self, child):
-        self.children.append(child)
-
-    def get_all_codes(self):
-        """
-        Recursively collects this node’s code and the codes of all its descendants.
-        (Excludes the dummy root code.)
-        """
-        codes = [] if self.code == "root" else [self.code]
-        for child in self.children:
-            codes.extend(child.get_all_codes())
-        return codes
-
-    def __repr__(self):
-        return f"Node(code={self.code}, text={self.text}, level={self.level})"
-
-
-def is_chapter(text):
+def parse_arguments() -> argparse.Namespace:
     """
-    Returns True if the text starts with a chapter keyword (e.g. "Chap.", "Ch.", "Chapter")
-    and ends with a bracketed expression (e.g. "[DA00-DB99]").
+    Parse command line arguments.
+
+    Returns:
+        argparse.Namespace: Parsed arguments containing level and type.
     """
-    pattern = r"^(Chap\.|Ch\.|Chapter)\s.*\[[^]]+\]\s*$"
-    return re.match(pattern, text.strip()) is not None
+    parser = argparse.ArgumentParser(
+        description="Build diagnosis or medication tree at a specified level"
+    )
+    parser.add_argument(
+        "--level",
+        type=int,
+        default=3,
+        choices=[1, 2, 3, 4, 5, 6, 7, 8],
+        help=(
+            "Target level for grouping. "
+            "1: Chapters, 2: Subchapters, 3: Detailed diagnosis, "
+            "4: Detailed diagnosis groups, 5: Detailed diagnosis groups"
+        ),
+    )
+    parser.add_argument(
+        "--type",
+        type=str,
+        choices=["medication", "diagnosis"],
+        default="diagnosis",
+        help="Which tree to build (default: diagnosis)",
+    )
+    return parser.parse_args()
 
 
-def is_subchapter(text):
+def get_csv_file(tree_type: str) -> str:
     """
-    Returns True if the text ends with a bracketed expression but is not recognized as a chapter.
+    Get the CSV file path based on the type of tree.
+
+    Args:
+        tree_type (str): Type of the tree ('diagnosis' or 'medication').
+
+    Returns:
+        str: The CSV file path.
+
+    Raises:
+        ValueError: If the provided tree type is invalid.
     """
-    pattern = r"^.*\[[^]]+\]\s*$"
-    return (not is_chapter(text)) and (re.match(pattern, text.strip()) is not None)
+    if tree_type == "diagnosis":
+        return f"{SKS_DUMP_DIR}/sks_dump_diag.csv"
+    elif tree_type == "medication":
+        return f"{SKS_DUMP_DIR}/sks_dump_med.csv"
+    else:
+        raise ValueError(f"Invalid type: {tree_type}")
 
 
-def build_tree(csv_file, delimiter=";"):
+def save_tree_dict(tree_dict: Dict[Any, Any], tree_type: str, level: int) -> None:
     """
-    Reads the CSV file (assumed to have headers "Text" and "Code") and builds a tree.
+    Save the tree dictionary as a pickle file.
 
-    For rows with an empty "Code":
-      - If the text is a chapter (matches is_chapter), assign level 1 and derive the code from the bracket.
-      - If it is a subchapter (matches is_subchapter), assign level 2 and derive the code similarly.
-      - Otherwise, default to parent's level + 1.
-
-    For rows with a nonempty "Code", assign level = parent's level + 1.
-    The stack-based approach ensures proper nesting.
+    Args:
+        tree_dict (dict): The dictionary representation of the tree.
+        tree_type (str): The type of tree ('diagnosis' or 'medication').
+        level (int): The target level used in building the tree.
     """
-    with open(csv_file, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f, delimiter=delimiter)
-        rows = [row for row in reader]
-
-    # Create a dummy root node at level 0.
-    root = Node("root", "root", level=0)
-    stack = [root]  # Stack to track current branch.
-
-    for row in rows:
-        text = row["Text"].strip()
-        code = row["Code"].strip()
-
-        # Determine explicit level if code is missing.
-        explicit_level = None
-        if code == "":
-            if is_chapter(text):
-                explicit_level = 1
-                # Extract the code range from the bracket.
-                m = re.search(r"\[([^]]+)\]", text)
-                code = m.group(1) if m else "XX"
-            elif is_subchapter(text):
-                explicit_level = 2
-                m = re.search(r"\[([^]]+)\]", text)
-                code = m.group(1) if m else "XXX"
-            else:
-                # Fallback: assign as child of current node.
-                explicit_level = stack[-1].level + 1
-
-        # For rows with an explicit nonempty code, if not explicitly set, assign as child of current node.
-        new_level = (
-            explicit_level if explicit_level is not None else (stack[-1].level + 1)
-        )
-
-        # Adjust the stack: pop until the top of the stack has a level less than new_level.
-        while stack and stack[-1].level >= new_level:
-            stack.pop()
-        parent = stack[-1]
-        new_node = Node(code, text, new_level)
-        parent.add_child(new_node)
-        stack.append(new_node)
-
-    return root
+    output_path = f"{SKS_TREES_DIR}/{tree_type}_tree_{level}.pkl"
+    with open(output_path, "wb") as f:
+        pickle.dump(tree_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
+    print(f"Saved tree dictionary to {output_path}")
 
 
-# -- Extraction of Dictionary at a Target Level --
-
-
-def extract_dict_at_level(root, target_level):
+def print_tree_sample(tree_dict: Dict[Any, Any], level: int, sample: int = 5) -> None:
     """
-    Traverse the tree and for every node at the specified target level,
-    create an entry in a dictionary mapping the node’s text to the list
-    of all descendant codes (including its own code).
+    Print sample entries from the tree dictionary and summary information.
+
+    Args:
+        tree_dict (dict): The dictionary representation of the tree.
+        level (int): The target level used in building the tree.
+        sample (int): Number of entries to show from the start and end.
     """
-    result = {}
+    print("\nOutcome Dictionary at level", level)
+    items = list(tree_dict.items())
 
-    def dfs(node):
-        if node.level == target_level and node.code != "root":
-            # If multiple nodes share the same text, you could combine them here.
-            result[node.text] = node.get_all_codes()
-        for child in node.children:
-            dfs(child)
+    # Print first few entries
+    for category, codes in items[:sample]:
+        print("Category:", category)
+        print("Codes:", codes)
+        print("-" * 40)
 
-    dfs(root)
-    return result
+    # Print last few entries if the dictionary is larger than the sample size
+    if len(items) > sample:
+        for category, codes in items[-sample:]:
+            print("Category:", category)
+            print("Codes:", codes)
+            print("-" * 40)
 
-
-# -- Debugging Helper: Print the Tree --
-
-
-def print_tree(node, indent=0):
-    print("  " * indent + f"{node.level}: {node.text} ({node.code})")
-    for child in node.children:
-        print_tree(child, indent + 1)
+    print(f"Total number of codes at level {level}: {len(tree_dict)}")

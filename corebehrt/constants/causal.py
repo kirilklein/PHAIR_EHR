@@ -33,3 +33,6 @@ ESTIMATE_RESULTS_FILE = "estimate_results.csv"
 PROB_KEY = "prob"  # Overall predicted outcome probability
 PROB_T_KEY = "prob_t"  # Predicted outcome probability under treatment
 PROB_C_KEY = "prob_c"  # Predicted outcome probability under control
+
+SKS_DUMP_DIR = "corebehrt/main_causal/helper/data/sks_dumps"
+SKS_TREES_DIR = "corebehrt/main_causal/helper/data/sks_trees"
