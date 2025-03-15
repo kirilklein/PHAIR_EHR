@@ -1,6 +1,6 @@
 import pandas as pd
 from tqdm import tqdm
-
+from typing import List
 from corebehrt.modules.tree.node import Node
 
 
@@ -27,7 +27,7 @@ class TreeBuilder:
     def create_tree_codes(self):
         print(':Create tree codes')
         codes : list[tuple[int, str]] = []
-        database : pd.DataFrame = pd.read_csv(self.file)
+        database : pd.DataFrame = pd.read_csv(self.file, sep=';', encoding='utf-8')
         database = self.determine_levels_and_codes(database)
         for _, row in tqdm(database.iterrows(), desc=f'Create tree codes from {self.file}'):
             level : int = row.level
@@ -106,3 +106,35 @@ class TreeBuilder:
         database = database.drop(rows_to_drop).reset_index(drop=True)
         return database
     
+    @staticmethod
+    def tree_to_dict_at_level(root: Node, level: int) -> dict:
+        """
+        Converts the tree into a dictionary based on a specified level.
+        Each key is the node name at the given level, and its value is a list of names
+        for all descendant nodes (at any lower level).
+        
+        Args:
+            root (Node): The root of the tree.
+            level (int): The level at which to gather the keys (0-based level after root).
+        
+        Returns:
+            dict: A dictionary mapping node names at the given level to a list of descendant node names.
+        """
+        # Get all nodes at the specified level.
+        nodes_at_level : List[Node] = root.get_level(level)
+        
+        def get_descendants(node: Node) -> list:
+            """Recursively collects all descendant nodes (excluding the node itself)."""
+            descendants : List[Node] = []
+            for child in node.children:
+                descendants.append(child)
+                descendants.extend(get_descendants(child))
+            return descendants
+        
+        result : dict = {}
+        for node in nodes_at_level:
+            # Gather the names of all descendants of the current node.
+            descendants : List[Node] = get_descendants(node)
+            result[node.name] = [desc.name for desc in descendants]
+        
+        return result
