@@ -2,7 +2,11 @@ import torch
 from typing import List
 
 
-def flatten(data):
+def flatten(data: List) -> List:
+    """
+    Recursively flattens a nested list.
+    """
+
     def _flatten(data):
         for element in data:
             if isinstance(element, list):
@@ -19,36 +23,48 @@ class Node:
         self.parent: "Node" = parent
         self.children: List["Node"] = []
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name
 
-    def add_child(self, code: str):
-        node = Node(name=code, parent=self)
-        self.children.append(node)
+    def add_child(self, code: str) -> None:
+        """
+        Adds a child node with the given code.
+        """
+        child = Node(name=code, parent=self)
+        self.children.append(child)
 
-    def base_counts(self, counts: dict):
+    def base_counts(self, counts: dict) -> None:
+        """
+        Sets the base count for the node and recursively for its children.
+        """
         self.base_count: int = counts.get(self.name, 0) + 1
         for child in self.children:
             child.base_counts(counts)
 
     def sum_counts(self) -> int:
+        """
+        Recursively sums the counts for this node and its descendants.
+        """
         self.sum_count: int = self.base_count + sum(
             child.sum_counts() for child in self.children
         )
         return self.sum_count
 
-    def redist_counts(self):
-        # This is needed for root node
+    def redist_counts(self) -> None:
+        """
+        Redistributes counts from this node to its children.
+        """
         self.redist_count = getattr(self, "redist_count", self.sum_count)
-
-        for child in self.children:  # sum of children
+        for child in self.children:
             child.redist_count = self.redist_count * (
                 child.sum_count / (self.sum_count - self.base_count)
             )
             child.redist_counts()
 
-    def extend_leaves(self, level: int):
-        """Not all branches end at the same level. Extend leaves to a certain level."""
+    def extend_leaves(self, level: int) -> None:
+        """
+        Extends leaves to ensure that all branches reach a specified level.
+        """
         if not self.children and level > 0:
             self.add_child(self.name)
         for child in self.children:
@@ -56,20 +72,19 @@ class Node:
 
     def cutoff_at_level(self, cutoff_level: int, method: str = "flatten"):
         """
-        Cutoff tree at a certain level.
-        if method == 'flatten', the tree truncated nodes are put into the parent level.
+        Cuts off the tree at a specified level.
+        For the 'flatten' method, truncated nodes are integrated at the parent's level.
         """
-
         if method == "flatten":
             if not self.children:
                 return self
 
             if cutoff_level <= 0:
-                new_childs = [self] + [
+                new_children = [self] + [
                     child.cutoff_at_level(cutoff_level - 1) for child in self.children
                 ]
                 self.children = []
-                return new_childs
+                return new_children
             else:
                 self.children = [
                     child.cutoff_at_level(cutoff_level - 1) for child in self.children
@@ -79,24 +94,31 @@ class Node:
                     child.parent = self
                 return self
         else:
-            raise NotImplementedError  # TODO: Implement collapse method
+            raise NotImplementedError("Collapse method not implemented")
 
     def get_tree_matrix(self) -> torch.Tensor:
+        """
+        Constructs a tensor representing the tree structure.
+        """
         n_levels = self.get_max_level()
         n_leaves = len(self.get_level(n_levels))
         tree_matrix = torch.zeros((n_levels, n_leaves, n_leaves))
         for level in range(n_levels):
             nodes: List["Node"] = self.get_level(level + 1)
-            acc: int = 0
+            acc = 0
             for i, node in enumerate(nodes):
-                n_children: int = node.num_children_leaves()
+                n_children = node.num_children_leaves()
                 tree_matrix[level, i, acc : acc + n_children] = 1
                 acc += n_children
         return tree_matrix
 
     def create_target_mapping(self, value: int = -100) -> dict:
-        mapping: dict = {"root": []}  # To handle root errors (for level 1)
-        max_level: int = self.get_max_level()
+        """
+        Creates a mapping for each node that includes its parent's mapping,
+        its index, and padding.
+        """
+        mapping: dict = {"root": []}
+        max_level = self.get_max_level()
         for level in range(1, max_level + 1):
             nodes: List["Node"] = self.get_level(level)
             for i, node in enumerate(nodes):
@@ -104,42 +126,59 @@ class Node:
                     mapping[node.parent.name][: level - 1]
                     + [i]
                     + [value] * (max_level - level)
-                )  # parent mapping + index + padding
-        del mapping["root"]  # Remove root
+                )
+        del mapping["root"]
         return mapping
 
-    def print_children(self, *attr: str, spaces: int = 0):
-        print(f" " * spaces, self, [getattr(self, a, "") for a in attr])
+    def print_children(self, *attrs: str, spaces: int = 0) -> None:
+        """
+        Prints the node along with specified attributes, and recursively prints its children.
+        """
+        print(" " * spaces, self, [getattr(self, attr, "") for attr in attrs])
         for child in self.children:
-            child.print_children(*attr, spaces=spaces + 2)
+            child.print_children(*attrs, spaces=spaces + 2)
 
-    def get_level(self, level: int) -> list:
+    def get_level(self, level: int) -> List["Node"]:
+        """
+        Returns all nodes at a specified level.
+        Level 0 is the current node.
+        """
         if self.parent is None and level > self.get_max_level():
             raise IndexError(
                 f"Level {level} is too high. Max level is {self.get_max_level()}"
             )
         if level == 0:
             return [self]
-        else:
-            return flatten([child.get_level(level - 1) for child in self.children])
+        return flatten([child.get_level(level - 1) for child in self.children])
 
     def get_max_level(self) -> int:
+        """
+        Returns the maximum depth (level) of the tree.
+        """
         if not self.children:
             return 0
-        else:
-            return 1 + max(child.get_max_level() for child in self.children)
+        return 1 + max(child.get_max_level() for child in self.children)
 
     def num_children_leaves(self) -> int:
+        """
+        Returns the number of leaf nodes under this node.
+        """
         if not self.children:
             return 1
-        return sum([child.num_children_leaves() for child in self.children])
+        return sum(child.num_children_leaves() for child in self.children)
 
     def get_leaf_counts(self) -> torch.Tensor:
+        """
+        Returns a tensor of the redistributed counts for all leaves.
+        """
         return torch.tensor(
             [c.redist_count for c in self.get_level(self.get_max_level())]
         )
 
-    def get_all_nodes(self) -> list:
-        if not self.parent:  # This removes root node and category nodes
+    def get_all_nodes(self) -> List["Node"]:
+        """
+        Returns a flat list of all nodes (excluding the root).
+        """
+        if not self.parent:  # Exclude the root node and category nodes
             return flatten([child.get_all_nodes() for child in self.children])
         return [self] + flatten([child.get_all_nodes() for child in self.children])
