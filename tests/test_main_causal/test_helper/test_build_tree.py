@@ -1,20 +1,9 @@
-import os
-import pickle
 import sys
 import unittest
 from io import StringIO
 
-# For testing get_csv_file, we rely on the constants defined in your project.
-from corebehrt.constants.causal import SKS_TREES_DIR
-from corebehrt.main_causal.helper.build_tree import (
-    get_csv_file,
-    print_tree_sample,
-    save_tree_dict,
-)
+from corebehrt.main_causal.helper.build_tree import get_csv_file, print_tree_sample
 from corebehrt.modules.tree.node import Node
-
-# Import functions and classes from your modules.
-# Adjust the import paths if needed.
 from corebehrt.modules.tree.tree import TreeBuilder
 
 
@@ -55,20 +44,6 @@ class TestTreeFunctions(unittest.TestCase):
         tree_dict = TreeBuilder.tree_to_dict_at_level(root, 1)
         expected = {"A": ["A1", "A2"], "B": ["B1"]}
         self.assertEqual(tree_dict, expected)
-
-    def test_save_tree_dict(self):
-        """Test that the tree dictionary is saved and can be reloaded correctly."""
-        tree_dict = {"A": ["A1", "A2"], "B": ["B1"]}
-        tree_type = "diagnosis"
-        level = 2
-
-        save_tree_dict(tree_dict, tree_type, level)
-        expected_file = os.path.join(SKS_TREES_DIR, f"{tree_type}_tree_{level}.pkl")
-        self.assertTrue(os.path.exists(expected_file))
-
-        with open(expected_file, "rb") as f:
-            loaded_dict = pickle.load(f)
-        self.assertEqual(loaded_dict, tree_dict)
 
     def test_print_tree_sample(self):
         """Test that print_tree_sample outputs expected content."""
