@@ -3,7 +3,7 @@ from typing import Tuple
 import pandas as pd
 import torch
 
-from corebehrt.constants.causal import (
+from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     OUTCOMES,
     PROBAS,

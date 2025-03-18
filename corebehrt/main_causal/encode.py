@@ -10,7 +10,7 @@ from corebehrt.functional.utils.filter import filter_folds_by_pids
 from corebehrt.main_causal.helper.encode import encode_loop
 from corebehrt.modules.preparation.dataset import PatientDataset
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory import DirectoryPreparer
+from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/encode.yaml"
 
@@ -19,7 +19,7 @@ def main_encode(config_path):
     cfg = load_config(config_path)
 
     # Setup directories
-    DirectoryPreparer(cfg).setup_encode()
+    CausalDirectoryPreparer(cfg).setup_encode()
 
     # Logger
     logger = logging.getLogger("encode")

@@ -4,8 +4,9 @@ from typing import Tuple
 import pandas as pd
 import torch
 
-from corebehrt.constants.causal import CALIBRATED_PREDICTIONS_FILE, TARGETS
-from corebehrt.constants.paths import ENCODINGS_FILE, PID_FILE
+from corebehrt.constants.causal.data import TARGETS
+from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE, ENCODINGS_FILE
+from corebehrt.constants.paths import PID_FILE
 from corebehrt.functional.causal.data_utils import align_df_with_pids
 
 

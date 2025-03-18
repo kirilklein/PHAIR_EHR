@@ -1,7 +1,10 @@
 import logging
 from os.path import join
 
-from corebehrt.constants.causal import SIMULATION_RESULTS_FILE, TIMESTAMP_OUTCOME_FILE
+from corebehrt.constants.causal.paths import (
+    SIMULATION_RESULTS_FILE,
+    TIMESTAMP_OUTCOME_FILE,
+)
 from corebehrt.constants.data import ABSPOS_COL, TIMESTAMP_COL
 from corebehrt.functional.causal.load import (
     load_encodings_and_pids_from_encoded_dir,
@@ -11,7 +14,7 @@ from corebehrt.functional.setup.args import get_args
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.main_causal.helper.simulate import simulate
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory import DirectoryPreparer
+from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/simulate.yaml"
 
@@ -20,7 +23,7 @@ def main_simulate(config_path):
     cfg = load_config(config_path)
 
     # Setup directories
-    DirectoryPreparer(cfg).setup_simulate()
+    CausalDirectoryPreparer(cfg).setup_simulate()
 
     # Logger
     logger = logging.getLogger("simulate")

@@ -8,7 +8,7 @@ from corebehrt.main_causal.helper.calibrate import (
     calibrate_probas,
     split_data,
 )
-from corebehrt.constants.causal import PROBAS, TARGETS
+from corebehrt.constants.causal.data import PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL
 
 
