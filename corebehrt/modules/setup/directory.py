@@ -71,8 +71,6 @@ class DirectoryPreparer:
                 "tokenized": DATA_CFG,
                 "prepare_pretrain": PREPARE_PRETRAIN_CFG,
                 "prepare_finetune": PREPARE_FINETUNE_CFG,
-                "prepare_pretrain": PREPARE_PRETRAIN_CFG,
-                "prepare_finetune": PREPARE_FINETUNE_CFG,
                 "outcomes": OUTCOMES_CFG,
                 "model": PRETRAIN_CFG,
                 "cohort": COHORT_CFG,
