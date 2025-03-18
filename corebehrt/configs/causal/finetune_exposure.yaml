@@ -45,10 +45,10 @@ trainer_args:
   sampler: true
   sample_weight_function:
     _target_: corebehrt.evaluation.utils.inverse_sqrt # function to calculate sample weights
-  batch_size: 128
-  val_batch_size: 128
-  effective_batch_size: 128
-  epochs: 2
+  batch_size: 256
+  val_batch_size: 256
+  effective_batch_size: 256
+  epochs: 3
   info: true
   gradient_clip: 
     clip_value: 1.0
@@ -58,7 +58,7 @@ trainer_args:
   stopping_criterion: roc_auc
   
 optimizer:
-  lr: 5e-4
+  lr: 8e-4
   eps: 1e-6
 
 scheduler:

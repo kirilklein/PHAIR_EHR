@@ -4,7 +4,7 @@ from os.path import join
 import torch
 
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
-from corebehrt.constants.paths import FOLDS_FILE, PROCESSED_DATA_DIR
+from corebehrt.constants.paths import FOLDS_FILE
 from corebehrt.functional.setup.args import get_args
 from corebehrt.functional.utils.filter import filter_folds_by_pids
 from corebehrt.main_causal.helper.encode import encode_loop
@@ -25,10 +25,10 @@ def main_encode(config_path):
     logger = logging.getLogger("encode")
 
     # Load data
-    processed_data_dir = join(cfg.paths.finetune_model, PROCESSED_DATA_DIR)
-    data = PatientDataset.load(processed_data_dir)
+    prepared_data_dir = cfg.paths.prepared_data
+    data = PatientDataset.load(prepared_data_dir)
     logger.info(f"Data patients: {len(data.patients)}")
-    folds = torch.load(join(processed_data_dir, FOLDS_FILE))
+    folds = torch.load(join(prepared_data_dir, FOLDS_FILE))
     folds = filter_folds_by_pids(folds, data.get_pids())
     logger.info(
         f"Folds patients: {sum(len(fold[TRAIN_KEY]) + len(fold[VAL_KEY]) for fold in folds)}"
