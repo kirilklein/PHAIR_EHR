@@ -2,28 +2,30 @@ from os.path import join
 from typing import Any, Dict
 
 import pandas as pd
-from CausalEstimate.filter.propensity import filter_common_support
 from CausalEstimate import MultiEstimator
-from CausalEstimate.estimators import TMLE, IPW, AIPW
+from CausalEstimate.estimators import AIPW, IPW, TMLE
+from CausalEstimate.filter.propensity import filter_common_support
 from CausalEstimate.stats.stats import compute_treatment_outcome_table
 
-from corebehrt.constants.causal import (
-    CALIBRATED_PREDICTIONS_FILE,
+from corebehrt.constants.causal.data import (
     CF_PROBAS,
-    ESTIMATE_RESULTS_FILE,
-    EXPERIMENT_DATA_FILE,
-    EXPERIMENT_STATS_FILE,
     EXPOSURE_COL,
+    PROB_C_KEY,
+    PROB_KEY,
+    PROB_T_KEY,
     PROBAS,
     PROBAS_CONTROL,
     PROBAS_EXPOSED,
     PS_COL,
-    SIMULATION_RESULTS_FILE,
     TARGETS,
     TRUE_EFFECT_COL,
-    PROB_KEY,
-    PROB_T_KEY,
-    PROB_C_KEY,
+)
+from corebehrt.constants.causal.paths import (
+    CALIBRATED_PREDICTIONS_FILE,
+    ESTIMATE_RESULTS_FILE,
+    EXPERIMENT_DATA_FILE,
+    EXPERIMENT_STATS_FILE,
+    SIMULATION_RESULTS_FILE,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.counterfactuals import expand_counterfactuals

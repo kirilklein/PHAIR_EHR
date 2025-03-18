@@ -4,21 +4,24 @@ import uuid
 from os.path import basename, join, splitext
 from shutil import copyfile, rmtree
 
-from corebehrt.constants.paths import (
-    CHECKPOINTS_DIR,
-    COHORT_CFG,
-    DATA_CFG,
+from corebehrt.constants.causal.paths import (
     ENCODE_CFG,
-    FINETUNE_CFG,
-    OUTCOMES_CFG,
-    PRETRAIN_CFG,
-    PREPARE_PRETRAIN_CFG,
-    PREPARE_FINETUNE_CFG,
     SIMULATE_CFG,
     CALIBRATE_CFG,
     TRAIN_MLP_CFG,
     ESTIMATE_CFG,
 )
+from corebehrt.constants.paths import (
+    FINETUNE_CFG,
+    OUTCOMES_CFG,
+    PRETRAIN_CFG,
+    PREPARE_PRETRAIN_CFG,
+    PREPARE_FINETUNE_CFG,
+    CHECKPOINTS_DIR,
+    COHORT_CFG,
+    DATA_CFG,
+)
+
 from corebehrt.functional.setup.checks import check_categories
 from corebehrt.modules.setup.config import Config, load_config
 

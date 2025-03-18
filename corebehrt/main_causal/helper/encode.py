@@ -5,8 +5,9 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from corebehrt.constants.causal.paths import ENCODINGS_FILE
 from corebehrt.constants.data import VAL_KEY
-from corebehrt.constants.paths import ENCODINGS_FILE, PID_FILE
+from corebehrt.constants.paths import PID_FILE
 from corebehrt.functional.io_operations.paths import get_fold_folders
 from corebehrt.functional.trainer.collate import dynamic_padding
 from corebehrt.modules.model.model import CorebehrtForFineTuning

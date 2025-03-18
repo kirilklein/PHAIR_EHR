@@ -4,7 +4,7 @@ from os.path import join
 
 import pandas as pd
 
-from corebehrt.constants.causal import CALIBRATED_PREDICTIONS_FILE
+from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.calibrate_mlp import calibrate_predictions

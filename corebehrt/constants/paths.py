@@ -11,12 +11,6 @@ PREPARE_PRETRAIN_CFG = "prepare_pretrain.yaml"
 FINETUNE_CFG = "finetune_config.yaml"
 PREPARE_FINETUNE_CFG = "prepare_finetune.yaml"
 
-## Causal ##
-ENCODE_CFG = "encode_config.yaml"
-SIMULATE_CFG = "simulate_config.yaml"
-CALIBRATE_CFG = "calibrate_config.yaml"
-TRAIN_MLP_CFG = "train_mlp_config.yaml"
-ESTIMATE_CFG = "estimate_config.yaml"
 ### Files ###
 VOCABULARY_FILE = "vocabulary.pt"
 PROCESSED_DATA_DIR = "processed_data"
@@ -27,7 +21,6 @@ TEST_PIDS_FILE = "test_pids.pt"
 FOLDS_FILE = "folds.pt"
 PREPARED_TRAIN_PATIENTS = "patients_train.pt"
 PREPARED_VAL_PATIENTS = "patients_val.pt"
-ENCODINGS_FILE = "encodings.pt"
 PREPARED_ALL_PATIENTS = "patients.pt"
 
 ### File Patterns ###
@@ -35,6 +28,5 @@ CONCEPT_FORMAT = "concept.*"
 PATIENTS_INFO_FORMAT = "patients_info.*"
 
 ### File Extensions ###
-
 CSV_EXT = ".csv"
 PARQUET_EXT = ".parquet"

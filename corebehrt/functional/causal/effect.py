@@ -1,6 +1,6 @@
 import pandas as pd
 
-from corebehrt.constants.causal import (
+from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     SIMULATED_OUTCOME_CONTROL,
     SIMULATED_OUTCOME_EXPOSED,

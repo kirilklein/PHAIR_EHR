@@ -7,18 +7,17 @@ import torch
 from sklearn.isotonic import IsotonicRegression
 from tqdm import tqdm
 
-from corebehrt.constants.causal import (
+from corebehrt.constants.causal.paths import (
     CALIBRATED_PREDICTIONS_FILE,
     PREDICTIONS_FILE,
-    PROBAS,
-    TARGETS,
 )
+from corebehrt.constants.causal.data import PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL, TRAIN_KEY, VAL_KEY
 from corebehrt.constants.paths import CHECKPOINTS_DIR
 from corebehrt.functional.io_operations.load import get_pids_file
 from corebehrt.functional.io_operations.paths import (
-    get_fold_folders,
     get_checkpoint_predictions_path,
+    get_fold_folders,
 )
 from corebehrt.functional.setup.model import get_last_checkpoint_epoch
 

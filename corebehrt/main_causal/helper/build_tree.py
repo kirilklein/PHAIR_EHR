@@ -7,7 +7,7 @@ import argparse
 import pickle
 from typing import Any, Dict
 
-from corebehrt.constants.causal import SKS_DUMP_DIR, SKS_TREES_DIR
+from corebehrt.constants.causal.paths import SKS_DUMP_DIR, SKS_TREES_DIR
 
 
 def parse_arguments() -> argparse.Namespace:

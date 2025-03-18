@@ -4,7 +4,7 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from corebehrt.constants.causal import (
+from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     OUTCOMES,
     PROBAS,
