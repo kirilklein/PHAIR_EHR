@@ -2,12 +2,14 @@ import logging
 from os.path import join
 
 from corebehrt.constants.causal import SIMULATION_RESULTS_FILE, TIMESTAMP_OUTCOME_FILE
+from corebehrt.constants.data import ABSPOS_COL, TIMESTAMP_COL
 from corebehrt.functional.causal.load import (
     load_encodings_and_pids_from_encoded_dir,
     load_exposure_from_predictions,
 )
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main_causal.helper.simulate import add_abspos_to_df, simulate
+from corebehrt.functional.utils.time import get_hours_since_epoch
+from corebehrt.main_causal.helper.simulate import simulate
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 
@@ -34,8 +36,7 @@ def main_simulate(config_path):
         logger, pids, encodings, exposure, cfg.simulation
     )
 
-    # Post-process timestamps using the provided origin point.
-    timestamp_df = add_abspos_to_df(timestamp_df, {"year": 2020, "month": 1, "day": 26})
+    timestamp_df[ABSPOS_COL] = get_hours_since_epoch(timestamp_df[TIMESTAMP_COL])
 
     logger.info("Save results")
     result_df.to_csv(
