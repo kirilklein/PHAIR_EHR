@@ -28,6 +28,7 @@ FOLDS_FILE = "folds.pt"
 PREPARED_TRAIN_PATIENTS = "patients_train.pt"
 PREPARED_VAL_PATIENTS = "patients_val.pt"
 ENCODINGS_FILE = "encodings.pt"
+PREPARED_ALL_PATIENTS = "patients.pt"
 
 ### File Patterns ###
 CONCEPT_FORMAT = "concept.*"

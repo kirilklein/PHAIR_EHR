@@ -20,6 +20,6 @@ outcomes:
     type:
     - code
 paths:
-  data: ./example_data/raw
-  features: ./outputs/features/
-  outcomes: ./outputs/outcomes/
+  data: ./tests/data/raw
+  features: ./tests/data/features
+  outcomes: ./tests/data/outcomes
