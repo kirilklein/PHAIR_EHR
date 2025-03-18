@@ -7,7 +7,6 @@ from corebehrt.constants.data import CONCEPT_COL, PID_COL
 from corebehrt.constants.paths import DATA_CFG
 from corebehrt.main.create_data import main_data
 from tests.helpers import compute_column_checksum
-from corebehrt.constants.data import PID_COL, CONCEPT_COL
 
 from tests.test_main.base import TestMainScript
 

@@ -19,7 +19,6 @@ from corebehrt.functional.preparation.filter import (
     censor_patient,
     exclude_short_sequences,
 )
-from corebehrt.modules.features.loader import ShardLoader
 from corebehrt.functional.preparation.truncate import (
     truncate_patient,
     truncate_patient_df,

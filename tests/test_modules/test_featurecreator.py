@@ -6,8 +6,6 @@ from pandas import NaT
 
 from corebehrt.constants.data import CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.modules.features.features import FeatureCreator
-from pandas import NaT
-from corebehrt.constants.data import PID_COL, TIMESTAMP_COL, CONCEPT_COL
 
 
 class TestFeatureCreator(unittest.TestCase):

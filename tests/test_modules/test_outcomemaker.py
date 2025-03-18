@@ -5,10 +5,6 @@ import pandas as pd
 from corebehrt.constants.data import CONCEPT_COL, PID_COL
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.cohort_handling.outcomes import OutcomeMaker
-from corebehrt.constants.data import (
-    PID_COL,
-    CONCEPT_COL,
-)
 
 
 class TestOutcomeMaker(unittest.TestCase):

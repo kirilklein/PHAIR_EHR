@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Tuple
 
 import pandas as pd
@@ -13,10 +12,9 @@ from corebehrt.constants.causal import (
     SIMULATED_PROBAS_CONTROL,
     SIMULATED_PROBAS_EXPOSED,
 )
-from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
+from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 from corebehrt.functional.causal.counterfactuals import get_true_outcome
 from corebehrt.functional.causal.simulate import simulate_outcome_from_encodings
-from corebehrt.functional.utils.time import get_hours_since_epoch
 
 DATE_FUTURE = pd.Timestamp("2100-01-01")
 

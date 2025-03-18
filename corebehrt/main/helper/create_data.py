@@ -11,10 +11,6 @@ from corebehrt.modules.features.features import FeatureCreator
 from corebehrt.modules.features.loader import FormattedDataLoader
 from corebehrt.modules.features.tokenizer import EHRTokenizer
 from corebehrt.modules.features.values import ValueCreator
-import os
-import pyarrow as pa
-import pandas as pd
-from corebehrt.functional.features.exclude import exclude_incorrect_event_ages
 
 
 def load_tokenize_and_save(
