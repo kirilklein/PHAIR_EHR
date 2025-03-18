@@ -10,7 +10,7 @@ from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.calibrate_mlp import calibrate_predictions
 from corebehrt.main_causal.helper.train_mlp import setup_model, setup_trainer
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory import DirectoryPreparer
+from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 from corebehrt.modules.trainer.data_module import EncodedDataModule
 
 CONFIG_PATH = "./corebehrt/configs/causal/train_mlp.yaml"
@@ -20,7 +20,7 @@ def main_train(config_path):
     cfg = load_config(config_path)
 
     # Setup directories
-    DirectoryPreparer(cfg).setup_train_mlp()
+    CausalDirectoryPreparer(cfg).setup_train_mlp()
 
     # Logger
     logger = logging.getLogger("train_mlp")

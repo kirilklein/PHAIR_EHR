@@ -6,7 +6,7 @@ from corebehrt.main_causal.helper.calibrate import (
     save_combined_predictions,
 )
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory import DirectoryPreparer
+from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/calibrate.yaml"
 
@@ -15,7 +15,7 @@ def main_calibrate(config_path):
     cfg = load_config(config_path)
 
     # Setup directories
-    DirectoryPreparer(cfg).setup_calibrate()
+    CausalDirectoryPreparer(cfg).setup_calibrate()
 
     # Logger
     logger = logging.getLogger("calibrate")
