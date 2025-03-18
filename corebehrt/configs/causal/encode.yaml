@@ -5,6 +5,7 @@ logging:
 paths:
 ## INPUTS  
   finetune_model: ./outputs/causal/finetuning_exposure
+  prepared_data: ./outputs/causal/finetuning/processed_data/exposure
 
 ## OUTPUTS
   encoded_data: ./outputs/causal/encoding # Save encoded data to this folder
