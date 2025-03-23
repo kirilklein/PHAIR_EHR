@@ -5,10 +5,11 @@
 This guide walks through the steps required to **estimate treatment effects** using patient encodings, outcome simulation, and causal inference techniques. The pipeline consists of:
 
 1. [**Build Tree**](#1-build-tree)
-2. [**Encode**](#2-encode)
-3. [**Simulate Outcome**](#3-simulate-outcome)
-4. [**Train MLP (on encodings)**](#4-train-mlp-on-encodings)
-5. [**Estimate Treatment Effects**](#5-estimate-treatment-effects)
+2. [**Generate Outcomes Config**](#2-generate-outcomes-config)
+3. [**Encode**](#3-encode)
+4. [**Simulate Outcome**](#4-simulate-outcome)
+5. [**Train MLP (on encodings)**](#5-train-mlp-on-encodings)
+6. [**Estimate Treatment Effects**](#6-estimate-treatment-effects)
 
 ---
 
@@ -44,16 +45,50 @@ The tree structure enables:
 
 ---
 
-## 2. Encode
+## 2. Generate Outcomes Config
+
+The `generate_outcomes_config.py` script automatically creates an outcomes configuration YAML file from the tree dictionary generated in the previous step. This allows for the creation of thousands of outcome definitions without manual specification.
+
+### 2.1 Usage
+
+```bash
+python -m corebehrt.main_causal.generate_outcomes_config \
+    --input ./outputs/trees/[type]_tree_level_[level].pkl \
+    --output ./outputs/causal/outcomes/generated_outcomes.yaml \
+    --match_how startswith \
+    --prepend "CODE_"
+```
+
+### 2.2 Parameters
+
+- `--input`: Path to the tree dictionary pickle file (required)
+- `--output`: Path to save the generated outcomes config file (default: `./outputs/causal/outcomes/generated_outcomes.yaml`)
+- `--prepend`: Optional string to prepend to outcome names
+- `--match_how`: Match method to use (choices: `startswith`, `contains`, `exact`; default: `startswith`)
+- `--case_sensitive`: Flag to enable case-sensitive matching
+
+### 2.3 Purpose
+
+This script enables automated creation of outcomes configurations for large numbers of medical codes.
+
+### 2.4 Outputs
+
+- **YAML file**: Contains the generated outcomes configuration
+- Location: Specified by the `--output` parameter
+- Structure: Follows the standard outcomes configuration format with an entry for each code in the tree dictionary
+
+---
+
+## 3. Encode
 
 The `encode` script extracts patient encodings using a **fine-tuned model** and the **processed data** generated during the fine-tuning step.
 
-### 2.1 Inputs
+### 3.1 Inputs
 
 - Fine-tuned model
 - Processed patient data from the fine-tuning script
 
-### 2.2 Outputs
+### 3.2 Outputs
 
 - **`encodings.pt`**: Patient-level vector representations
 
@@ -61,14 +96,14 @@ These encodings serve as inputs for downstream causal inference tasks.
 
 ---
 
-## 3. Simulate Outcome
+## 4. Simulate Outcome
 
 The `simulate` script generates synthetic patient outcomes using:
 
 - Encodings from the **encode** step
 - Predictions and targets from the fine-tuned model (files: `probas` and `predictions_and_targets`)
 
-### 3.1 Configuration
+### 4.1 Configuration
 
 Edit the **simulation configuration file**:
 
@@ -84,21 +119,21 @@ counterfactual:
   method: "inverse probability weighting"
 ```
 
-### 3.2 Outcome Simulation Outputs
+### 4.2 Outcome Simulation Outputs
 
 - **`simulated_outcomes.csv`**: Generated patient outcomes
 - **`counterfactual_probas.csv`** (if enabled): Counterfactual outcome probabilities
 
 ---
 
-## 4. Train MLP (on encodings)
+## 5. Train MLP (on encodings)
 
 The `train_mlp` script trains shallow **multi-layer perceptrons (MLPs)** on the patient encodings to predict:
 
 - **Simulated outcomes** (or)
 - **Real target outcomes**
 
-### 4.1 Finetuning Configuration
+### 5.1 Finetuning Configuration
 
 Edit the **training configuration file**:
 
@@ -116,14 +151,14 @@ trainer_args:
   loss_function: binary_cross_entropy
 ```
 
-### 4.2 Training Outputs
+### 5.2 Training Outputs
 
 - **`mlp_probas.pt`**: Predicted probabilities from the shallow MLPs
 - **`mlp_predictions.pt`**: Model predictions
 
 ---
 
-## 5. Estimate Treatment Effects
+## 6. Estimate Treatment Effects
 
 The `estimate` script combines multiple sources of information to compute treatment effect estimates:
 
@@ -131,7 +166,7 @@ The `estimate` script combines multiple sources of information to compute treatm
 - **Shallow MLP predictions and targets**
 - **Simulated counterfactual outcomes**
 
-### 5.1 Estimation Methods
+### 6.1 Estimation Methods
 
 The script supports multiple causal inference techniques:
 
@@ -140,7 +175,7 @@ The script supports multiple causal inference techniques:
 - **Targeted Maximum Likelihood Estimation (TMLE)**
 - **Matching-based methods**
 
-### 5.2 Estimation Outputs
+### 6.2 Estimation Outputs
 
 - **`treatment_effects.csv`**: Estimated treatment effects
 - **`bootstrap_results.pt`** (if enabled): Bootstrapped standard errors
@@ -152,10 +187,11 @@ The script supports multiple causal inference techniques:
 | Step                     | Script           | Key Configs | Output Files |
 |--------------------------|-----------------|-------------|-------------|
 | **1. Build Tree** | `build_tree.py` | Type and level | Pickle file |
-| **2. Encode** | `encode` | Fine-tuned model | `encodings.pt` |
-| **3. Simulate Outcome** | `simulate` | Outcome simulation, counterfactuals | `simulated_outcomes.csv`, `counterfactual_probas.csv` |
-| **4. Train MLP** | `train_mlp` | MLP parameters, early stopping | `mlp_probas.pt`, `mlp_predictions.pt` |
-| **5. Estimate Effects** | `estimate` | Causal inference methods, bootstrap | `treatment_effects.csv`, `bootstrap_results.pt` |
+| **2. Generate Outcomes Config** | `generate_outcomes_config.py` | Input and output paths, match method, prepend string | YAML file |
+| **3. Encode** | `encode` | Fine-tuned model | `encodings.pt` |
+| **4. Simulate Outcome** | `simulate` | Outcome simulation, counterfactuals | `simulated_outcomes.csv`, `counterfactual_probas.csv` |
+| **5. Train MLP** | `train_mlp` | MLP parameters, early stopping | `mlp_probas.pt`, `mlp_predictions.pt` |
+| **6. Estimate Effects** | `estimate` | Causal inference methods, bootstrap | `treatment_effects.csv`, `bootstrap_results.pt` |
 
 ---
 
