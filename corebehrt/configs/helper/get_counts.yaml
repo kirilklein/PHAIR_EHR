@@ -1,0 +1,12 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+## INPUTS
+  data: ./example_data/example_MEDS_data_w_labs
+  splits: [train, tuning]
+      
+## OUTPUTS
+  counts: ./outputs/counts # Save counts to this folder
+  
