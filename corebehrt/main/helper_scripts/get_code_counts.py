@@ -71,38 +71,6 @@ def yield_shard_paths(path_name: str) -> Iterator[str]:
         yield shard_path
 
 
-def count_codes_in_split(data_dir: str, split_name: str) -> Counter:
-    """
-    Count codes in a specific data split.
-
-    Args:
-        data_dir: Base directory containing the data
-        split_name: Name of the split to process
-
-    Returns:
-        Counter with code counts for this split
-    """
-    logger = logging.getLogger("get_code_counts")
-    logger.info(f"Getting code counts for {split_name} split")
-
-    path_name = f"{data_dir}/{split_name}"
-    split_counts = Counter()
-
-    if not os.path.exists(path_name):
-        logger.warning(f"Path {path_name} does not exist. Skipping split.")
-        return split_counts
-
-    for shard_path in yield_shard_paths(path_name):
-        try:
-            concepts = pd.read_parquet(shard_path, columns=[CONCEPT_COL])
-            shard_counts = concepts[CONCEPT_COL].value_counts().to_dict()
-            split_counts.update(shard_counts)
-        except Exception as e:
-            logger.error(f"Error processing shard {shard_path}: {e}")
-
-    return split_counts
-
-
 if __name__ == "__main__":
     args = get_args(CONFIG_PATH)
     main(CONFIG_PATH)
