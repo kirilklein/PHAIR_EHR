@@ -26,7 +26,9 @@ logger = logging.getLogger("get_code_counts")
 def main(config_path):
     cfg = load_config(config_path)
     DirectoryPreparer(cfg).setup_logging("get_code_counts")
-    counts_dict = get_and_save_code_counts(cfg.paths.data, cfg.splits, cfg.paths.counts)
+    counts_dict = get_and_save_code_counts(
+        cfg.paths.data, cfg.paths.splits, cfg.paths.counts
+    )
     # Now you can use code_counts for additional processing if needed
     logger.info(f"Total unique codes found: {len(counts_dict)}")
     return counts_dict

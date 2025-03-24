@@ -2,6 +2,7 @@ from corebehrt.azure.util import job
 
 INPUTS = {
     "data": {"type": "uri_folder"},
+    "splits": {"type": "list", "optional": True},
 }
 OUTPUTS = {
     "counts": {"type": "uri_folder"},
