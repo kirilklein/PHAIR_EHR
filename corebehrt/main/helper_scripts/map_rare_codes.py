@@ -30,7 +30,7 @@ def main(config_path):
     code_counts = code_counts[code_counts < cfg.threshold]
     code_counts = code_counts.to_dict()
     logger.info(f"Found {len(code_counts)} rare codes")
-    
+
     mapping = group_rare_codes(
         code_counts, cfg.threshold, cfg.hierarchical_pattern, cfg.separator
     )

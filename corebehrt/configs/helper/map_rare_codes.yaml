@@ -10,5 +10,5 @@ paths:
   mapping: ./outputs/mapping # Save mapping to this folder
 
 threshold: 90
-hierarchical_pattern: "^[DM]"
+hierarchical_pattern: "^[MD]" # Only codes starting with M or D are hierarchical
 separator: "/"
