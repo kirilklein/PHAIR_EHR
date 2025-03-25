@@ -13,12 +13,13 @@ from typing import Iterator, List
 import pandas as pd
 
 from corebehrt.constants.data import CONCEPT_COL
+from corebehrt.constants.helper import CODE_COUNTS_FILE_NAME
 from corebehrt.functional.setup.args import get_args
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/helper/get_counts.yaml"
-OUTPUT_FILE_NAME = "code_counts.json"
+
 
 logger = logging.getLogger("get_code_counts")
 
@@ -51,7 +52,7 @@ def get_and_save_code_counts(data_dir: str, splits: List[str], write_dir: str) -
 
     counts_dict = dict(all_code_counts)
 
-    with open(join(write_dir, OUTPUT_FILE_NAME), "w") as f:
+    with open(join(write_dir, CODE_COUNTS_FILE_NAME), "w") as f:
         json.dump(counts_dict, f)
 
     logger.info(f"Saved counts for {len(counts_dict)} unique codes to {write_dir}")
