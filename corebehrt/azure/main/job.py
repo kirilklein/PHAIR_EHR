@@ -24,6 +24,7 @@ def add_parser(subparsers) -> None:
             "train_mlp",
             "estimate",
             "get_code_counts",
+            "map_rare_codes",
         },
         help="Job to run.",
     )
