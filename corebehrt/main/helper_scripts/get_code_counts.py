@@ -71,4 +71,4 @@ def yield_shard_paths(path_name: str) -> Iterator[str]:
 
 if __name__ == "__main__":
     args = get_args(CONFIG_PATH)
-    main(CONFIG_PATH)
+    main(args.config_path)
