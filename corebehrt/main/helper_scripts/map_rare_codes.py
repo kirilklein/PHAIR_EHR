@@ -22,12 +22,11 @@ from corebehrt.modules.setup.directory import DirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/helper/map_rare_codes.yaml"
 
-logger = logging.getLogger("map_rare_codes")
-
 
 def main(config_path):
     cfg = load_config(config_path)
     DirectoryPreparer(cfg).setup_logging("map_rare_codes")
+    logger = logging.getLogger("map_rare_codes")
     with open(
         join(cfg.paths.code_counts, cfg.get("file", CODE_COUNTS_FILE_NAME)), "r"
     ) as f:
@@ -52,6 +51,11 @@ def main(config_path):
     logger.info(f"After mapping: {len(mapped_codes)} unique codes")
 
     os.makedirs(cfg.paths.mapping, exist_ok=True)
+    # Print a few example mappings
+    logger.info("Example mappings:")
+    for orig_code, mapped_code in list(mapping.items())[:5]:
+        if orig_code != mapped_code:
+            logger.info(f"  {orig_code} -> {mapped_code}")
     # Save config for reproducibility
     with open(join(cfg.paths.mapping, "config.yaml"), "w") as f:
         yaml.dump(cfg.to_dict(), f)
