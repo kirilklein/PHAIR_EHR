@@ -4,10 +4,12 @@ logging:
 
 paths:
 ## INPUTS
-  code_counts: ./outputs/counts/code_counts.json
+  code_counts: ./outputs/counts # Folder containing the code counts
       
 ## OUTPUTS
   mapping: ./outputs/mapping # Save mapping to this folder
+
+file: code_counts.json # File containing the code counts (optional, default is code_counts.json)
 
 threshold: 90
 hierarchical_pattern: "^[MD]" # Only codes starting with M or D are hierarchical

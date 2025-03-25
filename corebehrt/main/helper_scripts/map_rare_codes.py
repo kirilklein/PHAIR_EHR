@@ -9,7 +9,10 @@ from os.path import join
 
 import pandas as pd
 
-from corebehrt.constants.helper import RARE_CODE_MAPPING_FILE_NAME
+from corebehrt.constants.helper import (
+    CODE_COUNTS_FILE_NAME,
+    RARE_CODE_MAPPING_FILE_NAME,
+)
 from corebehrt.functional.helpers.rare_code_mapping import group_rare_codes
 from corebehrt.functional.setup.args import get_args
 from corebehrt.modules.setup.config import load_config
@@ -23,7 +26,9 @@ logger = logging.getLogger("map_rare_codes")
 def main(config_path):
     cfg = load_config(config_path)
     DirectoryPreparer(cfg).setup_logging("map_rare_codes")
-    with open(cfg.paths.code_counts, "r") as f:
+    with open(
+        join(cfg.paths.code_counts, cfg.get("file", CODE_COUNTS_FILE_NAME)), "r"
+    ) as f:
         code_counts = json.load(f)
 
     code_counts = pd.Series(code_counts)
