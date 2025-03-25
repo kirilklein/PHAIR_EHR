@@ -1,5 +1,5 @@
 ## File names
-RARE_CODE_MAPPING_FILE_NAME = "rare_code_mapping.json"
+RARE_CODE_MAPPING_FILE_NAME = "rare_code_mapping.pt"
 CODE_COUNTS_FILE_NAME = "code_counts.json"
 
 ## Data
