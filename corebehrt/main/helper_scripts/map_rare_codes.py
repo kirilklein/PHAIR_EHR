@@ -8,6 +8,7 @@ import os
 from os.path import join
 
 import pandas as pd
+import torch
 import yaml
 
 from corebehrt.constants.helper import (
@@ -54,8 +55,7 @@ def main(config_path):
     # Save config for reproducibility
     with open(join(cfg.paths.mapping, "config.yaml"), "w") as f:
         yaml.dump(cfg.to_dict(), f)
-    with open(join(cfg.paths.mapping, RARE_CODE_MAPPING_FILE_NAME), "w") as f:
-        json.dump(mapping, f)
+    torch.save(mapping, join(cfg.paths.mapping, RARE_CODE_MAPPING_FILE_NAME))
 
 
 if __name__ == "__main__":
