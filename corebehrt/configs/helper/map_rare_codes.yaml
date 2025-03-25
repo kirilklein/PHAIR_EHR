@@ -1,0 +1,14 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+## INPUTS
+  code_counts: ./outputs/counts/code_counts.json
+      
+## OUTPUTS
+  mapping: ./outputs/mapping # Save mapping to this folder
+
+threshold: 90
+hierarchical_pattern: "^[DM]"
+separator: "/"
