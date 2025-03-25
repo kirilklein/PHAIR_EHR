@@ -12,4 +12,4 @@ corebehrt/sandbox
 /tmp
 corebehrt/main/create_data_profiling.py
 **tmp**
-corebehrt/main_causal/helper/data/sks_trees/
+corebehrt/main_causal/helper_data/sks_trees/

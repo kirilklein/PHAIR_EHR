@@ -23,6 +23,7 @@ def add_parser(subparsers) -> None:
             "simulate",
             "train_mlp",
             "estimate",
+            "get_code_counts",
         },
         help="Job to run.",
     )
