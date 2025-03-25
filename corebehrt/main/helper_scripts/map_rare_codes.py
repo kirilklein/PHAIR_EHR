@@ -33,13 +33,23 @@ def main(config_path):
         code_counts = json.load(f)
 
     code_counts = pd.Series(code_counts)
-    code_counts = code_counts[code_counts < cfg.threshold]
-    code_counts = code_counts.to_dict()
-    logger.info(f"Found {len(code_counts)} rare codes")
+    logger.info(f"Before mapping: {len(code_counts)} unique codes")
+    rare_code_counts = code_counts[code_counts < cfg.threshold]
+    rare_code_counts = rare_code_counts.to_dict()
+    logger.info(f"Found {len(rare_code_counts)} rare codes")
 
     mapping = group_rare_codes(
-        code_counts, cfg.threshold, cfg.hierarchical_pattern, cfg.separator
+        rare_code_counts, cfg.threshold, cfg.hierarchical_pattern, cfg.separator
     )
+
+    # Apply mapping to get mapped codes
+    mapped_codes = set()
+    for code in code_counts.index:
+        mapped_code = mapping.get(code, code)  # Use original if not in mapping
+        mapped_codes.add(mapped_code)
+
+    logger.info(f"After mapping: {len(mapped_codes)} unique codes")
+
     os.makedirs(cfg.paths.mapping, exist_ok=True)
     # Save config for reproducibility
     with open(join(cfg.paths.mapping, "config.yaml"), "w") as f:
