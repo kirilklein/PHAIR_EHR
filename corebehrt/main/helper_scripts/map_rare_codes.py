@@ -8,6 +8,7 @@ import os
 from os.path import join
 
 import pandas as pd
+import yaml
 
 from corebehrt.constants.helper import (
     CODE_COUNTS_FILE_NAME,
@@ -40,6 +41,9 @@ def main(config_path):
         code_counts, cfg.threshold, cfg.hierarchical_pattern, cfg.separator
     )
     os.makedirs(cfg.paths.mapping, exist_ok=True)
+    # Save config for reproducibility
+    with open(join(cfg.paths.mapping, "config.yaml"), "w") as f:
+        yaml.dump(cfg.to_dict(), f)
     with open(join(cfg.paths.mapping, RARE_CODE_MAPPING_FILE_NAME), "w") as f:
         json.dump(mapping, f)
 

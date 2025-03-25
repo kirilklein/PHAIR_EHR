@@ -11,6 +11,7 @@ from os.path import join
 from typing import Iterator, List
 
 import pandas as pd
+import yaml
 
 from corebehrt.constants.data import CONCEPT_COL
 from corebehrt.constants.helper import CODE_COUNTS_FILE_NAME
@@ -26,8 +27,13 @@ logger = logging.getLogger("get_code_counts")
 
 def main(config_path):
     cfg = load_config(config_path)
+
     DirectoryPreparer(cfg).setup_logging("get_code_counts")
-    counts_dict = get_and_save_code_counts(cfg.paths.data, cfg.splits, cfg.paths.counts)
+    write_dir = cfg.paths.counts
+    os.makedirs(write_dir, exist_ok=True)
+    with open(join(write_dir, "config.yaml"), "w") as f:
+        yaml.dump(cfg.to_dict(), f)
+    counts_dict = get_and_save_code_counts(cfg.paths.data, cfg.splits, write_dir)
     # Now you can use code_counts for additional processing if needed
     logger.info(f"Total unique codes found: {len(counts_dict)}")
     return counts_dict
@@ -38,8 +44,6 @@ def get_and_save_code_counts(data_dir: str, splits: List[str], write_dir: str) -
     Get the counts of codes in the dataset.
     """
     all_code_counts = Counter()
-
-    os.makedirs(write_dir, exist_ok=True)
 
     for split_name in splits:
         logger.info(f"Getting code counts for {split_name} split")
