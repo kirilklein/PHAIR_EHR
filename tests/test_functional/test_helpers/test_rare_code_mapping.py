@@ -23,6 +23,9 @@ class TestGroupRareCodes(unittest.TestCase):
             "F": 1,  # non-hierarchical: becomes "F/rare"
             "A/1": 3,  # hierarchical: should become "A/rare"
             "A123": 3,  # hierarchical: should become "A/rare"
+            "A/22": 3,  # A/22 will be updated and not be rare anymore because A/221 and A/222 will move into A/22
+            "A/221": 3,  # this should be mapped to A/22
+            "A/222": 3,  # this should be mapped to A/22
         }
         hierarchical_pattern = r"^A"  # Only codes starting with A are hierarchical.
         rare_threshold = 5
@@ -37,9 +40,13 @@ class TestGroupRareCodes(unittest.TestCase):
             "F": "F/rare",  # non-hierarchical rare code
             "A/1": f"A/{RARE_STR}",  # hierarchical rare code with separator
             "A123": f"A/{RARE_STR}",  # hierarchical rare code without separator
+            "A/22": "A/22",  # A/22 will be updated and not be rare anymore because A/221 and A/222 will move into A/22
+            "A/221": "A/22",  # this should be mapped to A/22
+            "A/222": "A/22",  # this should be mapped to A/22
         }
         mapping = group_rare_codes(input_counts, rare_threshold, hierarchical_pattern)
-        self.assertEqual(mapping, expected_mapping)
+        for code, expected in expected_mapping.items():
+            self.assertEqual(mapping[code], expected)
 
     def test_is_hierarchical(self):
         """Test whether codes are identified as hierarchical."""

@@ -19,23 +19,8 @@ def group_rare_codes(
     group_separator: str = "/",
 ) -> Dict[str, str]:
     """
-    Maps rare codes to their aggregated form.
-
-    Args:
-        counts: Dictionary mapping codes to their counts
-        rare_threshold: Threshold below which a code is considered rare
-        hierarchical_pattern: Regex pattern for hierarchical codes
-        group_separator: Separator between group and detail parts
-
-    Returns:
-        Mapping from original codes to their aggregated codes
-
-    Example:
-        >>> counts = {"A/1234": 2, "B/456": 2, "C/789": 10}
-        >>> group_rare_codes(counts, 5, r"^A")
-        {"A/1234": "A/123", "B/456": "B/rare", "C/789": "C/789"}
+    Maps rare codes to their aggregated form, processing longest codes first.
     """
-
     if not group_separator:
         warnings.warn("Empty group separator provided, defaulting to '/'")
         group_separator = "/"
@@ -47,8 +32,18 @@ def group_rare_codes(
     while should_continue_aggregation(aggregated_counts, rare_threshold, i):
         changed = False
         rare_codes = find_rare_codes(aggregated_counts, rare_threshold)
+        rare_codes.sort(key=len, reverse=True)
+
         for code in rare_codes:
-            if aggregated_counts.get(code, 0) >= rare_threshold:
+            # Skip if:
+            # - code was already processed
+            # - is no longer rare
+            # - already contains RARE_STR
+            if (
+                code not in aggregated_counts
+                or aggregated_counts[code] >= rare_threshold
+                or RARE_STR in code
+            ):
                 continue
 
             hierarchical = is_hierarchical(code, hierarchical_pattern)
@@ -82,6 +77,10 @@ def get_new_code(
     - Hierarchical without separator: trim until MIN_DETAIL_LENGTH, then map to "<first_char>/rare"
     - Non-hierarchical: always map to "<first_part>/rare"
     """
+    # Don't process codes that are already rare
+    if RARE_STR in code:
+        return code
+
     if not code:
         return code
 
@@ -124,8 +123,6 @@ def handle_hierarchical_with_separator(group: str, detail: str, separator: str) 
 
 def handle_hierarchical_without_separator(code: str, separator: str) -> str:
     """Process hierarchical code without separator."""
-    print(f"Processing hierarchical code without separator: {code}")
-    print(f"Code length: {len(code)}, MIN_DETAIL_LENGTH: {MIN_DETAIL_LENGTH}")
     if len(code) > MIN_DETAIL_LENGTH:
         return code[:-1]
     return f"{code[0]}{separator}{RARE_STR}"
