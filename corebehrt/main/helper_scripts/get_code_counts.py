@@ -42,7 +42,7 @@ def get_and_save_code_counts(data_dir: str, splits: List[str], write_dir: str) -
 
     for split_name in splits:
         logger.info(f"Getting code counts for {split_name} split")
-        path_name = f"{data_dir}/{split_name}"
+        path_name = join(data_dir, split_name)
 
         for shard_path in yield_shard_paths(path_name):
             concepts = pd.read_parquet(shard_path, columns=[CONCEPT_COL])
