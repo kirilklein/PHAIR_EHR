@@ -12,5 +12,5 @@ paths:
 file: code_counts.json # File containing the code counts (optional, default is code_counts.json)
 
 threshold: 90
-hierarchical_pattern: "^[MD]" # Only codes starting with M or D are hierarchical
+hierarchical_pattern: ^(?:M|D|P) # codes starting with M, D, P 
 separator: "/"
