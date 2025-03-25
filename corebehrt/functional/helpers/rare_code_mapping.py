@@ -30,6 +30,7 @@ def group_rare_codes(
 
     i = 0
     while should_continue_aggregation(aggregated_counts, rare_threshold, i):
+        print("iteration", i)
         changed = False
         rare_codes = find_rare_codes(aggregated_counts, rare_threshold)
         rare_codes.sort(key=len, reverse=True)
