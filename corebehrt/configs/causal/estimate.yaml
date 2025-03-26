@@ -16,4 +16,4 @@ estimator:
   methods: ["IPW", "AIPW", "TMLE"]
   effect_type: "ATE"
   n_bootstrap: 30
-  common_support_threshold: 0.01
+  common_support_threshold: 0.001
