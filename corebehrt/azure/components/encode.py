@@ -1,6 +1,9 @@
 from corebehrt.azure.util import job
 
-INPUTS = {"finetune_model": {"type": "uri_folder"}}
+INPUTS = {
+    "finetune_model": {"type": "uri_folder"},
+    "prepared_data": {"type": "uri_folder"},
+}
 OUTPUTS = {
     "encoded_data": {"type": "uri_folder"},
 }
