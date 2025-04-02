@@ -1,0 +1,39 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+## INPUTS  
+  encoded_data: ./outputs/causal/encoding
+  calibrated_predictions: ./outputs/causal/calibrated_predictions # to extract exposure
+  cohort: ./outputs/causal/exposure_cohort
+
+  outcomes: ./outputs/causal/outcomes/OUTCOME.csv
+## OUTPUTS
+  trained_xgb: ./outputs/causal/trained_xgb
+
+outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
+  n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+
+model:
+  n_trials: 2  # Number of hyperparameter optimization trials
+  cv: 2 # Number of cross-validation folds
+  scoring: "neg_log_loss"
+  params:
+    objective: "binary:logistic"
+    eval_metric: "logloss"
+    tree_method: "hist"
+    random_state: 42
+  
+  # Hyperparameter ranges
+  param_space:
+    max_depth: [3]
+    learning_rate: [0.01, 0.05]
+    n_estimators: [10, 20]
+    min_child_weight: [1]
+    subsample: [0.9]
+    colsample_bytree: [0.8]
+    reg_alpha: [0.1]
+    reg_lambda: [0.1]
+  early_stopping_rounds: 2

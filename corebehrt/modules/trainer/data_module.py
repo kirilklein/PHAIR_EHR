@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Tuple
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
+import logging
 
 from corebehrt.constants.data import ABSPOS_COL, TIMESTAMP_COL, TRAIN_KEY, VAL_KEY
 from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE
@@ -15,6 +16,53 @@ from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
 from corebehrt.functional.utils.filter import filter_folds_by_pids
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.trainer.dataset import SimpleDataset
+
+
+def load_and_prepare_data(
+    encoded_data_path: str, calibrated_predictions_path: str, logger: logging.Logger
+) -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
+    """
+    Load and prepare factual and counterfactual features.
+
+    Args:
+        encoded_data_path: Path to encoded data
+        calibrated_predictions_path: Path to calibrated predictions
+        logger: Logger instance
+
+    Returns:
+        Tuple containing:
+        - X: Factual features
+        - X_cf: Counterfactual features
+        - pids: List of patient IDs
+    """
+    logger.info("Loading encodings and exposures")
+    encodings, pids = load_encodings_and_pids_from_encoded_dir(encoded_data_path)
+    exposure = load_exposure_from_predictions(calibrated_predictions_path, pids)
+
+    # Create factual and counterfactual features
+    X, X_cf = create_factual_counterfactual_features(encodings, exposure)
+
+    return X, X_cf, pids
+
+
+def create_factual_counterfactual_features(
+    encodings: torch.Tensor, exposure: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Create factual and counterfactual feature tensors.
+
+    Args:
+        encodings: Encoded features tensor
+        exposure: Exposure tensor
+
+    Returns:
+        Tuple of (factual features, counterfactual features)
+    """
+    centered_exposure = exposure.unsqueeze(1) - 0.5
+    X = torch.cat([encodings, centered_exposure], dim=1)
+    X_cf = torch.cat([encodings, -centered_exposure], dim=1)
+
+    return X, X_cf
 
 
 class EncodedDataModule:
@@ -51,20 +99,12 @@ class EncodedDataModule:
         self.input_dim = 0
 
     def setup(self) -> None:
-        self.logger.info("Loading encodings and exposures")
-        encodings, pids = load_encodings_and_pids_from_encoded_dir(
-            self.cfg.paths.encoded_data
+        """Setup the data module by loading and preparing data."""
+        self.X, self.X_cf, self.pids = load_and_prepare_data(
+            self.cfg.paths.encoded_data,
+            self.cfg.paths.calibrated_predictions,
+            self.logger,
         )
-        exposure = load_exposure_from_predictions(
-            self.cfg.paths.calibrated_predictions, pids
-        )
-
-        # Create factual and counterfactual features
-        centered_exposure = exposure.unsqueeze(1) - 0.5
-        self.X = torch.cat([encodings, centered_exposure], dim=1)
-        self.X_cf = torch.cat(
-            [encodings, -centered_exposure], dim=1
-        )  # Flip the centered exposure/ counterfactual
         self.input_dim = self.X.shape[1]
 
         self.logger.info("Loading index dates and folds")
@@ -97,9 +137,9 @@ class EncodedDataModule:
         binary_outcomes = binary_outcomes.loc[pids]
         return torch.tensor(binary_outcomes.values, dtype=torch.float32)
 
-    def get_fold_dataloaders(
+    def get_fold_data(
         self, fold: Dict
-    ) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         val_fold_pids = fold[VAL_KEY]
         train_fold_pids = fold[TRAIN_KEY]
         val_fold_ids = [i for i, pid in enumerate(self.pids) if pid in val_fold_pids]
@@ -115,6 +155,12 @@ class EncodedDataModule:
         ]  # Counterfactual features for validation
         y_train = self.y[train_fold_ids]
         y_val = self.y[val_fold_ids]
+        return X_train, X_val, X_val_counter, y_train, y_val
+
+    def get_fold_dataloaders(
+        self, fold: Dict
+    ) -> Tuple[DataLoader, DataLoader, DataLoader]:
+        X_train, X_val, X_val_counter, y_train, y_val = self.get_fold_data(fold)
 
         train_dataset = SimpleDataset(X_train, y_train)
         val_dataset = SimpleDataset(X_val, y_val)
