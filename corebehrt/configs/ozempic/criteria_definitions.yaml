@@ -1,169 +1,175 @@
-diagnosis_delay_days: 14 # we match diagnoses up to index_date + diagnosis_delay_days/ assume it is not cause by the trial drug
+delays:
+  days: 14 # we match diagnoses and register diagnoses up to index_date + delay_days/ assume it is not caused by the trial drug
+  code_groups:
+    - "D/" # diagnoses
+    - "RD/" # register diagnoses
 
-min_age: 50 # minimum age for inclusion
+min_age: 50 # minimum age for inclusion  
 
 inclusion_criteria:
-  - type2_diabetes
-  - myocardial_infarction
-  - stroke
-  - transient_ischemic_attack
-  - glycemic_control
-
+  strict:
+    - type2_diabetes
+  minimum_one:
+    - myocardial_infarction
+    - stroke
+    - transient_ischemic_attack
+    - glycemic_control
+  
 exclusion_criteria:
   - cancer
   - end_stage_liver_disease
   - insulin
   - decompensation_of_glycemic_control
 
+criteria_definitions:
+  # Inclusion Criteria (At least one of the following should be true)
+  type2_diabetes:
+    codes:
+      # Diagnosis codes
+      - ^D/C11.*
+
+      # DDP-4 inhibitors
+      - ^M/A10BH.*
+      ## A10BD07–13 → 07 to 13
+      - ^M/A10BD0[7-9].*
+      - ^M/A10BD1[0-3].*
+      ## A10BD18–22
+      - ^M/A10BD1[8-9].*
+      - ^M/A10BD2[0-2].*
+      ## A10BD24–25, A10BD27
+      - ^M/A10BD2[4-5].*
+      - ^M/A10BD27.*
+
+      # Metformin-related codes
+      - ^M/A10BA.*
+      - ^M/A10BD0[1-3].*
+      - ^M/A10BD05.*
+      - ^M/A10BD07.*
+      - ^M/A10BD08.*
+      - ^M/A10BD1[0-1].*
+      - ^M/A10BD1[3-8].*
+      - ^M/A10BD20.*
+      - ^M/A10BD2[2-3].*
+      - ^M/A10BD25.*
+
+      # SGLT-2 inhibitors
+      - ^M/A10BK.*
+      - ^M/A10BD1[5-6].*
+      - ^M/A10BD2[0-1].*
+      - ^M/A10BD2[3-5].*
+      - ^M/A10BD27.*
+
+      # Sulphonylureas
+      - ^M/A10BB.*
+      - ^M/A10BC.*
+      - ^M/A10BD0[1-2].*
+      - ^M/A10BD04.*
+      - ^M/A10BD06.*
+      - ^M/A10BD14.*
+      - ^M/A10BX0[2-3].*
+
+      # Thiazolidinediones
+      - ^M/A10BG.*
+
+  myocardial_infarction:
+    codes:
+      - ^D/I2[1-3].*  # starts with D/I21, D/I22, D/I23
+
+  stroke:
+    codes:
+      - ^D/I6[3-6].*  # starts with D/I63, D/I64, D/I65, D/I66
+      - ^D/H341.*     # starts with D/H341
+
+  transient_ischemic_attack:
+    codes:
+      - ^D/G45.*      # starts with D/G45
+
+  # Glycemic Control
+  HbA1c:
+    codes:
+      - (?i).*hba1c.*
+    threshold: 7.0
+    operator: ">="
 
 
-# Inclusion Criteria (At least one of the following should be true)
-type2_diabetes:
-  codes:
-    # Diagnosis codes
-    - ^D/C11.*
+  #########################################################################
+  # Exclusion Criteria (Remove if at least one of the following is true)
+  type1_diabetes:
+    codes:
+      - ^D/C10.*
 
-    # DDP-4 inhibitors
-    - ^M/A10BH.*
-    ## A10BD07–13 → 07 to 13
-    - ^M/A10BD0[7-9].*
-    - ^M/A10BD1[0-3].*
-    ## A10BD18–22
-    - ^M/A10BD1[8-9].*
-    - ^M/A10BD2[0-2].*
-    ## A10BD24–25, A10BD27
-    - ^M/A10BD2[4-5].*
-    - ^M/A10BD27.*
+  glp1_receptor_agonist:
+    codes:
+      - ^M/A10BJ02.*  # Liraglutide
+      - ^M/A10BJ05.*  # Dulaglutid
+      - ^M/A10BJ06.*  # Semaglutide
+      - ^M/A10AE56.*  # Insulin/Liraglutid combination
+    time_window_days: 90
 
-    # Metformin-related codes
-    - ^M/A10BA.*
-    - ^M/A10BD0[1-3].*
-    - ^M/A10BD05.*
-    - ^M/A10BD07.*
-    - ^M/A10BD08.*
-    - ^M/A10BD1[0-1].*
-    - ^M/A10BD1[3-8].*
-    - ^M/A10BD20.*
-    - ^M/A10BD2[2-3].*
-    - ^M/A10BD25.*
+  dpp4_inhibitor: # also used as diabetes 2 criteria, ask Sanne
+    codes:
+      - ^M/A10BH.*
+      ## A10BD07–13 → 07 to 13
+      - ^M/A10BD0[7-9].*
+      - ^M/A10BD1[0-3].*
+      ## A10BD18–22
+      - ^M/A10BD1[8-9].*
+      - ^M/A10BD2[0-2].*
+      ## A10BD24–25, A10BD27
+      - ^M/A10BD2[4-5].*
+      - ^M/A10BD27.*
+    time_window_days: 30
 
-    # SGLT-2 inhibitors
-    - ^M/A10BK.*
-    - ^M/A10BD1[5-6].*
-    - ^M/A10BD2[0-1].*
-    - ^M/A10BD2[3-5].*
-    - ^M/A10BD27.*
+  # insulin: 
+  #   codes:
+  #   time_window_days: 90
 
-    # Sulphonylureas
-    - ^M/A10BB.*
-    - ^M/A10BC.*
-    - ^M/A10BD0[1-2].*
-    - ^M/A10BD04.*
-    - ^M/A10BD06.*
-    - ^M/A10BD14.*
-    - ^M/A10BX0[2-3].*
+  acute_decompensation_of_glycemic_control:
+    codes: 
+      - ^D/E111.* # ketoacidosis
 
-    # Thiazolidinediones
-    - ^M/A10BG.*
+  chronic_pancreatitis:
+    codes:
+      - ^D/K861.*
 
-myocardial_infarction:
-  codes:
-    - ^D/I2[1-3].*  # starts with D/I21, D/I22, D/I23
+  idiopathic_acute_pancreatitis:
+    codes:
+      - ^D/K850.*
 
-stroke:
-  codes:
-    - ^D/I6[3-6].*  # starts with D/I63, D/I64, D/I65, D/I66
-    - ^D/H341.*     # starts with D/H341
+  acute_coronary_or_cv_event:
+    codes:
+      - ^D/I21.*
+      - ^D/I24.*
+      - ^D/I63.*
+      - ^D/I64.*
 
-transient_ischemic_attack:
-  codes:
-    - ^D/G45.*      # starts with D/G45
+  # planned_artery_revascularization:
+  #   codes:
+      
+  # chronic_heart_failure_iv:
 
-# Glycemic Control
-HbA1c:
-  codes:
-    - (?i).*hba1c.*
-  threshold: 7.0
-  operator: ">="
+  chronic_hemodialysis: # includes peritoneal dialysis
+    codes:
+      - ^D/Z992.*
 
-
-#########################################################################
-# Exclusion Criteria (Remove if at least one of the following is true)
-type1_diabetes:
-  codes:
-    - ^D/C10.*
-
-glp1_receptor_agonist:
-  codes:
-    - ^M/A10BJ02.*  # Liraglutide
-    - ^M/A10BJ05.*  # Dulaglutid
-    - ^M/A10BJ06.*  # Semaglutide
-    - ^M/A10AE56.*  # Insulin/Liraglutid combination
-  time_window_days: 90
-
-dpp4_inhibitor: # also used as diabetes 2 criteria, ask Sanne
-  codes:
-    - ^M/A10BH.*
-    ## A10BD07–13 → 07 to 13
-    - ^M/A10BD0[7-9].*
-    - ^M/A10BD1[0-3].*
-    ## A10BD18–22
-    - ^M/A10BD1[8-9].*
-    - ^M/A10BD2[0-2].*
-    ## A10BD24–25, A10BD27
-    - ^M/A10BD2[4-5].*
-    - ^M/A10BD27.*
-  time_window_days: 30
-
-# insulin: 
-#   codes:
-#   time_window_days: 90
-
-acute_decompensation_of_glycemic_control:
-  codes: 
-    - ^D/E111.* # ketoacidosis
-
-chronic_pancreatitis:
-  codes:
-    - ^D/K861.*
-
-idiopathic_acute_pancreatitis:
-  codes:
-    - ^D/K850.*
-
-acute_coronary_or_cv_event:
-  codes:
-    - ^D/I21.*
-    - ^D/I24.*
-    - ^D/I63.*
-    - ^D/I64.*
-
-# planned_artery_revascularization:
-#   codes:
+  end_stage_liver_disease:
+    codes:
+      - ^D/K72.*
     
-# chronic_heart_failure_iv:
-
-chronic_hemodialysis: # includes peritoneal dialysis
-  codes:
-    - ^D/Z992.*
-
-end_stage_liver_disease:
-  codes:
-    - ^D/K72.*
-  
-# solid_organ_transplant:
-#   codes:
-    
-cancer:
-  codes: # DC00-DC99 (except C4491/2)
-    - ^D/C[0-9][0-9].*
-  exclude_codes:
-    - ^D/C449.*
-  time_window_days: 1826 # 5 years
+  # solid_organ_transplant:
+  #   codes:
+      
+  cancer:
+    codes: # DC00-DC99 (except C4491/2)
+      - ^D/C[0-9][0-9].*
+    exclude_codes:
+      - ^D/C449.*
+    time_window_days: 1826 # 5 years
 
 
-pregnancy_and_birth:
-  - ^D/O[0-9][0-9].*
+  pregnancy_and_birth:
+    codes:
+      - ^D/O[0-9][0-9].*
 
 
 
