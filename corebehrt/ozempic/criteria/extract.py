@@ -3,18 +3,15 @@ from datetime import timedelta
 import pandas as pd
 
 from corebehrt.constants.data import AGE_COL, PID_COL
-from corebehrt.ozempic_scripts.helper.constant import (
+from corebehrt.ozempic.criteria.match import evaluate_numeric_criteria, match_codes
+from corebehrt.ozempic.data.patient import Patient
+from corebehrt.ozempic.utils.calculations import calculate_age
+from corebehrt.ozempic.utils.definitions import (
     CRITERIA_DEFINITIONS,
     DELAYS,
     THRESHOLD,
     TIME_WINDOW_DAYS,
 )
-from corebehrt.ozempic_scripts.helper.data import Patient
-from corebehrt.ozempic_scripts.helper.matching import (
-    evaluate_numeric_criteria,
-    match_codes,
-)
-from corebehrt.ozempic_scripts.helper.utils import calculate_age
 
 
 def extract_patient_criteria(

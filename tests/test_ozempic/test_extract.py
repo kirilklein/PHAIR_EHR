@@ -9,9 +9,7 @@ from corebehrt.constants.data import (
     TIMESTAMP_COL,
     VALUE_COL,
 )
-from corebehrt.ozempic_scripts.extract_incl_excl_criteria import (
-    extract_patient_criteria,
-)
+from corebehrt.ozempic.criteria.extract import extract_patient_criteria
 
 
 class TestCriteriaExtraction(unittest.TestCase):
