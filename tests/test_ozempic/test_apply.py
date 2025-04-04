@@ -5,6 +5,12 @@ import pandas as pd
 from corebehrt.constants.causal.data import (
     EXCLUDED_BY,
     EXCLUSION,
+    FLOW,
+    FLOW_AFTER_AGE,
+    FLOW_AFTER_MINIMUM_ONE,
+    FLOW_AFTER_STRICT,
+    FLOW_FINAL,
+    FLOW_INITIAL,
     INCLUDED,
     STRICT_INCLUSION,
     TOTAL,
@@ -69,7 +75,7 @@ class TestApplyCriteria(unittest.TestCase):
         self.assertNotIn(
             4, included[PID_COL].values
         )  # Patient 4 doesn't have type2_diabetes
-        self.assertTrue(stats[EXCLUDED_BY][STRICT_INCLUSION] > 0)
+        self.assertTrue(stats[EXCLUDED_BY][STRICT_INCLUSION]["type2_diabetes"] > 0)
 
     def test_minimum_one_criteria(self):
         """Test that patients with none of the minimum_one criteria are excluded."""
@@ -127,7 +133,9 @@ class TestApplyCriteria(unittest.TestCase):
 
         # Verify inclusion criteria statistics
         self.assertEqual(stats[EXCLUDED_BY][AGE_COL], 1)  # Patient 2 (age 45)
-        self.assertEqual(stats[EXCLUDED_BY][STRICT_INCLUSION], 1)  # Patient 4 (no T2D)
+        self.assertEqual(
+            stats[EXCLUDED_BY][STRICT_INCLUSION], {"type2_diabetes": 1}
+        )  # Patient 4 (no T2D)
         self.assertEqual(
             stats[EXCLUDED_BY][MINIMUM_ONE], 1
         )  # Patient 5 (no minimum_one criteria)
@@ -142,6 +150,45 @@ class TestApplyCriteria(unittest.TestCase):
 
         # Final included patients
         self.assertEqual(stats[INCLUDED], 2)  # Only patients 1 and 6 remain
+
+    def test_patient_flow(self):
+        """Test that patient flow counts are correctly tracked at each step."""
+        _, stats = apply_criteria(self.df, self.config)
+
+        self.assertEqual(stats[FLOW][FLOW_INITIAL], 6)  # All patients
+        self.assertEqual(stats[FLOW][FLOW_AFTER_AGE], 5)  # Exclude patient 2 (age)
+        self.assertEqual(
+            stats[FLOW][FLOW_AFTER_STRICT], 4
+        )  # Exclude patient 4 (no T2D)
+        self.assertEqual(
+            stats[FLOW][FLOW_AFTER_MINIMUM_ONE], 3
+        )  # Exclude patient 5 (no min one)
+        self.assertEqual(stats[FLOW][FLOW_FINAL], 2)  # Exclude patient 3 (cancer)
+
+    def test_consort_numbers_match(self):
+        """Test that flow numbers match exclusion counts."""
+        _, stats = apply_criteria(self.df, self.config)
+
+        # Verify that differences between steps match exclusion counts
+        self.assertEqual(
+            stats[FLOW][FLOW_INITIAL] - stats[FLOW][FLOW_AFTER_AGE],
+            stats[EXCLUDED_BY][AGE_COL],
+        )
+
+        self.assertEqual(
+            stats[FLOW][FLOW_AFTER_AGE] - stats[FLOW][FLOW_AFTER_STRICT],
+            sum(stats[EXCLUDED_BY][STRICT_INCLUSION].values()),
+        )
+
+        self.assertEqual(
+            stats[FLOW][FLOW_AFTER_STRICT] - stats[FLOW][FLOW_AFTER_MINIMUM_ONE],
+            stats[EXCLUDED_BY][MINIMUM_ONE],
+        )
+
+        self.assertEqual(
+            stats[FLOW][FLOW_AFTER_MINIMUM_ONE] - stats[FLOW][FLOW_FINAL],
+            sum(stats[EXCLUDED_BY][EXCLUSION].values()),
+        )
 
 
 if __name__ == "__main__":

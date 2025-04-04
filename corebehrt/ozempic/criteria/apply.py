@@ -1,57 +1,59 @@
 from typing import Dict, Tuple
 
+import numpy as np
 import pandas as pd
 
+from corebehrt.constants.causal.data import (
+    EXCLUDED_BY,
+    EXCLUSION,
+    FLOW,
+    FLOW_AFTER_AGE,
+    FLOW_AFTER_MINIMUM_ONE,
+    FLOW_AFTER_STRICT,
+    FLOW_FINAL,
+    FLOW_INITIAL,
+    INCLUDED,
+    STRICT_INCLUSION,
+    TOTAL,
+)
 from corebehrt.constants.data import AGE_COL, PID_COL
 from corebehrt.ozempic.utils.definitions import (
     EXCLUSION_CRITERIA,
     INCLUSION_CRITERIA,
-    MIN_AGE,
     MAX_AGE,
+    MIN_AGE,
     MINIMUM_ONE,
     STRICT,
-)
-from corebehrt.constants.causal.data import (
-    EXCLUDED_BY,
-    STRICT_INCLUSION,
-    EXCLUSION,
-    INCLUDED,
-    TOTAL,
 )
 
 
 def apply_criteria(df: pd.DataFrame, config: dict) -> Tuple[pd.DataFrame, Dict]:
     """
     Apply inclusion and exclusion criteria to a DataFrame of patients.
+    Tracks patient counts at each step for CONSORT diagram creation.
 
     Args:
-        df (pd.DataFrame): DataFrame with columns:
-            - subject_id: Patient identifier
-            - flag_*: Boolean columns for each criterion
-            - value_age: Patient age
-        config (dict): Configuration containing:
-            - min_age: Minimum age requirement
-            - inclusion_criteria:
-                - strict: List of criteria that must all be True
-                - minimum_one: List of criteria where at least one must be True
-            - exclusion_criteria: List of criteria that must all be False
+        df (pd.DataFrame): DataFrame with patient criteria
+        config (dict): Configuration with criteria definitions
 
     Returns:
-        tuple[pd.DataFrame, dict]:
-            - DataFrame with only included patients
-            - Dictionary with statistics about exclusions
+        tuple[pd.DataFrame, dict]: Included patients and statistics including flow counts
     """
-
     stats = {
         TOTAL: len(df),
-        EXCLUDED_BY: {AGE_COL: 0, STRICT_INCLUSION: 0, MINIMUM_ONE: 0, EXCLUSION: {}},
+        FLOW: {
+            FLOW_INITIAL: len(df),
+            FLOW_AFTER_AGE: 0,
+            FLOW_AFTER_STRICT: 0,
+            FLOW_AFTER_MINIMUM_ONE: 0,
+            FLOW_FINAL: 0,
+        },
+        EXCLUDED_BY: {AGE_COL: 0, STRICT_INCLUSION: {}, MINIMUM_ONE: 0, EXCLUSION: {}},
         INCLUDED: 0,
     }
 
-    # Start with all patients
     included = df.copy()
-    # Verify all required criteria columns exist
-    check_criteria_columns(included, config)
+
     # 1. Apply age criterion
     if MIN_AGE in config:
         age_mask = included[AGE_COL] >= config[MIN_AGE]
@@ -63,34 +65,35 @@ def apply_criteria(df: pd.DataFrame, config: dict) -> Tuple[pd.DataFrame, Dict]:
         stats[EXCLUDED_BY][AGE_COL] = (~age_mask).sum()
         included = included[age_mask]
 
+    stats[FLOW][FLOW_AFTER_AGE] = len(included)
+
     # 2. Apply strict inclusion criteria
     for criterion in config[INCLUSION_CRITERIA][STRICT]:
-        mask = included[criterion] == True
-        stats[EXCLUDED_BY][STRICT_INCLUSION] += (~mask).sum()
+        mask = included[criterion]
+        excluded_count = (~mask).sum()
+        stats[EXCLUDED_BY][STRICT_INCLUSION][criterion] = excluded_count
         included = included[mask]
+    stats[FLOW][FLOW_AFTER_STRICT] = len(included)
 
     # 3. Apply minimum_one criteria
     if MINIMUM_ONE in config[INCLUSION_CRITERIA]:
-        # Create combined mask where at least one criterion is True
-        minimum_one_mask = False
-        for criterion in config[INCLUSION_CRITERIA][MINIMUM_ONE]:
-            minimum_one_mask |= included[criterion] == True
-
+        minimum_one_mask = included[config[INCLUSION_CRITERIA][MINIMUM_ONE]].any(axis=1)
         stats[EXCLUDED_BY][MINIMUM_ONE] = (~minimum_one_mask).sum()
         included = included[minimum_one_mask]
+    stats[FLOW][FLOW_AFTER_MINIMUM_ONE] = len(included)
 
     # 4. Apply exclusion criteria
-    ## First count the number of patients excluded by each criterion
     for criterion in config[EXCLUSION_CRITERIA]:
         excluded_count = included[criterion].sum()
         stats[EXCLUDED_BY][EXCLUSION][criterion] = excluded_count
 
-    ## Then remove the excluded patients from the included DataFrame
+    # Remove excluded patients
     included = included[included[config[EXCLUSION_CRITERIA]].eq(False).all(axis=1)]
 
+    stats[FLOW][FLOW_FINAL] = len(included)
     stats[INCLUDED] = len(included)
 
-    return included, stats
+    return included, prettify_stats(stats)
 
 
 def check_criteria_columns(df: pd.DataFrame, config: dict) -> None:
@@ -115,3 +118,27 @@ def check_criteria_columns(df: pd.DataFrame, config: dict) -> None:
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
         raise ValueError(f"Missing required criteria columns: {missing_columns}")
+
+
+def prettify_stats(stats: dict) -> dict:
+    """
+    Convert all numpy numeric types to Python native types recursively through the dictionary.
+
+    Args:
+        stats (dict): Dictionary containing statistics, potentially with numpy numeric types
+                     and nested dictionaries
+
+    Returns:
+        dict: Dictionary with all numpy numeric types converted to Python native types
+    """
+
+    def convert_value(v):
+        if isinstance(v, (np.integer, np.floating)):
+            return int(v) if isinstance(v, np.integer) else float(v)
+        elif isinstance(v, dict):
+            return prettify_stats(v)
+        elif isinstance(v, (list, tuple)):
+            return type(v)(convert_value(x) for x in v)
+        return v
+
+    return {k: convert_value(v) for k, v in stats.items()}

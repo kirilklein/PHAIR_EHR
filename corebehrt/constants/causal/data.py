@@ -28,8 +28,17 @@ TRUE_EFFECT_COL = "true_effect"
 
 INDEX_DATE = "index_date"
 
+# Statistics
 EXCLUDED_BY = "excluded_by"
 STRICT_INCLUSION = "strict_inclusion"
 EXCLUSION = "exclusion"
 INCLUDED = "included"
 TOTAL = "total"
+
+# New flow-related constants
+FLOW = "flow"
+FLOW_INITIAL = "initial"
+FLOW_AFTER_AGE = "after_age"
+FLOW_AFTER_STRICT = "after_strict"
+FLOW_AFTER_MINIMUM_ONE = "after_minimum_one"
+FLOW_FINAL = "final"
