@@ -16,10 +16,15 @@ inclusion_criteria:
     - glycemic_control
   
 exclusion_criteria:
+  - type1_diabetes
+  - glp1_receptor_agonist
+  - dpp4_inhibitor
+  - acute_decompensation_of_glycemic_control
   - cancer
   - end_stage_liver_disease
   - insulin
   - decompensation_of_glycemic_control
+  - pregnancy_and_birth
 
 criteria_definitions:
   # Inclusion Criteria (At least one of the following should be true)

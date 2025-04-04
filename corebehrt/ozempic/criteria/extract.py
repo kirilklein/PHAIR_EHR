@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import pandas as pd
 
-from corebehrt.constants.data import AGE_COL, PID_COL
+from corebehrt.constants.data import PID_COL
 from corebehrt.ozempic.criteria.match import evaluate_numeric_criteria, match_codes
 from corebehrt.ozempic.data.patient import Patient
 from corebehrt.ozempic.utils.calculations import calculate_age
@@ -73,7 +73,7 @@ def extract_patient_criteria(
         patient = Patient(row[PID_COL], row.index_date)
         patient_data = df[df[PID_COL] == patient.subject_id]
 
-        patient.values[AGE_COL] = calculate_age(patient_data, patient.index_date)
+        patient.age = calculate_age(patient_data, patient.index_date)
 
         for criteria, criteria_cfg in config[CRITERIA_DEFINITIONS].items():
             min_timestamp = patient.index_date - timedelta(

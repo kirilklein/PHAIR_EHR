@@ -2,13 +2,15 @@ from datetime import datetime
 
 import pandas as pd
 
-from corebehrt.constants.data import PID_COL
+from corebehrt.constants.data import PID_COL, AGE_COL
+from corebehrt.constants.causal.data import INDEX_DATE
 
 
 class Patient:
     def __init__(self, subject_id: int, index_date: datetime):
         self.subject_id = subject_id
         self.index_date = index_date
+        self.age = None
         self.criteria_flags = {}
         self.values = {}
 
@@ -41,14 +43,13 @@ def patients_to_dataframe(patients: dict[int, Patient]) -> pd.DataFrame:
 
     # Second pass: create rows with all columns
     for subject_id, patient in patients.items():
-        row = {PID_COL: subject_id, "index_date": patient.index_date}
+        row = {PID_COL: subject_id, INDEX_DATE: patient.index_date}
 
         # Add criteria flags (True/False)
         for flag in flag_columns:
-            col_name = f"flag_{flag}"
-            row[col_name] = patient.criteria_flags.get(flag, False)
+            row[flag] = patient.criteria_flags.get(flag, False)
 
-        # Add values (numeric values, including age)
+        # Add values (numeric values)
         for val in value_columns:
             col_name = f"value_{val}"
             row[col_name] = patient.values.get(val, None)
@@ -59,8 +60,8 @@ def patients_to_dataframe(patients: dict[int, Patient]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
 
     # Set column order
-    column_order = [PID_COL, "index_date"]
-    column_order.extend([f"flag_{col}" for col in sorted(flag_columns)])
+    column_order = [PID_COL, INDEX_DATE, AGE_COL]
+    column_order.extend([col for col in sorted(flag_columns)])
     column_order.extend([f"value_{col}" for col in sorted(value_columns)])
 
     return df[column_order]

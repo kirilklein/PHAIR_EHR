@@ -25,3 +25,11 @@ SIMULATED_PROBAS_CONTROL = "P0"  # Simulated probability under control
 
 # Treatment effect
 TRUE_EFFECT_COL = "true_effect"
+
+INDEX_DATE = "index_date"
+
+EXCLUDED_BY = "excluded_by"
+STRICT_INCLUSION = "strict_inclusion"
+EXCLUSION = "exclusion"
+INCLUDED = "included"
+TOTAL = "total"

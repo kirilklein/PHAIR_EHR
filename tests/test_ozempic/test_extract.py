@@ -8,6 +8,7 @@ from corebehrt.constants.data import (
     PID_COL,
     TIMESTAMP_COL,
     VALUE_COL,
+    AGE_COL
 )
 from corebehrt.ozempic.criteria.extract import extract_patient_criteria
 
@@ -127,7 +128,7 @@ class TestCriteriaExtraction(unittest.TestCase):
         self.assertTrue(patient.criteria_flags["type2_diabetes"])
         self.assertFalse(patient.criteria_flags["stroke"])
         self.assertFalse(patient.criteria_flags["HbA1c"])
-        self.assertLess(patient.values["age"], self.config["min_age"])
+        self.assertLess(patient.age, self.config["min_age"])
 
     def test_patient_3_recent_cancer(self):
         patients = extract_patient_criteria(self.df, self.index_dates, self.config)
