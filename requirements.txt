@@ -10,3 +10,4 @@ tqdm==4.67.1
 transformers>=4.48.0
 CausalEstimate==0.8.0
 lightning>=2.4.0
+xgboost
