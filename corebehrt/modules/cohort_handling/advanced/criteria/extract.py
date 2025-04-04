@@ -71,7 +71,10 @@ def extract_patient_criteria(
     """
     patients = {}
     delays_config = config.get(DELAYS, {})
-
+    
+    # Validate required configuration
+    if CRITERIA_DEFINITIONS not in config:
+        raise ValueError(f"Configuration missing required key: {CRITERIA_DEFINITIONS}")
     for _, row in index_dates.iterrows():
         patient = Patient(row[PID_COL], row.index_date)
         patient_data = df[df[PID_COL] == patient.subject_id]
