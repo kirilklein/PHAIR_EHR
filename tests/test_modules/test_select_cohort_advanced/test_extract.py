@@ -9,7 +9,7 @@ from corebehrt.constants.data import (
     TIMESTAMP_COL,
     VALUE_COL,
 )
-from corebehrt.modules.cohort_handling.advanced.criteria.extract import (
+from corebehrt.modules.cohort_handling.advanced.extract import (
     extract_patient_criteria,
 )
 

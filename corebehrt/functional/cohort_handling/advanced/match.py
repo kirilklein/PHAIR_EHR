@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 import pandas as pd
 
 from corebehrt.constants.data import CONCEPT_COL, TIMESTAMP_COL
-from corebehrt.modules.cohort_handling.advanced.utils.definitions import (
+from corebehrt.constants.cohort import (
     CODE_ENTRY,
     CODE_GROUPS,
     DAYS,

@@ -1,6 +1,5 @@
 import unittest
 from datetime import datetime
-import numpy as np
 import pandas as pd
 
 from corebehrt.modules.cohort_handling.advanced.data.patient import (

@@ -2,20 +2,20 @@ from datetime import timedelta
 
 import pandas as pd
 
-from corebehrt.constants.data import PID_COL
-from corebehrt.modules.cohort_handling.advanced.criteria.match import (
-    evaluate_numeric_criteria,
-    match_codes,
-)
-from corebehrt.modules.cohort_handling.advanced.data.patient import Patient
-from corebehrt.modules.cohort_handling.advanced.utils.calculations import calculate_age
-from corebehrt.modules.cohort_handling.advanced.utils.definitions import (
+from corebehrt.constants.cohort import (
     CODE_ENTRY,
     CRITERIA_DEFINITIONS,
     DELAYS,
     THRESHOLD,
     TIME_WINDOW_DAYS,
 )
+from corebehrt.constants.data import PID_COL
+from corebehrt.functional.cohort_handling.advanced.calculations import calculate_age
+from corebehrt.functional.cohort_handling.advanced.match import (
+    evaluate_numeric_criteria,
+    match_codes,
+)
+from corebehrt.modules.cohort_handling.advanced.data.patient import Patient
 
 
 def extract_patient_criteria(

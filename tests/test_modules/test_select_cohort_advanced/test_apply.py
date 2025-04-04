@@ -15,15 +15,15 @@ from corebehrt.constants.causal.data import (
     STRICT_INCLUSION,
     TOTAL,
 )
-from corebehrt.constants.data import AGE_COL, PID_COL
-from corebehrt.modules.cohort_handling.advanced.criteria.apply import apply_criteria
-from corebehrt.modules.cohort_handling.advanced.utils.definitions import (
+from corebehrt.constants.cohort import (
     EXCLUSION_CRITERIA,
     INCLUSION_CRITERIA,
     MIN_AGE,
     MINIMUM_ONE,
     STRICT,
 )
+from corebehrt.constants.data import AGE_COL, PID_COL
+from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria
 
 
 class TestApplyCriteria(unittest.TestCase):
