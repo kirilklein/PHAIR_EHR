@@ -10,6 +10,7 @@ from corebehrt.modules.cohort_handling.advanced.criteria.match import (
 from corebehrt.modules.cohort_handling.advanced.data.patient import Patient
 from corebehrt.modules.cohort_handling.advanced.utils.calculations import calculate_age
 from corebehrt.modules.cohort_handling.advanced.utils.definitions import (
+    CODE_ENTRY,
     CRITERIA_DEFINITIONS,
     DELAYS,
     THRESHOLD,
@@ -71,10 +72,18 @@ def extract_patient_criteria(
     """
     patients = {}
     delays_config = config.get(DELAYS, {})
-    
+
     # Validate required configuration
     if CRITERIA_DEFINITIONS not in config:
         raise ValueError(f"Configuration missing required key: {CRITERIA_DEFINITIONS}")
+
+    # Validate criteria structure
+    for criteria_name, criteria_cfg in config[CRITERIA_DEFINITIONS].items():
+        if CODE_ENTRY not in criteria_cfg:
+            raise ValueError(
+                f"Criterion '{criteria_name}' missing required 'code_entry' key"
+            )
+
     for _, row in index_dates.iterrows():
         patient = Patient(row[PID_COL], row.index_date)
         patient_data = df[df[PID_COL] == patient.subject_id]
