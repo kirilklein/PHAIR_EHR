@@ -56,10 +56,14 @@ def train_xgb_model(
     Args:
         X_train: Training features array
         y_train: Training labels array
+        X_val: Validation features array
+        y_val: Validation labels array
         params: Base XGBoost parameters
         param_space: Hyperparameter search space
         n_trials: Number of random search trials
-        logger: Optional logger instance
+        cv: Number of cross-validation folds
+        scoring: Scoring metric for hyperparameter tuning
+        early_stopping_rounds: Number of rounds to stop training if no improvement
 
     Returns:
         Trained XGBoost classifier model
