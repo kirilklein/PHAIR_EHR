@@ -29,6 +29,10 @@ def patients_to_dataframe(patients: dict[int, Patient]) -> pd.DataFrame:
     Returns:
         pd.DataFrame: DataFrame with columns for each criterion flag and value
     """
+    if not patients:
+        # Return empty DataFrame with required columns
+        return pd.DataFrame(columns=[PID_COL, INDEX_DATE, AGE_COL])
+
     # Initialize lists to store data
     rows = []
 
@@ -43,7 +47,11 @@ def patients_to_dataframe(patients: dict[int, Patient]) -> pd.DataFrame:
 
     # Second pass: create rows with all columns
     for subject_id, patient in patients.items():
-        row = {PID_COL: subject_id, INDEX_DATE: patient.index_date}
+        row = {
+            PID_COL: subject_id,
+            INDEX_DATE: patient.index_date,
+            AGE_COL: patient.age,
+        }
 
         # Add criteria flags (True/False)
         for flag in flag_columns:
