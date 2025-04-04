@@ -64,8 +64,7 @@ def train_xgb_model(
     Returns:
         Trained XGBoost classifier model
     """
-    if logger:
-        logger.info("Starting hyperparameter tuning...")
+    logger.info("Starting hyperparameter tuning...")
 
     # Create XGBoost classifier
     model = xgb.XGBClassifier(**params)
@@ -85,10 +84,8 @@ def train_xgb_model(
     # Fit using cross-validation on training data
     search.fit(X_train, y_train)
 
-    if logger:
-        logger.info(f"Best parameters found: {search.best_params_}")
-        logger.info(f"Best CV score: {-search.best_score_:.4f} (log loss)")
-
+    logger.info(f"Best parameters found: {search.best_params_}")
+    logger.info(f"Best CV score: {-search.best_score_:.4f} (log loss)")
     # Train final model on full training data with best parameters
     final_model = xgb.XGBClassifier(**{**params, **search.best_params_})
     final_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
