@@ -131,13 +131,16 @@ def match_codes(
             (patient_data[TIMESTAMP_COL] >= min_timestamp)
             & (patient_data[TIMESTAMP_COL] <= max_timestamp)
         ]
-
+        if filtered_data.empty:
+            continue
         if exclude_codes:
             filtered_data = filtered_data[
                 ~filtered_data[CONCEPT_COL].apply(
                     lambda x: matches_pattern(x, exclude_codes)
                 )
             ]
+            if filtered_data.empty:
+                continue
 
         # Check if any codes in this delay group match
         if (

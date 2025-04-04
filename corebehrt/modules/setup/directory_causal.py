@@ -6,6 +6,7 @@ from corebehrt.constants.causal.paths import (
     ESTIMATE_CFG,
     SIMULATE_CFG,
     TRAIN_MLP_CFG,
+    COHORT_ADVANCED_CFG,
 )
 from corebehrt.constants.paths import COHORT_CFG, FINETUNE_CFG, PRETRAIN_CFG
 from corebehrt.modules.setup.config import Config
@@ -117,3 +118,16 @@ class CausalDirectoryPreparer(DirectoryPreparer):
 
         # Write config in output directory
         self.write_config("estimate", name=ESTIMATE_CFG)
+
+    def setup_select_cohort_advanced(self) -> None:
+        """
+        Validates path config and sets up directories for select_cohort_advanced.
+        """
+        # Setup logging
+        self.setup_logging("select_cohort_advanced")
+        # Check input directories
+        self.check_directory("cohort")
+        self.check_directory("meds")
+        # Create output directories
+        self.create_directory("cohort_advanced")
+        self.write_config("cohort_advanced", name=COHORT_ADVANCED_CFG)

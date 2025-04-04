@@ -3,14 +3,27 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 
-from corebehrt.constants.causal.data import (EXCLUDED_BY, EXCLUSION, FLOW,
-                                             FLOW_AFTER_AGE,
-                                             FLOW_AFTER_MINIMUM_ONE,
-                                             FLOW_AFTER_STRICT, FLOW_FINAL,
-                                             FLOW_INITIAL, INCLUDED,
-                                             STRICT_INCLUSION, TOTAL)
-from corebehrt.constants.cohort import (EXCLUSION_CRITERIA, INCLUSION_CRITERIA,
-                                        MAX_AGE, MIN_AGE, MINIMUM_ONE, STRICT)
+from corebehrt.constants.causal.data import (
+    EXCLUDED_BY,
+    EXCLUSION,
+    FLOW,
+    FLOW_AFTER_AGE,
+    FLOW_AFTER_MINIMUM_ONE,
+    FLOW_AFTER_STRICT,
+    FLOW_FINAL,
+    FLOW_INITIAL,
+    INCLUDED,
+    STRICT_INCLUSION,
+    TOTAL,
+)
+from corebehrt.constants.cohort import (
+    EXCLUSION_CRITERIA,
+    INCLUSION_CRITERIA,
+    MAX_AGE,
+    MIN_AGE,
+    MINIMUM_ONE,
+    STRICT,
+)
 from corebehrt.constants.data import AGE_COL, PID_COL
 
 

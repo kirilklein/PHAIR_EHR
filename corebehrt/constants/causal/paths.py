@@ -5,7 +5,7 @@ CALIBRATE_CFG = "calibrate_config.yaml"
 TRAIN_MLP_CFG = "train_mlp_config.yaml"
 ESTIMATE_CFG = "estimate_config.yaml"
 ENCODINGS_FILE = "encodings.pt"
-
+COHORT_ADVANCED_CFG = "cohort_advanced_config.yaml"
 # Files
 PREDICTIONS_FILE = "predictions_and_targets.csv"
 CALIBRATED_PREDICTIONS_FILE = "predictions_and_targets_calibrated.csv"
