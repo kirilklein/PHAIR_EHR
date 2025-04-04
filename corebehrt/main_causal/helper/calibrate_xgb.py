@@ -50,9 +50,11 @@ def calibrate_predictions(
 
     Args:
         model: The trained XGBoost model
-        train_data: Dictionary containing training features and labels
-        val_data: Dictionary containing validation features and labels
-        val_cf_data: Dictionary containing counterfactual validation features
+        X_train: Training features
+        X_val: Validation features
+        X_val_counter: Counterfactual validation features
+        y_train: Training targets
+        y_val: Validation targets
         val_pids: List of patient IDs for the validation set
         epsilon: Clipping epsilon for calibration
 

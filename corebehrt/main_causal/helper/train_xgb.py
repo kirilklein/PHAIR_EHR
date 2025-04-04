@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import xgboost as xgb
@@ -8,7 +8,9 @@ from sklearn.model_selection import RandomizedSearchCV
 logger = logging.getLogger("train_xgb")
 
 
-def setup_xgb_params(model_cfg: Dict[str, Any]) -> Dict[str, Any]:
+def setup_xgb_params(
+    model_cfg: Dict[str, Any],
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Setup XGBoost parameters and hyperparameter search space."""
     # Base parameters
     if model_cfg.get("params") is None:
