@@ -3,10 +3,13 @@ from datetime import timedelta
 import pandas as pd
 
 from corebehrt.constants.data import PID_COL
-from corebehrt.ozempic.criteria.match import evaluate_numeric_criteria, match_codes
-from corebehrt.ozempic.data.patient import Patient
-from corebehrt.ozempic.utils.calculations import calculate_age
-from corebehrt.ozempic.utils.definitions import (
+from corebehrt.modules.cohort_handling.advanced.criteria.match import (
+    evaluate_numeric_criteria,
+    match_codes,
+)
+from corebehrt.modules.cohort_handling.advanced.data.patient import Patient
+from corebehrt.modules.cohort_handling.advanced.utils.calculations import calculate_age
+from corebehrt.modules.cohort_handling.advanced.utils.definitions import (
     CRITERIA_DEFINITIONS,
     DELAYS,
     THRESHOLD,

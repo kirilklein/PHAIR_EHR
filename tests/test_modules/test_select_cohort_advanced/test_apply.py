@@ -16,8 +16,8 @@ from corebehrt.constants.causal.data import (
     TOTAL,
 )
 from corebehrt.constants.data import AGE_COL, PID_COL
-from corebehrt.ozempic.criteria.apply import apply_criteria
-from corebehrt.ozempic.utils.definitions import (
+from corebehrt.modules.cohort_handling.advanced.criteria.apply import apply_criteria
+from corebehrt.modules.cohort_handling.advanced.utils.definitions import (
     EXCLUSION_CRITERIA,
     INCLUSION_CRITERIA,
     MIN_AGE,
