@@ -28,8 +28,8 @@ def apply_calibration_to_predictions(
 def get_predictions(
     model: Any,
     X: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Get predictions and targets from data."""
+) -> np.ndarray:
+    """Get positive class probabilities from model."""
     predictions = model.predict_proba(X)[:, 1]  # Get positive class probabilities
     return predictions
 
