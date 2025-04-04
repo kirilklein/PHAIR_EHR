@@ -53,10 +53,10 @@ def main_train(config_path: str):
             y_val,
             params,
             param_space,
-            n_trials=cfg.get("n_trials", 20),
-            cv=cfg.get("cv", 5),
-            scoring=cfg.get("scoring", "neg_log_loss"),
-            early_stopping_rounds=cfg.get("early_stopping_rounds", 10),
+            n_trials=cfg.model.get("n_trials", 20),
+            cv=cfg.model.get("cv", 5),
+            scoring=cfg.model.get("scoring", "neg_log_loss"),
+            early_stopping_rounds=cfg.model.get("early_stopping_rounds", 10),
         )
 
         # Save model
