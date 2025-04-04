@@ -8,7 +8,6 @@ from corebehrt.constants.data import (
     PID_COL,
     TIMESTAMP_COL,
     VALUE_COL,
-    AGE_COL
 )
 from corebehrt.ozempic.criteria.extract import extract_patient_criteria
 
