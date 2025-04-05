@@ -1,21 +1,20 @@
 import re
 from datetime import datetime, timedelta
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
 import pandas as pd
 
-from corebehrt.constants.data import CONCEPT_COL, TIMESTAMP_COL
 from corebehrt.constants.cohort import (
     CODE_ENTRY,
     CODE_GROUPS,
     DAYS,
     EXCLUDE_CODES,
+    NUMERIC_VALUE,
     OPERATOR,
     THRESHOLD,
-    CODE_ENTRY,
     USE_PATTERNS,
-    NUMERIC_VALUE,
 )
+from corebehrt.constants.data import CONCEPT_COL, TIMESTAMP_COL
 
 
 def matches_pattern(code: str, patterns: list[str]) -> bool:
