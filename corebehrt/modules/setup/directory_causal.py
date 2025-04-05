@@ -6,6 +6,7 @@ from corebehrt.constants.causal.paths import (
     ESTIMATE_CFG,
     SIMULATE_CFG,
     TRAIN_MLP_CFG,
+    TRAIN_XGB_CFG,
     COHORT_ADVANCED_CFG,
 )
 from corebehrt.constants.paths import COHORT_CFG, FINETUNE_CFG, PRETRAIN_CFG
@@ -97,6 +98,26 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         )
         self.write_config("trained_mlp", source="cohort", name=COHORT_CFG)
         self.write_config("trained_mlp", name=TRAIN_MLP_CFG)
+
+    def setup_train_xgb(self) -> None:
+        """
+        Validates path config and sets up directories for train_xgb.
+        """
+        out = "trained_xgb"
+        # Setup logging
+        self.setup_logging("train_xgb")
+
+        # Validate and create directories
+        self.check_directory("encoded_data")
+        self.check_directory("calibrated_predictions")
+        self.check_directory("cohort")
+        self.create_run_directory(out, base="runs")
+
+        # Write config in output directory.
+        self.write_config(out, source="encoded_data", name=ENCODE_CFG)
+        self.write_config(out, source="calibrated_predictions", name=CALIBRATE_CFG)
+        self.write_config(out, source="cohort", name=COHORT_CFG)
+        self.write_config(out, name=TRAIN_XGB_CFG)
 
     def setup_estimate(self) -> None:
         """

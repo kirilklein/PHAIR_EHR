@@ -74,6 +74,11 @@ jobs:
                 source .venv/bin/activate
                 python -m corebehrt.main_causal.train_mlp
 
+            - name: train_xgb # as alternative to mlp
+              run: |
+                source .venv/bin/activate
+                python -m corebehrt.main_causal.train_xgb --config_path ./corebehrt/configs/causal/train_xgb.yaml
+
             - name: estimate
               run: |
                 source .venv/bin/activate

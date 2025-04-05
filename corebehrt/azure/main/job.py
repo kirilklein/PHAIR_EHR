@@ -22,6 +22,7 @@ def add_parser(subparsers) -> None:
             "encode",
             "simulate",
             "train_mlp",
+            "train_xgb",
             "estimate",
             "get_code_counts",
             "map_rare_codes",
