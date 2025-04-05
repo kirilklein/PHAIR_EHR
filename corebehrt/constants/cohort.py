@@ -16,3 +16,6 @@ INCLUSION_CRITERIA = "inclusion_criteria"
 EXCLUSION_CRITERIA = "exclusion_criteria"
 MIN_AGE = "min_age"
 MAX_AGE = "max_age"
+
+# Add this constant
+UNIQUE_CODE_LIMITS = "unique_code_limits"

@@ -12,8 +12,10 @@ from corebehrt.constants.causal.data import (
     FLOW_AFTER_STRICT,
     FLOW_FINAL,
     FLOW_INITIAL,
+    FLOW_AFTER_UNIQUE_CODES,
     INCLUDED,
     STRICT_INCLUSION,
+    UNIQUE_CODE_LIMITS,
     TOTAL,
 )
 from corebehrt.constants.cohort import (
@@ -39,6 +41,10 @@ def apply_criteria(df: pd.DataFrame, config: dict) -> Tuple[pd.DataFrame, Dict]:
     Returns:
         tuple[pd.DataFrame, dict]: Included patients and statistics including flow counts
     """
+    check_criteria_columns(
+        df, config
+    )  # This will raise ValueError if columns are missing
+
     stats = {
         TOTAL: len(df),
         FLOW: {
@@ -46,9 +52,16 @@ def apply_criteria(df: pd.DataFrame, config: dict) -> Tuple[pd.DataFrame, Dict]:
             FLOW_AFTER_AGE: 0,
             FLOW_AFTER_STRICT: 0,
             FLOW_AFTER_MINIMUM_ONE: 0,
+            FLOW_AFTER_UNIQUE_CODES: 0,
             FLOW_FINAL: 0,
         },
-        EXCLUDED_BY: {AGE_COL: 0, STRICT_INCLUSION: {}, MINIMUM_ONE: 0, EXCLUSION: {}},
+        EXCLUDED_BY: {
+            AGE_COL: 0,
+            STRICT_INCLUSION: {},
+            MINIMUM_ONE: 0,
+            UNIQUE_CODE_LIMITS: {},
+            EXCLUSION: {},
+        },
         INCLUDED: 0,
     }
 
@@ -82,6 +95,25 @@ def apply_criteria(df: pd.DataFrame, config: dict) -> Tuple[pd.DataFrame, Dict]:
         included = included[minimum_one_mask]
     stats[FLOW][FLOW_AFTER_MINIMUM_ONE] = len(included)
 
+    # Apply unique code limits
+    if UNIQUE_CODE_LIMITS in config:
+        for limit_name, limit_config in config[UNIQUE_CODE_LIMITS].items():
+            max_count = limit_config["max_count"]
+            criteria_cols = limit_config["criteria"]
+
+            # Count how many criteria are True for each patient
+            unique_count = included[criteria_cols].sum(axis=1)
+            exceeds_limit = unique_count > max_count
+
+            # Track exclusions
+            excluded_count = exceeds_limit.sum()
+            stats[EXCLUDED_BY][UNIQUE_CODE_LIMITS][limit_name] = excluded_count
+
+            # Remove patients exceeding the limit
+            included = included[~exceeds_limit]
+
+    stats[FLOW][FLOW_AFTER_UNIQUE_CODES] = len(included)
+
     # 4. Apply exclusion criteria
     for criterion in config[EXCLUSION_CRITERIA]:
         excluded_count = included[criterion].sum()
@@ -101,6 +133,7 @@ def check_criteria_columns(df: pd.DataFrame, config: dict) -> None:
     Check if all required criteria columns exist in the DataFrame.
     """
     required_columns = [PID_COL, AGE_COL]
+
     # Add strict inclusion criteria columns
     for criterion in config[INCLUSION_CRITERIA][STRICT]:
         required_columns.append(criterion)
@@ -109,6 +142,11 @@ def check_criteria_columns(df: pd.DataFrame, config: dict) -> None:
     if MINIMUM_ONE in config[INCLUSION_CRITERIA]:
         for criterion in config[INCLUSION_CRITERIA][MINIMUM_ONE]:
             required_columns.append(criterion)
+
+    # Add unique code limit criteria columns
+    if UNIQUE_CODE_LIMITS in config:
+        for limit_config in config[UNIQUE_CODE_LIMITS].values():
+            required_columns.extend(limit_config["criteria"])
 
     # Add exclusion criteria columns
     for criterion in config[EXCLUSION_CRITERIA]:

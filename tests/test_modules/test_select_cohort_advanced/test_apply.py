@@ -11,6 +11,7 @@ from corebehrt.constants.causal.data import (
     FLOW_AFTER_STRICT,
     FLOW_FINAL,
     FLOW_INITIAL,
+    FLOW_AFTER_UNIQUE_CODES,
     INCLUDED,
     STRICT_INCLUSION,
     TOTAL,
@@ -21,6 +22,7 @@ from corebehrt.constants.cohort import (
     MIN_AGE,
     MINIMUM_ONE,
     STRICT,
+    UNIQUE_CODE_LIMITS,
 )
 from corebehrt.constants.data import AGE_COL, PID_COL
 from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria
@@ -189,6 +191,171 @@ class TestApplyCriteria(unittest.TestCase):
             stats[FLOW][FLOW_AFTER_MINIMUM_ONE] - stats[FLOW][FLOW_FINAL],
             sum(stats[EXCLUDED_BY][EXCLUSION].values()),
         )
+
+    def test_unique_code_limits(self):
+        """Test that patients with too many unique codes are excluded."""
+        test_data = pd.DataFrame(
+            {
+                PID_COL: [1, 2, 3, 4],
+                AGE_COL: [60, 60, 60, 60],
+                # Strict inclusion criteria
+                "type2_diabetes": [True, True, True, True],
+                # Minimum one criteria
+                "myocardial_infarction": [True, True, True, True],
+                # Drug criteria
+                "metformin": [True, True, True, True],
+                "sulphonylureas": [True, True, True, False],
+                "sglt2_inhibitors": [False, True, True, False],  # Patient 2 has 3 drugs
+                "thiazolidinediones": [False, False, True, False],
+            }
+        )
+
+        test_config = {
+            MIN_AGE: 50,
+            INCLUSION_CRITERIA: {
+                STRICT: ["type2_diabetes"],
+                MINIMUM_ONE: ["myocardial_infarction"],
+            },
+            UNIQUE_CODE_LIMITS: {
+                "anti_diabetic_drugs": {
+                    "max_count": 2,
+                    "criteria": [
+                        "metformin",
+                        "sulphonylureas",
+                        "sglt2_inhibitors",
+                        "thiazolidinediones",
+                    ],
+                }
+            },
+            EXCLUSION_CRITERIA: [],
+        }
+
+        # Apply criteria
+        result_df, stats = apply_criteria(test_data, test_config)
+
+        # Check results
+        expected_pids = [1, 4]  # Patients 2 and 3 should be excluded (have >2 drugs)
+        self.assertListEqual(sorted(result_df[PID_COL].tolist()), expected_pids)
+
+        # Check statistics
+        self.assertEqual(stats[FLOW][FLOW_INITIAL], 4)
+        self.assertEqual(stats[FLOW][FLOW_AFTER_AGE], 4)  # All pass age criterion
+        self.assertEqual(stats[FLOW][FLOW_AFTER_STRICT], 4)  # All pass strict criterion
+        self.assertEqual(stats[FLOW][FLOW_AFTER_MINIMUM_ONE], 4)  # All pass minimum one
+        self.assertEqual(
+            stats[FLOW][FLOW_AFTER_UNIQUE_CODES], 2
+        )  # Two excluded due to too many drugs
+        self.assertEqual(stats[FLOW][FLOW_FINAL], 2)  # No exclusion criteria
+        self.assertEqual(
+            stats[EXCLUDED_BY][UNIQUE_CODE_LIMITS]["anti_diabetic_drugs"],
+            2,  # Two patients excluded
+        )
+
+    def test_multiple_unique_code_limits(self):
+        """Test that multiple unique code limit groups work correctly."""
+        test_data = pd.DataFrame(
+            {
+                PID_COL: [1, 2],
+                AGE_COL: [60, 60],
+                # Inclusion criteria
+                "type2_diabetes": [True, True],
+                "myocardial_infarction": [True, True],
+                # Test criteria
+                "drug_a": [True, True],
+                "drug_b": [True, True],
+                "drug_c": [True, False],  # Patient 1 has 3 drugs, Patient 2 has 2
+                "test_1": [True, True],
+                "test_2": [True, True],
+                "test_3": [False, False],  # Changed to False for Patient 2
+            }
+        )
+
+        test_config = {
+            MIN_AGE: 50,
+            INCLUSION_CRITERIA: {
+                STRICT: ["type2_diabetes"],
+                MINIMUM_ONE: ["myocardial_infarction"],
+            },
+            UNIQUE_CODE_LIMITS: {
+                "drugs": {"max_count": 2, "criteria": ["drug_a", "drug_b", "drug_c"]},
+                "tests": {"max_count": 2, "criteria": ["test_1", "test_2", "test_3"]},
+            },
+            EXCLUSION_CRITERIA: [],
+        }
+
+        # Apply criteria
+        result_df, stats = apply_criteria(test_data, test_config)
+
+        # Check results
+        expected_pids = [
+            2
+        ]  # Patient 1 excluded (too many drugs), Patient 2 has acceptable counts
+        self.assertListEqual(sorted(result_df[PID_COL].tolist()), expected_pids)
+
+        # Check statistics
+        self.assertEqual(stats[FLOW][FLOW_INITIAL], 2)
+        self.assertEqual(stats[FLOW][FLOW_AFTER_AGE], 2)
+        self.assertEqual(stats[FLOW][FLOW_AFTER_STRICT], 2)
+        self.assertEqual(stats[FLOW][FLOW_AFTER_MINIMUM_ONE], 2)
+        self.assertEqual(stats[FLOW][FLOW_AFTER_UNIQUE_CODES], 1)
+        self.assertEqual(stats[FLOW][FLOW_FINAL], 1)
+        self.assertEqual(
+            stats[EXCLUDED_BY][UNIQUE_CODE_LIMITS]["drugs"],
+            1,  # One patient excluded due to drugs
+        )
+        self.assertEqual(
+            stats[EXCLUDED_BY][UNIQUE_CODE_LIMITS]["tests"],
+            0,  # No patients excluded due to tests
+        )
+
+    def test_unique_code_limits_empty_criteria(self):
+        """Test that empty criteria list is handled correctly."""
+        test_data = pd.DataFrame(
+            {
+                PID_COL: [1],
+                AGE_COL: [60],
+                "type2_diabetes": [True],
+                "myocardial_infarction": [True],
+            }
+        )
+
+        test_config = {
+            MIN_AGE: 50,
+            INCLUSION_CRITERIA: {
+                STRICT: ["type2_diabetes"],
+                MINIMUM_ONE: ["myocardial_infarction"],
+            },
+            UNIQUE_CODE_LIMITS: {"empty_group": {"max_count": 2, "criteria": []}},
+            EXCLUSION_CRITERIA: [],
+        }
+
+        # Apply criteria
+        result_df, stats = apply_criteria(test_data, test_config)
+
+        # Check results
+        self.assertEqual(len(result_df), 1)  # Patient should not be excluded
+        self.assertEqual(
+            stats[EXCLUDED_BY][UNIQUE_CODE_LIMITS]["empty_group"], 0  # No exclusions
+        )
+
+    def test_unique_code_limits_missing_columns(self):
+        """Test that missing columns are handled appropriately."""
+        test_data = pd.DataFrame({PID_COL: [1], AGE_COL: [60]})
+
+        test_config = {
+            UNIQUE_CODE_LIMITS: {
+                "missing_cols": {
+                    "max_count": 2,
+                    "criteria": ["nonexistent_col1", "nonexistent_col2"],
+                }
+            },
+            INCLUSION_CRITERIA: {STRICT: [], MINIMUM_ONE: []},
+            EXCLUSION_CRITERIA: [],
+        }
+
+        # Should raise either ValueError or KeyError
+        with self.assertRaises((ValueError, KeyError)):
+            apply_criteria(test_data, test_config)
 
 
 if __name__ == "__main__":
