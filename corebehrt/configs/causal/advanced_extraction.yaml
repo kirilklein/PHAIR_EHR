@@ -1,0 +1,52 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ### Inputs
+  cohort: ./outputs/cohort # Data directory
+  meds: ./example_data/example_MEDS_data_w_labs
+  splits: [tuning]
+  ### Outputs
+  cohort_advanced: ./outputs/cohort_advanced # Data directory
+
+cv_folds: 2 # can be set to 1 if only a simple train/val split is needed
+val_ratio: 0.1 # only used if cv_folds is set to 1
+test_ratio: 0 # can be set to 1 for test set creation only
+
+
+delays:
+  days: 14 # we match diagnoses and register diagnoses up to index_date + delay_days/ assume it is not caused by the trial drug
+  code_groups:
+    - "D" # diagnoses
+
+min_age: 50 # minimum age for inclusion  
+
+inclusion_criteria:
+  strict:
+    - example_strict
+  minimum_one:
+    - example_minimum_one
+
+exclusion_criteria:
+  - example_exclusion
+
+criteria_definitions:
+  # Inclusion Criteria (At least one of the following should be true)
+  example_strict:
+    codes:
+      # Diagnosis codes
+      - ^D84.*
+  example_minimum_one:
+    codes:
+      - ^LAB6.*
+  
+  #########################################################################
+  # Exclusion Criteria (Remove if at least one of the following is true)
+  example_exclusion:
+    codes:
+      - ^D98.*
+
+ 
+
+
