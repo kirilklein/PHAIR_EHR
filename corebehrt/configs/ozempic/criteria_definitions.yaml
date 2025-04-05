@@ -26,59 +26,20 @@ exclusion_criteria:
   - cancer
   - end_stage_liver_disease
   - insulin
-  - decompensation_of_glycemic_control
   - pregnancy_and_birth
 
 # we always check for both normal and register medication/diagnoses as well as for all procedures P, RPO, RPS
 criteria_definitions:
   # Inclusion Criteria (At least one of the following should be true)
-  type2_diabetes: # at least one of the codes below should be present
+  type2_diabetes:
+    use_patterns:
+      - metformin
+      - dpp4_inhibitors
+      - sglt2_inhibitors
+      - sulphonylureas
+      - thiazolidinediones
     codes:
-      # Diagnosis codes
       - ^(?:D|RD)/C11.*
-
-      # DDP-4 inhibitors
-      - ^(?:M|RM)/A10BH.*
-      ## A10BD07–13 → 07 to 13
-      - ^(?:M|RM)/A10BD0[7-9].*
-      - ^(?:M|RM)/A10BD1[0-3].*
-      ## A10BD18–22
-      - ^(?:M|RM)/A10BD1[8-9].*
-      - ^(?:M|RM)/A10BD2[0-2].*
-      ## A10BD24–25, A10BD27
-      - ^(?:M|RM)/A10BD2[4-5].*
-      - ^(?:M|RM)/A10BD27.*
-
-      # Metformin-related codes
-      - ^(?:M|RM)/A10BA.*
-      - ^(?:M|RM)/A10BD0[1-3].*
-      - ^(?:M|RM)/A10BD05.*
-      - ^(?:M|RM)/A10BD07.*
-      - ^(?:M|RM)/A10BD08.*
-      - ^(?:M|RM)/A10BD1[0-1].*
-      - ^(?:M|RM)/A10BD1[3-8].*
-      - ^(?:M|RM)/A10BD20.*
-      - ^(?:M|RM)/A10BD2[2-3].*
-      - ^(?:M|RM)/A10BD25.*
-
-      # SGLT-2 inhibitors
-      - ^(?:M|RM)/A10BK.*
-      - ^(?:M|RM)/A10BD1[5-6].*
-      - ^(?:M|RM)/A10BD2[0-1].*
-      - ^(?:M|RM)/A10BD2[3-5].*
-      - ^(?:M|RM)/A10BD27.*
-
-      # Sulphonylureas
-      - ^(?:M|RM)/A10BB.*
-      - ^(?:M|RM)/A10BC.*
-      - ^(?:M|RM)/A10BD0[1-2].*
-      - ^(?:M|RM)/A10BD04.*
-      - ^(?:M|RM)/A10BD06.*
-      - ^(?:M|RM)/A10BD14.*
-      - ^(?:M|RM)/A10BX0[2-3].*
-
-      # Thiazolidinediones
-      - ^(?:M|RM)/A10BG.*
 
   myocardial_infarction:
     codes:
@@ -126,18 +87,9 @@ criteria_definitions:
       - ^(?:M|RM)/A10AE56.*  # Insulin/Liraglutid combination
     time_window_days: 90
 
-  dpp4_inhibitor: # also used as diabetes 2 criteria, ask Sanne
-    codes:
-      - ^(?:M|RM)/A10BH.*
-      ## A10BD07–13 → 07 to 13
-      - ^(?:M|RM)/A10BD0[7-9].*
-      - ^(?:M|RM)/A10BD1[0-3].*
-      ## A10BD18–22
-      - ^(?:M|RM)/A10BD1[8-9].*
-      - ^(?:M|RM)/A10BD2[0-2].*
-      ## A10BD24–25, A10BD27
-      - ^(?:M|RM)/A10BD2[4-5].*
-      - ^(?:M|RM)/A10BD27.*
+  dpp4_inhibitor:
+    use_patterns:
+      - dpp4_inhibitors
     time_window_days: 30
 
   insulin: 
@@ -207,6 +159,44 @@ criteria_definitions:
   pregnancy_and_birth:
     codes:
       - ^(?:D|RD)/O[0-9][0-9].*
+
+# Define reusable code patterns
+code_patterns:
+  metformin:
+    codes:
+      - ^(?:M|RM)/A10BA.*
+      - ^(?:M|RM)/A10BD0[1-3].*
+      - ^(?:M|RM)/A10BD05.*
+
+  dpp4_inhibitors:
+    codes:
+      - ^(?:M|RM)/A10BH.*
+      - ^(?:M|RM)/A10BD0[7-9].*
+      - ^(?:M|RM)/A10BD1[0-3].*
+
+  sglt2_inhibitors:
+    codes:
+      - ^(?:M|RM)/A10BK.*
+      - ^(?:M|RM)/A10BD1[5-6].*
+
+  sulphonylureas:
+    codes:
+      - ^(?:M|RM)/A10BB.*
+      - ^(?:M|RM)/A10BC.*
+
+  thiazolidinediones:
+    codes:
+      - ^(?:M|RM)/A10BG.*
+
+# Use the same patterns for unique code limits
+unique_code_limits:
+  anti_diabetic_drugs:
+    max_count: 2
+    use_patterns:
+      - metformin
+      - sulphonylureas
+      - sglt2_inhibitors
+      - thiazolidinediones
 
 
 

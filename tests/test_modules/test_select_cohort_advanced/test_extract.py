@@ -2,6 +2,20 @@ import unittest
 
 import pandas as pd
 
+from corebehrt.constants.cohort import (
+    CODE_ENTRY,
+    CODE_GROUPS,
+    CODE_PATTERNS,
+    CRITERIA_DEFINITIONS,
+    DAYS,
+    DELAYS,
+    EXCLUDE_CODES,
+    MIN_AGE,
+    OPERATOR,
+    THRESHOLD,
+    TIME_WINDOW_DAYS,
+    USE_PATTERNS,
+)
 from corebehrt.constants.data import (
     BIRTH_CODE,
     CONCEPT_COL,
@@ -9,31 +23,29 @@ from corebehrt.constants.data import (
     TIMESTAMP_COL,
     VALUE_COL,
 )
-from corebehrt.modules.cohort_handling.advanced.extract import (
-    extract_patient_criteria,
-)
+from corebehrt.modules.cohort_handling.advanced.extract import extract_patient_criteria
 
 
 class TestCriteriaExtraction(unittest.TestCase):
     def setUp(self):
         self.config = {
-            "delays": {"days": 14, "code_groups": ["D/", "RD/"]},
-            "min_age": 50,
-            "criteria_definitions": {
-                "type2_diabetes": {"codes": ["^D/C11.*", "^M/A10BH.*"]},
-                "stroke": {"codes": ["^D/I6[3-6].*", "^D/H341.*"]},
+            DELAYS: {DAYS: 14, CODE_GROUPS: ["D/", "RD/"]},
+            MIN_AGE: 50,
+            CRITERIA_DEFINITIONS: {
+                "type2_diabetes": {CODE_ENTRY: ["^D/C11.*", "^M/A10BH.*"]},
+                "stroke": {CODE_ENTRY: ["^D/I6[3-6].*", "^D/H341.*"]},
                 "HbA1c": {
-                    "codes": ["(?i).*hba1c.*"],
-                    "threshold": 7.0,
-                    "operator": ">=",
+                    CODE_ENTRY: ["(?i).*hba1c.*"],
+                    THRESHOLD: 7.0,
+                    OPERATOR: ">=",
                 },
-                "type1_diabetes": {"codes": ["^D/C10.*"]},
+                "type1_diabetes": {CODE_ENTRY: ["^D/C10.*"]},
                 "cancer": {
-                    "codes": ["^D/C[0-9][0-9].*"],
-                    "exclude_codes": ["^D/C449.*"],
-                    "time_window_days": 1826,
+                    CODE_ENTRY: ["^D/C[0-9][0-9].*"],
+                    EXCLUDE_CODES: ["^D/C449.*"],
+                    TIME_WINDOW_DAYS: 1826,
                 },
-                "pregnancy_and_birth": {"codes": ["^D/O[0-9][0-9].*"]},
+                "pregnancy_and_birth": {CODE_ENTRY: ["^D/O[0-9][0-9].*"]},
             },
         }
 
@@ -129,7 +141,7 @@ class TestCriteriaExtraction(unittest.TestCase):
         self.assertTrue(patient.criteria_flags["type2_diabetes"])
         self.assertFalse(patient.criteria_flags["stroke"])
         self.assertFalse(patient.criteria_flags["HbA1c"])
-        self.assertLess(patient.age, self.config["min_age"])
+        self.assertLess(patient.age, self.config[MIN_AGE])
 
     def test_patient_3_recent_cancer(self):
         patients = extract_patient_criteria(self.df, self.index_dates, self.config)
@@ -150,6 +162,107 @@ class TestCriteriaExtraction(unittest.TestCase):
         patients = extract_patient_criteria(self.df, self.index_dates, self.config)
         patient = patients[6]
         self.assertTrue(patient.criteria_flags["stroke"])
+
+
+class TestPatternUsage(unittest.TestCase):
+    def setUp(self):
+        """Set up test data with various medication codes and patterns."""
+        self.config = {
+            CODE_PATTERNS: {
+                "metformin": {CODE_ENTRY: ["^(?:M|RM)/A10BA.*"]},
+                "dpp4_inhibitors": {
+                    CODE_ENTRY: ["^(?:M|RM)/A10BH.*", "^(?:M|RM)/A10BD0[7-9].*"]
+                },
+                "sglt2_inhibitors": {CODE_ENTRY: ["^(?:M|RM)/A10BK.*"]},
+            },
+            CRITERIA_DEFINITIONS: {
+                "type2_diabetes": {
+                    USE_PATTERNS: ["metformin", "dpp4_inhibitors"],
+                    CODE_ENTRY: [
+                        "^D/C11.*"
+                    ],  # Any of these OR any pattern match makes it true
+                },
+                "dpp4_use": {USE_PATTERNS: ["dpp4_inhibitors"]},
+                "any_diabetes_med": {
+                    USE_PATTERNS: ["metformin", "dpp4_inhibitors", "sglt2_inhibitors"]
+                },
+            },
+        }
+
+        # Create test events data
+        self.df = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1, 2, 2, 3, 3],
+                CONCEPT_COL: [
+                    "M/A10BA01",  # metformin for patient 1
+                    "D/C11",  # T2D diagnosis for patient 1
+                    "M/A10BH01",  # DPP4 for patient 1
+                    "M/A10BA01",  # metformin for patient 2
+                    "M/A10BK01",  # SGLT2 for patient 2
+                    "D/C11",  # T2D diagnosis only for patient 3
+                    "M/A10BD08",  # Combination with DPP4 for patient 3
+                ],
+                TIMESTAMP_COL: pd.to_datetime(
+                    [
+                        "2023-05-15",
+                        "2023-05-15",
+                        "2023-05-15",
+                        "2023-05-15",
+                        "2023-05-15",
+                        "2023-05-15",
+                        "2023-05-15",
+                    ]
+                ),
+            }
+        )
+
+        self.index_dates = pd.DataFrame(
+            {PID_COL: [1, 2, 3], TIMESTAMP_COL: pd.to_datetime(["2023-06-01"] * 3)}
+        )
+
+    def test_pattern_combination(self):
+        """Test criteria using multiple patterns."""
+        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+
+        # Patient 1: Has metformin, DPP4, and T2D diagnosis (any would make it true)
+        self.assertTrue(patients[1].criteria_flags["type2_diabetes"])
+        self.assertTrue(patients[1].criteria_flags["dpp4_use"])
+        self.assertTrue(patients[1].criteria_flags["any_diabetes_med"])
+
+        # Patient 2: Has metformin and SGLT2
+        self.assertTrue(
+            patients[2].criteria_flags["type2_diabetes"]
+        )  # True because has metformin
+        self.assertFalse(patients[2].criteria_flags["dpp4_use"])
+        self.assertTrue(patients[2].criteria_flags["any_diabetes_med"])
+
+        # Patient 3: Has T2D diagnosis and DPP4 combination
+        self.assertTrue(
+            patients[3].criteria_flags["type2_diabetes"]
+        )  # True from either diagnosis or DPP4
+        self.assertTrue(patients[3].criteria_flags["dpp4_use"])
+
+    def test_pattern_with_direct_codes(self):
+        """Test criteria using both patterns and direct codes."""
+        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+
+        # Patient 3: Has T2D diagnosis and DPP4 (either makes it true)
+        self.assertTrue(patients[3].criteria_flags["type2_diabetes"])
+
+        # Patient 2: Has metformin (makes type2_diabetes true)
+        self.assertTrue(patients[2].criteria_flags["type2_diabetes"])
+
+    def test_pattern_reuse(self):
+        """Test that the same pattern can be reused in different criteria."""
+        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+
+        # Patient 1: Check DPP4 pattern in both criteria
+        self.assertTrue(patients[1].criteria_flags["type2_diabetes"])
+        self.assertTrue(patients[1].criteria_flags["dpp4_use"])
+
+        # Patient 2: No DPP4, should be false in dpp4_use but true in type2_diabetes (has metformin)
+        self.assertFalse(patients[2].criteria_flags["dpp4_use"])
+        self.assertTrue(patients[2].criteria_flags["type2_diabetes"])
 
 
 if __name__ == "__main__":

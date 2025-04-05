@@ -1,10 +1,13 @@
 DELAYS = "delays"
 THRESHOLD = "threshold"
+NUMERIC_VALUE = "numeric_value"
 CRITERIA_DEFINITIONS = "criteria_definitions"
 TIME_WINDOW_DAYS = "time_window_days"
 
 # criteria config
 CODE_ENTRY = "codes"
+CODE_PATTERNS = "code_patterns"
+USE_PATTERNS = "use_patterns"
 EXCLUDE_CODES = "exclude_codes"
 CODE_GROUPS = "code_groups"
 OPERATOR = "operator"

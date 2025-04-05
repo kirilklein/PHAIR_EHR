@@ -1,6 +1,6 @@
 import re
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import pandas as pd
 
@@ -12,6 +12,9 @@ from corebehrt.constants.cohort import (
     EXCLUDE_CODES,
     OPERATOR,
     THRESHOLD,
+    CODE_ENTRY,
+    USE_PATTERNS,
+    NUMERIC_VALUE,
 )
 
 
@@ -38,7 +41,7 @@ def evaluate_numeric_criteria(
     ]
 
     if not numeric_data.empty:
-        if "numeric_value" not in numeric_data.columns:
+        if NUMERIC_VALUE not in numeric_data.columns:
             raise ValueError(
                 "Data is missing the numeric_value column required for numeric criteria."
             )
@@ -157,3 +160,26 @@ def match_codes(
             return True
 
     return False
+
+
+def get_all_codes_for_criterion(
+    criterion_config: dict, code_patterns: dict
+) -> List[str]:
+    """
+    Get all code patterns for a criterion, including referenced patterns.
+
+    Args:
+        criterion_config: Configuration for a single criterion
+        code_patterns: Dictionary of predefined code patterns
+
+    Returns:
+        List of all code patterns for this criterion
+    """
+    codes = criterion_config.get(CODE_ENTRY, [])
+
+    # Add codes from referenced patterns
+    for pattern_name in criterion_config.get(USE_PATTERNS, []):
+        if pattern_name in code_patterns:
+            codes.extend(code_patterns[pattern_name][CODE_ENTRY])
+
+    return codes
