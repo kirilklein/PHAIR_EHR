@@ -40,7 +40,7 @@ class TestCriteriaExtraction(unittest.TestCase):
         self.index_dates = pd.DataFrame(
             {
                 PID_COL: [1, 2, 3, 4, 5, 6],
-                "index_date": pd.to_datetime(
+                TIMESTAMP_COL: pd.to_datetime(
                     [
                         "2023-06-01",
                         "2023-06-01",

@@ -38,6 +38,10 @@ def evaluate_numeric_criteria(
     ]
 
     if not numeric_data.empty:
+        if "numeric_value" not in numeric_data.columns:
+            raise ValueError(
+                "Data is missing the numeric_value column required for numeric criteria."
+            )
         latest = numeric_data.sort_values(TIMESTAMP_COL).iloc[-1]
         value = latest.numeric_value
         threshold = criteria_cfg[THRESHOLD]
@@ -51,6 +55,8 @@ def evaluate_numeric_criteria(
         }
         if operator in operators:
             return value, operators[operator](value, threshold)
+        else:
+            raise ValueError(f"Invalid operator: {operator}")
 
     return None, False
 
