@@ -105,6 +105,10 @@ class EncodedDataModule:
             self.cfg.paths.calibrated_predictions,
             self.logger,
         )
+        # Move tensors to GPU if available
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.X = self.X.to(device)
+        self.X_cf = self.X_cf.to(device)
         self.input_dim = self.X.shape[1]
 
         self.logger.info("Loading index dates and folds")
@@ -114,6 +118,7 @@ class EncodedDataModule:
 
         self.logger.info("Loading outcomes")
         self.y = self._load_outcomes(index_dates, pids)
+        self.y = self.y.to(device)  # Move outcomes to GPU as well
 
     def _load_index_dates_and_folds(self) -> Tuple[pd.DataFrame, List[Dict], List[str]]:
         index_dates = pd.read_csv(

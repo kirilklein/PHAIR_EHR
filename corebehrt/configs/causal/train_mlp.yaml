@@ -25,7 +25,9 @@ trainer_args:
   sampler: true
   sample_weight_function:
     _target_: corebehrt.evaluation.utils.inverse_sqrt # function to calculate sample weights
-  
+  precision: 16  # Use mixed precision for faster training
+  accelerator: 'gpu'
+  devices: 1
   epochs: 2
   gradient_clip: 
     clip_value: 1.0

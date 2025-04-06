@@ -45,5 +45,7 @@ def setup_trainer(root_folder: str, trainer_args: dict) -> pl.Trainer:
         default_root_dir=root_folder,
         gradient_clip_val=trainer_args.get("gradient_clip", {}).get("clip_value", None),
         log_every_n_steps=1,
-        logger=azure_logger,  # <--- Here it is!
+        logger=azure_logger,
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        devices=1,
     )
