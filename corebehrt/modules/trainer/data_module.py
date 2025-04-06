@@ -16,6 +16,7 @@ from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
 from corebehrt.functional.utils.filter import filter_folds_by_pids
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.trainer.dataset import SimpleDataset
+from corebehrt.modules.trainer.utils import get_sampler
 
 
 def load_and_prepare_data(
@@ -144,7 +145,7 @@ class EncodedDataModule:
         return torch.tensor(binary_outcomes.values, dtype=torch.float32)
 
     def get_fold_data(
-        self, fold: Dict
+        self, fold: Dict[str, List[str]]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         # Use mapping for faster indexing
         val_fold_ids = torch.tensor([self.pid_to_idx[pid] for pid in fold[VAL_KEY]])
@@ -159,26 +160,41 @@ class EncodedDataModule:
         )
 
     def get_fold_dataloaders(
-        self, fold: Dict
+        self, fold: Dict[str, List[str]]
     ) -> Tuple[DataLoader, DataLoader, DataLoader]:
-        X_train, X_val, X_val_counter, y_train, y_val = self.get_fold_data(fold)
+        """
+        Get dataloaders for a given fold.
+        Args:
+            fold (Dict): A dictionary containing training and validation patient IDs
 
+        Returns:
+            Tuple[DataLoader, DataLoader, DataLoader]: A tuple of three DataLoader objects
+            - train_loader: DataLoader for training data
+            - val_loader: DataLoader for validation data
+            - val_counter_loader: DataLoader for counterfactual validation data
+        """
+        X_train, X_val, X_val_counter, y_train, y_val = self.get_fold_data(fold)
         train_dataset = SimpleDataset(X_train, y_train)
         val_dataset = SimpleDataset(X_val, y_val)
         val_counter_dataset = SimpleDataset(X_val_counter, y_val)
+        # Get the sampler from your function. It returns None if sampling is not enabled.
+        sampler = get_sampler(self.cfg, y_train.tolist())
 
         train_loader = DataLoader(
-            dataset=train_dataset,
+            train_dataset,
+            sampler=sampler,
+            # Disable shuffling if a sampler is provided.
+            shuffle=False if sampler is not None else True,
             **self.cfg.trainer_args.train_loader_kwargs,
         )
         val_loader = DataLoader(
-            dataset=val_dataset,
+            val_dataset,
             shuffle=False,
             **self.cfg.trainer_args.val_loader_kwargs,
         )
 
         val_cf_loader = DataLoader(
-            dataset=val_counter_dataset,
+            val_counter_dataset,
             shuffle=False,
             **self.cfg.trainer_args.val_loader_kwargs,
         )
