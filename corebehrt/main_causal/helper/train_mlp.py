@@ -4,6 +4,7 @@ import torch
 from corebehrt.functional.trainer.setup import replace_steps_with_epochs
 from corebehrt.modules.model.mlp import LitMLP
 from corebehrt.modules.trainer.checkpoint import ModelCheckpoint
+from corebehrt.azure.util.pl_logger import AzureLogger
 
 
 def setup_model(
@@ -30,6 +31,7 @@ def setup_model(
 
 
 def setup_trainer(root_folder: str, trainer_args: dict) -> pl.Trainer:
+    azure_logger = AzureLogger(name="my_mlp_trainer")
     return pl.Trainer(
         max_epochs=trainer_args.epochs,
         callbacks=[
@@ -43,4 +45,5 @@ def setup_trainer(root_folder: str, trainer_args: dict) -> pl.Trainer:
         default_root_dir=root_folder,
         gradient_clip_val=trainer_args.get("gradient_clip", {}).get("clip_value", None),
         log_every_n_steps=1,
+        logger=azure_logger,  # <--- Here it is!
     )
