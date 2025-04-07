@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import time
+from typing import Any
 
 MLFLOW_AVAILABLE = False
 MLFLOW_CLIENT = None
@@ -124,16 +125,11 @@ def log_metrics(key: str, *args, **kwargs):
         mlflow.log_metrics(prefix + key, *args, run_id=run.info.run_id, **kwargs)
 
 
-def log_param(key: str, *args, **kwargs):
-    """
-    Log a parameter
-
-    :param key: Name of the param.
-    :param value: Value of the param.
-    """
+def log_param(key: str, value: Any) -> None:
+    """Log a parameter to the job (if mlflow is available)."""
     if is_mlflow_available():
         run, prefix = get_run_and_prefix()
-        mlflow.log_param(prefix + key, *args, run_id=run.info.run_id, **kwargs)
+        mlflow.log_param(prefix + key, value)  # Remove run_id parameter
 
 
 def log_params(key: str, *args, **kwargs):

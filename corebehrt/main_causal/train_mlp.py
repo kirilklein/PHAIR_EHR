@@ -3,6 +3,7 @@ import os
 from os.path import join
 
 import pandas as pd
+import torch
 
 from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
@@ -24,6 +25,15 @@ def main_train(config_path):
 
     # Logger
     logger = logging.getLogger("train_mlp")
+
+    # Log GPU information
+    if torch.cuda.is_available():
+        logger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
+        logger.info(
+            f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB"
+        )
+    else:
+        logger.info("No GPU available, using CPU")
 
     data_module = EncodedDataModule(cfg, logger)
     data_module.setup()
