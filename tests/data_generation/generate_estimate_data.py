@@ -5,10 +5,10 @@ import numpy as np
 import pandas as pd
 
 from corebehrt.constants.causal.data import (
+    CF_PROBAS,
     EXPOSURE_COL,
     OUTCOMES,
     PROBAS,
-    CF_PROBAS,
     SIMULATED_OUTCOME_CONTROL,
     SIMULATED_OUTCOME_EXPOSED,
     SIMULATED_PROBAS_CONTROL,
@@ -20,13 +20,6 @@ from corebehrt.constants.causal.paths import (
     SIMULATION_RESULTS_FILE,
 )
 from corebehrt.constants.data import PID_COL
-from tests.data_generation.plot_generated_data import (
-    save_comparison_figures,
-    save_outcome_probas_by_exposure_figure,
-    save_outcome_probas_figures,
-    save_predicted_outcome_probas_distribution,
-    save_ps_distribution_figure,
-)
 
 NOISE_SCALE = 0.05
 # Paths from config
@@ -193,7 +186,14 @@ def main(generate_figures=False):
     )
     if not generate_figures:
         return
-    # Save visualization figures using the proper data
+    from tests.data_generation.plot_generated_data import (  # Save visualization figures using the proper data
+        save_comparison_figures,
+        save_outcome_probas_by_exposure_figure,
+        save_outcome_probas_figures,
+        save_predicted_outcome_probas_distribution,
+        save_ps_distribution_figure,
+    )
+
     save_ps_distribution_figure(subject_ids, ps_scores, exposures)
     save_outcome_probas_figures(subject_ids, cf_data, outcome_df)
     save_comparison_figures(subject_ids, cf_data, outcome_df)
