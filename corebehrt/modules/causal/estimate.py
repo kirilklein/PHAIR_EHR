@@ -7,29 +7,20 @@ from CausalEstimate.estimators import AIPW, IPW, TMLE
 from CausalEstimate.filter.propensity import filter_common_support
 from CausalEstimate.stats.stats import compute_treatment_outcome_table
 
-from corebehrt.constants.causal.data import (
-    CF_PROBAS,
-    EXPOSURE_COL,
-    PROB_C_KEY,
-    PROB_KEY,
-    PROB_T_KEY,
-    PROBAS,
-    PROBAS_CONTROL,
-    PROBAS_EXPOSED,
-    PS_COL,
-    TARGETS,
-    TRUE_EFFECT_COL,
-)
-from corebehrt.constants.causal.paths import (
-    CALIBRATED_PREDICTIONS_FILE,
-    ESTIMATE_RESULTS_FILE,
-    EXPERIMENT_DATA_FILE,
-    EXPERIMENT_STATS_FILE,
-    SIMULATION_RESULTS_FILE,
-)
+from corebehrt.constants.causal.data import (CF_PROBAS, EXPOSURE_COL,
+                                             PROB_C_KEY, PROB_KEY, PROB_T_KEY,
+                                             PROBAS, PROBAS_CONTROL,
+                                             PROBAS_EXPOSED, PS_COL, TARGETS,
+                                             TRUE_EFFECT_COL)
+from corebehrt.constants.causal.paths import (CALIBRATED_PREDICTIONS_FILE,
+                                              ESTIMATE_RESULTS_FILE,
+                                              EXPERIMENT_DATA_FILE,
+                                              EXPERIMENT_STATS_FILE,
+                                              SIMULATION_RESULTS_FILE)
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.counterfactuals import expand_counterfactuals
-from corebehrt.functional.causal.effect import compute_effect_from_counterfactuals
+from corebehrt.functional.causal.effect import \
+    compute_effect_from_counterfactuals
 from corebehrt.modules.setup.config import Config
 
 
@@ -216,6 +207,7 @@ class EffectEstimator:
 
     def _save_estimate_results(self, effect_df: pd.DataFrame) -> None:
         filepath = join(self.exp_dir, ESTIMATE_RESULTS_FILE)
+        effect_df = effect_df.round(5)
         effect_df.to_csv(filepath, index=False)
 
     @staticmethod
