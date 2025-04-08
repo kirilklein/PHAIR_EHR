@@ -88,8 +88,8 @@ class EffectEstimator:
         self._save_experiment_data(df)
         self._save_experiment_stats(df)
         return expand_counterfactuals(
-            df, EXPOSURE_COL, CF_PROBAS, PROBAS_CONTROL, PROBAS_EXPOSED
-        )
+        df, EXPOSURE_COL, PROBAS, CF_PROBAS, PROBAS_CONTROL, PROBAS_EXPOSED
+    )
 
     def _load_data(self) -> pd.DataFrame:
         exposure_preds = pd.read_csv(
