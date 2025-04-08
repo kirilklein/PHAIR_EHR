@@ -9,13 +9,10 @@ import numpy as np
 from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     PROBAS,
-    PROBAS_CONTROL,
-    PROBAS_EXPOSED,
     PS_COL,
     SIMULATED_PROBAS_CONTROL,
     SIMULATED_PROBAS_EXPOSED,
     TARGETS,
-    OUTCOMES,
 )
 from corebehrt.constants.data import PID_COL
 
