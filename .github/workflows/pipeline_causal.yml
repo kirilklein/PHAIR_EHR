@@ -100,4 +100,3 @@ jobs:
               run: |
                 source .venv/bin/activate
                 python -m corebehrt.main_causal.estimate --config_path ./corebehrt/configs/causal/estimate/estimate_with_true.yaml
-

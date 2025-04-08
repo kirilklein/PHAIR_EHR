@@ -8,8 +8,7 @@ from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     OUTCOMES,
     PROBAS,
-    PROBAS_CONTROL,
-    PROBAS_EXPOSED,
+    CF_PROBAS,
     SIMULATED_OUTCOME_CONTROL,
     SIMULATED_OUTCOME_EXPOSED,
     SIMULATED_PROBAS_CONTROL,
@@ -23,12 +22,13 @@ from corebehrt.constants.causal.paths import (
 from corebehrt.constants.data import PID_COL
 from tests.data_generation.plot_generated_data import (
     save_comparison_figures,
+    save_outcome_probas_by_exposure_figure,
     save_outcome_probas_figures,
     save_predicted_outcome_probas_distribution,
     save_ps_distribution_figure,
-    save_outcome_probas_by_exposure_figure,
 )
 
+NOISE_SCALE = 0.05
 # Paths from config
 EXPOSURE_PRED_DIR = "./outputs/causal/generated/calibrated_predictions"
 OUTCOME_PRED_DIR = "./outputs/causal/generated/trained_mlp_simulated"
@@ -61,8 +61,8 @@ def generate_exposure_predictions(n_samples=1000, seed=42):
     df = pd.DataFrame(
         {
             PID_COL: subject_ids,
-            PROBAS: ps_scores,  # Will be renamed to PS_COL
-            TARGETS: exposures,  # Will be renamed to EXPOSURE_COL
+            PROBAS: ps_scores,  # This will be used as the PS distribution
+            TARGETS: exposures,  # This column stores exposure (will be labeled accordingly)
         }
     )
 
@@ -74,7 +74,7 @@ def generate_exposure_predictions(n_samples=1000, seed=42):
     return subject_ids, ps_scores, exposures
 
 
-def generate_counterfactual_outcomes(subject_ids, ps_scores, exposures, seed=42):
+def generate_counterfactual_outcomes(subject_ids, exposures, seed=42):
     """
     Generate counterfactual outcomes data.
     This contains the ground truth potential outcomes under both treatment and control.
@@ -86,9 +86,9 @@ def generate_counterfactual_outcomes(subject_ids, ps_scores, exposures, seed=42)
     # Parameters for generating counterfactual outcomes
     baseline_effect = 0.25  # Average treatment effect
 
-    # Generate potential outcome probabilities
-    # P0: probability of outcome if subject was in control group
-    # P1: probability of outcome if subject was in treatment group
+    # Generate potential outcome probabilities:
+    # p0: probability of outcome if subject was in control group
+    # p1: probability of outcome if subject was in treatment group
     p0 = np.random.beta(2, 5, n_samples)  # Lower probability for control
     p1 = (
         p0 + baseline_effect + np.random.normal(0, 0.05, n_samples)
@@ -99,19 +99,21 @@ def generate_counterfactual_outcomes(subject_ids, ps_scores, exposures, seed=42)
     y0 = np.random.binomial(1, p0)  # Outcomes under control
     y1 = np.random.binomial(1, p1)  # Outcomes under treatment
 
-    # The actual observed outcome should match either Y0 or Y1 depending on actual exposure
+    # The actual observed outcome should match either y0 or y1 depending on the actual exposure
     observed_outcomes = exposures * y1 + (1 - exposures) * y0
 
     # Create DataFrame with counterfactual outcomes
     df = pd.DataFrame(
         {
             PID_COL: subject_ids,
-            SIMULATED_OUTCOME_EXPOSED: y1,  # Y1
-            SIMULATED_OUTCOME_CONTROL: y0,  # Y0
+            SIMULATED_OUTCOME_EXPOSED: y1,  # Outcome under treatment (Y1)
+            SIMULATED_OUTCOME_CONTROL: y0,  # Outcome under control (Y0)
             SIMULATED_PROBAS_EXPOSED: p1,  # P1
             SIMULATED_PROBAS_CONTROL: p0,  # P0
             EXPOSURE_COL: exposures,
-            PROBAS: np.where(exposures == 1, p1, p0),  # True observed probabilities
+            PROBAS: np.where(
+                exposures == 1, p1, p0
+            ),  # Observed probability based on actual exposure
             OUTCOMES: observed_outcomes,
         }
     )
@@ -124,35 +126,45 @@ def generate_counterfactual_outcomes(subject_ids, ps_scores, exposures, seed=42)
     return df
 
 
-def generate_outcome_predictions(subject_ids, cf_data, seed=42):
+def generate_outcome_predictions(subject_ids, cf_data, noise_scale=0.001, seed=42):
     """
     Generate outcome predictions data.
-    This contains predicted probabilities of outcomes and actual outcomes,
+    This contains predicted probabilities of outcomes and the actual outcomes,
     based on the true counterfactual data but with some noise added.
+
+    Output format:
+    - subject_id: Patient identifier
+    - probas: Predicted probability under the factual (observed) treatment
+    - cf_probas: Predicted probability under the counterfactual (alternative) treatment
+    - targets: Actual outcome
     """
     np.random.seed(seed)
 
-    # Extract the true counterfactual data
+    # Extract true counterfactual data
     p0 = cf_data[SIMULATED_PROBAS_CONTROL].values
     p1 = cf_data[SIMULATED_PROBAS_EXPOSED].values
     exposures = cf_data[EXPOSURE_COL].values
     outcomes = cf_data[OUTCOMES].values
 
     # Add noise to create "predicted" probabilities
-    noise_scale = 0.1
-    predicted_p0 = np.clip(p0 + np.random.normal(0, noise_scale, len(p0)), 0.01, 0.99)
-    predicted_p1 = np.clip(p1 + np.random.normal(0, noise_scale, len(p1)), 0.01, 0.99)
+    noise_p0 = np.random.normal(0, noise_scale, len(p0))
+    noise_p1 = np.random.normal(0, noise_scale, len(p1))
 
-    # Create outcome probabilities for exposed and control groups
-    outcome_probas = np.where(exposures == 1, predicted_p1, predicted_p0)
+    predicted_p0 = np.clip(p0 + noise_p0, 0.01, 0.99)
+    predicted_p1 = np.clip(p1 + noise_p1, 0.01, 0.99)
 
-    # Create DataFrame
+    # For each subject:
+    #   If exposure == 1: factual prediction is predicted_p1, counterfactual is predicted_p0.
+    #   If exposure == 0: factual prediction is predicted_p0, counterfactual is predicted_p1.
+    factual_probas = np.where(exposures == 1, predicted_p1, predicted_p0)
+    counterfactual_probas = np.where(exposures == 1, predicted_p0, predicted_p1)
+
+    # Create DataFrame with the correct format
     df = pd.DataFrame(
         {
             PID_COL: subject_ids,
-            PROBAS: outcome_probas,
-            PROBAS_EXPOSED: predicted_p1,  # Predicted outcome under treatment
-            PROBAS_CONTROL: predicted_p0,  # Predicted outcome under control
+            PROBAS: factual_probas,  # Predicted probability under factual exposure
+            CF_PROBAS: counterfactual_probas,  # Predicted probability under counterfactual exposure
             TARGETS: outcomes,
         }
     )
@@ -162,36 +174,44 @@ def generate_outcome_predictions(subject_ids, cf_data, seed=42):
     df.to_csv(output_path, index=False)
     print(f"Outcome predictions saved to {output_path}")
 
-    return outcome_probas, outcomes
+    return df
 
 
-def main():
+def main(generate_figures=False):
     """Generate all necessary data for testing estimate.py"""
     create_directories()
 
     # Generate data with 1000 samples
     subject_ids, ps_scores, exposures = generate_exposure_predictions(n_samples=1000)
 
-    # Generate counterfactual data first (the ground truth)
-    cf_data = generate_counterfactual_outcomes(subject_ids, ps_scores, exposures)
+    # Generate counterfactual (simulated) outcomes (ground truth)
+    cf_data = generate_counterfactual_outcomes(subject_ids, exposures)
 
-    # Now generate the predicted outcomes based on the counterfactual data
-    _, _ = generate_outcome_predictions(subject_ids, cf_data)
-
-    # Load the outcome data file for visualization
-    outcome_df = pd.read_csv(
-        os.path.join(OUTCOME_PRED_DIR, CALIBRATED_PREDICTIONS_FILE)
+    # Generate outcome predictions (with noise) using the counterfactual data
+    outcome_df = generate_outcome_predictions(
+        subject_ids, cf_data, noise_scale=NOISE_SCALE
     )
-
-    # Save visualization figures
+    if not generate_figures:
+        return
+    # Save visualization figures using the proper data
     save_ps_distribution_figure(subject_ids, ps_scores, exposures)
     save_outcome_probas_figures(subject_ids, cf_data, outcome_df)
     save_comparison_figures(subject_ids, cf_data, outcome_df)
-    # New distribution plot for predicted probabilities colored by exposure
     save_predicted_outcome_probas_distribution(cf_data, outcome_df)
     save_outcome_probas_by_exposure_figure(subject_ids, cf_data, outcome_df)
     print("All test data generated successfully!")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--generate-figures",
+        action="store_true",
+        default=False,
+        help="Generate visualization figures",
+    )
+    args = parser.parse_args()
+
+    main(generate_figures=args.generate_figures)
