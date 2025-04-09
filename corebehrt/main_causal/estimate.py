@@ -5,7 +5,7 @@ from corebehrt.modules.causal.estimate import EffectEstimator
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
-CONFIG_PATH = "./corebehrt/configs/causal/estimate.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/estimate/estimate.yaml"
 
 
 def main_estimate(config_path):

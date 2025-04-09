@@ -97,7 +97,7 @@ class EffectEstimator:
         self._save_experiment_data(df)
         self._save_experiment_stats(df)
         return expand_counterfactuals(
-            df, EXPOSURE_COL, CF_PROBAS, PROBAS_CONTROL, PROBAS_EXPOSED
+            df, EXPOSURE_COL, PROBAS, CF_PROBAS, PROBAS_CONTROL, PROBAS_EXPOSED
         )
 
     def _load_data(self) -> pd.DataFrame:
@@ -216,6 +216,7 @@ class EffectEstimator:
 
     def _save_estimate_results(self, effect_df: pd.DataFrame) -> None:
         filepath = join(self.exp_dir, ESTIMATE_RESULTS_FILE)
+        effect_df = effect_df.round(5)
         effect_df.to_csv(filepath, index=False)
 
     @staticmethod

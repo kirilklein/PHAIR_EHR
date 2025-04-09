@@ -4,14 +4,14 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.isotonic import IsotonicRegression
+from betacal import BetaCalibration
 from tqdm import tqdm
 
+from corebehrt.constants.causal.data import PROBAS, TARGETS
 from corebehrt.constants.causal.paths import (
     CALIBRATED_PREDICTIONS_FILE,
     PREDICTIONS_FILE,
 )
-from corebehrt.constants.causal.data import PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL, TRAIN_KEY, VAL_KEY
 from corebehrt.constants.paths import CHECKPOINTS_DIR
 from corebehrt.functional.io_operations.load import get_pids_file
@@ -88,8 +88,7 @@ def compute_and_save_calibration(
         val_pids = torch.load(get_pids_file(fold_dir, mode=VAL_KEY), weights_only=True)
         train_data, val_data = split_data(preds, train_pids, val_pids)
 
-        calibrator: IsotonicRegression = train_isotonic_regression(train_data)
-        calibrated_probas = calibrate_probas(calibrator, val_data[PROBAS])
+        calibrated_probas = calibrate(train_data, val_data)
         val_data[PROBAS] = calibrated_probas  # Update the probabilities
         all_calibrated_predictions.append(val_data)
 
@@ -101,34 +100,15 @@ def compute_and_save_calibration(
     )
 
 
-def train_isotonic_regression(train_data: pd.DataFrame) -> IsotonicRegression:
-    """
-    Train isotonic regression calibrator.
-    """
-    X = train_data[PROBAS].to_numpy()
-    y = train_data[TARGETS].to_numpy().ravel()
-    calibrator = IsotonicRegression(out_of_bounds="clip")
-    calibrator.fit(X, y)
-    return calibrator
-
-
-def calibrate_probas(
-    calibrator: IsotonicRegression,
-    probas: pd.Series,
-    epsilon: float = 1e-8,
+def calibrate(
+    train_data: pd.DataFrame, val_data: pd.DataFrame, epsilon=1e-8
 ) -> pd.DataFrame:
-    """
-    Calibrate the probabilities of the given dataframe using the calibrator.
-    Clip the probabilities to avoid values close to 0 or 1. (Often happening with isotonic regression)
-    Args:
-        calibrator: The calibrator to use.
-        probas: The probabilities to calibrate.
-        epsilon: The epsilon value to clip the probabilities to.
-    Returns:
-        The calibrated probabilities.
-    """
-    calibrated_probas = calibrator.predict(probas.to_numpy())
-    return np.clip(calibrated_probas, epsilon, 1 - epsilon)
+    """Calibrate the probabilities of the given dataframe using the calibrator."""
+    calibrator = BetaCalibration("abm")
+    calibrator.fit(train_data[PROBAS], train_data[TARGETS])
+    calibrated_probas = calibrator.predict(val_data[PROBAS])
+    calibrated_probas = np.clip(calibrated_probas, epsilon, 1 - epsilon)
+    return calibrated_probas
 
 
 def split_data(
