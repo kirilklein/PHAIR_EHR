@@ -21,7 +21,7 @@ from corebehrt.constants.causal.paths import (
 )
 from corebehrt.constants.data import PID_COL
 
-NOISE_SCALE = 0.05
+NOISE_SCALE = 0.02
 # Paths from config
 EXPOSURE_PRED_DIR = "./outputs/causal/generated/calibrated_predictions"
 OUTCOME_PRED_DIR = "./outputs/causal/generated/trained_mlp_simulated"
@@ -67,7 +67,9 @@ def generate_exposure_predictions(n_samples=1000, seed=42):
     return subject_ids, ps_scores, exposures
 
 
-def generate_counterfactual_outcomes(subject_ids, exposures, seed=42):
+def generate_counterfactual_outcomes(
+    subject_ids, exposures, noise_scale=NOISE_SCALE, seed=42
+):
     """
     Generate counterfactual outcomes data.
     This contains the ground truth potential outcomes under both treatment and control.
@@ -84,7 +86,7 @@ def generate_counterfactual_outcomes(subject_ids, exposures, seed=42):
     # p1: probability of outcome if subject was in treatment group
     p0 = np.random.beta(2, 5, n_samples)  # Lower probability for control
     p1 = (
-        p0 + baseline_effect + np.random.normal(0, 0.05, n_samples)
+        p0 + baseline_effect + np.random.normal(0, noise_scale, n_samples)
     )  # Higher probability for treatment
     p1 = np.clip(p1, 0.01, 0.99)  # Ensure probas are in [0.01, 0.99]
 
@@ -119,7 +121,9 @@ def generate_counterfactual_outcomes(subject_ids, exposures, seed=42):
     return df
 
 
-def generate_outcome_predictions(subject_ids, cf_data, noise_scale=0.001, seed=42):
+def generate_outcome_predictions(
+    subject_ids, cf_data, noise_scale=NOISE_SCALE, seed=42
+):
     """
     Generate outcome predictions data.
     This contains predicted probabilities of outcomes and the actual outcomes,
