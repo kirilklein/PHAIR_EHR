@@ -33,8 +33,8 @@ def generate_mock_finetune_output(
     kf = KFold(n_splits=n_folds, shuffle=True, random_state=random_seed)
     
     # Generate data for all subjects once
-    all_probas = np.random.random(size=n_subjects).astype(np.float32)
-    all_targets = np.random.randint(0, 2, size=n_subjects).astype(np.float32)
+    all_probas = np.random.beta(5, 2, size=n_subjects).astype(np.float32)
+    all_targets = np.random.binomial(1, all_probas+np.random.normal(0, 0.01, size=n_subjects)).astype(np.float32)
     
 
     all_val_pids = []
@@ -62,14 +62,16 @@ def generate_mock_finetune_output(
         torch.save(train_pids.tolist(), join(fold_dir, "train_pids.pt"))
         torch.save(val_pids.tolist(), join(fold_dir, "val_pids.pt"))
         
-   
         # Save fold-specific files with correct shapes
         val_targets_reshaped = val_targets.reshape(-1, 1)
         val_probas_reshaped = val_probas.reshape(-1, 1)
         
-        np.savez(join(checkpoints_dir, "targets_val999.npz"), val_targets_reshaped)
-        np.savez(join(checkpoints_dir, "probas_val999.npz"), val_probas_reshaped)
+        np.savez(join(checkpoints_dir, "targets_val_999.npz"), targets=val_targets_reshaped)
+        np.savez(join(checkpoints_dir, "probas_val_999.npz"), probas=val_probas_reshaped)
         
+        # this is needed by calibrate to get epoch number
+        mock_model_checkpoint = torch.zeros(1)
+        torch.save(mock_model_checkpoint, join(checkpoints_dir, "checkpoint_epoch999_end.pt"))
         
         # Save fold-specific validation data
         pd.DataFrame({
