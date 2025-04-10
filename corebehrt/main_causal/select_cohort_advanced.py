@@ -23,6 +23,7 @@ The criteria evaluation is highly configurable through YAML files that can speci
 
 import json
 import logging
+import os
 from os.path import join
 
 import pandas as pd
@@ -69,6 +70,7 @@ def main(config_path: str):
 
     patients = {}
     for shard_path in iterate_splits_and_shards(meds_path, splits):
+        print(f"Processing shard: {os.path.basename(shard_path)}")
         shard = pd.read_parquet(shard_path)
         patients.update(extract_patient_criteria(shard, index_dates, cfg))
 

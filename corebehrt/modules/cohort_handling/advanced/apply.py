@@ -10,13 +10,13 @@ from corebehrt.constants.causal.data import (
     FLOW_AFTER_AGE,
     FLOW_AFTER_MINIMUM_ONE,
     FLOW_AFTER_STRICT,
+    FLOW_AFTER_UNIQUE_CODES,
     FLOW_FINAL,
     FLOW_INITIAL,
-    FLOW_AFTER_UNIQUE_CODES,
     INCLUDED,
     STRICT_INCLUSION,
-    UNIQUE_CODE_LIMITS,
     TOTAL,
+    UNIQUE_CODE_LIMITS,
 )
 from corebehrt.constants.cohort import (
     EXCLUSION_CRITERIA,
@@ -27,6 +27,9 @@ from corebehrt.constants.cohort import (
     STRICT,
 )
 from corebehrt.constants.data import AGE_COL, PID_COL
+from corebehrt.functional.cohort_handling.advanced.match import (
+    get_all_codes_for_criterion,
+)
 
 
 def apply_criteria(df: pd.DataFrame, config: dict) -> Tuple[pd.DataFrame, Dict]:
@@ -99,10 +102,20 @@ def apply_criteria(df: pd.DataFrame, config: dict) -> Tuple[pd.DataFrame, Dict]:
     if UNIQUE_CODE_LIMITS in config:
         for limit_name, limit_config in config[UNIQUE_CODE_LIMITS].items():
             max_count = limit_config["max_count"]
-            criteria_cols = limit_config["criteria"]
+
+            # First try to get direct criteria columns
+            criteria_cols = limit_config.get("criteria", [])
+
+            # Then add any pattern-based codes
+            pattern_cols = get_all_codes_for_criterion(
+                limit_config, config.get("use_patterns", {})
+            )
+
+            # Combine both types of criteria
+            all_criteria_cols = list(set(criteria_cols + pattern_cols))
 
             # Count how many criteria are True for each patient
-            unique_count = included[criteria_cols].sum(axis=1)
+            unique_count = included[all_criteria_cols].sum(axis=1)
             exceeds_limit = unique_count > max_count
 
             # Track exclusions
@@ -146,7 +159,17 @@ def check_criteria_columns(df: pd.DataFrame, config: dict) -> None:
     # Add unique code limit criteria columns
     if UNIQUE_CODE_LIMITS in config:
         for limit_config in config[UNIQUE_CODE_LIMITS].values():
-            required_columns.extend(limit_config["criteria"])
+            # Get direct criteria columns
+            criteria_cols = limit_config.get("criteria", [])
+
+            # Get pattern-based codes
+            pattern_cols = get_all_codes_for_criterion(
+                limit_config, config.get("code_patterns", {})
+            )
+
+            # Add both types to required columns
+            required_columns.extend(criteria_cols)
+            required_columns.extend(pattern_cols)
 
     # Add exclusion criteria columns
     for criterion in config[EXCLUSION_CRITERIA]:

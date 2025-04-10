@@ -129,10 +129,9 @@ def match_codes(
     # Group codes by their delays
     delay_groups = group_codes_by_delay(codes, delays=delays_config)
 
-    # Check each delay group separately
     for delay_days, delayed_codes in delay_groups.items():
         max_timestamp = (
-            index_date + timedelta(days=delay_days) if delay_days else index_date
+            (index_date + timedelta(days=delay_days)) if delay_days else index_date
         )
 
         filtered_data = patient_data[
@@ -141,21 +140,20 @@ def match_codes(
         ]
         if filtered_data.empty:
             continue
+
+        # Exclude codes in a vectorized way: compile a combined regex.
         if exclude_codes:
+            exclude_regex = re.compile("|".join(exclude_codes), flags=re.IGNORECASE)
+            # Keep rows that do not contain any of the exclude codes.
             filtered_data = filtered_data[
-                ~filtered_data[CONCEPT_COL].apply(
-                    lambda x: matches_pattern(x, exclude_codes)
-                )
+                ~filtered_data[CONCEPT_COL].str.contains(exclude_regex, na=False)
             ]
             if filtered_data.empty:
                 continue
 
-        # Check if any codes in this delay group match
-        if (
-            filtered_data[CONCEPT_COL]
-            .apply(lambda x: matches_pattern(x, delayed_codes))
-            .any()
-        ):
+        # Pre-compile the regex for the delayed_codes.
+        code_regex = re.compile("|".join(delayed_codes), flags=re.IGNORECASE)
+        if filtered_data[CONCEPT_COL].str.contains(code_regex, na=False).any():
             return True
 
     return False

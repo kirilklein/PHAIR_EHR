@@ -1,7 +1,6 @@
 from datetime import timedelta
-
 import pandas as pd
-
+from tqdm import tqdm
 from corebehrt.constants.cohort import (
     CODE_ENTRY,
     CODE_PATTERNS,
@@ -33,50 +32,72 @@ def extract_patient_criteria(
     # Get code patterns for reuse
     code_patterns = config.get(CODE_PATTERNS, {})
 
-    # Get unique patient IDs in the current shard
+    # Get unique patient IDs in the current shard and filter index_dates
     shard_patient_ids = df[PID_COL].unique()
-
-    # Filter index_dates to only include patients present in the shard
     relevant_index_dates = index_dates[index_dates[PID_COL].isin(shard_patient_ids)]
+    print(f"Processing {len(relevant_index_dates)} patients")
 
     patients = {}
     delays_config = config.get(DELAYS, {})
 
-    for _, row in relevant_index_dates.iterrows():
-        patient = Patient(row[PID_COL], row[TIMESTAMP_COL])
-        patient_data = df[df[PID_COL] == patient.subject_id]
-        if patient_data.empty:
-            continue
+    # Pre-group the DataFrame by patient id to avoid repeated filtering
+    grouped_events = {pid: group for pid, group in df.groupby(PID_COL)}
 
+    # Cache criteria definitions locally for speed
+    criteria_definitions = config[CRITERIA_DEFINITIONS]
+
+    # Precompute configurations for non-numeric criteria (ones without THRESHOLD)
+    precomputed_non_numeric_cfg = {}
+    for criterion, crit_cfg in criteria_definitions.items():
+        if THRESHOLD not in crit_cfg:
+            cfg_copy = crit_cfg.copy()
+            cfg_copy[CODE_ENTRY] = get_all_codes_for_criterion(crit_cfg, code_patterns)
+            precomputed_non_numeric_cfg[criterion] = cfg_copy
+
+    # Use itertuples (faster than iterrows) for index_date iteration.
+    # Assumes that the column names in index_dates match PID_COL and TIMESTAMP_COL.
+    for row in tqdm(
+        relevant_index_dates.itertuples(index=False),
+        total=len(relevant_index_dates),
+        desc="Processing patients",
+    ):
+        pid = getattr(row, PID_COL)
+        ts = getattr(row, TIMESTAMP_COL)
+        patient = Patient(pid, ts)
+
+        # Skip patients without events.
+        if pid not in grouped_events:
+            continue
+        patient_data = grouped_events[pid]
+
+        # Calculate patient age.
         patient.age = calculate_age(patient_data, patient.index_date)
 
-        for criteria, criteria_cfg in config[CRITERIA_DEFINITIONS].items():
+        # Iterate through each criterion
+        for criterion, crit_cfg in criteria_definitions.items():
+            # Compute the minimum timestamp for filtering based on the criterion time window.
             min_timestamp = patient.index_date - timedelta(
-                days=criteria_cfg.get(TIME_WINDOW_DAYS, 36500)
+                days=crit_cfg.get(TIME_WINDOW_DAYS, 36500)
             )
 
-            if THRESHOLD in criteria_cfg:
+            if THRESHOLD in crit_cfg:
+                # Numeric criteria evaluation
                 value, matched = evaluate_numeric_criteria(
-                    patient_data, criteria_cfg, patient.index_date, min_timestamp
+                    patient_data, crit_cfg, patient.index_date, min_timestamp
                 )
-                patient.values[criteria] = value
-                patient.criteria_flags[criteria] = matched
+                patient.values[criterion] = value
+                patient.criteria_flags[criterion] = matched
             else:
-                # Get all codes including referenced patterns
-                all_codes = get_all_codes_for_criterion(criteria_cfg, code_patterns)
-                criteria_cfg = (
-                    criteria_cfg.copy()
-                )  # Create a copy to not modify original
-                criteria_cfg[CODE_ENTRY] = all_codes
-
-                patient.criteria_flags[criteria] = match_codes(
+                # Non-numeric criteria: use the precomputed configuration.
+                pre_cfg = precomputed_non_numeric_cfg[criterion]
+                patient.criteria_flags[criterion] = match_codes(
                     patient_data,
-                    criteria_cfg,
+                    pre_cfg,
                     delays_config,
                     patient.index_date,
                     min_timestamp,
                 )
 
-        patients[patient.subject_id] = patient
+        patients[pid] = patient
 
     return patients
