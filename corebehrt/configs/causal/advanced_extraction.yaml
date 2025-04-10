@@ -48,5 +48,12 @@ criteria_definitions:
       - ^D98.*
 
  
+# Use the same patterns for unique code limits
+unique_code_limits:
+  code_limit_1:
+    max_count: 2
+    criteria:
+      - example_strict
+      - example_minimum_one
 
 

@@ -1,14 +1,14 @@
 import pandas as pd
+from tqdm import tqdm
 
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 from corebehrt.functional.cohort_handling.advanced.calculations import calculate_age
+from corebehrt.functional.cohort_handling.advanced.checks import check_code_patterns
 from corebehrt.functional.cohort_handling.advanced.extract import (
-    check_code_patterns,
     evaluate_criterion,
     precompute_non_numeric_criteria,
 )
 from corebehrt.modules.cohort_handling.advanced.data.patient import Patient
-from tqdm import tqdm
 
 
 def extract_patient_criteria(

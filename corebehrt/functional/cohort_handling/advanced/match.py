@@ -12,12 +12,11 @@ from corebehrt.constants.cohort import (
     NUMERIC_VALUE,
     OPERATOR,
     THRESHOLD,
-    USE_PATTERNS,
 )
 from corebehrt.constants.data import CONCEPT_COL, TIMESTAMP_COL
 
 
-def matches_pattern(code: str, patterns: list[str]) -> bool:
+def matches_pattern(code: str, patterns: List[str]) -> bool:
     """
     Check if any of the patterns match the code.
     """

@@ -28,25 +28,6 @@ def precompute_non_numeric_criteria(
     return precomputed_non_numeric_cfg
 
 
-def check_code_patterns(criteria_definitions: dict, code_patterns: dict) -> None:
-    """Check if any criteria use patterns and validate code_patterns."""
-    has_patterns = any(
-        USE_PATTERNS in crit_cfg for crit_cfg in criteria_definitions.values()
-    )
-    if not has_patterns:  # if no patterns are used, return 0
-        return
-    required_patterns = set()
-    for crit_cfg in criteria_definitions.values():
-        if USE_PATTERNS in crit_cfg:
-            required_patterns.update(crit_cfg[USE_PATTERNS])
-    for required_pattern in required_patterns:
-        if required_pattern not in code_patterns:
-            raise ValueError(
-                f"Criteria definitions use pattern {required_pattern} but code_patterns do not contain it"
-            )
-    return
-
-
 def evaluate_criterion(
     criterion: str,
     crit_cfg: dict,

@@ -2,6 +2,7 @@ DELAYS = "delays"
 THRESHOLD = "threshold"
 NUMERIC_VALUE = "numeric_value"
 CRITERIA_DEFINITIONS = "criteria_definitions"
+CRITERIA = "criteria"
 TIME_WINDOW_DAYS = "time_window_days"
 
 # criteria config

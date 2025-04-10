@@ -35,6 +35,7 @@ EXCLUSION = "exclusion"
 INCLUDED = "included"
 TOTAL = "total"
 UNIQUE_CODE_LIMITS = "unique_code_limits"
+MAX_COUNT = "max_count"
 
 # New flow-related constants
 FLOW = "flow"
