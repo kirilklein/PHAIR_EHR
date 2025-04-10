@@ -126,9 +126,18 @@ class TestCriteriaExtraction(unittest.TestCase):
                 ),
             }
         )
+        self.criteria_definitions = self.config.get(CRITERIA_DEFINITIONS)
+        self.delays_config = self.config.get(DELAYS)
+        self.code_patterns = self.config.get(CODE_PATTERNS)
 
     def test_patient_1_included(self):
-        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+        patients = extract_patient_criteria(
+            self.df,
+            self.index_dates,
+            criteria_definitions=self.criteria_definitions,
+            delays_config=self.delays_config,
+            code_patterns=self.code_patterns,
+        )
         patient = patients[1]
         self.assertTrue(patient.criteria_flags["type2_diabetes"])
         self.assertTrue(patient.criteria_flags["stroke"])
@@ -136,7 +145,13 @@ class TestCriteriaExtraction(unittest.TestCase):
         self.assertEqual(patient.values["HbA1c"], 7.5)
 
     def test_patient_2_too_young(self):
-        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+        patients = extract_patient_criteria(
+            self.df,
+            self.index_dates,
+            criteria_definitions=self.criteria_definitions,
+            delays_config=self.delays_config,
+            code_patterns=self.code_patterns,
+        )
         patient = patients[2]
         self.assertTrue(patient.criteria_flags["type2_diabetes"])
         self.assertFalse(patient.criteria_flags["stroke"])
@@ -144,22 +159,46 @@ class TestCriteriaExtraction(unittest.TestCase):
         self.assertLess(patient.age, self.config[MIN_AGE])
 
     def test_patient_3_recent_cancer(self):
-        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+        patients = extract_patient_criteria(
+            self.df,
+            self.index_dates,
+            criteria_definitions=self.criteria_definitions,
+            delays_config=self.delays_config,
+            code_patterns=self.code_patterns,
+        )
         patient = patients[3]
         self.assertTrue(patient.criteria_flags["cancer"])
 
     def test_patient_4_type1_diabetes(self):
-        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+        patients = extract_patient_criteria(
+            self.df,
+            self.index_dates,
+            criteria_definitions=self.criteria_definitions,
+            delays_config=self.delays_config,
+            code_patterns=self.code_patterns,
+        )
         patient = patients[4]
         self.assertTrue(patient.criteria_flags["type1_diabetes"])
 
     def test_patient_5_recent_pregnancy(self):
-        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+        patients = extract_patient_criteria(
+            self.df,
+            self.index_dates,
+            criteria_definitions=self.criteria_definitions,
+            delays_config=self.delays_config,
+            code_patterns=self.code_patterns,
+        )
         patient = patients[5]
         self.assertTrue(patient.criteria_flags["pregnancy_and_birth"])
 
     def test_patient_6_stroke_within_delay(self):
-        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+        patients = extract_patient_criteria(
+            self.df,
+            self.index_dates,
+            criteria_definitions=self.criteria_definitions,
+            delays_config=self.delays_config,
+            code_patterns=self.code_patterns,
+        )
         patient = patients[6]
         self.assertTrue(patient.criteria_flags["stroke"])
 
@@ -219,10 +258,19 @@ class TestPatternUsage(unittest.TestCase):
         self.index_dates = pd.DataFrame(
             {PID_COL: [1, 2, 3], TIMESTAMP_COL: pd.to_datetime(["2023-06-01"] * 3)}
         )
+        self.criteria_definitions = self.config.get(CRITERIA_DEFINITIONS)
+        self.delays_config = self.config.get(DELAYS)
+        self.code_patterns = self.config.get(CODE_PATTERNS)
 
     def test_pattern_combination(self):
         """Test criteria using multiple patterns."""
-        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+        patients = extract_patient_criteria(
+            self.df,
+            self.index_dates,
+            criteria_definitions=self.criteria_definitions,
+            delays_config=self.delays_config,
+            code_patterns=self.code_patterns,
+        )
 
         # Patient 1: Has metformin, DPP4, and T2D diagnosis (any would make it true)
         self.assertTrue(patients[1].criteria_flags["type2_diabetes"])
@@ -244,7 +292,13 @@ class TestPatternUsage(unittest.TestCase):
 
     def test_pattern_with_direct_codes(self):
         """Test criteria using both patterns and direct codes."""
-        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+        patients = extract_patient_criteria(
+            self.df,
+            self.index_dates,
+            criteria_definitions=self.criteria_definitions,
+            delays_config=self.delays_config,
+            code_patterns=self.code_patterns,
+        )
 
         # Patient 3: Has T2D diagnosis and DPP4 (either makes it true)
         self.assertTrue(patients[3].criteria_flags["type2_diabetes"])
@@ -254,7 +308,13 @@ class TestPatternUsage(unittest.TestCase):
 
     def test_pattern_reuse(self):
         """Test that the same pattern can be reused in different criteria."""
-        patients = extract_patient_criteria(self.df, self.index_dates, self.config)
+        patients = extract_patient_criteria(
+            self.df,
+            self.index_dates,
+            criteria_definitions=self.criteria_definitions,
+            delays_config=self.delays_config,
+            code_patterns=self.code_patterns,
+        )
 
         # Patient 1: Check DPP4 pattern in both criteria
         self.assertTrue(patients[1].criteria_flags["type2_diabetes"])
