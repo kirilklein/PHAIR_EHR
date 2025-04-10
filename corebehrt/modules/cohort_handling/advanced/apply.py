@@ -169,6 +169,6 @@ def apply_age_criteria(
 
     if max_age is not None:
         age_mask = df[AGE_COL] <= max_age
-        stats[EXCLUDED_BY][AGE_COL] = (~age_mask).sum()
+        stats[EXCLUDED_BY][AGE_COL] += (~age_mask).sum()
         df = df[age_mask]
     return df, stats

@@ -21,7 +21,7 @@ delays:
     - "D" # diagnoses
 
 min_age: 50 # minimum age for inclusion  
-
+max_age: 100
 inclusion_criteria:
   strict:
     - example_strict
