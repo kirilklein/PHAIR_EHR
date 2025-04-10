@@ -67,7 +67,7 @@ def main(config_path: str):
     index_dates = pd.read_csv(
         join(cohort_path, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
     )
-
+    logger.info(f"Extracting criteria for {len(index_dates)} patients")
     patients = {}
     for shard_path in iterate_splits_and_shards(meds_path, splits):
         print(f"Processing shard: {os.path.basename(shard_path)}")
@@ -77,6 +77,7 @@ def main(config_path: str):
     df = patients_to_dataframe(patients)
     df.to_csv(join(save_path, "criteria_flags.csv"))
 
+    logger.info("Applying criteria and saving stats")
     df, stats = apply_criteria(df, cfg)
     with open(join(save_path, "stats.json"), "w") as f:
         json.dump(stats, f)
@@ -88,10 +89,12 @@ def main(config_path: str):
     filtered_index_dates = index_dates[index_dates[PID_COL].isin(filtered_pids)]
     filtered_index_dates.to_csv(join(save_path, INDEX_DATES_FILE))
 
+    logger.info("Splitting test and train/val")
     train_val_pids, test_pids = split_test(filtered_pids, cfg.get("test_ratio", 0))
     if len(test_pids) > 0:
         torch.save(test_pids, join(save_path, TEST_PIDS_FILE))
 
+    logger.info("Creating folds")
     if len(train_val_pids) > 0:
         folds = create_folds(
             train_val_pids,
