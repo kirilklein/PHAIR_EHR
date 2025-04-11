@@ -1,106 +1,182 @@
-from datetime import datetime, timedelta
-from typing import Optional, Tuple, List
+import re
 
+import numpy as np
 import pandas as pd
 
 from corebehrt.constants.cohort import (
-    CODE_ENTRY,
-    THRESHOLD,
-    TIME_WINDOW_DAYS,
-    USE_PATTERNS,
+    AGE_AT_INDEX_DATE,
+    CRITERION_FLAG,
+    DELAY,
+    FINAL_MASK,
+    INDEX_DATE,
+    MAX_TIME,
+    MIN_TIME,
+    NUMERIC_VALUE,
+    NUMERIC_VALUE_SUFFIX,
 )
-from corebehrt.functional.cohort_handling.advanced.match import (
-    evaluate_numeric_criteria,
-    match_codes,
+from corebehrt.constants.data import (
+    BIRTH_CODE,
+    BIRTHDATE_COL,
+    CONCEPT_COL,
+    PID_COL,
+    TIMESTAMP_COL,
 )
 
 
-def precompute_non_numeric_criteria(
-    criteria_definitions: dict, code_patterns: dict
-) -> dict:
-    """Precompute configurations for non-numeric criteria (ones without THRESHOLD)."""
-    precomputed_non_numeric_cfg = {}
-    for criterion, crit_cfg in criteria_definitions.items():
-        if THRESHOLD not in crit_cfg:
-            cfg_copy = crit_cfg.copy()
-            cfg_copy[CODE_ENTRY] = get_all_codes_for_criterion(crit_cfg, code_patterns)
-            precomputed_non_numeric_cfg[criterion] = cfg_copy
-    return precomputed_non_numeric_cfg
-
-
-def evaluate_criterion(
-    criterion: str,
-    crit_cfg: dict,
-    patient_data: pd.DataFrame,
-    patient_index_date: datetime,
-    precomputed_non_numeric_cfg: dict,
-    delays_config: dict,
-) -> Tuple[Optional[float], bool]:
+def compute_age_at_index_date(
+    index_dates: pd.DataFrame, events: pd.DataFrame
+) -> pd.DataFrame:
     """
-    Evaluate a single criterion for a patient.
-
-    Args:
-        criterion: Name of the criterion being evaluated
-        crit_cfg: Configuration for this criterion
-        patient_data: DataFrame containing patient's data
-        patient_index_date: Reference date for the patient
-        precomputed_non_numeric_cfg: Precomputed configuration for non-numeric criteria
-        delays_config: Configuration for code delays
-
-    Returns:
-        Tuple[Optional[float], bool]: (value, matched) where value is None for non-numeric criteria
+    Compute the patient age at index date.
+    Extracts birth dates from events and merges them with index_dates.
+    Returns a DataFrame with columns: subject_id and age_at_index_date.
     """
-    # Compute the minimum timestamp for filtering
-    min_timestamp = patient_index_date - timedelta(
-        days=crit_cfg.get(TIME_WINDOW_DAYS, 36500)
+    birth_dates = get_birth_date_for_each_patient(events)
+    birth_dates_df = birth_dates.reset_index().rename(
+        columns={TIMESTAMP_COL: BIRTHDATE_COL}
     )
-
-    if THRESHOLD in crit_cfg:
-        # Numeric criteria evaluation
-        value, matched = evaluate_numeric_criteria(
-            patient_data, crit_cfg, patient_index_date, min_timestamp
-        )
-        return value, matched
-    else:
-        # Non-numeric criteria using precomputed configuration
-        pre_cfg = precomputed_non_numeric_cfg[criterion]
-        matched = match_codes(
-            patient_data,
-            pre_cfg,
-            delays_config,
-            patient_index_date,
-            min_timestamp,
-        )
-        return None, matched
+    merged = index_dates.merge(birth_dates_df, on=PID_COL, how="left")
+    merged[AGE_AT_INDEX_DATE] = (
+        merged[INDEX_DATE] - merged[BIRTHDATE_COL]
+    ).dt.days / 365.25
+    return merged[[PID_COL, AGE_AT_INDEX_DATE]]
 
 
-def get_all_codes_for_criterion(
-    criterion_config: dict, code_patterns: dict
-) -> List[str]:
+def get_birth_date_for_each_patient(events: pd.DataFrame) -> pd.Series:
     """
-    Get all code patterns for a criterion, including referenced patterns.
+    Extract the birth date for each patient from the events DataFrame.
+    Assumes that birth date events have CONCEPT_COL equal to "DOB".
+    Returns a Series with index=subject_id and values as birth_date.
+    """
+    # Here we take the first occurrence (earliest time) of a DOB event.
+    birth_dates = (
+        events[events[CONCEPT_COL] == BIRTH_CODE].groupby(PID_COL)[TIMESTAMP_COL].min()
+    )
+    return birth_dates
+
+
+def compute_delay_column(
+    df: pd.DataFrame, code_groups: list, delay_in_days: int
+) -> pd.DataFrame:
+    """
+    Compute a 'delay' column in df based on whether its code starts with any prefix in delays_config["code_groups"].
+    If a match is found the delay (in days) is set to delays_config["days"], otherwise 0.
+    """
+    if code_groups:
+        prefixes = tuple(code_groups)
+        df[DELAY] = np.where(df[CONCEPT_COL].str.startswith(prefixes), delay_in_days, 0)
+    else:
+        df[DELAY] = 0
+    return df
+
+
+def compute_time_window_columns(
+    df: pd.DataFrame, time_window_days: float = 36500
+) -> pd.DataFrame:
+    """
+    Compute two new columns:
+      - 'min_time': index_date minus the time_window_days (default 36500 days if not specified).
+      - 'max_time': index_date plus the computed delay (if delay > 0; otherwise, just index_date).
+    """
+    df[MIN_TIME] = df[INDEX_DATE] - pd.to_timedelta(time_window_days, unit="D")
+    df[MAX_TIME] = np.where(
+        df[DELAY] > 0,
+        df[INDEX_DATE] + pd.to_timedelta(df[DELAY], unit="D"),
+        df[INDEX_DATE],
+    )
+    return df
+
+
+def compute_code_masks(df: pd.DataFrame, codes: list, exclude_codes: list) -> pd.Series:
+    """
+    Build a Boolean mask for allowed codes and then exclude any matching exclusion patterns.
 
     Args:
-        criterion_config: Configuration for a single criterion
-        code_patterns: Dictionary of predefined code patterns
+        df: DataFrame with columns [subject_id, time, code, numeric_value, ...]
+        codes: List of allowed codes
+        exclude_codes: List of exclusion codes
+    Returns:
+        Boolean mask indicating whether each event's code is allowed.
+    """
+    if codes:
+        allowed_regex = re.compile("|".join(codes))
+        allowed_mask = df[CONCEPT_COL].str.contains(allowed_regex, na=False)
+    else:
+        allowed_mask = pd.Series(False, index=df.index)
+
+    if exclude_codes:
+        exclude_regex = re.compile("|".join(exclude_codes))
+        exclude_mask = df[CONCEPT_COL].str.contains(exclude_regex, na=False)
+    else:
+        exclude_mask = pd.Series(False, index=df.index)
+
+    return allowed_mask & (~exclude_mask)
+
+
+def merge_index_dates(events: pd.DataFrame, index_dates: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge index_dates into the events DataFrame so that each event row gets its corresponding index_date.
+    """
+    index_dates = index_dates.rename(columns={TIMESTAMP_COL: "index_date"})
+    return events.merge(index_dates, on=PID_COL, how="left")
+
+
+def compute_time_mask(df: pd.DataFrame) -> pd.Series:
+    """
+    Create a Boolean mask indicating whether each event's time is between min_timestamp and max_timestamp.
+    """
+    return (df[TIMESTAMP_COL] >= df[MIN_TIME]) & (df[TIMESTAMP_COL] <= df[MAX_TIME])
+
+
+def rename_result(df: pd.DataFrame, criterion: str, has_numeric: bool) -> pd.DataFrame:
+    """Rename CRITERION_FLAG and, if applicable, NUMERIC_VALUE columns to use the criterion name."""
+    new_cols = {CRITERION_FLAG: criterion}
+    if has_numeric:
+        new_cols[NUMERIC_VALUE] = criterion + NUMERIC_VALUE_SUFFIX
+    return df.rename(columns=new_cols)[
+        [PID_COL, criterion]
+        + ([criterion + NUMERIC_VALUE_SUFFIX] if has_numeric else [])
+    ]
+
+
+def extract_numeric_values(
+    df: pd.DataFrame,
+    flag_df: pd.DataFrame,
+    min_value: float = None,
+    max_value: float = None,
+) -> pd.DataFrame:
+    """
+    Extract the most recent numeric value for each patient where FINAL_MASK is True
+    and the numeric value falls within [min_value, max_value] if specified.
+
+    Args:
+        df: DataFrame containing the filtered events with FINAL_MASK and NUMERIC_VALUE columns.
+        flag_df: DataFrame containing the patient IDs and criterion flags (based solely on code matching).
+        min_value: Optional minimum threshold for numeric_value.
+        max_value: Optional maximum threshold for numeric_value.
 
     Returns:
-        List of all code patterns for this criterion
+        DataFrame with PID_COL, CRITERION_FLAG, and NUMERIC_VALUE columns.
+        The CRITERION_FLAG is updated to True only if a numeric value in the required range is found.
     """
-    # Get both direct codes and pattern-based codes
-    direct_codes = criterion_config.get(CODE_ENTRY, [])
-    pattern_codes = []
+    # Start with events that are marked True by the final mask and have a numeric value.
+    num_df = df[(df[FINAL_MASK]) & (df[NUMERIC_VALUE].notna())].copy()
 
-    # Add codes from referenced patterns
-    for pattern_name in criterion_config.get(USE_PATTERNS, []):
-        if pattern_name in code_patterns:
-            pattern_codes.extend(code_patterns[pattern_name][CODE_ENTRY])
-        else:
-            raise ValueError(
-                f"Pattern {pattern_name} not found in code_patterns. Available patterns: {code_patterns.keys()}"
-            )
+    # Apply numeric range filtering, if thresholds are specified.
+    if min_value is not None:
+        num_df = num_df[num_df[NUMERIC_VALUE] >= min_value]
+    if max_value is not None:
+        num_df = num_df[num_df[NUMERIC_VALUE] <= max_value]
 
-    # Combine both types of codes
-    all_codes = direct_codes + pattern_codes
+    # Group by patient and select the most recent event (by TIMESTAMP_COL)
+    if not num_df.empty:
+        num_df = num_df.sort_values(TIMESTAMP_COL).groupby(PID_COL).last().reset_index()
+        num_df = num_df[[PID_COL, NUMERIC_VALUE]]
+        result = flag_df.merge(num_df, on=PID_COL, how="left")
+    else:
+        result = flag_df.copy()
+        result[NUMERIC_VALUE] = None
 
-    return all_codes
+    # For numeric criteria, update the criterion flag: it is True only if a numeric value in the desired range exists.
+    result[CRITERION_FLAG] = result[NUMERIC_VALUE].notna()
+    return result

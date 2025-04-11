@@ -1,4 +1,5 @@
 import numpy as np
+import re
 
 
 def prettify_stats(stats: dict) -> dict:
@@ -23,3 +24,8 @@ def prettify_stats(stats: dict) -> dict:
         return v
 
     return {k: convert_value(v) for k, v in stats.items()}
+
+
+def extract_criteria_names_from_expression(expression: str) -> list:
+    """Extract criteria names from expression by splitting on operators and check they exist"""
+    return [c.strip() for c in re.split(r"[|&~]", expression) if c.strip()]
