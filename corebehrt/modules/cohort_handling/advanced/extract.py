@@ -1,40 +1,21 @@
 from typing import Dict, List
+
 import pandas as pd
 
-from corebehrt.constants.cohort import (
-    AGE_AT_INDEX_DATE,
-    CODE_ENTRY,
-    CODE_GROUPS,
-    CODE_MASK,
-    CRITERION_FLAG,
-    DAYS,
-    EXCLUDE_CODES,
-    EXPRESSION,
-    FINAL_MASK,
-    MAX_AGE,
-    MIN_AGE,
-    NUMERIC_VALUE,
-    TIME_MASK,
-    TIME_WINDOW_DAYS,
-    INDEX_DATE,
-    MIN_VALUE,
-    MAX_VALUE,
-)
+from corebehrt.constants.cohort import (AGE_AT_INDEX_DATE, CODE_ENTRY,
+                                        CODE_GROUPS, CODE_MASK, CRITERION_FLAG,
+                                        DAYS, EXCLUDE_CODES, EXPRESSION,
+                                        FINAL_MASK, INDEX_DATE, MAX_AGE,
+                                        MAX_VALUE, MIN_AGE, MIN_VALUE,
+                                        NUMERIC_VALUE, NUMERIC_VALUE_SUFFIX,
+                                        TIME_MASK, TIME_WINDOW_DAYS)
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 from corebehrt.functional.cohort_handling.advanced.checks import (
-    check_criteria_definitions,
-    check_delays_config,
-)
+    check_criteria_definitions, check_delays_config)
 from corebehrt.functional.cohort_handling.advanced.extract import (
-    compute_age_at_index_date,
-    compute_code_masks,
-    compute_delay_column,
-    compute_time_mask,
-    compute_time_window_columns,
-    merge_index_dates,
-    rename_result,
-    extract_numeric_values,
-)
+    compute_age_at_index_date, compute_code_masks, compute_delay_column,
+    compute_time_mask, compute_time_window_columns, extract_numeric_values,
+    merge_index_dates, rename_result)
 
 
 # --- Main Extraction Function ---
@@ -143,7 +124,7 @@ def vectorized_extraction_codes(
       2. Compute per-event delay using delays_config.
       3. Compute the time window (min_timestamp and max_timestamp).
       4. Build time and code masks and combine them into FINAL_MASK.
-      5. Group by patient: a patient’s CRITERION_FLAG is True if any event passes FINAL_MASK.
+      5. Group by patient: a patient's CRITERION_FLAG is True if any event passes FINAL_MASK.
       6. If numeric extraction is requested, additionally extract, for each patient, the latest numeric_value
          (subject to additional range filtering on min_value and/or max_value).
 
@@ -182,25 +163,63 @@ def vectorized_extraction_codes(
     return result
 
 
+def check_boolean_convertible(series: pd.Series, col_name: str) -> None:
+    """
+    Check if a series can be safely converted to boolean.
+    
+    Args:
+        series: pandas Series to check
+        col_name: name of the column for error messaging
+    
+    Raises:
+        ValueError: if series contains values that aren't boolean convertible
+    """
+    unique_values = series.unique()
+    valid_values = {0, 1, True, False, 0.0, 1.0}
+    invalid_values = [v for v in unique_values if pd.notna(v) and v not in valid_values]
+    if invalid_values:
+        raise ValueError(
+            f"Column '{col_name}' contains values that cannot be converted to boolean: {invalid_values}. "
+            "Only True/False, 1/0 are allowed."
+        )
+
 def vectorized_extraction_expression(
     expression: str, initial_results: pd.DataFrame
 ) -> pd.DataFrame:
     """
     Evaluate a composite criterion defined by an expression.
-
-    Returns a DataFrame with columns:
-       PID_COL and CRITERION_FLAG.
+    
+    Args:
+        expression: String expression using boolean operators (&, |, ~, and, or, not)
+        initial_results: DataFrame containing the criteria columns to evaluate
+    
+    Returns:
+        DataFrame with columns: PID_COL and CRITERION_FLAG
+        
+    Raises:
+        ValueError: if any criterion column contains non-boolean-convertible values
     """
-    local_dict = {
-        col.upper(): initial_results[col]
-        for col in initial_results.columns
-        if col != PID_COL
-    }
-    composite_flag = pd.eval(expression, engine="python", local_dict=local_dict)
+    local_dict = construct_local_dict(initial_results)
+    
+    composite_flag = pd.eval(expression, local_dict=local_dict)
     result = initial_results[[PID_COL]].copy()
     result[CRITERION_FLAG] = composite_flag
     return result
 
+
+def construct_local_dict(initial_results: pd.DataFrame) -> dict:
+    """Construct a local dictionary for the expression evaluation."""
+    local_dict = {}
+    for col in initial_results.columns:
+        if col == PID_COL or col.endswith(NUMERIC_VALUE_SUFFIX):
+            continue
+        series = initial_results[col]
+        # Check if the column is boolean or numeric using pandas type utilities.
+        if not (pd.api.types.is_bool_dtype(series) or pd.api.types.is_numeric_dtype(series)):
+            raise ValueError(f"Column '{col}' must be boolean or numeric for expression evaluation.")
+        # Convert to boolean.
+        local_dict[col] = series.astype(bool)
+    return local_dict
 
 def vectorized_extraction_age(
     initial_results: pd.DataFrame, min_age: int = None, max_age: int = None

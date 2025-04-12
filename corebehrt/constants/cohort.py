@@ -34,3 +34,5 @@ NUMERIC_VALUE_SUFFIX = "_numeric_value"
 DELAY = "delay"
 INDEX_DATE = "index_date"
 AGE_AT_INDEX_DATE = "age_at_index_date"
+
+ALLOWED_OPERATORS = {"|", "&", "~", "and", "or", "not"}
