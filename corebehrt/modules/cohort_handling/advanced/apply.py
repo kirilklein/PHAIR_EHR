@@ -1,3 +1,33 @@
+"""
+Module for applying complex inclusion/exclusion criteria to patient cohorts.
+
+This module provides functions to:
+1. Apply boolean expressions for inclusion/exclusion criteria (e.g., "diabetes & (stroke | mi)")
+2. Track patient flow statistics through each filtering step
+3. Apply limits on combinations of criteria (e.g., max number of medications)
+
+Main function `apply_criteria_with_stats` returns both the filtered cohort and detailed statistics:
+- Patients excluded by each inclusion criterion
+- Patients excluded by each exclusion criterion
+- Patients excluded by unique code limits
+- Total patients at each stage
+
+Example usage:
+```python
+df, stats = apply_criteria_with_stats(
+    df=patient_criteria_df,
+    inclusion_expression="type2_diabetes & (mi | stroke)",
+    exclusion_expression="cancer | pregnancy",
+    unique_code_limits={
+        "medications": {
+            "max_count": 2,
+            "criteria": ["med_a", "med_b", "med_c"]
+        }
+    }
+)
+```
+"""
+
 from typing import Dict, Tuple
 
 import pandas as pd

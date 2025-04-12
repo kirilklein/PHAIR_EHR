@@ -1,3 +1,47 @@
+"""
+Module for extracting and evaluating complex patient criteria from medical event data.
+
+This module provides classes and functions to:
+1. Extract patient criteria based on medical codes, numeric values, and time windows
+2. Evaluate age-based criteria relative to index dates
+3. Process hierarchical criteria expressions with dependencies
+4. Handle complex temporal relationships through delay configurations
+
+Key classes:
+- CohortExtractor: Main class for orchestrating criteria extraction
+- ExpressionCriteriaResolver: Handles hierarchical criteria dependencies
+- CriteriaExtraction: Static methods for different types of criteria evaluation
+
+Example usage:
+```python
+extractor = CohortExtractor(
+    criteria_definitions={
+        "diabetes": {
+            "code_entry": ["E11%"],
+            "time_window_days": 365
+        },
+        "elderly": {
+            "min_age": 65
+        },
+        "high_risk": {
+            "expression": "diabetes & elderly"
+        }
+    },
+    delays_config={
+        "code_groups": ["medications"],
+        "days": 30
+    }
+)
+
+results = extractor.extract(events_df, index_dates_df)
+```
+
+The module supports three types of criteria:
+1. Code-based: Match medical codes with optional time windows and numeric thresholds
+2. Age-based: Filter by age at index date
+3. Expression-based: Combine other criteria using boolean expressions
+"""
+
 from typing import Dict, List, Tuple
 
 import pandas as pd

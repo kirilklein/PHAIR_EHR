@@ -10,7 +10,12 @@ This script performs a second stage of patient filtering after the basic cohort 
 
 The script outputs:
 - A DataFrame with criteria flags and clinical values for each patient
-- Statistics showing patient counts at each filtering stage
+- Statistics showing patient counts at each filtering stage:
+  * Initial total patients
+  * Patients excluded by individual inclusion criteria
+  * Patients excluded by individual exclusion criteria
+  * Patients excluded by unique code limits
+  * Final included patients count
 - Final cohort files matching the format of the initial selection
   (patient IDs, index dates, train/test splits)
 
@@ -19,6 +24,7 @@ The criteria evaluation is highly configurable through YAML files that can speci
 - Time windows relative to index dates
 - Numeric thresholds and comparisons
 - Required combinations of multiple criteria
+
 """
 
 import json
