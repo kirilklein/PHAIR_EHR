@@ -114,7 +114,7 @@ def check_age(
 ) -> None:
     """Check that min_age and max_age are valid, if present."""
     if min_age is not None:
-        if not isinstance(min_age, int) or min_age < -1:
+        if not isinstance(min_age, int) or min_age < 0:
             raise ValueError(f"min_age for {criterion} must be a non-negative integer")
 
     if max_age is not None:
@@ -123,7 +123,6 @@ def check_age(
         if min_age is not None:
             if min_age > max_age:
                 raise ValueError(f"min_age for {criterion} must be less than max_age")
-
 
 def check_codes(codes: list, criterion: str) -> None:
     """Check that codes are valid. Are strings and valid regexes."""
