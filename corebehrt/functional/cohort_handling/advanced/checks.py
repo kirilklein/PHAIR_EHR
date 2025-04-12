@@ -75,6 +75,10 @@ def check_delays_config(delays_config: dict) -> None:
     """Check that delays_config has valid codes (which should be strings) and days (which should be ints)"""
     if len(delays_config) == 0:
         return
+    if CODE_GROUPS not in delays_config or DAYS not in delays_config:
+        raise ValueError(
+            f"delays_config must contain both '{CODE_GROUPS}' and '{DAYS}' keys"
+        )
     for code_group in delays_config[CODE_GROUPS]:
         if not isinstance(code_group, str):
             raise ValueError(f"Code group for delays must be a string")
