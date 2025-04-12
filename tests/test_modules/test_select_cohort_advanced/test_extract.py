@@ -19,12 +19,7 @@ from corebehrt.constants.cohort import (
     TIME_WINDOW_DAYS,
 )
 from corebehrt.constants.data import CONCEPT_COL, PID_COL, TIMESTAMP_COL, VALUE_COL
-from corebehrt.modules.cohort_handling.advanced.extract import (
-    extract_patient_criteria,
-    vectorized_extraction_age,
-    vectorized_extraction_codes,
-    vectorized_extraction_expression,
-)
+from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
 
 
 class TestExtraction(unittest.TestCase):
@@ -138,9 +133,9 @@ class TestExtraction(unittest.TestCase):
         # - Have type2_diabetes flag True from "D/C11"
         # - Have stroke flag True from "D/I63"
         # - Have HbA1c flag True and a numeric value of 7.5, because the measurement is ≥ 7.0
-        final_results = extract_patient_criteria(
-            self.df, self.index_dates, self.criteria_definitions, self.delays_config
-        )
+        final_results = CohortExtractor(
+            self.criteria_definitions, self.delays_config
+        ).extract(self.df, self.index_dates)
         patient1 = final_results.loc[final_results[PID_COL] == 1].iloc[0]
         self.assertTrue(patient1["type2_diabetes"])
         self.assertTrue(patient1["stroke"])
@@ -150,9 +145,9 @@ class TestExtraction(unittest.TestCase):
     def test_patient_2_too_young(self):
         # For patient 2, DOB is "1978-01-01" and index_date "2023-06-01": age ~45.
         # Expect type2_diabetes flag True from "D/C11" but stroke and HbA1c flags False.
-        final_results = extract_patient_criteria(
-            self.df, self.index_dates, self.criteria_definitions, self.delays_config
-        )
+        final_results = CohortExtractor(
+            self.criteria_definitions, self.delays_config
+        ).extract(self.df, self.index_dates)
         patient2 = final_results.loc[final_results[PID_COL] == 2].iloc[0]
         self.assertTrue(patient2["type2_diabetes"])
         self.assertFalse(patient2["stroke"])
@@ -160,42 +155,42 @@ class TestExtraction(unittest.TestCase):
 
     def test_patient_3_recent_cancer(self):
         # Patient 3 has event "D/C50" which should trigger the cancer criterion.
-        final_results = extract_patient_criteria(
-            self.df, self.index_dates, self.criteria_definitions, self.delays_config
-        )
+        final_results = CohortExtractor(
+            self.criteria_definitions, self.delays_config
+        ).extract(self.df, self.index_dates)
         patient3 = final_results.loc[final_results[PID_COL] == 3].iloc[0]
         self.assertTrue(patient3["cancer"])
 
     def test_patient_4_type1_diabetes(self):
         # Patient 4 should have type1_diabetes flagged True.
-        final_results = extract_patient_criteria(
-            self.df, self.index_dates, self.criteria_definitions, self.delays_config
-        )
+        final_results = CohortExtractor(
+            self.criteria_definitions, self.delays_config
+        ).extract(self.df, self.index_dates)
         patient4 = final_results.loc[final_results[PID_COL] == 4].iloc[0]
         self.assertTrue(patient4["type1_diabetes"])
 
     def test_patient_5_pregnancy_and_birth(self):
         # Patient 5 should have the pregnancy_and_birth flag set True.
-        final_results = extract_patient_criteria(
-            self.df, self.index_dates, self.criteria_definitions, self.delays_config
-        )
+        final_results = CohortExtractor(
+            self.criteria_definitions, self.delays_config
+        ).extract(self.df, self.index_dates)
         patient5 = final_results.loc[final_results[PID_COL] == 5].iloc[0]
         self.assertTrue(patient5["pregnancy_and_birth"])
 
     def test_patient_6_stroke_within_delay(self):
         # Patient 6: Has events "D/C11" and "D/I63". The stroke event should be flagged.
-        final_results = extract_patient_criteria(
-            self.df, self.index_dates, self.criteria_definitions, self.delays_config
-        )
+        final_results = CohortExtractor(
+            self.criteria_definitions, self.delays_config
+        ).extract(self.df, self.index_dates)
         patient6 = final_results.loc[final_results[PID_COL] == 6].iloc[0]
         self.assertTrue(patient6["stroke"])
 
     def test_age_calculation(self):
         # Validate that age_at_index_date is computed correctly.
         # For example, for patient 1: birth "1968-01-01" and index "2023-06-01" ~55 years.
-        final_results = extract_patient_criteria(
-            self.df, self.index_dates, self.criteria_definitions, self.delays_config
-        )
+        final_results = CohortExtractor(
+            self.criteria_definitions, self.delays_config
+        ).extract(self.df, self.index_dates)
         patient1 = final_results.loc[final_results[PID_COL] == 1].iloc[0]
         self.assertAlmostEqual(patient1[AGE_AT_INDEX_DATE], 55, delta=1)
 
@@ -264,9 +259,9 @@ class TestPatternUsage(unittest.TestCase):
 
     def test_pattern_combination(self):
         # Using the basic type2_diabetes criteria (direct codes), patient 1 and 3 should be flagged.
-        final_results = extract_patient_criteria(
-            self.df, self.index_dates, self.criteria_definitions, self.delays_config
-        )
+        final_results = CohortExtractor(
+            self.criteria_definitions, self.delays_config
+        ).extract(self.df, self.index_dates)
         patient1 = final_results.loc[final_results[PID_COL] == 1].iloc[0]
         patient3 = final_results.loc[final_results[PID_COL] == 3].iloc[0]
         self.assertTrue(patient1["type2_diabetes"])
@@ -277,9 +272,9 @@ class TestPatternUsage(unittest.TestCase):
         # For simplicity, we check that if patient 1 meets one criteria (type2_diabetes),
         # then related criteria (dpp4_use) which might share the same pattern in a full implementation
         # would also be flagged. For this test we assume that patient 1 has a dpp4 use via M/A10BH01.
-        final_results = extract_patient_criteria(
-            self.df, self.index_dates, self.criteria_definitions, self.delays_config
-        )
+        final_results = CohortExtractor(
+            self.criteria_definitions, self.delays_config
+        ).extract(self.df, self.index_dates)
         patient1 = final_results.loc[final_results[PID_COL] == 1].iloc[0]
         # Since our dummy config for dpp4_use has no codes, it will default to False,
         # but in an integrated system it would be combined with patterns.
@@ -290,7 +285,6 @@ class TestPatternUsage(unittest.TestCase):
 
 class TestVectorizedExtractionFunctions(unittest.TestCase):
     def setUp(self):
-        # Create a sample events DataFrame with one patient.
         self.events = pd.DataFrame(
             {
                 PID_COL: [1, 1],
@@ -299,82 +293,70 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
                 VALUE_COL: [5.5, None],
             }
         )
-        # Create an index_dates DataFrame with one patient.
+
         self.index_dates = pd.DataFrame(
             {PID_COL: [1], TIMESTAMP_COL: to_datetime(["2023-06-01"])}
         )
-        # Provide a delays_config dictionary.
+
         self.delays_config = {DAYS: 14, CODE_GROUPS: ["D/"]}
 
     def test_vectorized_extraction_codes_non_numeric(self):
-        """
-        Test vectorized_extraction_codes for a simple, non-numeric criterion.
-        Using a criteria configuration with allowed codes that match the event codes,
-        we expect the subject to be flagged True.
-        """
         crit_cfg = {CODE_ENTRY: ["^D/TST.*"]}
-        result = vectorized_extraction_codes(
-            self.events, self.index_dates, crit_cfg, self.delays_config
+        criteria_definitions = {"test_criterion": crit_cfg}
+
+        extractor = CohortExtractor(criteria_definitions, self.delays_config)
+        result = extractor._vectorized_extraction_codes(
+            self.events, self.index_dates, crit_cfg
         )
-        # Expect one row, CRITERION_FLAG should be True, and no numeric value.
+
         self.assertEqual(result.shape[0], 1)
         self.assertTrue(result.iloc[0][CRITERION_FLAG])
         self.assertIsNone(result.iloc[0][NUMERIC_VALUE])
 
     def test_vectorized_extraction_codes_numeric_in_range(self):
-        """
-        Test vectorized_extraction_codes for a numeric criterion.
-        With a configuration specifying a numeric extraction (and range [5,6]),
-        the event numeric_value of 5.5 should be accepted.
-        """
         crit_cfg = {
             CODE_ENTRY: ["^D/TST.*"],
             NUMERIC_VALUE: {MIN_VALUE: 5},
-            # We omit MAX_VALUE so that any value >= 5 is accepted.
         }
-        result = vectorized_extraction_codes(
-            self.events, self.index_dates, crit_cfg, self.delays_config
+        criteria_definitions = {"numeric_criterion": crit_cfg}
+
+        extractor = CohortExtractor(criteria_definitions, self.delays_config)
+        result = extractor._vectorized_extraction_codes(
+            self.events, self.index_dates, crit_cfg
         )
+
         self.assertEqual(result.shape[0], 1)
         self.assertTrue(result.iloc[0][CRITERION_FLAG])
         self.assertAlmostEqual(result.iloc[0][NUMERIC_VALUE], 5.5)
 
     def test_vectorized_extraction_expression(self):
-        """
-        Test vectorized_extraction_expression.
-        Given an initial_results DataFrame with columns corresponding to
-        individual criteria, evaluate an expression combining them.
-        """
-        # Create an initial results DataFrame with two criteria columns.
         initial_results = pd.DataFrame(
             {PID_COL: [1, 2], "TYPE2_DIABETES": [True, False], "STROKE": [False, True]}
         )
-        # Expression: include patient if they have TYPE2_DIABETES and not STROKE.
+
         expression = "TYPE2_DIABETES & ~STROKE"
-        result = vectorized_extraction_expression(expression, initial_results)
+        result = CohortExtractor._vectorized_extraction_expression(
+            expression, initial_results
+        )
+
         self.assertEqual(result.shape[0], 2)
-        # For patient 1: True & ~False == True; for patient 2: False & ~True == False.
         self.assertTrue(result.loc[result[PID_COL] == 1, CRITERION_FLAG].iloc[0])
         self.assertFalse(result.loc[result[PID_COL] == 2, CRITERION_FLAG].iloc[0])
 
     def test_vectorized_extraction_age(self):
-        """
-        Test vectorized_extraction_age.
-        Provide an initial_results DataFrame that includes the AGE_AT_INDEX_DATE column,
-        then check that the age-based criterion is applied correctly.
-        """
         initial_results = pd.DataFrame(
             {PID_COL: [1, 2, 3], AGE_AT_INDEX_DATE: [55, 45, 60]}
         )
-        # Define an age-based criterion: include patients with age between 50 and 59.
-        result = vectorized_extraction_age(initial_results, min_age=50, max_age=59)
+
+        extractor = CohortExtractor(criteria_definitions={})
+        result = extractor._vectorized_extraction_age(
+            initial_results, min_age=50, max_age=59
+        )
+
         self.assertEqual(result.shape[0], 3)
-        flag1 = result.loc[result[PID_COL] == 1, CRITERION_FLAG].iloc[0]  # 55 -> True
-        flag2 = result.loc[result[PID_COL] == 2, CRITERION_FLAG].iloc[0]  # 45 -> False
-        flag3 = result.loc[result[PID_COL] == 3, CRITERION_FLAG].iloc[0]  # 60 -> False
-        self.assertTrue(flag1)
-        self.assertFalse(flag2)
-        self.assertFalse(flag3)
+        self.assertTrue(result.loc[result[PID_COL] == 1, CRITERION_FLAG].iloc[0])
+        self.assertFalse(result.loc[result[PID_COL] == 2, CRITERION_FLAG].iloc[0])
+        self.assertFalse(result.loc[result[PID_COL] == 3, CRITERION_FLAG].iloc[0])
 
 
 if __name__ == "__main__":

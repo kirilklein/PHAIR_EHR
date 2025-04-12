@@ -13,6 +13,8 @@ from corebehrt.constants.cohort import (
     MIN_TIME,
     NUMERIC_VALUE,
     NUMERIC_VALUE_SUFFIX,
+    ALLOWED_OPERATORS
+    
 )
 from corebehrt.constants.data import (
     BIRTH_CODE,
@@ -22,6 +24,12 @@ from corebehrt.constants.data import (
     TIMESTAMP_COL,
 )
 
+def extract_criteria_names_from_expression(expression: str) -> list:
+    """
+    Extract criterion names from an expression.
+    """
+    tokens = expression.split()
+    return [token for token in tokens if token.lower() not in ALLOWED_OPERATORS]
 
 def compute_age_at_index_date(
     index_dates: pd.DataFrame, events: pd.DataFrame

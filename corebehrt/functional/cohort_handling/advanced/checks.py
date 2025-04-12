@@ -74,7 +74,9 @@ def check_criteria_definitions(criteria_definitions: dict) -> None:
 
 
 def check_delays_config(delays_config: dict) -> None:
-    """Check that delays_config is valid hase codes (which should be strings) and days (which should be ints)"""
+    """Check that delays_config has valid codes (which should be strings) and days (which should be ints)"""
+    if len(delays_config) == 0:
+        return 
     for code_group in delays_config[CODE_GROUPS]:
         if not isinstance(code_group, str):
             raise ValueError(f"Code group for delays must be a string")
