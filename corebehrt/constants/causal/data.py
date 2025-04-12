@@ -28,14 +28,6 @@ TRUE_EFFECT_COL = "true_effect"
 
 INDEX_DATE = "index_date"
 
-# Statistics
-EXCLUDED_BY = "excluded_by"
-STRICT_INCLUSION = "strict_inclusion"
-EXCLUSION = "exclusion"
-INCLUDED = "included"
-TOTAL = "total"
-UNIQUE_CODE_LIMITS = "unique_code_limits"
-MAX_COUNT = "max_count"
 
 # New flow-related constants
 FLOW = "flow"

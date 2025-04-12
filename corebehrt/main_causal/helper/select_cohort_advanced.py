@@ -4,7 +4,7 @@ from typing import List
 import pandas as pd
 import torch
 
-from corebehrt.constants.cohort import CODE_PATTERNS, CRITERIA_DEFINITIONS, DELAYS
+from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, DELAYS
 from corebehrt.constants.paths import (
     FOLDS_FILE,
     TEST_PIDS_FILE,
@@ -13,10 +13,7 @@ from corebehrt.constants.data import PID_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
-from corebehrt.modules.cohort_handling.advanced.data.patient import (
-    patients_to_dataframe,
-)
-from corebehrt.modules.cohort_handling.advanced.extract import extract_patient_criteria
+from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
 import logging
 
 logger = logging.getLogger("select_cohort_advanced")
@@ -34,23 +31,22 @@ def extract_and_save_criteria(
     if CRITERIA_DEFINITIONS not in cfg:
         raise ValueError(f"Configuration missing required key: {CRITERIA_DEFINITIONS}")
 
-    patients = {}
+    criteria_dfs = []
     for shard_path in iterate_splits_and_shards(meds_path, splits):
         print(f"Processing shard: {os.path.basename(shard_path)}")
         shard = pd.read_parquet(shard_path)
-        patients.update(
-            extract_patient_criteria(
-                shard,
-                index_dates,
-                cfg.get(CRITERIA_DEFINITIONS),
-                cfg.get(CODE_PATTERNS),
-                cfg.get(DELAYS),
-            )
+        cohort_extractor = CohortExtractor(
+            cfg.get(CRITERIA_DEFINITIONS),
+            cfg.get(DELAYS),
         )
-
-    df = patients_to_dataframe(patients)
-    df.to_csv(join(save_path, "criteria_flags.csv"))
-    return df
+        criteria_df = cohort_extractor.extract(
+            shard,
+            index_dates,
+        )
+        criteria_dfs.append(criteria_df)
+    criteria_df = pd.concat(criteria_dfs)
+    criteria_df.to_csv(join(save_path, "criteria_flags.csv"), index=False)
+    return criteria_df
 
 
 def split_and_save(

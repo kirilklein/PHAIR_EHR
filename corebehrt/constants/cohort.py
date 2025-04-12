@@ -15,6 +15,8 @@ EXPRESSION = "expression"
 INCLUSION = "inclusion"
 EXCLUSION = "exclusion"
 
+MAX_COUNT = "max_count"
+
 # Value/Limit Keys for Criteria
 MIN_AGE = "min_age"
 MAX_AGE = "max_age"
@@ -35,4 +37,13 @@ DELAY = "delay"
 INDEX_DATE = "index_date"
 AGE_AT_INDEX_DATE = "age_at_index_date"
 
-ALLOWED_OPERATORS = {"|", "&", "~", "and", "or", "not"}
+# === Statistics ===
+INITIAL_TOTAL = "initial_total"
+EXCLUDED_BY_INCLUSION_CRITERIA = "excluded_by_inclusion_criteria"
+EXCLUDED_BY_EXCLUSION_CRITERIA = "excluded_by_exclusion_criteria"
+N_EXCLUDED_BY_EXPRESSION = "n_excluded_by_expression"
+N_EXCLUDED_BY_CODE_LIMITS = "n_excluded_by_code_limits"
+FINAL_INCLUDED = "final_included"
+
+
+ALLOWED_OPERATORS = {"|", "&", "~", "and", "or", "not", "(", ")"}

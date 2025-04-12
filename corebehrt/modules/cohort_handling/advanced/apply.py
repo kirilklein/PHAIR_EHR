@@ -2,173 +2,128 @@ from typing import Dict, Tuple
 
 import pandas as pd
 
-from corebehrt.constants.causal.data import (
-    EXCLUDED_BY,
-    EXCLUSION,
-    FLOW,
-    FLOW_AFTER_AGE,
-    FLOW_AFTER_MINIMUM_ONE,
-    FLOW_AFTER_STRICT,
-    FLOW_AFTER_UNIQUE_CODES,
-    FLOW_FINAL,
-    FLOW_INITIAL,
-    INCLUDED,
-    STRICT_INCLUSION,
-    TOTAL,
-    UNIQUE_CODE_LIMITS,
-    MAX_COUNT,
-)
 from corebehrt.constants.cohort import (
     CRITERIA,
-    EXCLUSION_CRITERIA,
-    INCLUSION_CRITERIA,
-    MAX_AGE,
-    MIN_AGE,
-    MINIMUM_ONE,
-    STRICT,
+    EXCLUDED_BY_EXCLUSION_CRITERIA,
+    EXCLUDED_BY_INCLUSION_CRITERIA,
+    FINAL_INCLUDED,
+    INITIAL_TOTAL,
+    MAX_COUNT,
+    N_EXCLUDED_BY_CODE_LIMITS,
+    N_EXCLUDED_BY_EXPRESSION,
 )
-from corebehrt.constants.data import AGE_COL
+from corebehrt.functional.cohort_handling.advanced.checks import check_criteria_names
+from corebehrt.functional.cohort_handling.advanced.extract import (
+    extract_criteria_names_from_expression,
+)
+from corebehrt.functional.cohort_handling.advanced.utills import print_stats
 
-from corebehrt.functional.cohort_handling.advanced.checks import check_criteria_columns
-from corebehrt.functional.cohort_handling.advanced.utills import prettify_stats
 
-
-def apply_criteria(df: pd.DataFrame, config: dict) -> Tuple[pd.DataFrame, Dict]:
+def apply_criteria_with_stats(
+    df: pd.DataFrame,
+    inclusion_expression: str,
+    exclusion_expression: str,
+    unique_code_limits: Dict = None,
+    verbose: bool = True,
+) -> Tuple[pd.DataFrame, Dict]:
     """
-    Apply inclusion and exclusion criteria to a DataFrame of patients.
-    Tracks patient counts at each step for CONSORT diagram creation.
+    Apply a composite inclusion/exclusion expression and optional unique code limits.
 
     Args:
-        df (pd.DataFrame): DataFrame with patient criteria
-        config (dict): Configuration with criteria definitions
+        df (pd.DataFrame): Criteria flags per patient.
+        inclusion_expression (str): Boolean expression combining inclusion criteria.
+        exclusion_expression (str): Boolean expression combining exclusion criteria.
+        unique_code_limits (dict, optional): Limits for grouped criteria (e.g., max 2 meds).
+        verbose (bool): If True, prints the flow summary.
 
     Returns:
-        tuple[pd.DataFrame, dict]: Included patients and statistics including flow counts
+        Tuple containing:
+            - Filtered DataFrame of included patients
+            - Dictionary with flow statistics.
     """
-    check_criteria_columns(
-        df, config
-    )  # This will raise ValueError if columns are missing
-
     stats = {
-        TOTAL: len(df),
-        FLOW: {
-            FLOW_INITIAL: len(df),
-            FLOW_AFTER_AGE: 0,
-            FLOW_AFTER_STRICT: 0,
-            FLOW_AFTER_MINIMUM_ONE: 0,
-            FLOW_AFTER_UNIQUE_CODES: 0,
-            FLOW_FINAL: 0,
-        },
-        EXCLUDED_BY: {
-            AGE_COL: 0,
-            STRICT_INCLUSION: {},
-            MINIMUM_ONE: 0,
-            UNIQUE_CODE_LIMITS: {},
-            EXCLUSION: {},
-        },
-        INCLUDED: 0,
+        INITIAL_TOTAL: len(df),
+        EXCLUDED_BY_INCLUSION_CRITERIA: {},
+        EXCLUDED_BY_EXCLUSION_CRITERIA: {},
+        N_EXCLUDED_BY_EXPRESSION: 0,
+        N_EXCLUDED_BY_CODE_LIMITS: {},
+        FINAL_INCLUDED: 0,
     }
 
-    included = df.copy()
-
-    included, stats = apply_age_criteria(
-        included, stats, config.get(MIN_AGE, None), config.get(MAX_AGE, None)
+    # --- Extract criteria names from expressions ---
+    inclusion_criteria_names = extract_criteria_names_from_expression(
+        inclusion_expression
     )
-    stats[FLOW][FLOW_AFTER_AGE] = len(included)
-
-    # 2. Apply strict inclusion criteria
-    for criterion in config[INCLUSION_CRITERIA][STRICT]:
-        included, stats = apply_strict_inclusion_criteria(included, stats, criterion)
-    stats[FLOW][FLOW_AFTER_STRICT] = len(included)
-
-    # 3. Apply minimum_one criteria
-    if MINIMUM_ONE in config[INCLUSION_CRITERIA]:
-        included, stats = apply_minimum_one_criteria(
-            included, stats, config[INCLUSION_CRITERIA][MINIMUM_ONE]
+    exclusion_criteria_names = extract_criteria_names_from_expression(
+        exclusion_expression
+    )
+    check_criteria_names(df, inclusion_criteria_names)
+    check_criteria_names(df, exclusion_criteria_names)
+    # --- Compute criteria-specific statistics ---
+    # For inclusion: count how many patients DO NOT meet the criteria.
+    for crit in inclusion_criteria_names:
+        stats[EXCLUDED_BY_INCLUSION_CRITERIA][crit] = int(
+            (~df[crit].astype(bool)).sum()
         )
-        stats[FLOW][FLOW_AFTER_MINIMUM_ONE] = len(included)
+    # For exclusion: count how many patients DO meet the criteria.
+    for crit in exclusion_criteria_names:
+        stats[EXCLUDED_BY_EXCLUSION_CRITERIA][crit] = int((df[crit].astype(bool)).sum())
 
-    # 4. Apply unique code limits
-    if UNIQUE_CODE_LIMITS in config:
-        included, stats = apply_unique_code_limits(included, stats, config)
-        stats[FLOW][FLOW_AFTER_UNIQUE_CODES] = len(included)
+    # --- Build a local dictionary covering all criteria for eval ---
+    all_criteria = set(inclusion_criteria_names) | set(exclusion_criteria_names)
+    local_dict = {crit: df[crit].astype(bool) for crit in all_criteria}
 
-    # 4. Apply exclusion criteria
-    for criterion in config[EXCLUSION_CRITERIA]:
-        excluded_count = included[criterion].sum()
-        stats[EXCLUDED_BY][EXCLUSION][criterion] = excluded_count
+    # --- Evaluate the inclusion and exclusion expressions ---
+    inclusion_mask = pd.eval(inclusion_expression, local_dict=local_dict)
+    exclusion_mask = pd.eval(exclusion_expression, local_dict=local_dict)
 
-    # Remove excluded patients
-    included = included[included[config[EXCLUSION_CRITERIA]].eq(False).all(axis=1)]
+    # --- Combine expressions: final mask includes patients who satisfy inclusion and do not satisfy exclusion ---
+    final_mask = inclusion_mask & ~exclusion_mask
+    stats[N_EXCLUDED_BY_EXPRESSION] = len(df) - final_mask.sum()
 
-    stats[FLOW][FLOW_FINAL] = len(included)
-    stats[INCLUDED] = len(included)
+    # --- Subset the DataFrame ---
+    included = df[final_mask].copy()
 
-    return included, prettify_stats(stats)
+    # --- Apply optional unique code limits ---
+    if unique_code_limits:
+        included, code_limit_stats = apply_unique_code_limits(
+            included, unique_code_limits
+        )
+        stats[N_EXCLUDED_BY_CODE_LIMITS] = code_limit_stats
+
+    stats[FINAL_INCLUDED] = len(included)
+
+    if verbose:
+        print_stats(stats)
+
+    return included, stats
 
 
 def apply_unique_code_limits(
-    df: pd.DataFrame, stats: dict, config: dict
-) -> Tuple[pd.DataFrame, dict]:
+    df: pd.DataFrame,
+    limits_config: Dict,
+) -> Tuple[pd.DataFrame, Dict]:
     """
-    Apply unique code limits to a DataFrame and update stats.
+    Remove patients exceeding the allowed number of positive flags in certain groups.
+
     Args:
-        df (pd.DataFrame): DataFrame with patient criteria
-        stats (dict): Statistics dictionary
-        config (dict): Configuration with unique code limits
+        df (pd.DataFrame): DataFrame of patients.
+        limits_config (dict): Configuration, e.g.:
+            { "antidiabetics": { "criteria": [...], "max_count": 2 } }
 
     Returns:
-        tuple[pd.DataFrame, dict]: DataFrame with unique code limits applied and stats
+        Tuple: filtered DataFrame and dictionary of counts for exclusions per limit name.
     """
-    for limit_name, limit_config in config[UNIQUE_CODE_LIMITS].items():
-        max_count = limit_config[MAX_COUNT]
-        criteria_cols = limit_config.get(CRITERIA, [])
+    stats = {}
+    for name, cfg in limits_config.items():
+        criteria_cols = cfg[CRITERIA]
+        max_count = cfg[MAX_COUNT]
 
-        # Count how many criteria are True for each patient
-        unique_count = df[criteria_cols].sum(axis=1)
-        exceeds_limit = unique_count > max_count
+        # Sum positive flags and identify patients exceeding the limit.
+        pos_counts = df[criteria_cols].sum(axis=1)
+        mask_exceeds = pos_counts > max_count
 
-        # Track exclusions
-        excluded_count = exceeds_limit.sum()
-        stats[EXCLUDED_BY][UNIQUE_CODE_LIMITS][limit_name] = excluded_count
+        stats[name] = int(mask_exceeds.sum())
+        df = df[~mask_exceeds]  # Remove patients exceeding limit.
 
-        # Remove patients exceeding the limit
-        df = df[~exceeds_limit]
-    return df, stats
-
-
-def apply_minimum_one_criteria(
-    df: pd.DataFrame, stats: dict, criteria: list[str]
-) -> Tuple[pd.DataFrame, dict]:
-    """At least one of the criteria must be true."""
-    minimum_one_mask = df[criteria].any(axis=1)
-    stats[EXCLUDED_BY][MINIMUM_ONE] = (~minimum_one_mask).sum()
-    df = df[minimum_one_mask]
-    return df, stats
-
-
-def apply_strict_inclusion_criteria(
-    df: pd.DataFrame, stats: dict, criterion: str
-) -> Tuple[pd.DataFrame, dict]:
-    """Apply strict inclusion criteria to a DataFrame and update stats."""
-    mask = df[criterion]
-    excluded_count = (~mask).sum()
-    stats[EXCLUDED_BY][STRICT_INCLUSION][criterion] = excluded_count
-    df = df[mask]
-    return df, stats
-
-
-def apply_age_criteria(
-    df: pd.DataFrame, stats: dict, min_age: int, max_age: int
-) -> Tuple[pd.DataFrame, dict]:
-    """Apply age criteria to a DataFrame and update stats."""
-    if min_age is not None:
-        age_mask = df[AGE_COL] >= min_age
-        stats[EXCLUDED_BY][AGE_COL] = (~age_mask).sum()
-        df = df[age_mask]
-
-    if max_age is not None:
-        age_mask = df[AGE_COL] <= max_age
-        stats[EXCLUDED_BY][AGE_COL] += (~age_mask).sum()
-        df = df[age_mask]
     return df, stats

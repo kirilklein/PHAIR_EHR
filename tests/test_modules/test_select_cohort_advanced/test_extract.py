@@ -305,7 +305,6 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
 
     def test_vectorized_extraction_codes_non_numeric(self):
         crit_cfg = {CODE_ENTRY: ["^D/TST.*"]}
-        criteria_definitions = {"test_criterion": crit_cfg}
 
         result = CriteriaExtraction.extract_codes(
             self.events, self.index_dates, crit_cfg, self.delays_config
@@ -335,9 +334,7 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
         )
 
         expression = "TYPE2_DIABETES & ~STROKE"
-        result = CriteriaExtraction.extract_expression(
-            expression, initial_results
-        )
+        result = CriteriaExtraction.extract_expression(expression, initial_results)
 
         self.assertEqual(result.shape[0], 2)
         self.assertTrue(result.loc[result[PID_COL] == 1, CRITERION_FLAG].iloc[0])
@@ -348,9 +345,7 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
             {PID_COL: [1, 2, 3], AGE_AT_INDEX_DATE: [55, 45, 60]}
         )
 
-        result = CriteriaExtraction.extract_age(
-            initial_results, min_age=50, max_age=59
-        )
+        result = CriteriaExtraction.extract_age(initial_results, min_age=50, max_age=59)
 
         self.assertEqual(result.shape[0], 3)
         self.assertTrue(result.loc[result[PID_COL] == 1, CRITERION_FLAG].iloc[0])

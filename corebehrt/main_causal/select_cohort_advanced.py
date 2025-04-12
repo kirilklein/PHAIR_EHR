@@ -26,16 +26,20 @@ import logging
 from os.path import join
 
 import pandas as pd
+import numpy as np
 
 from corebehrt.constants.data import TIMESTAMP_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE
+from corebehrt.constants.cohort import INCLUSION, EXCLUSION, UNIQUE_CODE_LIMITS
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.select_cohort_advanced import (
     extract_and_save_criteria,
     filter_and_save_cohort,
     split_and_save,
 )
-from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria
+from corebehrt.modules.cohort_handling.advanced.apply import (
+    apply_criteria_with_stats,
+)
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
@@ -60,10 +64,19 @@ def main(config_path: str):
         join(cohort_path, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
     )
     logger.info(f"Extracting criteria for {len(index_dates)} patients")
-    df = extract_and_save_criteria(meds_path, index_dates, cfg, save_path, splits)
+    criteria_df = extract_and_save_criteria(
+        meds_path, index_dates, cfg, save_path, splits
+    )
 
     logger.info("Applying criteria and saving stats")
-    df, stats = apply_criteria(df, cfg)
+    df, stats = apply_criteria_with_stats(
+        criteria_df, cfg[INCLUSION], cfg[EXCLUSION], cfg.get(UNIQUE_CODE_LIMITS, {})
+    )
+    # Convert numpy integers to Python integers
+    stats = {
+        k: int(v) if isinstance(v, (np.int32, np.int64)) else v
+        for k, v in stats.items()
+    }
     with open(join(save_path, "stats.json"), "w") as f:
         json.dump(stats, f)
 

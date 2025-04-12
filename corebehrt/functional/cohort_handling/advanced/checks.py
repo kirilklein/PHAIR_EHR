@@ -1,21 +1,19 @@
-import pandas as pd
+import re
 
 from corebehrt.constants.cohort import (
+    ALLOWED_OPERATORS,
+    CODE_ENTRY,
     CODE_GROUPS,
     DAYS,
     EXCLUDE_CODES,
-    NUMERIC_VALUE,
     EXPRESSION,
-    MIN_AGE,
     MAX_AGE,
-    CODE_ENTRY,
-    MIN_VALUE,
     MAX_VALUE,
-    ALLOWED_OPERATORS
+    MIN_AGE,
+    MIN_VALUE,
+    NUMERIC_VALUE,
 )
-from corebehrt.constants.data import AGE_COL, PID_COL
-import re
-from corebehrt.functional.cohort_handling.advanced.utills import (
+from corebehrt.functional.cohort_handling.advanced.extract import (
     extract_criteria_names_from_expression,
 )
 
@@ -76,7 +74,7 @@ def check_criteria_definitions(criteria_definitions: dict) -> None:
 def check_delays_config(delays_config: dict) -> None:
     """Check that delays_config has valid codes (which should be strings) and days (which should be ints)"""
     if len(delays_config) == 0:
-        return 
+        return
     for code_group in delays_config[CODE_GROUPS]:
         if not isinstance(code_group, str):
             raise ValueError(f"Code group for delays must be a string")
@@ -118,8 +116,9 @@ def check_age(
     if max_age is not None:
         if not isinstance(max_age, int) or max_age < 0:
             raise ValueError(f"max_age for {criterion} must be a non-negative integer")
-        if min_age > max_age:
-            raise ValueError(f"min_age for {criterion} must be less than max_age")
+        if min_age is not None:
+            if min_age > max_age:
+                raise ValueError(f"min_age for {criterion} must be less than max_age")
 
 
 def check_codes(codes: list, criterion: str) -> None:
@@ -140,38 +139,31 @@ def is_valid_criterion_name(name: str) -> bool:
     # Define allowed pattern: alphanumeric characters, underscore, or slash.
     return bool(re.match(r"^[A-Za-z0-9_/]+$", name))
 
-def extract_criteria_names_from_expression(expression: str) -> list:
-    """
-    Splits the expression by whitespace and returns tokens that are not valid operators.
-    Assumes that tokens are separated by spaces.
-    """
-    tokens = expression.split()
-    return [token for token in tokens if token.lower() not in ALLOWED_OPERATORS]
 
 def check_expression(expression: str, criteria_names: list) -> None:
     """
     An expression consists of criterion names separated by operators (|, &, ~,
     or their word equivalents: and, or, not). These criterion names must:
-      - appear in the criteria_definitions, and 
+      - appear in the criteria_definitions, and
       - be composed only of allowed characters (letters, digits, underscores, and slashes).
-    
+
     Raises:
         ValueError: if any token is not permitted.
     """
     # Ensure the expression contains at least one operator.
-    if not any(op in expression for op in ["|", "&", "~", "and", "or", "not"]):
+    if not any(op in expression for op in ALLOWED_OPERATORS):
         raise ValueError(
             f"Expression '{expression}' must contain at least one operator (|, &, ~, and, or, not)."
         )
-    
+
     allowed_names = set(criteria_names)
     criteria_in_expr = extract_criteria_names_from_expression(expression)
-    
+
     # Check that every extracted criterion name is in the allowed names.
     unknown_criteria = [c for c in criteria_in_expr if c not in allowed_names]
     if unknown_criteria:
         raise ValueError(f"Unknown criteria in expression: {unknown_criteria}")
-    
+
     # Additionally, ensure that each criterion name matches the allowed pattern.
     for name in criteria_in_expr:
         if not is_valid_criterion_name(name):
@@ -181,15 +173,8 @@ def check_expression(expression: str, criteria_names: list) -> None:
             )
 
 
-def check_criteria_columns(df: pd.DataFrame, expression: str) -> None:
-    """
-    Check if all required criteria columns exist in the DataFrame.
-    """
-    required_columns = [PID_COL, AGE_COL]
-    # Add strict inclusion criteria columns
-    for criterion in extract_criteria_names_from_expression(expression):
-        required_columns.append(criterion)
-    # Check if any columns are missing
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    if missing_columns:
-        raise ValueError(f"Missing required criteria columns: {missing_columns}")
+def check_criteria_names(df, criteria_names):
+    """Check if all criteria names are present in the DataFrame."""
+    missing_criteria = set(criteria_names) - set(df.columns)
+    if missing_criteria:
+        raise ValueError(f"Criteria not found in DataFrame: {missing_criteria}")

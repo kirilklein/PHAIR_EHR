@@ -20,19 +20,17 @@ delays:
   code_groups:
     - "D" # diagnoses
 
-inclusion:
-  expression: criteria_1 | criteria_2 # use | for "OR", "&" for "AND", ~ for "NOT" together with criteria names in criteria_definitions to create arbitrary inclusion criteria
-  
-exclusion:
-  expression: criteria_3 & criteria_4 # use & for "AND", | for "OR", ~ for "NOT" together with criteria names in criteria_definitions to create arbitrary exclusion criteria
+# provide expressions for inclusion and exclusion
+inclusion: min_age_50 & criteria_1 | ~ criteria_2 # use |, &, ~, and, or, ~ together with criteria names separated by space to create arbitrary inclusion criteria
+exclusion: max_age_60 & criteria_3 & criteria_4 
 
 criteria_definitions:
-  # Define all the criteria that will be needed on the lowest level
+  # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
   min_age_50: # would be the age at index_date
     min_age: 50
 
-  min_age_60:
-    min_age: 60
+  max_age_60:
+    max_age: 60
 
   criteria_1:
     codes:
@@ -45,15 +43,12 @@ criteria_definitions:
       - ^LAB6.*
     numeric_value:
       min_value: 100
-  
-  #########################################################################
-  # Exclusion Criteria (Remove if at least one of the following is true)
+
   criteria_3:
-    codes:
-      - ^D98.*
-  
+    expression: criteria_1 | criteria_2
+
   criteria_4:
-    expression: criteria_1 | criteria_2 # you can use expressions here as well.
+    expression: ~ criteria_3
     
  
 # Use the same patterns for unique code limits
@@ -61,7 +56,7 @@ unique_code_limits:
   code_limit_1:
     max_count: 2
     criteria:
-      - example_strict
-      - example_minimum_one
+      - criteria_1
+      - criteria_2
 
 

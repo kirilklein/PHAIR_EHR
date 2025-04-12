@@ -13,8 +13,7 @@ from corebehrt.constants.cohort import (
     MIN_TIME,
     NUMERIC_VALUE,
     NUMERIC_VALUE_SUFFIX,
-    ALLOWED_OPERATORS
-    
+    ALLOWED_OPERATORS,
 )
 from corebehrt.constants.data import (
     BIRTH_CODE,
@@ -24,12 +23,6 @@ from corebehrt.constants.data import (
     TIMESTAMP_COL,
 )
 
-def extract_criteria_names_from_expression(expression: str) -> list:
-    """
-    Extract criterion names from an expression.
-    """
-    tokens = expression.split()
-    return [token for token in tokens if token.lower() not in ALLOWED_OPERATORS]
 
 def compute_age_at_index_date(
     index_dates: pd.DataFrame, events: pd.DataFrame
@@ -188,3 +181,24 @@ def extract_numeric_values(
     # For numeric criteria, update the criterion flag: it is True only if a numeric value in the desired range exists.
     result[CRITERION_FLAG] = result[NUMERIC_VALUE].notna()
     return result
+
+
+def extract_criteria_names_from_expression(expression: str) -> list:
+    """
+    Splits the expression and returns tokens that are criteria names (not operators or parentheses).
+    Handles ~, (, and ) operators by ensuring they are separated from criteria names.
+
+    Args:
+        expression: String like "type2_diabetes & (myocardial_infarction | stroke)"
+
+    Returns:
+        List of criteria names, e.g. ["type2_diabetes", "myocardial_infarction", "stroke"]
+    """
+    # Add spaces around operators and parentheses to ensure they're separated
+    expression = expression.replace("~", " ~ ")
+    expression = expression.replace("(", " ( ")
+    expression = expression.replace(")", " ) ")
+
+    tokens = expression.split()
+    # Exclude operators and parentheses from the results
+    return [token for token in tokens if token.lower() not in ALLOWED_OPERATORS]
