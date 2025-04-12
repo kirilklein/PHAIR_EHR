@@ -55,29 +55,27 @@ class CohortExtractor:
         """
         Extract and evaluate criteria for each patient in a vectorized fashion.
 
-        This function processes "simple" criteria (code- and numeric-based) first, then computes
-        additional criteria:
-        - Composite criteria defined via an expression (EXPRESSION key)
-        - Age-based criteria (using MIN_AGE and/or MAX_AGE)
-
-        Also computes the patient's age at index_date and merges it into the final results.
-
-        Returns a DataFrame with one row per patient (subject_id) and one column per criterion.
-        Additionally, an "age_at_index_date" column is added.
+        Clearly separates the extraction into three steps:
+        1. Simple (code/numeric-based) criteria
+        2. Age-based criteria
+        3. Expression-based criteria (hierarchical)
         """
         relevant_index_dates = self._get_relevant_index_dates(events, index_dates)
         print(f"Processing {len(relevant_index_dates)} patients")
 
         age_df = compute_age_at_index_date(relevant_index_dates, events)
 
-        simple_criteria, additional_criteria = self._partition_criteria()
+        simple_criteria, age_criteria, expression_criteria = self._partition_criteria()
         simple_results = self._process_simple_criteria(
             events, relevant_index_dates, simple_criteria
         )
 
         all_results = simple_results.merge(age_df, on=PID_COL, how="left")
-        all_results = self._process_additional_criteria(
-            all_results, additional_criteria
+
+        all_results = self._process_age_criteria(all_results, age_criteria)
+
+        all_results = self._process_expression_criteria(
+            all_results, expression_criteria
         )
 
         return all_results
@@ -89,16 +87,19 @@ class CohortExtractor:
         relevant_dates = index_dates[index_dates[PID_COL].isin(shard_ids)]
         return relevant_dates.rename(columns={TIMESTAMP_COL: INDEX_DATE})
 
-    def _partition_criteria(self) -> Tuple[List, List]:
-        simple_criteria, additional_criteria = [], []
+    def _partition_criteria(self) -> Tuple[List, List, List]:
+        """Separate criteria into simple, age-based, and expression-based criteria."""
+        simple_criteria, age_criteria, expression_criteria = [], [], []
 
         for criterion, crit_cfg in self.criteria_definitions.items():
             if CODE_ENTRY in crit_cfg:
                 simple_criteria.append((criterion, crit_cfg))
-            elif any(k in crit_cfg for k in [MIN_AGE, MAX_AGE, EXPRESSION]):
-                additional_criteria.append((criterion, crit_cfg))
+            elif MIN_AGE in crit_cfg or MAX_AGE in crit_cfg:
+                age_criteria.append((criterion, crit_cfg))
+            elif EXPRESSION in crit_cfg:
+                expression_criteria.append((criterion, crit_cfg))
 
-        return simple_criteria, additional_criteria
+        return simple_criteria, age_criteria, expression_criteria
 
     def _process_simple_criteria(
         self,
@@ -125,25 +126,16 @@ class CohortExtractor:
 
         return combined
 
-    def _process_additional_criteria(
-        self, all_results: pd.DataFrame, additional_criteria: list
+    def _process_age_criteria(
+        self, all_results: pd.DataFrame, age_criteria: list
     ) -> pd.DataFrame:
-        """Process composite and age-based criteria and merge with existing results."""
-
+        """Process age-based criteria and merge with existing results."""
         results = []
 
-        for criterion, crit_cfg in additional_criteria:
-            if EXPRESSION in crit_cfg:
-                res = self._vectorized_extraction_expression(
-                    crit_cfg[EXPRESSION], all_results
-                )
-            elif MIN_AGE in crit_cfg or MAX_AGE in crit_cfg:
-                res = self._vectorized_extraction_age(
-                    all_results, crit_cfg.get(MIN_AGE), crit_cfg.get(MAX_AGE)
-                )
-            else:
-                continue
-
+        for criterion, crit_cfg in age_criteria:
+            res = self._vectorized_extraction_age(
+                all_results, crit_cfg.get(MIN_AGE), crit_cfg.get(MAX_AGE)
+            )
             res = res.rename(columns={CRITERION_FLAG: criterion})[[PID_COL, criterion]]
             results.append(res)
 
@@ -155,6 +147,78 @@ class CohortExtractor:
             combined = combined.merge(df, on=PID_COL, how="outer")
 
         return all_results.merge(combined, on=PID_COL, how="left")
+
+    def _process_expression_criteria(
+        self, all_results: pd.DataFrame, expression_criteria: list, max_iter: int = 5
+    ) -> pd.DataFrame:
+        """
+        Process expression-based criteria hierarchically.
+        """
+        unresolved_criteria = expression_criteria.copy()
+        resolved_criteria = set(all_results.columns)
+        iteration = 0
+        while iteration < max_iter:
+            iteration += 1
+            newly_resolved, unresolved_criteria = self._resolve_criteria_iteration(
+                all_results, unresolved_criteria, resolved_criteria
+            )
+
+            if not newly_resolved:
+                break  # Stop if no further resolutions
+
+            resolved_criteria.update(newly_resolved)
+
+        self._ensure_all_criteria_resolved(unresolved_criteria, max_iter)
+
+        return all_results
+
+    def _resolve_criteria_iteration(
+        self,
+        all_results: pd.DataFrame,
+        criteria_to_resolve: list,
+        resolved_criteria: set,
+    ) -> Tuple[set, list]:
+        """
+        Attempt to resolve each criterion. Returns a set of resolved criterion names
+        and a list of still unresolved criteria configurations.
+        """
+        newly_resolved = set()
+        still_unresolved = []
+
+        for criterion, crit_cfg in criteria_to_resolve:
+            if self._can_resolve_criterion(crit_cfg, resolved_criteria):
+                res = self._vectorized_extraction_expression(
+                    crit_cfg[EXPRESSION], all_results
+                )
+                res = res.rename(columns={CRITERION_FLAG: criterion})[
+                    [PID_COL, criterion]
+                ]
+                all_results[criterion] = res[criterion]
+                newly_resolved.add(criterion)
+            else:
+                still_unresolved.append((criterion, crit_cfg))
+
+        return newly_resolved, still_unresolved
+
+    def _can_resolve_criterion(self, crit_cfg: dict, resolved_criteria: set) -> bool:
+        """
+        Check if criterion expression dependencies are resolved.
+        """
+        if EXPRESSION in crit_cfg:
+            expr_criteria = extract_criteria_names_from_expression(crit_cfg[EXPRESSION])
+            return set(expr_criteria).issubset(resolved_criteria)
+        return True  # Age-based criteria have no dependencies
+
+    def _ensure_all_criteria_resolved(self, unresolved_criteria: list, max_iter: int):
+        """
+        Ensure no criteria are left unresolved after maximum iterations.
+        """
+        if unresolved_criteria:
+            unresolved_names = [c for c, _ in unresolved_criteria]
+            raise ValueError(
+                f"Could not resolve criteria after {max_iter} iterations: {unresolved_names}. "
+                "Please check for undefined or circular dependencies."
+            )
 
     def _vectorized_extraction_codes(
         self, events: pd.DataFrame, index_dates: pd.DataFrame, crit_cfg: Dict
