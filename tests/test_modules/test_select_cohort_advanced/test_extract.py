@@ -19,7 +19,10 @@ from corebehrt.constants.cohort import (
     TIME_WINDOW_DAYS,
 )
 from corebehrt.constants.data import CONCEPT_COL, PID_COL, TIMESTAMP_COL, VALUE_COL
-from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
+from corebehrt.modules.cohort_handling.advanced.extract import (
+    CohortExtractor,
+    CriteriaExtraction,
+)
 
 
 class TestExtraction(unittest.TestCase):
@@ -304,9 +307,8 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
         crit_cfg = {CODE_ENTRY: ["^D/TST.*"]}
         criteria_definitions = {"test_criterion": crit_cfg}
 
-        extractor = CohortExtractor(criteria_definitions, self.delays_config)
-        result = extractor._vectorized_extraction_codes(
-            self.events, self.index_dates, crit_cfg
+        result = CriteriaExtraction.extract_codes(
+            self.events, self.index_dates, crit_cfg, self.delays_config
         )
 
         self.assertEqual(result.shape[0], 1)
@@ -318,11 +320,9 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
             CODE_ENTRY: ["^D/TST.*"],
             NUMERIC_VALUE: {MIN_VALUE: 5},
         }
-        criteria_definitions = {"numeric_criterion": crit_cfg}
 
-        extractor = CohortExtractor(criteria_definitions, self.delays_config)
-        result = extractor._vectorized_extraction_codes(
-            self.events, self.index_dates, crit_cfg
+        result = CriteriaExtraction.extract_codes(
+            self.events, self.index_dates, crit_cfg, self.delays_config
         )
 
         self.assertEqual(result.shape[0], 1)
@@ -335,7 +335,7 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
         )
 
         expression = "TYPE2_DIABETES & ~STROKE"
-        result = CohortExtractor._vectorized_extraction_expression(
+        result = CriteriaExtraction.extract_expression(
             expression, initial_results
         )
 
@@ -348,8 +348,7 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
             {PID_COL: [1, 2, 3], AGE_AT_INDEX_DATE: [55, 45, 60]}
         )
 
-        extractor = CohortExtractor(criteria_definitions={})
-        result = extractor._vectorized_extraction_age(
+        result = CriteriaExtraction.extract_age(
             initial_results, min_age=50, max_age=59
         )
 

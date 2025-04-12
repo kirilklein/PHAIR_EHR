@@ -110,8 +110,8 @@ class CohortExtractor:
         results = []
 
         for criterion, crit_cfg in simple_criteria:
-            res = self._vectorized_extraction_codes(
-                events, relevant_index_dates, crit_cfg
+            res = CriteriaExtraction.extract_codes(
+                events, relevant_index_dates, crit_cfg, self.delays_config
             )
             has_numeric = NUMERIC_VALUE in crit_cfg
             res = rename_result(res, criterion, has_numeric)
@@ -133,7 +133,7 @@ class CohortExtractor:
         results = []
 
         for criterion, crit_cfg in age_criteria:
-            res = self._vectorized_extraction_age(
+            res = CriteriaExtraction.extract_age(
                 all_results, crit_cfg.get(MIN_AGE), crit_cfg.get(MAX_AGE)
             )
             res = res.rename(columns={CRITERION_FLAG: criterion})[[PID_COL, criterion]]
@@ -159,8 +159,10 @@ class CohortExtractor:
         iteration = 0
         while iteration < max_iter:
             iteration += 1
-            newly_resolved, unresolved_criteria = self._resolve_criteria_iteration(
-                all_results, unresolved_criteria, resolved_criteria
+            newly_resolved, unresolved_criteria = (
+                ExpressionCriteriaResolver.resolve_iteration(
+                    all_results, unresolved_criteria, resolved_criteria
+                )
             )
 
             if not newly_resolved:
@@ -168,12 +170,34 @@ class CohortExtractor:
 
             resolved_criteria.update(newly_resolved)
 
-        self._ensure_all_criteria_resolved(unresolved_criteria, max_iter)
+        ExpressionCriteriaResolver.ensure_all_resolved(unresolved_criteria, max_iter)
 
         return all_results
 
-    def _resolve_criteria_iteration(
-        self,
+    @staticmethod
+    def _construct_local_dict(
+        initial_results: pd.DataFrame, expression_criteria: list
+    ) -> dict:
+        """Construct a local dictionary for the expression evaluation."""
+        local_dict = {}
+        for criterion in expression_criteria:
+            series = initial_results[criterion]
+            # Check if the column is boolean or numeric using pandas type utilities.
+            if not (
+                pd.api.types.is_bool_dtype(series)
+                or pd.api.types.is_numeric_dtype(series)
+            ):
+                raise ValueError(
+                    f"Column '{criterion}' must be boolean or numeric for expression evaluation."
+                )
+            # Convert to boolean.
+            local_dict[criterion] = series.astype(bool)
+        return local_dict
+
+
+class ExpressionCriteriaResolver:
+    @staticmethod
+    def resolve_iteration(
         all_results: pd.DataFrame,
         criteria_to_resolve: list,
         resolved_criteria: set,
@@ -186,8 +210,8 @@ class CohortExtractor:
         still_unresolved = []
 
         for criterion, crit_cfg in criteria_to_resolve:
-            if self._can_resolve_criterion(crit_cfg, resolved_criteria):
-                res = self._vectorized_extraction_expression(
+            if ExpressionCriteriaResolver.can_resolve(crit_cfg, resolved_criteria):
+                res = CriteriaExtraction.extract_expression(
                     crit_cfg[EXPRESSION], all_results
                 )
                 res = res.rename(columns={CRITERION_FLAG: criterion})[
@@ -200,7 +224,8 @@ class CohortExtractor:
 
         return newly_resolved, still_unresolved
 
-    def _can_resolve_criterion(self, crit_cfg: dict, resolved_criteria: set) -> bool:
+    @staticmethod
+    def can_resolve(crit_cfg: dict, resolved_criteria: set) -> bool:
         """
         Check if criterion expression dependencies are resolved.
         """
@@ -209,7 +234,8 @@ class CohortExtractor:
             return set(expr_criteria).issubset(resolved_criteria)
         return True  # Age-based criteria have no dependencies
 
-    def _ensure_all_criteria_resolved(self, unresolved_criteria: list, max_iter: int):
+    @staticmethod
+    def ensure_all_resolved(unresolved_criteria: list, max_iter: int):
         """
         Ensure no criteria are left unresolved after maximum iterations.
         """
@@ -220,54 +246,10 @@ class CohortExtractor:
                 "Please check for undefined or circular dependencies."
             )
 
-    def _vectorized_extraction_codes(
-        self, events: pd.DataFrame, index_dates: pd.DataFrame, crit_cfg: Dict
-    ) -> pd.DataFrame:
-        """
-        Fully vectorized extraction for a code/numeric criterion.
 
-        Steps:
-        1. Merge index_dates into events.
-        2. Compute per-event delay using delays_config.
-        3. Compute the time window (min_timestamp and max_timestamp).
-        4. Build time and code masks and combine them into FINAL_MASK.
-        5. Group by patient: a patient's CRITERION_FLAG is True if any event passes FINAL_MASK.
-        6. If numeric extraction is requested, additionally extract, for each patient, the latest numeric_value
-            (subject to additional range filtering on min_value and/or max_value).
-
-        Returns a DataFrame with columns: PID_COL, CRITERION_FLAG, and (if applicable) NUMERIC_VALUE.
-        """
-        df = merge_index_dates(events, index_dates)
-        df = compute_delay_column(
-            df, self.delays_config.get(CODE_GROUPS, []), self.delays_config.get(DAYS, 0)
-        )
-        df = compute_time_window_columns(df, crit_cfg.get(TIME_WINDOW_DAYS, 36500))
-
-        df[TIME_MASK] = compute_time_mask(df)
-        df[CODE_MASK] = compute_code_masks(
-            df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
-        )
-        df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
-
-        flag_df = (
-            df.groupby(PID_COL)[FINAL_MASK]
-            .any()
-            .reset_index()
-            .rename(columns={FINAL_MASK: CRITERION_FLAG})
-        )
-
-        if NUMERIC_VALUE in crit_cfg:
-            min_val = crit_cfg.get(MIN_VALUE)
-            max_val = crit_cfg.get(MAX_VALUE)
-            result = extract_numeric_values(df, flag_df, min_val, max_val)
-        else:
-            result = flag_df.copy()
-            result[NUMERIC_VALUE] = None
-
-        return result
-
+class CriteriaExtraction:
     @staticmethod
-    def _vectorized_extraction_expression(
+    def extract_expression(
         expression: str, initial_results: pd.DataFrame
     ) -> pd.DataFrame:
         """
@@ -299,27 +281,8 @@ class CohortExtractor:
         return result
 
     @staticmethod
-    def _construct_local_dict(
-        initial_results: pd.DataFrame, expression_criteria: list
-    ) -> dict:
-        """Construct a local dictionary for the expression evaluation."""
-        local_dict = {}
-        for criterion in expression_criteria:
-            series = initial_results[criterion]
-            # Check if the column is boolean or numeric using pandas type utilities.
-            if not (
-                pd.api.types.is_bool_dtype(series)
-                or pd.api.types.is_numeric_dtype(series)
-            ):
-                raise ValueError(
-                    f"Column '{criterion}' must be boolean or numeric for expression evaluation."
-                )
-            # Convert to boolean.
-            local_dict[criterion] = series.astype(bool)
-        return local_dict
-
-    def _vectorized_extraction_age(
-        self, initial_results: pd.DataFrame, min_age: int = None, max_age: int = None
+    def extract_age(
+        initial_results: pd.DataFrame, min_age: int = None, max_age: int = None
     ) -> pd.DataFrame:
         """
         Evaluate an age-based criterion.
@@ -336,4 +299,54 @@ class CohortExtractor:
 
         result = df[[PID_COL]].copy()
         result[CRITERION_FLAG] = flag
+        return result
+
+    @staticmethod
+    def extract_codes(
+        events: pd.DataFrame,
+        index_dates: pd.DataFrame,
+        crit_cfg: Dict,
+        delays_config: Dict,
+    ) -> pd.DataFrame:
+        """
+        Fully vectorized extraction for a code/numeric criterion.
+
+        Steps:
+        1. Merge index_dates into events.
+        2. Compute per-event delay using delays_config.
+        3. Compute the time window (min_timestamp and max_timestamp).
+        4. Build time and code masks and combine them into FINAL_MASK.
+        5. Group by patient: a patient's CRITERION_FLAG is True if any event passes FINAL_MASK.
+        6. If numeric extraction is requested, additionally extract, for each patient, the latest numeric_value
+            (subject to additional range filtering on min_value and/or max_value).
+
+        Returns a DataFrame with columns: PID_COL, CRITERION_FLAG, and (if applicable) NUMERIC_VALUE.
+        """
+        df = merge_index_dates(events, index_dates)
+        df = compute_delay_column(
+            df, delays_config.get(CODE_GROUPS, []), delays_config.get(DAYS, 0)
+        )
+        df = compute_time_window_columns(df, crit_cfg.get(TIME_WINDOW_DAYS, 36500))
+
+        df[TIME_MASK] = compute_time_mask(df)
+        df[CODE_MASK] = compute_code_masks(
+            df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
+        )
+        df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
+
+        flag_df = (
+            df.groupby(PID_COL)[FINAL_MASK]
+            .any()
+            .reset_index()
+            .rename(columns={FINAL_MASK: CRITERION_FLAG})
+        )
+
+        if NUMERIC_VALUE in crit_cfg:
+            min_val = crit_cfg.get(MIN_VALUE)
+            max_val = crit_cfg.get(MAX_VALUE)
+            result = extract_numeric_values(df, flag_df, min_val, max_val)
+        else:
+            result = flag_df.copy()
+            result[NUMERIC_VALUE] = None
+
         return result
