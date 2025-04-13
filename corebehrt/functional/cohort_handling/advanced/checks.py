@@ -124,6 +124,7 @@ def check_age(
             if min_age > max_age:
                 raise ValueError(f"min_age for {criterion} must be less than max_age")
 
+
 def check_codes(codes: list, criterion: str) -> None:
     """Check that codes are valid. Are strings and valid regexes."""
     for code in codes:
