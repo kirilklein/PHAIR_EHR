@@ -34,6 +34,6 @@ jobs:
             - name: test_calibrate_result
               run: |
                 source .venv/bin/activate
-                python -m tests.test_main_causal.test_calibrate_result --finetune_dir outputs/generated/finetune --calibrated_dir outputs/generated/calibrated
+                python -m tests.test_main_causal.test_calibrate_result --finetune_dir outputs/generated/finetune --calibrated_dir outputs/generated/calibrated_predictions
 
 
