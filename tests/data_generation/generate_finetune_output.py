@@ -64,10 +64,10 @@ def generate_mock_finetune_output(
         val_targets_reshaped = val_targets.reshape(-1, 1)
         val_probas_reshaped = val_probas.reshape(-1, 1)
 
-        np.savez(
+        np.savez_compressed(
             join(checkpoints_dir, "targets_val_999.npz"), targets=val_targets_reshaped
         )
-        np.savez(
+        np.savez_compressed(
             join(checkpoints_dir, "probas_val_999.npz"), probas=val_probas_reshaped
         )
 
