@@ -21,7 +21,7 @@ from corebehrt.constants.causal.paths import (
 )
 from corebehrt.constants.data import PID_COL
 
-NOISE_SCALE = 0.02
+NOISE_SCALE = 0.01
 # Paths from config
 EXPOSURE_PRED_DIR = "./outputs/causal/generated/calibrated_predictions"
 OUTCOME_PRED_DIR = "./outputs/causal/generated/trained_mlp_simulated"
@@ -34,7 +34,7 @@ def create_directories():
         Path(directory).mkdir(parents=True, exist_ok=True)
 
 
-def generate_exposure_predictions(n_samples=1000, seed=42):
+def generate_exposure_predictions(n_samples=2000, seed=42):
     """
     Generate exposure predictions data.
     This data contains propensity scores and true exposure values.
