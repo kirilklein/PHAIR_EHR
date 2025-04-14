@@ -25,7 +25,7 @@ jobs:
             - name: generate_data
               run: |
                 source .venv/bin/activate
-                python -m tests.data_generation.generate_estimate_data
+                python -m tests.data_generation.generate_estimate_data --noise-scale 0.005
                 
             - name: estimate_with_generated_data
               run: |

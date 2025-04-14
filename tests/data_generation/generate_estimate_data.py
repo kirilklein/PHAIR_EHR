@@ -21,7 +21,7 @@ from corebehrt.constants.causal.paths import (
 )
 from corebehrt.constants.data import PID_COL
 
-NOISE_SCALE = 0.01
+NOISE_SCALE = 0.005
 # Paths from config
 EXPOSURE_PRED_DIR = "./outputs/causal/generated/calibrated_predictions"
 OUTCOME_PRED_DIR = "./outputs/causal/generated/trained_mlp_simulated"
@@ -174,7 +174,7 @@ def generate_outcome_predictions(
     return df
 
 
-def main(generate_figures=False):
+def main(generate_figures=False, noise_scale=NOISE_SCALE):
     """Generate all necessary data for testing estimate.py"""
     create_directories()
 
@@ -186,7 +186,7 @@ def main(generate_figures=False):
 
     # Generate outcome predictions (with noise) using the counterfactual data
     outcome_df = generate_outcome_predictions(
-        subject_ids, cf_data, noise_scale=NOISE_SCALE
+        subject_ids, cf_data, noise_scale=noise_scale
     )
     if not generate_figures:
         return
@@ -210,6 +210,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--noise-scale", type=float, default=NOISE_SCALE)
     parser.add_argument(
         "--generate-figures",
         action="store_true",
@@ -218,4 +219,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    main(generate_figures=args.generate_figures)
+    main(generate_figures=args.generate_figures, noise_scale=args.noise_scale)
