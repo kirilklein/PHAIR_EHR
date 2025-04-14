@@ -3,19 +3,19 @@ logging:
   path: ./outputs/logs
 
 paths:
-  data: ./example_data/example_MEDS_data_w_labs
+  data: ./example_data/example_MEDS_data_causal
   outcomes: ./outputs/causal/outcomes
-  features: ./outputs/features/
+  features: ./outputs/causal/features/
 
 outcomes:
   EXPOSURE: 
     type: [code]
-    match: [['M37']]
+    match: [['EXPOSURE']]
     match_how: contains
     case_sensitive: true
   OUTCOME:
     type: [code]
-    match: [['D54']]
+    match: [['OUTCOME']]
     match_how: startswith
     case_sensitive: false
     

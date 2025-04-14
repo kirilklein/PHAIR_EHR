@@ -24,17 +24,17 @@ jobs:
             - name: main.create_data
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.create_data
+                python -m corebehrt.main.create_data --config_path ./corebehrt/configs/causal/prepare_and_pretrain/create_data.yaml
             
             - name: main.prepare_training_data
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.prepare_training_data --config_path ./corebehrt/configs/prepare_pretrain.yaml
+                python -m corebehrt.main.prepare_training_data --config_path ./corebehrt/configs/causal/prepare_and_pretrain/prepare_pretrain.yaml
 
             - name: main.pretrain
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.pretrain
+                python -m corebehrt.main.pretrain --config_path ./corebehrt/configs/causal/prepare_and_pretrain/pretrain.yaml
 
             ############# Same as pipeline up to here #############
             
@@ -46,60 +46,60 @@ jobs:
             - name: main.select_cohort_exposure
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.select_cohort --config_path ./corebehrt/configs/causal/select_cohort_exposure.yaml
+                python -m corebehrt.main.select_cohort --config_path ./corebehrt/configs/causal/select_cohort/select_cohort_exposure.yaml
 
             - name: main_causal.select_cohort_advanced
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main_causal.select_cohort_advanced --config_path ./corebehrt/configs/causal/advanced_extraction.yaml
+                python -m corebehrt.main_causal.select_cohort_advanced --config_path ./corebehrt/configs/causal/select_cohort/select_cohort_advanced.yaml
 
             - name: main.prepare_training_data
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.prepare_training_data --config_path ./corebehrt/configs/causal/prepare_finetune_exposure.yaml
+                python -m corebehrt.main.prepare_training_data --config_path ./corebehrt/configs/causal/finetune/prepare_finetune_exposure.yaml
 
             - name: main.finetune_exposure
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/causal/finetune_exposure.yaml
+                python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/causal/finetune/finetune_exposure.yaml
 
             ############# Causal related steps #############
             - name: calibrate
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main_causal.calibrate 
+                python -m corebehrt.main_causal.calibrate --config_path ./corebehrt/configs/causal/finetune/calibrate.yaml
 
             - name: encode
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main_causal.encode
+                python -m corebehrt.main_causal.encode --config_path ./corebehrt/configs/causal/finetune/encode.yaml
 
             - name: train_mlp
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main_causal.train_mlp
+                python -m corebehrt.main_causal.train_mlp --config_path ./corebehrt/configs/causal/double_robust/train_mlp.yaml
 
             - name: train_xgb # as alternative to mlp
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main_causal.train_xgb --config_path ./corebehrt/configs/causal/train_xgb.yaml
+                python -m corebehrt.main_causal.train_xgb --config_path ./corebehrt/configs/causal/double_robust/train_xgb.yaml
 
             - name: estimate
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main_causal.estimate
+                python -m corebehrt.main_causal.estimate --config_path ./corebehrt/configs/causal/estimate/estimate.yaml
 
             # With counterfactual outcomes
 
             - name: simulate
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main_causal.simulate
+                python -m corebehrt.main_causal.simulate --config_path ./corebehrt/configs/causal/simulate.yaml
 
             - name: train_mlp_simulated
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main_causal.train_mlp --config_path ./corebehrt/configs/causal/train_mlp_simulated.yaml
+                python -m corebehrt.main_causal.train_mlp --config_path ./corebehrt/configs/causal/double_robust/train_mlp_simulated.yaml
 
             - name: estimate_with_true
               run: |
