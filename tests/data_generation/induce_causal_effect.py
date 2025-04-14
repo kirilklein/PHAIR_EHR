@@ -70,24 +70,34 @@ def simulate_exposure_for_subject(
     return combined_df
 
 
-def load_data_from_shards(shard_dir: str) -> pd.DataFrame:
+def load_data_from_shards(shard_dir: str) -> tuple[pd.DataFrame, dict]:
     """Load and concatenate all parquet shards from a directory.
 
     Args:
         shard_dir: Directory containing parquet shards
 
     Returns:
-        pd.DataFrame: Concatenated dataframe from all shards
+        tuple[pd.DataFrame, dict]: Tuple containing concatenated dataframe and
+            dictionary mapping shard index to list of subject IDs
     """
     dfs = []
     shards = {}
-    for i, path in enumerate(os.listdir(shard_dir)):
+    if not os.path.exists(shard_dir):
+        raise FileNotFoundError(f"Shard directory not found: {shard_dir}")
+    
+    parquet_files = [f for f in os.listdir(shard_dir) if f.endswith('.parquet')]
+    if not parquet_files:
+        raise ValueError(f"No parquet files found in {shard_dir}")
+    
+    for i, path in enumerate(parquet_files):
         file_path = os.path.join(shard_dir, path)
-        shard = pd.read_parquet(file_path)
+        try:
+            shard = pd.read_parquet(file_path)
+        except Exception as e:
+            raise ValueError(f"Error reading parquet file {file_path}: {e}")
         shards[i] = shard.subject_id.unique()
         dfs.append(shard)
     return pd.concat(dfs), shards
-
 
 def write_shards(df: pd.DataFrame, write_dir: str, shards: dict) -> None:
     """
