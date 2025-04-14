@@ -118,7 +118,7 @@ def main(
     a_outcome: float,
     days_offset: int,
     trigger_code: str,
-) -> pd.DataFrame:
+) -> None:
     df, shards = load_data_from_shards(source_dir)
     df["time"] = pd.to_datetime(df["time"])
 
