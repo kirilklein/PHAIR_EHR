@@ -102,7 +102,7 @@ def compute_and_save_calibration(
 
 def calibrate(
     train_data: pd.DataFrame, val_data: pd.DataFrame, epsilon=1e-8
-) -> pd.DataFrame:
+) -> np.ndarray:
     """Calibrate the probabilities of the given dataframe using the calibrator."""
     calibrator = BetaCalibration("abm")
     calibrator.fit(train_data[PROBAS], train_data[TARGETS])

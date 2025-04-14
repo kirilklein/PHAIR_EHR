@@ -11,14 +11,19 @@ from corebehrt.main_causal.helper.calibrate import calibrate, split_data
 
 class TestCalibrationFunctions(unittest.TestCase):
     def setUp(self):
-        # Sample training data for isotonic regression
+        # Sample training data for calibration
         self.train_data = pd.DataFrame(
             {
                 PROBAS: [0.1, 0.4, 0.6, 0.9],
                 TARGETS: [0, 0, 1, 1],
             }
         )
-
+        self.val_data = pd.DataFrame(
+            {
+                PROBAS: [0.2, 0.5, 0.7, 0.8],
+                TARGETS: [0, 0, 1, 1],
+            }
+        )
         # Sample predictions dataframe for splitting
         self.predictions_df = pd.DataFrame(
             {
