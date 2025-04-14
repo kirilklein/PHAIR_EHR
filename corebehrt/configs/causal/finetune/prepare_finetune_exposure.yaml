@@ -4,8 +4,8 @@ logging:
 
 paths:
 ## INPUTS
-  features: ./outputs/features
-  tokenized: ./outputs/tokenized
+  features: ./outputs/causal/features
+  tokenized: ./outputs/causal/tokenized
   cohort: ./outputs/causal/exposure_cohort # path to cohort directory
   outcome: ./outputs/causal/outcomes/EXPOSURE.csv
   
