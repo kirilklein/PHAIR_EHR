@@ -104,11 +104,24 @@ def calibrate(
     train_data: pd.DataFrame, val_data: pd.DataFrame, epsilon=1e-8
 ) -> np.ndarray:
     """Calibrate the probabilities of the given dataframe using the calibrator."""
-    calibrator = BetaCalibration("abm")
-    calibrator.fit(train_data[PROBAS], train_data[TARGETS])
+    calibrator = train_calibrator_from_data(train_data)
     calibrated_probas = calibrator.predict(val_data[PROBAS])
     calibrated_probas = np.clip(calibrated_probas, epsilon, 1 - epsilon)
     return calibrated_probas
+
+
+def train_calibrator_from_data(train_data: pd.DataFrame) -> BetaCalibration:
+    """Train the calibrator on the given dataframe."""
+    return train_calibrator(train_data[PROBAS], train_data[TARGETS])
+
+
+def train_calibrator(
+    train_preds: np.ndarray, train_targets: np.ndarray
+) -> BetaCalibration:
+    """Train the calibrator on the given dataframe."""
+    calibrator = BetaCalibration("abm")
+    calibrator.fit(train_preds, train_targets)
+    return calibrator
 
 
 def split_data(
