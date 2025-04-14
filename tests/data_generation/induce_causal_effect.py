@@ -84,11 +84,11 @@ def load_data_from_shards(shard_dir: str) -> tuple[pd.DataFrame, dict]:
     shards = {}
     if not os.path.exists(shard_dir):
         raise FileNotFoundError(f"Shard directory not found: {shard_dir}")
-    
-    parquet_files = [f for f in os.listdir(shard_dir) if f.endswith('.parquet')]
+
+    parquet_files = [f for f in os.listdir(shard_dir) if f.endswith(".parquet")]
     if not parquet_files:
         raise ValueError(f"No parquet files found in {shard_dir}")
-    
+
     for i, path in enumerate(parquet_files):
         file_path = os.path.join(shard_dir, path)
         try:
@@ -98,6 +98,7 @@ def load_data_from_shards(shard_dir: str) -> tuple[pd.DataFrame, dict]:
         shards[i] = shard.subject_id.unique()
         dfs.append(shard)
     return pd.concat(dfs), shards
+
 
 def write_shards(df: pd.DataFrame, write_dir: str, shards: dict) -> None:
     """

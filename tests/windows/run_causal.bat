@@ -42,7 +42,7 @@ if !errorlevel! neq 0 (
 )
 
 REM Prepare finetune exposure
-python -m corebehrt.main.prepare_training_data --config_path ./corebehrt/configs/causal/prepare_finetune_exposure.yaml
+python -m corebehrt.main.prepare_training_data --config_path ./corebehrt/configs/causal/finetune/prepare_finetune_exposure.yaml
 if !errorlevel! neq 0 (
     echo Error preparing finetune exposure
     pause
@@ -50,7 +50,7 @@ if !errorlevel! neq 0 (
 )
 
 REM Finetune exposure
-python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/causal/finetune_exposure.yaml
+python -m corebehrt.main.finetune_cv --config_path ./corebehrt/configs/causal/finetune/finetune_exposure.yaml
 if !errorlevel! neq 0 (
     echo Error during finetuning exposure
     pause
@@ -60,7 +60,7 @@ if !errorlevel! neq 0 (
 REM Causal related steps
 
 REM Calibrate
-python -m corebehrt.main_causal.calibrate
+python -m corebehrt.main_causal.calibrate --config_path ./corebehrt/configs/causal/finetune/calibrate.yaml
 if !errorlevel! neq 0 (
     echo Error during calibration
     pause
@@ -68,7 +68,7 @@ if !errorlevel! neq 0 (
 )
 
 REM Encode
-python -m corebehrt.main_causal.encode
+python -m corebehrt.main_causal.encode --config_path ./corebehrt/configs/causal/finetune/encode.yaml
 if !errorlevel! neq 0 (
     echo Error during encoding
     pause
