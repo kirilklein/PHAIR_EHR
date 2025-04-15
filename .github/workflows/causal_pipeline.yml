@@ -62,7 +62,9 @@ jobs:
 
       - name: Run estimate
         run: python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate.yaml
-
+      
+      
+      ########## Simulated data ##########
       - name: Run simulate
         run: python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate.yaml
 
@@ -74,7 +76,9 @@ jobs:
 
       - name: Check estimation
         run: python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true
+      
 
+      ########## Simulated data with weak treatment effect ##########
       - name: Run simulate_weak
         run: python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate_weak.yaml
 
@@ -87,6 +91,7 @@ jobs:
       - name: Check estimation weak
         run: python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_weak
 
+      ########## Simulated data and predictions with xgboost ##########
       - name: Run train_xgb_simulated (using xgboost)
         run: python -m corebehrt.main_causal.train_xgb --config_path corebehrt/configs/causal/double_robust/train_xgb_simulated.yaml
 
