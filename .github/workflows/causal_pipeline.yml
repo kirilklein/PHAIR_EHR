@@ -65,3 +65,22 @@ jobs:
           python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp_simulated.yaml
           echo "Running estimate_with_true"
           python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true.yaml
+          echo "Check estimation"
+          python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true
+
+          echo "Running simulate_weak"
+          python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate_weak.yaml
+          echo "Running train_mlp_simulated_weak"
+          python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp_simulated_weak.yaml
+          echo "Running estimate_with_true_weak"
+          python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true_weak.yaml
+          echo "Check estimation_weak"
+          python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_weak
+
+          echo "Use xgboost"
+          python -m corebehrt.main_causal.train_xgb --config_path corebehrt/configs/causal/double_robust/train_xgb_simulated.yaml
+          echo "Running estimate_with_xgb"
+          python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true_xgb.yaml
+          echo "Check estimation_xgboost"
+          python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_xgb
+

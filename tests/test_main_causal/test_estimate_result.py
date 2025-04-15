@@ -4,20 +4,22 @@ We use generated data to achieve that.
 This step should be run by the pipeline test estimate.yml after generating the data.
 """
 
+import os
+
 import pandas as pd
 
-ESTIMATE_RESULT_PATH = (
-    "./outputs/causal/generated/estimate_with_generated_data/estimate_results.csv"
-)
+from corebehrt.constants.causal.paths import ESTIMATE_RESULTS_FILE
+
+ESTIMATE_RESULT_DIR = "./outputs/causal/generated/estimate_with_generated_data"
 MARGIN = 0.02
 
 
-def compare_estimate_result(margin):
+def compare_estimate_result(margin, estimate_results_dir):
     """
     This function compares the estimated effect on generated data with the simulated effect.
     """
     # Read the results
-    df = pd.read_csv(ESTIMATE_RESULT_PATH)
+    df = pd.read_csv(os.path.join(estimate_results_dir, ESTIMATE_RESULTS_FILE))
 
     # Check if estimated effects are within margin of true effect
     # Track differences for summary
@@ -58,6 +60,12 @@ if __name__ == "__main__":
         default=MARGIN,
         help="Acceptable margin of error for comparing estimated vs true effect",
     )
+    parser.add_argument(
+        "--dir",
+        type=str,
+        default=ESTIMATE_RESULT_DIR,
+        help="Path to the estimate result directory",
+    )
     args = parser.parse_args()
 
-    compare_estimate_result(args.margin)
+    compare_estimate_result(args.margin, args.dir)
