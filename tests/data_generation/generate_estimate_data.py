@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.special import expit, logit
 
 from corebehrt.constants.causal.data import (
     CF_PROBAS,
@@ -21,11 +22,22 @@ from corebehrt.constants.causal.paths import (
 )
 from corebehrt.constants.data import PID_COL
 
-NOISE_SCALE = 0.005
 # Paths from config
 EXPOSURE_PRED_DIR = "./outputs/causal/generated/calibrated_predictions"
 OUTCOME_PRED_DIR = "./outputs/causal/generated/trained_mlp_simulated"
 COUNTERFACTUAL_OUTCOMES_DIR = "./outputs/causal/generated/simulated_outcome"
+
+# Optional: Add different noise scales for different components
+EXPOSURE_NOISE = 0.03  # For propensity scores
+OUTCOME_NOISE = 0.05  # For outcome predictions
+NUM_SAMPLES = 10_000
+OUTCOME_PS_WEIGHT = 0.1  # in logit space
+OUTCOME_INTERCEPT = -1  # in logit space
+EXPOSURE_EFFECT = 0.5  # in logit space
+
+CLIP_EPS = 0.001
+PS_BETA_A = 2
+PS_BETA_B = 5
 
 
 def create_directories():
@@ -34,7 +46,9 @@ def create_directories():
         Path(directory).mkdir(parents=True, exist_ok=True)
 
 
-def generate_exposure_predictions(n_samples=2000, seed=42):
+def generate_exposure_predictions(
+    n_samples=NUM_SAMPLES, seed=42, exposure_noise=EXPOSURE_NOISE
+):
     """
     Generate exposure predictions data.
     This data contains propensity scores and true exposure values.
@@ -45,11 +59,18 @@ def generate_exposure_predictions(n_samples=2000, seed=42):
     subject_ids = np.arange(1, n_samples + 1)
 
     # Generate propensity scores (probability of treatment)
-    ps_scores = np.random.beta(2, 5, n_samples)  # Skewed toward control group
+    exposure_probas = np.random.beta(
+        PS_BETA_A, PS_BETA_B, n_samples
+    )  # Skewed toward control group
 
     # Generate binary exposure based on propensity scores
-    exposures = np.random.binomial(1, ps_scores)
+    exposures = np.random.binomial(1, exposure_probas)
 
+    ps_scores = np.clip(
+        expit(logit(exposure_probas) + np.random.normal(0, exposure_noise, n_samples)),
+        CLIP_EPS,
+        1 - CLIP_EPS,
+    )
     # Create DataFrame
     df = pd.DataFrame(
         {
@@ -64,31 +85,31 @@ def generate_exposure_predictions(n_samples=2000, seed=42):
     df.to_csv(output_path, index=False)
     print(f"Exposure predictions saved to {output_path}")
 
-    return subject_ids, ps_scores, exposures
+    return subject_ids, exposure_probas, ps_scores, exposures
 
 
 def generate_counterfactual_outcomes(
-    subject_ids, exposures, noise_scale=NOISE_SCALE, seed=42
+    subject_ids,
+    exposures,
+    propensities,
+    weight=1,
+    intercept=0,
+    exposure_effect=1,
+    seed=42,
 ):
     """
-    Generate counterfactual outcomes data.
+    Generate counterfactual (true) outcomes data.
     This contains the ground truth potential outcomes under both treatment and control.
     """
     np.random.seed(seed)
 
-    n_samples = len(subject_ids)
-
-    # Parameters for generating counterfactual outcomes
-    baseline_effect = 0.25  # Average treatment effect
-
     # Generate potential outcome probabilities:
     # p0: probability of outcome if subject was in control group
     # p1: probability of outcome if subject was in treatment group
-    p0 = np.random.beta(2, 5, n_samples)  # Lower probability for control
-    p1 = (
-        p0 + baseline_effect + np.random.normal(0, noise_scale, n_samples)
-    )  # Higher probability for treatment
-    p1 = np.clip(p1, 0.01, 0.99)  # Ensure probas are in [0.01, 0.99]
+    p0 = expit(logit(propensities) * weight + intercept)
+    p0 = np.clip(p0, CLIP_EPS, 1 - CLIP_EPS)
+    p1 = expit(logit(p0) + exposure_effect)
+    p1 = np.clip(p1, CLIP_EPS, 1 - CLIP_EPS)  # Ensure probas are in [0.01, 0.99]
 
     # Generate potential outcomes
     y0 = np.random.binomial(1, p0)  # Outcomes under control
@@ -122,7 +143,7 @@ def generate_counterfactual_outcomes(
 
 
 def generate_outcome_predictions(
-    subject_ids, cf_data, noise_scale=NOISE_SCALE, seed=42
+    subject_ids, cf_data, noise_scale=OUTCOME_NOISE, seed=42
 ):
     """
     Generate outcome predictions data.
@@ -147,8 +168,8 @@ def generate_outcome_predictions(
     noise_p0 = np.random.normal(0, noise_scale, len(p0))
     noise_p1 = np.random.normal(0, noise_scale, len(p1))
 
-    predicted_p0 = np.clip(p0 + noise_p0, 0.01, 0.99)
-    predicted_p1 = np.clip(p1 + noise_p1, 0.01, 0.99)
+    predicted_p0 = np.clip(expit(logit(p0) + noise_p0), CLIP_EPS, 1 - CLIP_EPS)
+    predicted_p1 = np.clip(expit(logit(p1) + noise_p1), CLIP_EPS, 1 - CLIP_EPS)
 
     # For each subject:
     #   If exposure == 1: factual prediction is predicted_p1, counterfactual is predicted_p0.
@@ -174,19 +195,36 @@ def generate_outcome_predictions(
     return df
 
 
-def main(generate_figures=False, noise_scale=NOISE_SCALE):
+def main(
+    generate_figures=False,
+    exposure_noise=EXPOSURE_NOISE,
+    outcome_noise=OUTCOME_NOISE,
+    num_samples=NUM_SAMPLES,
+    weight=OUTCOME_PS_WEIGHT,
+    intercept=OUTCOME_INTERCEPT,
+    exposure_effect=EXPOSURE_EFFECT,
+):
     """Generate all necessary data for testing estimate.py"""
     create_directories()
 
     # Generate data with 1000 samples
-    subject_ids, ps_scores, exposures = generate_exposure_predictions(n_samples=1000)
+    subject_ids, exposure_probas, ps_scores, exposures = generate_exposure_predictions(
+        n_samples=num_samples, exposure_noise=exposure_noise
+    )
 
-    # Generate counterfactual (simulated) outcomes (ground truth)
-    cf_data = generate_counterfactual_outcomes(subject_ids, exposures)
+    # Generate counterfactual/true (simulated) outcomes (ground truth)
+    cf_data = generate_counterfactual_outcomes(
+        subject_ids,
+        exposures,
+        propensities=exposure_probas,
+        weight=weight,
+        intercept=intercept,
+        exposure_effect=exposure_effect,
+    )
 
-    # Generate outcome predictions (with noise) using the counterfactual data
+    # Generate outcome/cf outcome predictions (with noise) using the counterfactual data
     outcome_df = generate_outcome_predictions(
-        subject_ids, cf_data, noise_scale=noise_scale
+        subject_ids, cf_data, noise_scale=outcome_noise
     )
     if not generate_figures:
         return
@@ -210,7 +248,39 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--noise-scale", type=float, default=NOISE_SCALE)
+    parser.add_argument(
+        "--exposure-noise",
+        type=float,
+        default=EXPOSURE_NOISE,
+        help="Noise in exposure predictions",
+    )
+    parser.add_argument(
+        "--outcome-noise",
+        type=float,
+        default=OUTCOME_NOISE,
+        help="Noise in outcome predictions",
+    )
+    parser.add_argument(
+        "--num_samples",
+        type=int,
+        default=NUM_SAMPLES,
+        help="Number of samples to generate",
+    )
+    parser.add_argument(
+        "--weight",
+        type=float,
+        default=OUTCOME_PS_WEIGHT,
+        help="Weight in the counterfactual outcome model",
+    )
+    parser.add_argument(
+        "--intercept",
+        type=float,
+        default=OUTCOME_INTERCEPT,
+        help="Intercept in the counterfactual outcome model",
+    )
+    parser.add_argument(
+        "--exposure-effect", type=float, default=1, help="Effect of exposure on outcome"
+    )
     parser.add_argument(
         "--generate-figures",
         action="store_true",
@@ -219,4 +289,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    main(generate_figures=args.generate_figures, noise_scale=args.noise_scale)
+    main(
+        generate_figures=args.generate_figures,
+        exposure_noise=args.exposure_noise,
+        outcome_noise=args.outcome_noise,
+        num_samples=args.num_samples,
+        exposure_effect=args.exposure_effect,
+    )

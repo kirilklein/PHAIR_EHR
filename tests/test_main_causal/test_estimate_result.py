@@ -20,10 +20,30 @@ def compare_estimate_result(margin):
     df = pd.read_csv(ESTIMATE_RESULT_PATH)
 
     # Check if estimated effects are within margin of true effect
+    # Track differences for summary
+    differences = []
+
     for _, row in df.iterrows():
-        assert abs(row["effect"] - row["true_effect"]) <= abs(margin), (
+        diff = abs(row["effect"] - row["true_effect"])
+        differences.append(
+            {
+                "method": row["method"],
+                "estimated": row["effect"],
+                "true": row["true_effect"],
+                "difference": diff,
+            }
+        )
+
+        assert diff <= abs(margin), (
             f"Estimated effect {row['effect']:.4f} for method {row['method']} "
             f"differs from true effect {row['true_effect']:.4f} by more than {abs(margin):.4f}"
+        )
+
+    # Print summary of differences
+    print("\nSummary of differences between estimated and true effects:")
+    for d in differences:
+        print(
+            f"{d['method']}: estimated={d['estimated']:.4f}, true={d['true']:.4f}, diff={d['difference']:.4f}"
         )
     print("All estimated effects are within the acceptable margin of error.")
 
