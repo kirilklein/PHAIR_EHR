@@ -5,7 +5,7 @@ logging:
 paths:
   ### Inputs
   cohort: ./outputs/causal/exposure_cohort # Data directory
-  meds: ./outputs/causal/meds_data_w_labs
+  meds: ./example_data/example_MEDS_data_causal
   splits: [tuning]
   ### Outputs
   cohort_advanced: ./outputs/causal/exposure_cohort_advanced # Data directory
