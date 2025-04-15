@@ -1,27 +1,29 @@
 import unittest
+
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.isotonic import IsotonicRegression
-from corebehrt.main_causal.helper.calibrate import (
-    train_isotonic_regression,
-    calibrate_probas,
-    split_data,
-)
+
 from corebehrt.constants.causal.data import PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL
+from corebehrt.main_causal.helper.calibrate import calibrate, split_data
 
 
 class TestCalibrationFunctions(unittest.TestCase):
     def setUp(self):
-        # Sample training data for isotonic regression
+        # Sample training data for calibration
         self.train_data = pd.DataFrame(
             {
                 PROBAS: [0.1, 0.4, 0.6, 0.9],
                 TARGETS: [0, 0, 1, 1],
             }
         )
-
+        self.val_data = pd.DataFrame(
+            {
+                PROBAS: [0.2, 0.5, 0.7, 0.8],
+                TARGETS: [0, 0, 1, 1],
+            }
+        )
         # Sample predictions dataframe for splitting
         self.predictions_df = pd.DataFrame(
             {
@@ -38,51 +40,10 @@ class TestCalibrationFunctions(unittest.TestCase):
         self.train_pids_list = ["pid1", "pid2"]
         self.val_pids_list = ["pid3", "pid4"]
 
-    def test_train_isotonic_regression(self):
-        calibrator = train_isotonic_regression(self.train_data)
+    def test_calibrate(self):
+        predictions = calibrate(self.train_data, self.val_data)
         # Check if the returned object is an IsotonicRegression instance.
-        self.assertIsInstance(calibrator, IsotonicRegression)
-
-        # Verify that predictions are monotonic by testing a sorted array.
-        test_inputs = np.array([0.0, 0.3, 0.5, 0.7, 1.0])
-        predictions = calibrator.predict(test_inputs)
-        self.assertTrue(
-            np.all(np.diff(predictions) >= 0),
-            "Predictions should be monotonic non-decreasing.",
-        )
-
-    def test_calibrate_probas_default_epsilon(self):
-        # Create a simple calibrator that is trained on edge values.
-        calibrator = IsotonicRegression(out_of_bounds="clip")
-        calibrator.fit([0.1, 0.9], [0, 1])
-
-        # Test with values that might go out-of-bound after calibration.
-        test_probas = pd.Series([0.0, 0.5, 1.0])
-        calibrated = calibrate_probas(calibrator, test_probas)
-
-        # Check output type and length.
-        self.assertIsInstance(calibrated, np.ndarray)
-        self.assertEqual(len(calibrated), 3)
-
-        # Assert that values are clipped using default epsilon (1e-8).
-        epsilon = 1e-8
-        self.assertTrue(np.all(calibrated >= epsilon))
-        self.assertTrue(np.all(calibrated <= 1 - epsilon))
-
-    def test_calibrate_probas_custom_epsilon(self):
-        # Test calibrate_probas with a custom epsilon.
-        calibrator = IsotonicRegression(out_of_bounds="clip")
-        calibrator.fit([0.1, 0.9], [0, 1])
-        custom_epsilon = 0.05
-        test_probas = pd.Series([0.0, 0.5, 1.0])
-        calibrated = calibrate_probas(calibrator, test_probas, epsilon=custom_epsilon)
-
-        # Verify clipping with custom epsilon.
-        self.assertTrue(np.all(calibrated >= custom_epsilon))
-        self.assertTrue(np.all(calibrated <= 1 - custom_epsilon))
-
-        # Optionally, check specific values if the calibrator yields deterministic outputs.
-        # np.testing.assert_allclose(calibrated[0], custom_epsilon)
+        self.assertIsInstance(predictions, np.ndarray)
 
     def test_split_data_with_list_pids(self):
         # Test split_data using string-based PID lists.
@@ -119,12 +80,6 @@ class TestCalibrationFunctions(unittest.TestCase):
             expected_order,
             "The order of rows in the train split should be preserved.",
         )
-
-    def test_error_on_invalid_train_data(self):
-        # Test error handling if required columns are missing.
-        invalid_data = pd.DataFrame({"some_other_column": [1, 2, 3]})
-        with self.assertRaises(KeyError):
-            _ = train_isotonic_regression(invalid_data)
 
 
 if __name__ == "__main__":

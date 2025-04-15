@@ -10,7 +10,6 @@ paths:
 
   outcomes: ./outputs/causal/outcomes/OUTCOME.csv
   
-
 ## OUTPUTS
   trained_mlp: ./outputs/causal/trained_mlp
 

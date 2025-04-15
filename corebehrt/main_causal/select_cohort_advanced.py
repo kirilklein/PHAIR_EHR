@@ -49,7 +49,7 @@ from corebehrt.modules.cohort_handling.advanced.apply import (
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
-CONFIG_PATH = "./corebehrt/configs/causal/advanced_extraction.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/select_cohort/advanced_extraction.yaml"
 
 
 def main(config_path: str):

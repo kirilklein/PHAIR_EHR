@@ -12,7 +12,7 @@ from corebehrt.modules.preparation.dataset import PatientDataset
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
-CONFIG_PATH = "./corebehrt/configs/causal/encode.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/finetune/encode.yaml"
 
 
 def main_encode(config_path):

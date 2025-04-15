@@ -2,27 +2,10 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.isotonic import IsotonicRegression
 
 from corebehrt.constants.causal.data import CF_PROBAS, PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL
-
-
-def train_calibrator_from_data(
-    predictions: np.ndarray, targets: np.ndarray
-) -> IsotonicRegression:
-    """Train an isotonic regression calibrator."""
-    calibrator = IsotonicRegression(out_of_bounds="clip")
-    calibrator.fit(predictions, targets)
-    return calibrator
-
-
-def apply_calibration_to_predictions(
-    calibrator: IsotonicRegression, predictions: np.ndarray, epsilon: float = 1e-8
-) -> np.ndarray:
-    """Apply calibration to predictions and clip values."""
-    calibrated = calibrator.predict(predictions)
-    return np.clip(calibrated, epsilon, 1 - epsilon)
+from corebehrt.functional.trainer.calibrate import train_calibrator
 
 
 def get_predictions(
@@ -64,15 +47,17 @@ def calibrate_predictions(
     """
     # Collect training predictions and targets
     train_preds = get_predictions(model, X_train)
-    calibrator = train_calibrator_from_data(train_preds, y_train)
+    calibrator = train_calibrator(train_preds, y_train)
 
     # Collect validation predictions and targets
     val_preds = get_predictions(model, X_val)
-    calibrated_val = apply_calibration_to_predictions(calibrator, val_preds, epsilon)
+    calibrated_val = calibrator.predict(val_preds)
+    calibrated_val = np.clip(calibrated_val, epsilon, 1 - epsilon)
 
     # Collect counterfactual validation predictions
     val_cf_preds = get_predictions(model, X_val_counter)
-    calibrated_cf = apply_calibration_to_predictions(calibrator, val_cf_preds, epsilon)
+    calibrated_cf = calibrator.predict(val_cf_preds)
+    calibrated_cf = np.clip(calibrated_cf, epsilon, 1 - epsilon)
 
     # Create DataFrame with results
     val_df = pd.DataFrame(

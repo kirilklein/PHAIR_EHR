@@ -1,0 +1,67 @@
+name: 'Test the estimate step with generated data.'
+
+on:
+    workflow_dispatch:
+    pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+    test:
+        runs-on: "ubuntu-latest"
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup dependencies.
+              run: |
+                python -m venv .venv
+                source .venv/bin/activate
+                pip install -r requirements.txt
+
+            - name: Run estimate test with custom noise levels
+              run: |
+                source .venv/bin/activate
+                # Function to run estimate test with parameters
+                run_estimate_test() {
+                  local exposure_noise=$1
+                  local outcome_noise=$2
+                  local exposure_effect=$3
+                  local margin=$4
+                  local test_name=$5
+                  local weight=${6:-0.1}    # Default to 0.1 if not provided
+                  local intercept=${7:-1.0}  # Default to 1.0 if not provided
+
+                  echo "Running estimate test: $test_name"
+                  echo "Parameters:"
+                  echo "  exposure_noise=$exposure_noise"
+                  echo "  outcome_noise=$outcome_noise"
+                  echo "  exposure_effect=$exposure_effect"
+                  echo "  margin=$margin"
+                  echo "  weight=$weight"
+                  echo "  intercept=$intercept"
+                  
+                  # Generate data
+                  python -m tests.data_generation.generate_estimate_data \
+                    --outcome-noise $outcome_noise \
+                    --exposure-noise $exposure_noise \
+                    --exposure-effect $exposure_effect \
+                    --weight $weight \
+                    --intercept $intercept
+
+                  # Run estimation
+                  python -m corebehrt.main_causal.estimate \
+                    --config_path ./corebehrt/configs/causal/estimate/estimate_generated_data.yaml
+
+                  # Test results
+                  python -m tests.test_main_causal.test_estimate_result --margin $margin
+                }
+
+                # Run tests with different configurations
+                run_estimate_test 0 0 2 0.02 "No noise, strong effect"  # Uses default weight/intercept
+                run_estimate_test 0.02 0.05 2.0 0.02 "Default test" 0.1 1.0  # Explicit defaults
+                run_estimate_test 0.05 0.05 1.0 0.02 "High noise test" 0.2 1.5  # Custom values
+                run_estimate_test 0.01 0.02 0.5 0.02 "Low noise test" 0.05 0.5  # Custom values 
+                run_estimate_test 0.02 0.05 2.0 0.02 "Default test" 0.2 -1.0  # Explicit defaults
