@@ -12,75 +12,86 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python and install dependencies
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install -r requirements.txt
+      - name: Create virtual environment
+        run: python -m venv .venv
 
-      - name: Run pipeline
-        run: |
-          # Activate our virtual environment once
-          source .venv/bin/activate
+      - name: Add virtualenv to PATH
+        run: echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
 
-          # Execute sequential modules.
-          echo "Running create_data"
-          python -m corebehrt.main.create_data --config_path corebehrt/configs/causal/prepare_and_pretrain/create_data.yaml
-          echo "Running prepare_training_data"
-          python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/prepare_and_pretrain/prepare_pretrain.yaml
-          echo "Running pretrain"
-          python -m corebehrt.main.pretrain --config_path corebehrt/configs/causal/prepare_and_pretrain/pretrain.yaml
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-          # Outcomes and cohort selection.
-          echo "Running create_outcomes"
-          python -m corebehrt.main.create_outcomes --config_path corebehrt/configs/causal/outcomes.yaml
-          echo "Running select_cohort"
-          python -m corebehrt.main.select_cohort --config_path corebehrt/configs/causal/select_cohort/select_cohort_exposure.yaml
-          echo "Running select_cohort_advanced"
-          python -m corebehrt.main_causal.select_cohort_advanced --config_path corebehrt/configs/causal/select_cohort/advanced_extraction.yaml
-          echo "Running prepare_finetune_data"
-          python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/finetune/prepare_finetune_exposure.yaml
-          echo "Running finetune"
-          python -m corebehrt.main.finetune_cv --config_path corebehrt/configs/causal/finetune/finetune_exposure.yaml
+      - name: Run create_data
+        run: python -m corebehrt.main.create_data --config_path corebehrt/configs/causal/prepare_and_pretrain/create_data.yaml
 
-          # Causal steps.
-          echo "Running calibrate"
-          python -m corebehrt.main_causal.calibrate --config_path corebehrt/configs/causal/finetune/calibrate.yaml
-          echo "Running encode"
-          python -m corebehrt.main_causal.encode --config_path corebehrt/configs/causal/finetune/encode.yaml
-          echo "Running train_mlp"
-          python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp.yaml
-          echo "Running train_xgb"
-          python -m corebehrt.main_causal.train_xgb --config_path corebehrt/configs/causal/double_robust/train_xgb.yaml
-          echo "Running estimate"
-          python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate.yaml
+      - name: Run prepare_training_data for pretrain
+        run: python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/prepare_and_pretrain/prepare_pretrain.yaml
 
-          # Simulated counterfactuals.
-          echo "Running simulate"
-          python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate.yaml
-          echo "Running train_mlp_simulated"
-          python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp_simulated.yaml
-          echo "Running estimate_with_true"
-          python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true.yaml
-          echo "Check estimation"
-          python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true
+      - name: Run pretrain
+        run: python -m corebehrt.main.pretrain --config_path corebehrt/configs/causal/prepare_and_pretrain/pretrain.yaml
 
-          echo "Running simulate_weak"
-          python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate_weak.yaml
-          echo "Running train_mlp_simulated_weak"
-          python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp_simulated_weak.yaml
-          echo "Running estimate_with_true_weak"
-          python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true_weak.yaml
-          echo "Check estimation_weak"
-          python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_weak
+      - name: Run create_outcomes
+        run: python -m corebehrt.main.create_outcomes --config_path corebehrt/configs/causal/outcomes.yaml
 
-          echo "Use xgboost"
-          python -m corebehrt.main_causal.train_xgb --config_path corebehrt/configs/causal/double_robust/train_xgb_simulated.yaml
-          echo "Running estimate_with_xgb"
-          python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true_xgb.yaml
-          echo "Check estimation_xgboost"
-          python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_xgb
+      - name: Run select_cohort
+        run: python -m corebehrt.main.select_cohort --config_path corebehrt/configs/causal/select_cohort/select_cohort_exposure.yaml
 
+      - name: Run select_cohort_advanced
+        run: python -m corebehrt.main_causal.select_cohort_advanced --config_path corebehrt/configs/causal/select_cohort/advanced_extraction.yaml
+
+      - name: Run prepare_finetune_data
+        run: python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/finetune/prepare_finetune_exposure.yaml
+
+      - name: Run finetune
+        run: python -m corebehrt.main.finetune_cv --config_path corebehrt/configs/causal/finetune/finetune_exposure.yaml
+
+      - name: Run calibrate
+        run: python -m corebehrt.main_causal.calibrate --config_path corebehrt/configs/causal/finetune/calibrate.yaml
+
+      - name: Run encode
+        run: python -m corebehrt.main_causal.encode --config_path corebehrt/configs/causal/finetune/encode.yaml
+
+      - name: Run train_mlp
+        run: python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp.yaml
+
+      - name: Run train_xgb
+        run: python -m corebehrt.main_causal.train_xgb --config_path corebehrt/configs/causal/double_robust/train_xgb.yaml
+
+      - name: Run estimate
+        run: python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate.yaml
+
+      - name: Run simulate
+        run: python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate.yaml
+
+      - name: Run train_mlp_simulated
+        run: python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp_simulated.yaml
+
+      - name: Run estimate with true data
+        run: python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true.yaml
+
+      - name: Check estimation
+        run: python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true
+
+      - name: Run simulate_weak
+        run: python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate_weak.yaml
+
+      - name: Run train_mlp_simulated_weak
+        run: python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp_simulated_weak.yaml
+
+      - name: Run estimate with true weak data
+        run: python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true_weak.yaml
+
+      - name: Check estimation weak
+        run: python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_weak
+
+      - name: Run train_xgb_simulated (using xgboost)
+        run: python -m corebehrt.main_causal.train_xgb --config_path corebehrt/configs/causal/double_robust/train_xgb_simulated.yaml
+
+      - name: Run estimate with xgboost
+        run: python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true_xgb.yaml
+
+      - name: Check estimation xgboost
+        run: python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_xgb
