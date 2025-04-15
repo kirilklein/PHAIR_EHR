@@ -4,86 +4,51 @@ import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from sklearn.isotonic import IsotonicRegression
 from torch.utils.data import DataLoader
 
 from corebehrt.constants.causal.data import CF_PROBAS, PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL
-from corebehrt.main_causal.helper.calibrate import (
-    calibrate_probas,
-    train_isotonic_regression,
-)
+from corebehrt.functional.causal.stats import compute_calibration_metrics
+from corebehrt.functional.trainer.calibrate import train_calibrator
 
 
 def collect_predictions(
-    model: pl.LightningModule, loader: DataLoader, device: torch.device
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Collects predictions and targets from a given DataLoader.
-
-    Args:
-        model: The trained model.
-        loader: DataLoader to iterate over.
-        device: Device to move data to.
-
-    Returns:
-        A tuple of (predictions, targets) as Tensors.
-    """
+    model: pl.LightningModule,
+    dataset,
+    device: torch.device,
+    batch_size: int = 512,  # Reasonable batch size to avoid memory issues
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Collect predictions using batches but without sampling."""
     model.eval()
+
+    # Create DataLoader without sampling or shuffling
+    loader = DataLoader(
+        dataset, batch_size=batch_size, shuffle=False, sampler=None, drop_last=False
+    )
+
     preds_list, targets_list = [], []
     with torch.no_grad():
-        for batch in loader:
-            x, y = batch
+        for x, y in loader:
             x = x.to(device)
             logits = model(x)
-            probs = torch.sigmoid(logits)
-            preds_list.append(probs.cpu())
-            targets_list.append(y.cpu())
-    preds = torch.cat(preds_list, dim=0)
-    targets = torch.cat(targets_list, dim=0)
+            probs = torch.sigmoid(logits).cpu().numpy().squeeze()
+            targets = y.cpu().numpy().astype(int)
+
+            preds_list.append(probs)
+            targets_list.append(targets)
+
+    # Concatenate all batches
+    preds = np.concatenate(preds_list)
+    targets = np.concatenate(targets_list)
+
+    print(f"Unique target values: {np.unique(targets)}")
+    print(f"Target distribution: {np.bincount(targets)}")
+
+    # Ensure both arrays are 1D
+    assert preds.ndim == 1, f"Predictions should be 1D, got shape {preds.shape}"
+    assert targets.ndim == 1, f"Targets should be 1D, got shape {targets.shape}"
+
     return preds, targets
-
-
-def train_calibrator_from_data(
-    train_preds: torch.Tensor, train_targets: torch.Tensor
-) -> IsotonicRegression:
-    """
-    Trains an isotonic regression calibrator using training predictions and targets.
-
-    Args:
-        train_preds: Raw predictions from the training set.
-        train_targets: Ground truth targets for the training set.
-
-    Returns:
-        A trained IsotonicRegression calibrator.
-    """
-    train_df = pd.DataFrame(
-        {
-            PROBAS: train_preds.numpy().ravel(),
-            TARGETS: train_targets.numpy().ravel(),
-        }
-    )
-    calibrator = train_isotonic_regression(train_df)
-    return calibrator
-
-
-def apply_calibration_to_predictions(
-    calibrator: IsotonicRegression, raw_preds: torch.Tensor, epsilon: float = 1e-8
-) -> np.ndarray:
-    """
-    Applies the trained calibrator to raw predictions.
-
-    Args:
-        calibrator: A trained IsotonicRegression calibrator.
-        raw_preds: Raw prediction tensor.
-        epsilon: Small value for clipping calibrated probabilities.
-
-    Returns:
-        Calibrated predictions as a numpy array.
-    """
-    raw_preds_series = pd.Series(raw_preds.numpy().ravel())
-    calibrated = calibrate_probas(calibrator, raw_preds_series, epsilon)
-    return calibrated
 
 
 def calibrate_predictions(
@@ -92,42 +57,42 @@ def calibrate_predictions(
     val_loader: DataLoader,
     val_cf_loader: DataLoader,
     val_pids: list,
-    epsilon: float = 1e-8,
 ) -> pd.DataFrame:
-    """
-    Calibrates validation predictions using an isotonic regression calibrator
-    trained on training predictions, and saves the results to CSV.
-
-    Args:
-        model: The trained LightningModule.
-        train_loader: DataLoader for the training set.
-        val_loader: DataLoader for the validation set.
-        val_cf_loader: DataLoader for the counterfactual validation set.
-        val_pids: List of patient IDs for the validation set.
-        epsilon: Clipping epsilon for calibration.
-
-    Returns:
-        A DataFrame containing raw predictions, targets, calibrated predictions, and fold index.
-    """
     device = next(model.parameters()).device
 
-    # Collect training predictions and targets
-    train_preds, train_targets = collect_predictions(model, train_loader, device)
-    calibrator = train_calibrator_from_data(train_preds, train_targets)
+    # Get raw datasets
+    train_dataset = train_loader.dataset
+    val_dataset = val_loader.dataset
+    val_cf_dataset = val_cf_loader.dataset
 
-    # Collect validation predictions and targets
-    val_preds, val_targets = collect_predictions(model, val_loader, device)
-    calibrated_val = apply_calibration_to_predictions(
-        calibrator, val_preds, epsilon=epsilon
-    )
+    # Collect predictions directly from datasets
+    train_preds, train_targets = collect_predictions(model, train_dataset, device)
+    if len(np.unique(train_targets)) < 2:
+        raise ValueError(
+            f"Training data must contain both classes for calibration. Found classes: {np.unique(train_targets)}"
+        )
 
-    # Collect counterfactual validation predictions and targets
-    val_cf_preds, _ = collect_predictions(model, val_cf_loader, device)
-    calibrated_cf = apply_calibration_to_predictions(
-        calibrator, val_cf_preds, epsilon=epsilon
-    )
+    # Compute pre-calibration metrics on validation set
+    val_preds, val_targets = collect_predictions(model, val_dataset, device)
+    pre_cal_metrics = compute_calibration_metrics(val_targets, val_preds)
+    print("\nPre-calibration metrics:")
+    print(f"Brier Score: {pre_cal_metrics['brier_score']:.4f}")
+    print(f"ECE: {pre_cal_metrics['ece']:.4f}")
 
-    # Create a DataFrame for validation results
+    # Train calibrator and get calibrated predictions
+    calibrator = train_calibrator(train_preds, train_targets)
+    calibrated_val = calibrator.predict(val_preds)
+
+    # Compute post-calibration metrics
+    post_cal_metrics = compute_calibration_metrics(val_targets, calibrated_val)
+    print("\nPost-calibration metrics:")
+    print(f"Brier Score: {post_cal_metrics['brier_score']:.4f}")
+    print(f"ECE: {post_cal_metrics['ece']:.4f}")
+
+    # Get counterfactual predictions
+    val_cf_preds, _ = collect_predictions(model, val_cf_dataset, device)
+    calibrated_cf = calibrator.predict(val_cf_preds)
+
     val_df = pd.DataFrame(
         {
             PID_COL: val_pids,

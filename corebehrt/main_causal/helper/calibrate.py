@@ -20,6 +20,7 @@ from corebehrt.functional.io_operations.paths import (
     get_fold_folders,
 )
 from corebehrt.functional.setup.model import get_last_checkpoint_epoch
+from corebehrt.functional.trainer.calibrate import train_calibrator
 
 
 def save_combined_predictions(logger, write_dir: str, finetune_model_dir: str) -> None:
@@ -113,15 +114,6 @@ def calibrate(
 def train_calibrator_from_data(train_data: pd.DataFrame) -> BetaCalibration:
     """Train the calibrator on the given dataframe."""
     return train_calibrator(train_data[PROBAS], train_data[TARGETS])
-
-
-def train_calibrator(
-    train_preds: np.ndarray, train_targets: np.ndarray
-) -> BetaCalibration:
-    """Train the calibrator on the given dataframe."""
-    calibrator = BetaCalibration("abm")
-    calibrator.fit(train_preds, train_targets)
-    return calibrator
 
 
 def split_data(
