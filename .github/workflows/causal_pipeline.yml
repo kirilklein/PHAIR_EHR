@@ -51,7 +51,7 @@ jobs:
             - name: main_causal.select_cohort_advanced
               run: |
                 source .venv/bin/activate
-                python -m corebehrt.main_causal.select_cohort_advanced --config_path ./corebehrt/configs/causal/select_cohort/select_cohort_advanced.yaml
+                python -m corebehrt.main_causal.select_cohort_advanced --config_path ./corebehrt/configs/causal/select_cohort/advanced_extraction.yaml
 
             - name: main.prepare_training_data
               run: |
