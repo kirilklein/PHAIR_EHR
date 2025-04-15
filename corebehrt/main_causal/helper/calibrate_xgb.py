@@ -25,6 +25,7 @@ def calibrate_predictions(
     y_train: np.ndarray,
     y_val: np.ndarray,
     val_pids: list,
+    epsilon: float = 1e-8,
 ) -> pd.DataFrame:
     """
     Calibrates validation predictions using an isotonic regression calibrator
@@ -51,10 +52,12 @@ def calibrate_predictions(
     # Collect validation predictions and targets
     val_preds = get_predictions(model, X_val)
     calibrated_val = calibrator.predict(val_preds)
+    calibrated_val = np.clip(calibrated_val, epsilon, 1 - epsilon)
 
     # Collect counterfactual validation predictions
     val_cf_preds = get_predictions(model, X_val_counter)
     calibrated_cf = calibrator.predict(val_cf_preds)
+    calibrated_cf = np.clip(calibrated_cf, epsilon, 1 - epsilon)
 
     # Create DataFrame with results
     val_df = pd.DataFrame(

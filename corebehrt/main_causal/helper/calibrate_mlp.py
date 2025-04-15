@@ -57,6 +57,7 @@ def calibrate_predictions(
     val_loader: DataLoader,
     val_cf_loader: DataLoader,
     val_pids: list,
+    epsilon: float = 1e-8,
 ) -> pd.DataFrame:
     device = next(model.parameters()).device
 
@@ -82,6 +83,7 @@ def calibrate_predictions(
     # Train calibrator and get calibrated predictions
     calibrator = train_calibrator(train_preds, train_targets)
     calibrated_val = calibrator.predict(val_preds)
+    calibrated_val = np.clip(calibrated_val, epsilon, 1 - epsilon)
 
     # Compute post-calibration metrics
     post_cal_metrics = compute_calibration_metrics(val_targets, calibrated_val)
@@ -92,6 +94,7 @@ def calibrate_predictions(
     # Get counterfactual predictions
     val_cf_preds, _ = collect_predictions(model, val_cf_dataset, device)
     calibrated_cf = calibrator.predict(val_cf_preds)
+    calibrated_cf = np.clip(calibrated_cf, epsilon, 1 - epsilon)
 
     val_df = pd.DataFrame(
         {
