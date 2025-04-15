@@ -295,4 +295,6 @@ if __name__ == "__main__":
         outcome_noise=args.outcome_noise,
         num_samples=args.num_samples,
         exposure_effect=args.exposure_effect,
+        weight=args.weight,
+        intercept=args.intercept,
     )
