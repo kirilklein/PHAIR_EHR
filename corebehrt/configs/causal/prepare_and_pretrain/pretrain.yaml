@@ -4,7 +4,7 @@ logging:
 
 paths:
 ## INPUTS
-  prepared_data: ./outputs/causal/prepare_and_pretrain/processed_data/
+  prepared_data: ./outputs/causal/pretraining/processed_data/
   # restart_model: ... # Use for restarting from checkpoint
 
 ## OUTPUTS
