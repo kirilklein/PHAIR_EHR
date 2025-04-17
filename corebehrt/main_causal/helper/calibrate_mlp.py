@@ -8,7 +8,10 @@ from torch.utils.data import DataLoader
 
 from corebehrt.constants.causal.data import CF_PROBAS, PROBAS, TARGETS
 from corebehrt.constants.data import PID_COL
-from corebehrt.functional.causal.stats import compute_calibration_metrics
+from corebehrt.functional.causal.stats import (
+    compute_calibration_metrics,
+    compute_probas_stats,
+)
 from corebehrt.functional.trainer.calibrate import train_calibrator
 
 
@@ -76,14 +79,20 @@ def calibrate_predictions(
     # Compute pre-calibration metrics on validation set
     val_preds, val_targets = collect_predictions(model, val_dataset, device)
     pre_cal_metrics = compute_calibration_metrics(val_targets, val_preds)
+    pre_cal_probas_stats = compute_probas_stats(val_preds, val_targets)
+    print(pre_cal_probas_stats)
     print("\nPre-calibration metrics:")
     print(f"Brier Score: {pre_cal_metrics['brier_score']:.4f}")
     print(f"ECE: {pre_cal_metrics['ece']:.4f}")
+    print("\nPre-calibration probas stats:")
 
     # Train calibrator and get calibrated predictions
     calibrator = train_calibrator(train_preds, train_targets)
     calibrated_val = calibrator.predict(val_preds)
     calibrated_val = np.clip(calibrated_val, epsilon, 1 - epsilon)
+    post_cal_probas_stats = compute_probas_stats(calibrated_val, val_targets)
+    print("\nCalibrated Probas Statistics:")
+    print(post_cal_probas_stats)
 
     # Compute post-calibration metrics
     post_cal_metrics = compute_calibration_metrics(val_targets, calibrated_val)

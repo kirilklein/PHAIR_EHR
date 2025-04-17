@@ -19,6 +19,7 @@ from corebehrt.functional.io_operations.paths import (
     get_checkpoint_predictions_path,
     get_fold_folders,
 )
+from corebehrt.functional.causal.stats import compute_probas_stats
 from corebehrt.functional.setup.model import get_last_checkpoint_epoch
 from corebehrt.functional.trainer.calibrate import train_calibrator
 
@@ -63,6 +64,9 @@ def save_combined_predictions(logger, write_dir: str, finetune_model_dir: str) -
 
     predictions = np.concatenate(predictions)
     targets = np.concatenate(targets)
+    pre_cal_probas_stats = compute_probas_stats(predictions, targets)
+    print("\nPre-calibration probas stats:")
+    print(pre_cal_probas_stats)
     logger.info("Saving combined predictions")
     pd.DataFrame({PID_COL: pids, TARGETS: targets, PROBAS: predictions}).to_csv(
         join(write_dir, PREDICTIONS_FILE), index=False
@@ -94,6 +98,11 @@ def compute_and_save_calibration(
         all_calibrated_predictions.append(val_data)
 
     combined_calibrated_df = pd.concat(all_calibrated_predictions, ignore_index=True)
+    post_cal_probas_stats = compute_probas_stats(
+        combined_calibrated_df[PROBAS], combined_calibrated_df[TARGETS]
+    )
+    print("\nPost-calibration probas stats:")
+    print(post_cal_probas_stats)
     logger.info("Saving calibrated predictions")
     combined_calibrated_df.to_csv(
         join(write_dir, CALIBRATED_PREDICTIONS_FILE),
