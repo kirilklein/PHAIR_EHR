@@ -76,7 +76,7 @@ python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\
 if errorlevel 1 goto :error
 
 echo Test estimate_with_true...
-python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\estimate\estimate_with_true.yaml
+python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir .\outputs\causal\estimate_with_true
 if errorlevel 1 goto :error
 
 :: Run Estimation with weak treatment effect
@@ -98,7 +98,7 @@ if errorlevel 1 goto :error
 
 :: Run Estimation with xgboost
 echo Train xgboost...
-python -m corebehrt.main_causal.train_xgb --config_path corebehrt\configs\causal\double_robust\train_xgb_simulated_weak.yaml
+python -m corebehrt.main_causal.train_xgb --config_path corebehrt\configs\causal\double_robust\train_xgb_simulated.yaml
 if errorlevel 1 goto :error
 
 echo Estimate...
