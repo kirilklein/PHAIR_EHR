@@ -80,11 +80,12 @@ def calibrate_predictions(
     val_preds, val_targets = collect_predictions(model, val_dataset, device)
     pre_cal_metrics = compute_calibration_metrics(val_targets, val_preds)
     pre_cal_probas_stats = compute_probas_stats(val_preds, val_targets)
-    print(pre_cal_probas_stats)
+
     print("\nPre-calibration metrics:")
     print(f"Brier Score: {pre_cal_metrics['brier_score']:.4f}")
     print(f"ECE: {pre_cal_metrics['ece']:.4f}")
     print("\nPre-calibration probas stats:")
+    print(pre_cal_probas_stats)
 
     # Train calibrator and get calibrated predictions
     calibrator = train_calibrator(train_preds, train_targets)
