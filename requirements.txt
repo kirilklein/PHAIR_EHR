@@ -3,7 +3,7 @@ pandas>=2.2.3
 pyarrow>=18.0.0
 python-dateutil==2.9.0.post0
 PyYAML>=6.0.2
-scikit-learn>=1.5.2
+scikit-learn==1.6.1
 setuptools==75.6.0
 torch==2.5.1
 tqdm==4.67.1
