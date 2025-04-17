@@ -76,10 +76,10 @@ def compute_calibration_metrics(
 def compute_probas_stats(y_pred: np.ndarray, y_true: np.ndarray = None) -> dict:
     """Compute basic statistics of the predicted probabilities. If y_true is provided, it will compute the statistics for each outcome group."""
     stats = {
-        "min": y_pred.min(),
-        "max": y_pred.max(),
-        "mean": y_pred.mean(),
-        "std": y_pred.std(),
+        "min": round(y_pred.min(), 4),
+        "max": round(y_pred.max(), 4),
+        "mean": round(y_pred.mean(), 4),
+        "std": round(y_pred.std(), 4),
     }
 
     if y_true is not None:
@@ -88,17 +88,17 @@ def compute_probas_stats(y_pred: np.ndarray, y_true: np.ndarray = None) -> dict:
         neg_mask = y_true == 0
 
         pos_stats = {
-            "min_pos": y_pred[pos_mask].min(),
-            "max_pos": y_pred[pos_mask].max(),
-            "mean_pos": y_pred[pos_mask].mean(),
-            "std_pos": y_pred[pos_mask].std(),
+            "min_pos": round(y_pred[pos_mask].min(), 4),
+            "max_pos": round(y_pred[pos_mask].max(), 4),
+            "mean_pos": round(y_pred[pos_mask].mean(), 4),
+            "std_pos": round(y_pred[pos_mask].std(), 4),
         }
 
         neg_stats = {
-            "min_neg": y_pred[neg_mask].min(),
-            "max_neg": y_pred[neg_mask].max(),
-            "mean_neg": y_pred[neg_mask].mean(),
-            "std_neg": y_pred[neg_mask].std(),
+            "min_neg": round(y_pred[neg_mask].min(), 4),
+            "max_neg": round(y_pred[neg_mask].max(), 4),
+            "mean_neg": round(y_pred[neg_mask].mean(), 4),
+            "std_neg": round(y_pred[neg_mask].std(), 4),
         }
 
         stats.update(pos_stats)
