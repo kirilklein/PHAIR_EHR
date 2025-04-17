@@ -16,17 +16,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           python-version: '3.11'
-          cache: 'pip' # caching pip dependencies
-          fetch-depth: 2
+          fetch-depth: 0
       
       - name: Remove old causal outputs
         run: rm -rf ./outputs/causal
-
-      - name: Constrain BLAS threads
-        run: |
-          echo "export OMP_NUM_THREADS=1" >> $GITHUB_ENV
-          echo "export MKL_NUM_THREADS=1" >> $GITHUB_ENV
-          echo "export OPENBLAS_NUM_THREADS=1" >> $GITHUB_ENV
 
       - name: Create virtual environment
         run: python -m venv .venv
