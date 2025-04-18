@@ -5,12 +5,12 @@ logging:
 paths:
 ## INPUTS  
   exposure_predictions: ./outputs/causal/calibrated_predictions # containing predictions_and_targets_calibrated.csv
-  outcome_predictions: ./outputs/causal/trained_mlp_simulated # containing predictions_and_targets_calibrated.csv 
+  outcome_predictions: ./outputs/causal/trained_xgb_simulated # containing predictions_and_targets_calibrated.csv 
 
   counterfactual_outcomes: ./outputs/causal/simulated_outcome # containing probas_and_outcomes.csv
 
 ## OUTPUTS
-  estimate: ./outputs/causal/estimate_with_true
+  estimate: ./outputs/causal/estimate_with_true_xgb
 
 estimator:
   methods: ["IPW", "AIPW", "TMLE"]

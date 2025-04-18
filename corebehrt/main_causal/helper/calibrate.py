@@ -4,10 +4,13 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 import torch
-from betacal import BetaCalibration
 from tqdm import tqdm
 
-from corebehrt.constants.causal.data import PROBAS, TARGETS
+from corebehrt.constants.causal.data import (
+    PROBAS,
+    TARGETS,
+    CALIBRATION_COLLAPSE_THRESHOLD,
+)
 from corebehrt.constants.causal.paths import (
     CALIBRATED_PREDICTIONS_FILE,
     PREDICTIONS_FILE,
@@ -19,8 +22,10 @@ from corebehrt.functional.io_operations.paths import (
     get_checkpoint_predictions_path,
     get_fold_folders,
 )
+from corebehrt.functional.causal.stats import compute_probas_stats
 from corebehrt.functional.setup.model import get_last_checkpoint_epoch
 from corebehrt.functional.trainer.calibrate import train_calibrator
+from corebehrt.main_causal.helper.utils import safe_assign_calibrated_probas
 
 
 def save_combined_predictions(logger, write_dir: str, finetune_model_dir: str) -> None:
@@ -63,6 +68,9 @@ def save_combined_predictions(logger, write_dir: str, finetune_model_dir: str) -
 
     predictions = np.concatenate(predictions)
     targets = np.concatenate(targets)
+    pre_cal_probas_stats = compute_probas_stats(predictions, targets)
+    print("\nPre-calibration probas stats:")
+    print(pre_cal_probas_stats)
     logger.info("Saving combined predictions")
     pd.DataFrame({PID_COL: pids, TARGETS: targets, PROBAS: predictions}).to_csv(
         join(write_dir, PREDICTIONS_FILE), index=False
@@ -70,7 +78,11 @@ def save_combined_predictions(logger, write_dir: str, finetune_model_dir: str) -
 
 
 def compute_and_save_calibration(
-    logger, write_dir: str, finetune_model_dir: str
+    logger,
+    write_dir: str,
+    finetune_model_dir: str,
+    epsilon: float = 1e-8,
+    calibration_collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
 ) -> None:
     """
     Compute calibration for the predictions and save the results in a csv file: predictions_and_targets_calibrated.csv
@@ -89,11 +101,18 @@ def compute_and_save_calibration(
         val_pids = torch.load(get_pids_file(fold_dir, mode=VAL_KEY), weights_only=True)
         train_data, val_data = split_data(preds, train_pids, val_pids)
 
-        calibrated_probas = calibrate(train_data, val_data)
-        val_data[PROBAS] = calibrated_probas  # Update the probabilities
+        calibrated_probas = calibrate(
+            train_data, val_data, epsilon, calibration_collapse_threshold
+        )
+        val_data[PROBAS] = calibrated_probas
         all_calibrated_predictions.append(val_data)
 
     combined_calibrated_df = pd.concat(all_calibrated_predictions, ignore_index=True)
+    post_cal_probas_stats = compute_probas_stats(
+        combined_calibrated_df[PROBAS], combined_calibrated_df[TARGETS]
+    )
+    print("\nPost-calibration probas stats:")
+    print(post_cal_probas_stats)
     logger.info("Saving calibrated predictions")
     combined_calibrated_df.to_csv(
         join(write_dir, CALIBRATED_PREDICTIONS_FILE),
@@ -102,18 +121,22 @@ def compute_and_save_calibration(
 
 
 def calibrate(
-    train_data: pd.DataFrame, val_data: pd.DataFrame, epsilon=1e-8
+    train_data: pd.DataFrame,
+    val_data: pd.DataFrame,
+    epsilon: float = 1e-8,
+    calibration_collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
 ) -> np.ndarray:
-    """Calibrate the probabilities of the given dataframe using the calibrator."""
-    calibrator = train_calibrator_from_data(train_data)
+    """
+    Calibrate the probabilities of the given dataframe using the calibrator.
+    If the calibrated probabilities appear to be collapsed (have very low variance),
+    keeps the original probabilities instead.
+    """
+    calibrator = train_calibrator(train_data[PROBAS], train_data[TARGETS])
     calibrated_probas = calibrator.predict(val_data[PROBAS])
-    calibrated_probas = np.clip(calibrated_probas, epsilon, 1 - epsilon)
+    calibrated_probas = safe_assign_calibrated_probas(
+        calibrated_probas, val_data[PROBAS], epsilon, calibration_collapse_threshold
+    )
     return calibrated_probas
-
-
-def train_calibrator_from_data(train_data: pd.DataFrame) -> BetaCalibration:
-    """Train the calibrator on the given dataframe."""
-    return train_calibrator(train_data[PROBAS], train_data[TARGETS])
 
 
 def split_data(

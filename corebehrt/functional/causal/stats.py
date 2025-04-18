@@ -29,7 +29,7 @@ def compute_treatment_outcome_table(
 
 
 def compute_calibration_metrics(
-    y_true: np.ndarray, y_pred: np.ndarray, n_bins: int = 10
+    y_true: np.ndarray, y_pred: np.ndarray, n_bins: int = 20
 ) -> dict:
     """
     Compute calibration metrics including Brier score and ECE.
@@ -71,6 +71,40 @@ def compute_calibration_metrics(
             )
 
     return {"brier_score": brier, "ece": ece, "bin_stats": bin_stats}
+
+
+def compute_probas_stats(y_pred: np.ndarray, y_true: np.ndarray = None) -> dict:
+    """Compute basic statistics of the predicted probabilities. If y_true is provided, it will compute the statistics for each outcome group."""
+    stats = {
+        "min": round(y_pred.min(), 4),
+        "max": round(y_pred.max(), 4),
+        "mean": round(y_pred.mean(), 4),
+        "std": round(y_pred.std(), 4),
+    }
+
+    if y_true is not None:
+        # Split predictions by outcome group
+        pos_mask = y_true == 1
+        neg_mask = y_true == 0
+
+        pos_stats = {
+            "min_pos": round(y_pred[pos_mask].min(), 4),
+            "max_pos": round(y_pred[pos_mask].max(), 4),
+            "mean_pos": round(y_pred[pos_mask].mean(), 4),
+            "std_pos": round(y_pred[pos_mask].std(), 4),
+        }
+
+        neg_stats = {
+            "min_neg": round(y_pred[neg_mask].min(), 4),
+            "max_neg": round(y_pred[neg_mask].max(), 4),
+            "mean_neg": round(y_pred[neg_mask].mean(), 4),
+            "std_neg": round(y_pred[neg_mask].std(), 4),
+        }
+
+        stats.update(pos_stats)
+        stats.update(neg_stats)
+
+    return stats
 
 
 def collect_predictions_without_sampler(

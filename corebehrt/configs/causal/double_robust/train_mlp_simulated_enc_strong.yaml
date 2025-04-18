@@ -8,11 +8,11 @@ paths:
   calibrated_predictions: ./outputs/causal/calibrated_predictions # to extract exposure
   cohort: ./outputs/causal/exposure_cohort
 
-  outcomes: ./outputs/causal/simulated_outcome/outcomes_with_timestamps.csv
+  outcomes: ./outputs/causal/simulated_outcome_enc_strong/outcomes_with_timestamps.csv
   
 
 ## OUTPUTS
-  trained_mlp: ./outputs/causal/trained_mlp_simulated
+  trained_mlp: ./outputs/causal/trained_mlp_simulated_enc_strong
 
 outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
   n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)

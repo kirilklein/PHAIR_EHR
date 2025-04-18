@@ -75,6 +75,41 @@ echo Running estimate_with_true...
 python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\estimate\estimate_with_true.yaml
 if errorlevel 1 goto :error
 
+echo Test estimate_with_true...
+python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir .\outputs\causal\estimate_with_true
+if errorlevel 1 goto :error
+
+:: Run Estimation with weak treatment effect
+echo Running simulate_weak_effect...
+python -m corebehrt.main_causal.simulate --config_path corebehrt\configs\causal\simulate_weak.yaml
+if errorlevel 1 goto :error
+
+echo Running train_mlp_simulated_weak...
+python -m corebehrt.main_causal.train_mlp --config_path corebehrt\configs\causal\double_robust\train_mlp_simulated_weak.yaml
+if errorlevel 1 goto :error
+
+echo Running estimate_with_weak_effect...
+python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\estimate\estimate_with_true_weak.yaml
+if errorlevel 1 goto :error
+
+echo Test estimate_with_weak_effect...
+python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_weak
+if errorlevel 1 goto :error
+
+:: Run Estimation with xgboost
+echo Train xgboost...
+python -m corebehrt.main_causal.train_xgb --config_path corebehrt\configs\causal\double_robust\train_xgb_simulated.yaml
+if errorlevel 1 goto :error
+
+echo Estimate...
+python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true_xgb.yaml
+if errorlevel 1 goto :error
+
+echo Test estimate_with_xgb...
+python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_xgb
+if errorlevel 1 goto :error
+
+
 echo Pipeline completed successfully.
 pause
 exit /b 0

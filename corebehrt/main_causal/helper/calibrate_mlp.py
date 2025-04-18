@@ -6,10 +6,19 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader
 
-from corebehrt.constants.causal.data import CF_PROBAS, PROBAS, TARGETS
+from corebehrt.constants.causal.data import (
+    CF_PROBAS,
+    PROBAS,
+    TARGETS,
+    CALIBRATION_COLLAPSE_THRESHOLD,
+)
 from corebehrt.constants.data import PID_COL
-from corebehrt.functional.causal.stats import compute_calibration_metrics
+from corebehrt.functional.causal.stats import (
+    compute_calibration_metrics,
+    compute_probas_stats,
+)
 from corebehrt.functional.trainer.calibrate import train_calibrator
+from corebehrt.main_causal.helper.utils import safe_assign_calibrated_probas
 
 
 def collect_predictions(
@@ -58,6 +67,7 @@ def calibrate_predictions(
     val_cf_loader: DataLoader,
     val_pids: list,
     epsilon: float = 1e-8,
+    collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
 ) -> pd.DataFrame:
     device = next(model.parameters()).device
 
@@ -76,14 +86,24 @@ def calibrate_predictions(
     # Compute pre-calibration metrics on validation set
     val_preds, val_targets = collect_predictions(model, val_dataset, device)
     pre_cal_metrics = compute_calibration_metrics(val_targets, val_preds)
+    pre_cal_probas_stats = compute_probas_stats(val_preds, val_targets)
+
     print("\nPre-calibration metrics:")
     print(f"Brier Score: {pre_cal_metrics['brier_score']:.4f}")
     print(f"ECE: {pre_cal_metrics['ece']:.4f}")
+    print("\nPre-calibration probas stats:")
+    print(pre_cal_probas_stats)
 
     # Train calibrator and get calibrated predictions
     calibrator = train_calibrator(train_preds, train_targets)
     calibrated_val = calibrator.predict(val_preds)
-    calibrated_val = np.clip(calibrated_val, epsilon, 1 - epsilon)
+    calibrated_val = safe_assign_calibrated_probas(
+        calibrated_val, val_preds, epsilon, collapse_threshold
+    )
+
+    post_cal_probas_stats = compute_probas_stats(calibrated_val, val_targets)
+    print("\nCalibrated Probas Statistics:")
+    print(post_cal_probas_stats)
 
     # Compute post-calibration metrics
     post_cal_metrics = compute_calibration_metrics(val_targets, calibrated_val)
@@ -94,7 +114,9 @@ def calibrate_predictions(
     # Get counterfactual predictions
     val_cf_preds, _ = collect_predictions(model, val_cf_dataset, device)
     calibrated_cf = calibrator.predict(val_cf_preds)
-    calibrated_cf = np.clip(calibrated_cf, epsilon, 1 - epsilon)
+    calibrated_cf = safe_assign_calibrated_probas(
+        calibrated_cf, val_cf_preds, epsilon, collapse_threshold
+    )
 
     val_df = pd.DataFrame(
         {

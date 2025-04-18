@@ -3,9 +3,15 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from corebehrt.constants.causal.data import CF_PROBAS, PROBAS, TARGETS
+from corebehrt.constants.causal.data import (
+    CF_PROBAS,
+    PROBAS,
+    TARGETS,
+    CALIBRATION_COLLAPSE_THRESHOLD,
+)
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.trainer.calibrate import train_calibrator
+from corebehrt.main_causal.helper.utils import safe_assign_calibrated_probas
 
 
 def get_predictions(
@@ -26,10 +32,13 @@ def calibrate_predictions(
     y_val: np.ndarray,
     val_pids: list,
     epsilon: float = 1e-8,
+    collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
 ) -> pd.DataFrame:
     """
     Calibrates validation predictions using an isotonic regression calibrator
     trained on training predictions.
+    If the calibrated probabilities appear to be collapsed (have very low variance),
+    keeps the original probabilities instead.
 
     Args:
         model: The trained XGBoost model
@@ -52,12 +61,16 @@ def calibrate_predictions(
     # Collect validation predictions and targets
     val_preds = get_predictions(model, X_val)
     calibrated_val = calibrator.predict(val_preds)
-    calibrated_val = np.clip(calibrated_val, epsilon, 1 - epsilon)
+    calibrated_val = safe_assign_calibrated_probas(
+        calibrated_val, val_preds, epsilon, collapse_threshold
+    )
 
     # Collect counterfactual validation predictions
     val_cf_preds = get_predictions(model, X_val_counter)
     calibrated_cf = calibrator.predict(val_cf_preds)
-    calibrated_cf = np.clip(calibrated_cf, epsilon, 1 - epsilon)
+    calibrated_cf = safe_assign_calibrated_probas(
+        calibrated_cf, val_cf_preds, epsilon, collapse_threshold
+    )
 
     # Create DataFrame with results
     val_df = pd.DataFrame(
