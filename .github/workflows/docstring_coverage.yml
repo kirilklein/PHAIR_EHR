@@ -33,7 +33,7 @@ jobs:
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
           auth: ${{ secrets.GIST_SECRET }}       # Your secret token with the gist scope
-          gistID: b02ecb317ea24a8ced5e72ae96e1c0c3                  # Fill in your gist id here
+          gistID: 9414903a757f9536ee69438142b66184                  # Fill in your gist id here
           filename: docstr-coverage.json
           label: Doc Coverage
           message: "${{ steps.extract.outputs.doccov }}%"
