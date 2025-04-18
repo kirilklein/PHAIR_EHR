@@ -19,7 +19,7 @@ class TestDataUtils(unittest.TestCase):
         result = align_df_with_pids(self.test_df, pids)
 
         self.assertEqual(len(result), 2)
-        self.assertTrue(all(pid in pids for pid in result[PID_COL]))
+        self.assertListEqual(result[PID_COL].tolist(), pids)
         self.assertEqual(result.iloc[0]["value"], 10)
         self.assertEqual(result.iloc[1]["value"], 30)
 
@@ -27,14 +27,22 @@ class TestDataUtils(unittest.TestCase):
         result_empty = align_df_with_pids(self.test_df, [])
         self.assertEqual(len(result_empty), 0)
 
-        # Test case 3: PIDs that don't exist in DataFrame
-        result_non_existing = align_df_with_pids(self.test_df, ["P5", "P6"])
-        self.assertEqual(len(result_non_existing), 0)
+        # Test case 3: PIDs that don't exist in DataFrame should still be present with NaN values
+        pids_non = ["P5", "P6"]
+        result_non_existing = align_df_with_pids(self.test_df, pids_non)
+        self.assertEqual(len(result_non_existing), len(pids_non))
+        self.assertListEqual(result_non_existing[PID_COL].tolist(), pids_non)
+        # All values should be NaN for non-existing PIDs
+        self.assertTrue(result_non_existing["value"].isna().all())
 
         # Test case 4: Mixed existing and non-existing PIDs
-        result_mixed = align_df_with_pids(self.test_df, ["P1", "P5"])
-        self.assertEqual(len(result_mixed), 1)
-        self.assertEqual(result_mixed.iloc[0][PID_COL], "P1")
+        pids_mixed = ["P1", "P5"]
+        result_mixed = align_df_with_pids(self.test_df, pids_mixed)
+        self.assertEqual(len(result_mixed), len(pids_mixed))
+        self.assertListEqual(result_mixed[PID_COL].tolist(), pids_mixed)
+        # First existing PID retains value, second non-existing is NaN
+        self.assertEqual(result_mixed.iloc[0]["value"], 10)
+        self.assertTrue(pd.isna(result_mixed.iloc[1]["value"]))
 
 
 if __name__ == "__main__":
