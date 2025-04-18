@@ -93,7 +93,7 @@ def compute_and_save_calibration(
         val_pids = torch.load(get_pids_file(fold_dir, mode=VAL_KEY), weights_only=True)
         train_data, val_data = split_data(preds, train_pids, val_pids)
 
-        calibrated_probas = calibrate(train_data, val_data)
+        calibrated_probas = val_data[PROBAS]  # calibrate(train_data, val_data)
         val_data[PROBAS] = calibrated_probas  # Update the probabilities
         all_calibrated_predictions.append(val_data)
 
