@@ -7,7 +7,11 @@ import torch
 from betacal import BetaCalibration
 from tqdm import tqdm
 
-from corebehrt.constants.causal.data import PROBAS, TARGETS
+from corebehrt.constants.causal.data import (
+    PROBAS,
+    TARGETS,
+    CALIBRATION_COLLAPSE_THRESHOLD,
+)
 from corebehrt.constants.causal.paths import (
     CALIBRATED_PREDICTIONS_FILE,
     PREDICTIONS_FILE,
@@ -74,7 +78,10 @@ def save_combined_predictions(logger, write_dir: str, finetune_model_dir: str) -
 
 
 def compute_and_save_calibration(
-    logger, write_dir: str, finetune_model_dir: str
+    logger,
+    write_dir: str,
+    finetune_model_dir: str,
+    collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
 ) -> None:
     """
     Compute calibration for the predictions and save the results in a csv file: predictions_and_targets_calibrated.csv
@@ -93,8 +100,10 @@ def compute_and_save_calibration(
         val_pids = torch.load(get_pids_file(fold_dir, mode=VAL_KEY), weights_only=True)
         train_data, val_data = split_data(preds, train_pids, val_pids)
 
-        calibrated_probas = val_data[PROBAS]  # calibrate(train_data, val_data)
-        val_data[PROBAS] = calibrated_probas  # Update the probabilities
+        calibrated_probas = calibrate(train_data, val_data)
+        val_data = safe_assign_calibrated_probas(
+            val_data, calibrated_probas, logger, fold_folder
+        )
         all_calibrated_predictions.append(val_data)
 
     combined_calibrated_df = pd.concat(all_calibrated_predictions, ignore_index=True)
@@ -108,6 +117,30 @@ def compute_and_save_calibration(
         join(write_dir, CALIBRATED_PREDICTIONS_FILE),
         index=False,
     )
+
+
+def safe_assign_calibrated_probas(
+    val_data: pd.DataFrame,
+    calibrated_probas: np.ndarray,
+    logger,
+    fold_folder: str,
+    collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
+) -> pd.DataFrame:
+    """Safely assign calibrated probabilities to validation data.
+
+    If the calibrated probabilities appear to be collapsed (have very low variance),
+    keeps the original probabilities instead. Returns the updated validation dataframe.
+    """
+    val_data[PROBAS] = calibrated_probas  # Update the probabilities
+    # Check if calibrated probabilities are collapsed (all very similar values)
+    std = np.std(calibrated_probas)
+    if std < collapse_threshold:  # Threshold for considering probas collapsed
+        logger.warning(
+            f"Calibrated probabilities appear to be collapsed in fold {fold_folder} "
+            f"(std={std:.6f}). Using original probabilities instead."
+        )
+        val_data[PROBAS] = val_data[PROBAS].values  # Keep original probas
+    return val_data
 
 
 def calibrate(
