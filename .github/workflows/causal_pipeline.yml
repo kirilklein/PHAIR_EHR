@@ -101,6 +101,21 @@ jobs:
       - name: Check estimation weak
         run: python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_weak
 
+
+      ########## Simulated data with more contribution from encodings ##########
+      - name: Run simulate_enc_strong
+        run: python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate_enc_strong.yaml
+
+      - name: Run train_mlp_simulated_enc_strong
+        run: python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp_simulated_enc_strong.yaml
+
+      - name: Run estimate with true enc_strong
+        run: python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true_enc_strong.yaml
+
+      - name: Check estimation enc_strong
+        run: python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_enc_strong
+        
+
       ########## Simulated data and predictions with xgboost ##########
       - name: Run train_xgb_simulated (using xgboost)
         run: python -m corebehrt.main_causal.train_xgb --config_path corebehrt/configs/causal/double_robust/train_xgb_simulated.yaml
