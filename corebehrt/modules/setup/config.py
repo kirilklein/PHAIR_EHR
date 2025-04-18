@@ -99,37 +99,45 @@ def instantiate_class(instantiate_config, **extra_kwargs):
     return instance
 
 
-def instantiate_function(func_path: str):
-    """Initializes a function or a class static method from a path string."""
-    parts = func_path.rsplit(
-        ".", 2
-    )  # Split into module, submodule (optional), and function/method
+def instantiate_function(instantiate_config, **extra_kwargs):
+    """
+    Initializes a function or a static/class method from a config object.
+    Supports paths like:
+        - module.function
+        - module.Class.method
+    """
+    if "_target_" not in instantiate_config:
+        raise ValueError("The configuration must include a '_target_' key.")
 
-    if len(parts) == 3:
-        # If there are three parts, it includes a submodule or class
-        module_path, submodule, func_name = parts
-        module = importlib.import_module(module_path)
-        submodule_or_class = getattr(module, submodule, None)
+    func_path = instantiate_config["_target_"]
+    parts = func_path.split(".")
 
-        if submodule_or_class is None:
-            raise ValueError(f"{submodule} is not found in module {module_path}")
+    if len(parts) < 2:
+        raise ValueError("Invalid '_target_' format.")
 
-        target = submodule_or_class
-
-    elif len(parts) == 2:
-        # If there are two parts, it's a function in a module
-        module_path, func_name = parts
-        module = importlib.import_module(module_path)
-        target = module
+    for i in reversed(range(1, len(parts))):
+        module_path = ".".join(parts[:i])
+        try:
+            module = importlib.import_module(module_path)
+            # If import successful, we now resolve the remaining attributes
+            attr = module
+            for p in parts[i:]:
+                attr = getattr(attr, p)
+            func = attr
+            break
+        except (ImportError, AttributeError):
+            continue
     else:
-        raise ValueError(
-            "Function path must be in the format 'module.submodule.function', 'module.Class.method', or 'module.function'"
-        )
-    func = getattr(target, func_name, None)
-    if func is None or not callable(func):
-        raise ValueError(f"{func_name} is not a callable function in {target}")
+        raise ImportError(f"Could not import target function from path: {func_path}")
 
-    return func
+    if not callable(func):
+        raise ValueError(f"Resolved object {func} from {func_path} is not callable.")
+
+    # Merge config kwargs with extra kwargs
+    kwargs = {k: v for k, v in instantiate_config.items() if k != "_target_"}
+    kwargs.update(extra_kwargs)
+
+    return lambda *args, **kwargs_: func(*args, **{**kwargs, **kwargs_})
 
 
 def load_config(config_file):
