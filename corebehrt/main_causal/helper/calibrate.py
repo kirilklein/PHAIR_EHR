@@ -4,7 +4,6 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 import torch
-from betacal import BetaCalibration
 from tqdm import tqdm
 
 from corebehrt.constants.causal.data import (
@@ -26,6 +25,7 @@ from corebehrt.functional.io_operations.paths import (
 from corebehrt.functional.causal.stats import compute_probas_stats
 from corebehrt.functional.setup.model import get_last_checkpoint_epoch
 from corebehrt.functional.trainer.calibrate import train_calibrator
+from corebehrt.main_causal.helper.utils import safe_assign_calibrated_probas
 
 
 def save_combined_predictions(logger, write_dir: str, finetune_model_dir: str) -> None:
@@ -81,7 +81,8 @@ def compute_and_save_calibration(
     logger,
     write_dir: str,
     finetune_model_dir: str,
-    collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
+    epsilon: float = 1e-8,
+    calibration_collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
 ) -> None:
     """
     Compute calibration for the predictions and save the results in a csv file: predictions_and_targets_calibrated.csv
@@ -100,10 +101,10 @@ def compute_and_save_calibration(
         val_pids = torch.load(get_pids_file(fold_dir, mode=VAL_KEY), weights_only=True)
         train_data, val_data = split_data(preds, train_pids, val_pids)
 
-        calibrated_probas = calibrate(train_data, val_data)
-        val_data = safe_assign_calibrated_probas(
-            val_data, calibrated_probas, logger, fold_folder
+        calibrated_probas = calibrate(
+            train_data, val_data, epsilon, calibration_collapse_threshold
         )
+        val_data[PROBAS] = calibrated_probas
         all_calibrated_predictions.append(val_data)
 
     combined_calibrated_df = pd.concat(all_calibrated_predictions, ignore_index=True)
@@ -119,43 +120,23 @@ def compute_and_save_calibration(
     )
 
 
-def safe_assign_calibrated_probas(
-    val_data: pd.DataFrame,
-    calibrated_probas: np.ndarray,
-    logger,
-    fold_folder: str,
-    collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
-) -> pd.DataFrame:
-    """Safely assign calibrated probabilities to validation data.
-
-    If the calibrated probabilities appear to be collapsed (have very low variance),
-    keeps the original probabilities instead. Returns the updated validation dataframe.
-    """
-    val_data[PROBAS] = calibrated_probas  # Update the probabilities
-    # Check if calibrated probabilities are collapsed (all very similar values)
-    std = np.std(calibrated_probas)
-    if std < collapse_threshold:  # Threshold for considering probas collapsed
-        logger.warning(
-            f"Calibrated probabilities appear to be collapsed in fold {fold_folder} "
-            f"(std={std:.6f}). Using original probabilities instead."
-        )
-        val_data[PROBAS] = val_data[PROBAS].values  # Keep original probas
-    return val_data
-
-
 def calibrate(
-    train_data: pd.DataFrame, val_data: pd.DataFrame, epsilon=1e-8
+    train_data: pd.DataFrame,
+    val_data: pd.DataFrame,
+    epsilon: float = 1e-8,
+    calibration_collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
 ) -> np.ndarray:
-    """Calibrate the probabilities of the given dataframe using the calibrator."""
-    calibrator = train_calibrator_from_data(train_data)
+    """
+    Calibrate the probabilities of the given dataframe using the calibrator.
+    If the calibrated probabilities appear to be collapsed (have very low variance),
+    keeps the original probabilities instead.
+    """
+    calibrator = train_calibrator(train_data[PROBAS], train_data[TARGETS])
     calibrated_probas = calibrator.predict(val_data[PROBAS])
-    calibrated_probas = np.clip(calibrated_probas, epsilon, 1 - epsilon)
+    calibrated_probas = safe_assign_calibrated_probas(
+        calibrated_probas, val_data[PROBAS], epsilon, calibration_collapse_threshold
+    )
     return calibrated_probas
-
-
-def train_calibrator_from_data(train_data: pd.DataFrame) -> BetaCalibration:
-    """Train the calibrator on the given dataframe."""
-    return train_calibrator(train_data[PROBAS], train_data[TARGETS])
 
 
 def split_data(

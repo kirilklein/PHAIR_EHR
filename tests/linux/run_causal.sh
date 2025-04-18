@@ -1,5 +1,6 @@
 #!/bin/bash
 
+echo "\n ================================ Prepare and pretrain ================================ "
 echo "Running create_data"
 python -m corebehrt.main.create_data --config_path corebehrt/configs/causal/prepare_and_pretrain/create_data.yaml
 
@@ -9,6 +10,9 @@ python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/c
 echo "Running pretrain"
 python -m corebehrt.main.pretrain --config_path corebehrt/configs/causal/prepare_and_pretrain/pretrain.yaml
 
+
+
+echo "\n ================================ Outcomes ================================ "
 echo "Running create_outcomes"
 python -m corebehrt.main.create_outcomes --config_path corebehrt/configs/causal/outcomes.yaml
 
@@ -24,6 +28,9 @@ python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/c
 echo "Running finetune"
 python -m corebehrt.main.finetune_cv --config_path corebehrt/configs/causal/finetune/finetune_exposure.yaml
 
+
+
+echo "\n ================================ Causal pipeline ================================ "
 echo "Running calibrate"
 python -m corebehrt.main_causal.calibrate --config_path corebehrt/configs/causal/finetune/calibrate.yaml
 
@@ -51,7 +58,9 @@ python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/
 echo "Checking estimation"
 python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true
 
-########## Simulated data with weak treatment effect ##########
+
+
+echo "\n ================================ Simulated data with weak treatment effect ================================ "
 echo "Running simulate_weak"
 python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate_weak.yaml
 
@@ -64,7 +73,24 @@ python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/
 echo "Checking estimation weak"
 python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_weak
 
-########## Simulated data and predictions with xgboost ##########
+
+
+echo "\n ================================ Simulated data with more contribution from encodings ================================ "
+echo "Running simulate_enc_strong"
+python -m corebehrt.main_causal.simulate --config_path corebehrt/configs/causal/simulate_enc_strong.yaml
+
+echo "Running train_mlp_simulated_enc_strong"
+python -m corebehrt.main_causal.train_mlp --config_path corebehrt/configs/causal/double_robust/train_mlp_simulated_enc_strong.yaml
+
+echo "Running estimate with true enc_strong"
+python -m corebehrt.main_causal.estimate --config_path corebehrt/configs/causal/estimate/estimate_with_true_enc_strong.yaml
+
+echo "Checking estimation enc_strong"
+python -m tests.test_main_causal.test_estimate_result --margin 0.1 --dir ./outputs/causal/estimate_with_true_enc_strong
+
+
+
+echo "\n ================================ Simulated data and predictions with xgboost ================================ "
 echo "Running train_xgb_simulated (using xgboost)"
 python -m corebehrt.main_causal.train_xgb --config_path corebehrt/configs/causal/double_robust/train_xgb_simulated.yaml
 
