@@ -37,3 +37,5 @@ FLOW_AFTER_STRICT = "after_strict"
 FLOW_AFTER_MINIMUM_ONE = "after_minimum_one"
 FLOW_FINAL = "final"
 FLOW_AFTER_UNIQUE_CODES = "after_unique_codes"
+
+CALIBRATION_COLLAPSE_THRESHOLD = 0.01
