@@ -1,28 +1,28 @@
 #!/bin/bash
 
-# echo "Running create_data"
-# python -m corebehrt.main.create_data --config_path corebehrt/configs/causal/prepare_and_pretrain/create_data.yaml
+echo "Running create_data"
+python -m corebehrt.main.create_data --config_path corebehrt/configs/causal/prepare_and_pretrain/create_data.yaml
 
-# echo "Running prepare_training_data for pretrain"
-# python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/prepare_and_pretrain/prepare_pretrain.yaml
+echo "Running prepare_training_data for pretrain"
+python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/prepare_and_pretrain/prepare_pretrain.yaml
 
-# echo "Running pretrain"
-# python -m corebehrt.main.pretrain --config_path corebehrt/configs/causal/prepare_and_pretrain/pretrain.yaml
+echo "Running pretrain"
+python -m corebehrt.main.pretrain --config_path corebehrt/configs/causal/prepare_and_pretrain/pretrain.yaml
 
-# echo "Running create_outcomes"
-# python -m corebehrt.main.create_outcomes --config_path corebehrt/configs/causal/outcomes.yaml
+echo "Running create_outcomes"
+python -m corebehrt.main.create_outcomes --config_path corebehrt/configs/causal/outcomes.yaml
 
-# echo "Running select_cohort"
-# python -m corebehrt.main.select_cohort --config_path corebehrt/configs/causal/select_cohort/select_cohort_exposure.yaml
+echo "Running select_cohort"
+python -m corebehrt.main.select_cohort --config_path corebehrt/configs/causal/select_cohort/select_cohort_exposure.yaml
 
-# echo "Running select_cohort_advanced"
-# python -m corebehrt.main_causal.select_cohort_advanced --config_path corebehrt/configs/causal/select_cohort/advanced_extraction.yaml
+echo "Running select_cohort_advanced"
+python -m corebehrt.main_causal.select_cohort_advanced --config_path corebehrt/configs/causal/select_cohort/advanced_extraction.yaml
 
-# echo "Running prepare_finetune_data"
-# python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/finetune/prepare_finetune_exposure.yaml
+echo "Running prepare_finetune_data"
+python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/finetune/prepare_finetune_exposure.yaml
 
-# echo "Running finetune"
-# python -m corebehrt.main.finetune_cv --config_path corebehrt/configs/causal/finetune/finetune_exposure.yaml
+echo "Running finetune"
+python -m corebehrt.main.finetune_cv --config_path corebehrt/configs/causal/finetune/finetune_exposure.yaml
 
 echo "Running calibrate"
 python -m corebehrt.main_causal.calibrate --config_path corebehrt/configs/causal/finetune/calibrate.yaml
