@@ -25,6 +25,9 @@ def compare_estimate_result(margin, estimate_results_dir):
     # Track differences for summary
     differences = []
 
+    # Track which methods are off by more than the margin
+    off_methods = []
+
     for _, row in df.iterrows():
         diff = abs(row["effect"] - row["true_effect"])
         differences.append(
@@ -36,9 +39,16 @@ def compare_estimate_result(margin, estimate_results_dir):
             }
         )
 
-        assert diff <= abs(margin), (
-            f"Estimated effect {row['effect']:.4f} for method {row['method']} "
-            f"differs from true effect {row['true_effect']:.4f} by more than {abs(margin):.4f}"
+        if diff > abs(margin):
+            off_methods.append(
+                f"Method {row['method']}: estimated={row['effect']:.4f}, "
+                f"true={row['true_effect']:.4f}, diff={diff:.4f}"
+            )
+
+    if off_methods:
+        assert not off_methods, (
+            "\nThe following methods had effects outside the acceptable margin:\n"
+            + "\n".join(off_methods)
         )
 
     # Print summary of differences
