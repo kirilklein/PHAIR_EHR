@@ -14,10 +14,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          python-version: '3.11'
-          fetch-depth: 0
+
       
+      - name: Setup Python  
+        uses: actions/setup-python@v4  
+        with:  
+          python-version: '3.10' 
+
+
       - name: Remove old causal outputs
         run: rm -rf ./outputs/causal
 
@@ -27,7 +31,7 @@ jobs:
       - name: Add virtualenv to PATH
         run: echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
 
-      - name: Install dependencies
+      - name: Install dependencies  
         run: pip install -r requirements.txt
 
       - name: Run create_data
