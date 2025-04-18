@@ -30,9 +30,9 @@ def test_calibration_results(
     print("\n=== Basic Validation Tests ===")
 
     # Check that we have the same subjects
-    assert set(original_preds["subject_id"]) == set(
-        calibrated_preds["subject_id"]
-    ), "Subject IDs don't match between original and calibrated predictions"
+    assert set(original_preds["subject_id"]) == set(calibrated_preds["subject_id"]), (
+        "Subject IDs don't match between original and calibrated predictions"
+    )
     print("✓ Subject IDs match between original and calibrated predictions")
 
     # Check probability ranges
@@ -45,9 +45,9 @@ def test_calibration_results(
     merged_df = pd.merge(
         original_preds, calibrated_preds, on="subject_id", suffixes=("_orig", "_cal")
     )
-    assert (
-        merged_df["targets_orig"] == merged_df["targets_cal"]
-    ).all(), "Targets changed during calibration"
+    assert (merged_df["targets_orig"] == merged_df["targets_cal"]).all(), (
+        "Targets changed during calibration"
+    )
     print("✓ Targets unchanged by calibration")
 
     # 2. Calibration Quality Tests

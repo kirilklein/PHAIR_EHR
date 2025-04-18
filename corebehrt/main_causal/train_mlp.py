@@ -40,11 +40,11 @@ def main_train(config_path):
 
     all_fold_results = []
     for fold_idx, fold in enumerate(data_module.folds):
-        logger.info(f"FOLD {fold_idx+1}/{len(data_module.folds)}")
+        logger.info(f"FOLD {fold_idx + 1}/{len(data_module.folds)}")
         logger.info(f"validation patients: {len(fold[VAL_KEY])}")
         logger.info(f"training patients: {len(fold[TRAIN_KEY])}")
 
-        fold_folder = join(cfg.paths.trained_mlp, f"fold_{fold_idx+1}")
+        fold_folder = join(cfg.paths.trained_mlp, f"fold_{fold_idx + 1}")
         os.makedirs(fold_folder, exist_ok=True)
 
         logger.info("Initializing model...")

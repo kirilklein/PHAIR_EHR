@@ -47,7 +47,6 @@ def dummy_get_true_outcome(exposure, outcome_exposed, outcome_control):
 
 
 class TestSimulate(unittest.TestCase):
-
     @patch(
         "corebehrt.main_causal.helper.simulate.simulate_outcome_from_encodings",
         side_effect=dummy_simulate_outcome_from_encodings,

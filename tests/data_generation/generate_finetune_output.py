@@ -105,7 +105,6 @@ def generate_mock_finetune_output(
 
 #  Example usage
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(
         description="Generate mock finetuning outputs for testing"
     )
