@@ -49,7 +49,6 @@ import logging
 import os
 from os.path import join
 
-import pandas as pd
 import torch
 import yaml
 
