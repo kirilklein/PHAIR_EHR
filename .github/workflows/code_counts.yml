@@ -20,7 +20,9 @@ jobs:
           python -m venv .venv
           source .venv/bin/activate
           pip install -r requirements.txt
-          pip install -e .
+      
+      - name: Expose code on PYTHONPATH
+        run: echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
 
       - name: Generate test fixtures
         run: |
