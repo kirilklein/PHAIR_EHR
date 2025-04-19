@@ -20,6 +20,7 @@ jobs:
           python -m venv .venv
           source .venv/bin/activate
           pip install -r requirements.txt
+          pip install -e .
 
       - name: Generate test fixtures
         run: |
@@ -45,3 +46,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python tests/helpers/compare_dicts.py --actual tmp/mapping/rare_code_mapping.pt --expected tmp/expected/expected_mapping.json
+
+      - name: Clean up tmp directory
+        run: |
+          rm -rf tmp/
