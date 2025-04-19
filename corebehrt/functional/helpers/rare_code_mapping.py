@@ -1,8 +1,18 @@
 """
-Functions for mapping rare codes to more common parent codes or group labels.
-Rare codes (counts below threshold) are processed as:
-- Hierarchical codes (matching regex): trim number part after separator
-- Non-hierarchical codes: map to "<group>/rare"
+Functions for mapping rare medical codes to common parents or group labels.
+
+Mapping Rules:
+1. Hierarchical codes (match regex pattern):
+   - If rare: Map to nearest common parent by trimming rightmost segments
+   - If common: Keep unchanged
+   Example: M/101 (rare) → M/10 (common parent)
+
+2. Non-hierarchical codes:
+   - If rare: Map to "<prefix>/rare"
+   - If common: Keep unchanged
+   Example: L/aa (rare) → L/rare
+
+A code is considered rare if its frequency is below the specified threshold.
 """
 
 import re
@@ -19,7 +29,19 @@ def group_rare_codes(
     group_separator: str = "/",
 ) -> Dict[str, str]:
     """
-    Maps rare codes to their aggregated form, processing longest codes first.
+    Maps codes to their aggregated form based on frequency.
+
+    Args:
+        counts: Code frequencies {code: count}
+        rare_threshold: Frequency cutoff for rare codes
+        hierarchical_pattern: Regex to identify hierarchical codes (e.g. "^(?:M)")
+        group_separator: Code segment separator (default: "/")
+
+    Returns:
+        Mapping {original_code: mapped_code} where:
+        - Common codes → unchanged
+        - Rare hierarchical → nearest common parent
+        - Rare non-hierarchical → "<group>/rare"
     """
     if not group_separator:
         warnings.warn("Empty group separator provided, defaulting to '/'")
