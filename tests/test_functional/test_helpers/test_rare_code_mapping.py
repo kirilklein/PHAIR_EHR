@@ -15,7 +15,7 @@ class TestGroupRareCodes(unittest.TestCase):
         """Test the main mapping from original codes to aggregated codes."""
         input_counts = {
             "A/1234": 2,  # hierarchical: should become "A/123"
-            "A/123": 3,  # hierarchical: should become "A123"
+            "A/123": 3,  # together with A/1234 remapped, this will be non-rare and remains unchanged
             "B/456": 2,  # non-hierarchical: becomes "B/rare"
             "C/789": 10,  # unchanged (above threshold)
             "D/012": 1,  # non-hierarchical: becomes "D/rare"
