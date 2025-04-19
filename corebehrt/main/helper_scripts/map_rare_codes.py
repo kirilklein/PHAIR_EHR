@@ -1,5 +1,47 @@
 """
-This script is used to map rare codes to more common parent codes or group labels.
+Map Rare Medical Codes to Common Parents or Group Labels
+
+Reduce code dimensionality by collapsing infrequent codes.
+
+Rules:
+ 1. Hierarchical codes (match regex):
+    - Rare (< threshold): trim segments to nearest common ancestor
+    - Common: unchanged
+ 2. Non‑hierarchical codes:
+    - Rare: map to "<group>/rare"
+    - Common: unchanged
+
+Example:
+    counts = {
+        "M/10": 20,   # common
+        "M/101": 1,   # rare → "M/10"
+        "L/aa": 1,    # rare → "L/rare"
+        "Y":     3,   # common
+        "Z":     1    # rare → "Z/rare"
+    }
+    mapping = {
+        "M/10":  "M/10",
+        "M/101": "M/10",
+        "L/aa":  "L/rare",
+        "Y":     "Y",
+        "Z":     "Z/rare"
+    }
+
+Config parameters (YAML):
+  threshold: int                   # rarity cutoff
+  hierarchical_pattern: str        # e.g. "^(?:M)"
+  separator: str                   # e.g. "/"
+  paths:
+    code_counts: <counts_dir>
+    mapping:     <output_dir>
+
+Usage:
+    python -m corebehrt.main.helper_scripts.map_rare_codes \
+        --config_path path/to/map_rare_codes.yaml
+
+Outputs in <mapping>:
+  • rare_code_mapping.pt   (PyTorch dict of code→mapped_code)
+  • config.yaml            (used settings)
 """
 
 import json
