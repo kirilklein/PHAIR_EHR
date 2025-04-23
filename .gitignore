@@ -12,4 +12,6 @@ corebehrt/sandbox
 /tmp
 corebehrt/main/create_data_profiling.py
 **tmp**
+linux_install/
+.DS_Store
 corebehrt/main_causal/helper_data/sks_trees/
