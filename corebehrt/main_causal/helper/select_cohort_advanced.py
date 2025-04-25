@@ -47,18 +47,18 @@ def extract_and_save_criteria(
     if pids is not None:
         index_dates = index_dates[index_dates[PID_COL].isin(pids)]
 
-    # Check the criteria definitions and delays config
+    logger.info("Checking criteria definitions and delays config")
     criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
     delays_cfg = cfg.get(DELAYS)
     check_criteria_definitions(criteria_definitions_cfg)
     check_delays_config(delays_cfg)
 
-    # Check the inclusion and exclusion expressions
+    logger.info("Checking inclusion and exclusion expressions")
     criteria_names = list(criteria_definitions_cfg.keys())
     check_expression(cfg.get(INCLUSION), criteria_names)
     check_expression(cfg.get(EXCLUSION), criteria_names)
 
-    # Extract criteria
+    logger.info("Checks successful, extracting criteria")
     criteria_dfs = []
     for shard_path in iterate_splits_and_shards(meds_path, splits):
         logger.info(
