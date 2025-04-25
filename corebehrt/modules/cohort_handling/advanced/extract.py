@@ -187,8 +187,10 @@ class CohortExtractor:
         base_df[TIME_MASK] = compute_time_mask(base_df)
 
         results = []
+        logger.info("\tProcessing simple criteria")
         for criterion, crit_cfg in tqdm(
-            simple_criteria, desc="Processing simple criteria"
+            simple_criteria,
+            desc="Processing simple criteria",
         ):
             res = CriteriaExtraction.extract_codes(base_df, crit_cfg)
             res = rename_result(res, criterion, NUMERIC_VALUE in crit_cfg)
@@ -400,13 +402,10 @@ class CriteriaExtraction:
         Fully vectorized extraction for a code/numeric criterion.
         """
         df = base_df.copy()  # Use a shallow copy to avoid modifying the base_df
-        logger.info(f"\t\tComputing code mask")
         df[CODE_MASK] = compute_code_masks(
             df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
         )
-        logger.info(f"\t\tComputing final mask")
         df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
-        logger.info(f"\t\tGrouping by PID and computing final mask")
         flag_df = (
             df.groupby(PID_COL)[FINAL_MASK]
             .any()
@@ -416,12 +415,10 @@ class CriteriaExtraction:
 
         has_numeric = NUMERIC_VALUE in crit_cfg
         if has_numeric:
-            logger.info(f"\t\tExtracting numeric values")
             min_val = crit_cfg.get(MIN_VALUE)
             max_val = crit_cfg.get(MAX_VALUE)
             res = extract_numeric_values(df, flag_df, min_val, max_val)
         else:
-            logger.info(f"\t\tno numeric values, returning flag only")
             res = flag_df.copy()
             res[NUMERIC_VALUE] = None
         return res
