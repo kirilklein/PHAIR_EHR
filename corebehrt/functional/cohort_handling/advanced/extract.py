@@ -1,10 +1,12 @@
 import re
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
 
 from corebehrt.constants.cohort import (
     AGE_AT_INDEX_DATE,
+    ALLOWED_OPERATORS,
     CRITERION_FLAG,
     DELAY,
     FINAL_MASK,
@@ -13,7 +15,6 @@ from corebehrt.constants.cohort import (
     MIN_TIME,
     NUMERIC_VALUE,
     NUMERIC_VALUE_SUFFIX,
-    ALLOWED_OPERATORS,
 )
 from corebehrt.constants.data import (
     BIRTH_CODE,
@@ -88,6 +89,12 @@ def compute_time_window_columns(
     return df
 
 
+@lru_cache(maxsize=128)
+def _compile_regex(patterns: tuple) -> re.Pattern:
+    """Cache compiled regex patterns."""
+    return re.compile("|".join(patterns))
+
+
 def compute_code_masks(df: pd.DataFrame, codes: list, exclude_codes: list) -> pd.Series:
     """
     Build a Boolean mask for allowed codes and then exclude any matching exclusion patterns.
@@ -100,13 +107,15 @@ def compute_code_masks(df: pd.DataFrame, codes: list, exclude_codes: list) -> pd
         Boolean mask indicating whether each event's code is allowed.
     """
     if codes:
-        allowed_regex = re.compile("|".join(codes))
+        # Convert list to tuple for hashing
+        allowed_regex = _compile_regex(tuple(codes))
         allowed_mask = df[CONCEPT_COL].str.contains(allowed_regex, na=False)
     else:
         allowed_mask = pd.Series(False, index=df.index)
 
     if exclude_codes:
-        exclude_regex = re.compile("|".join(exclude_codes))
+        # Convert list to tuple for hashing
+        exclude_regex = _compile_regex(tuple(exclude_codes))
         exclude_mask = df[CONCEPT_COL].str.contains(exclude_regex, na=False)
     else:
         exclude_mask = pd.Series(False, index=df.index)
@@ -193,17 +202,9 @@ def extract_numeric_values(
     return result
 
 
-def extract_criteria_names_from_expression(expression: str) -> list:
-    """
-    Splits the expression and returns tokens that are criteria names (not operators or parentheses).
-    Handles ~, (, and ) operators by ensuring they are separated from criteria names.
-
-    Args:
-        expression: String like "type2_diabetes & (myocardial_infarction | stroke)"
-
-    Returns:
-        List of criteria names, e.g. ["type2_diabetes", "myocardial_infarction", "stroke"]
-    """
+@lru_cache(maxsize=256)
+def extract_criteria_names_from_expression(expression: str) -> tuple:
+    """Cache parsed expressions since they're often reused."""
     # Add spaces around operators and parentheses to ensure they're separated
     expression = expression.replace("~", " ~ ")
     expression = expression.replace("(", " ( ")
@@ -211,4 +212,4 @@ def extract_criteria_names_from_expression(expression: str) -> list:
 
     tokens = expression.split()
     # Exclude operators and parentheses from the results
-    return [token for token in tokens if token.lower() not in ALLOWED_OPERATORS]
+    return tuple(token for token in tokens if token.lower() not in ALLOWED_OPERATORS)
