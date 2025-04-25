@@ -31,21 +31,20 @@ import json
 import logging
 from os.path import join
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+import torch
 
+from corebehrt.constants.cohort import EXCLUSION, INCLUSION, UNIQUE_CODE_LIMITS
 from corebehrt.constants.data import TIMESTAMP_COL
-from corebehrt.constants.paths import INDEX_DATES_FILE
-from corebehrt.constants.cohort import INCLUSION, EXCLUSION, UNIQUE_CODE_LIMITS
+from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.select_cohort_advanced import (
     extract_and_save_criteria,
     filter_and_save_cohort,
     split_and_save,
 )
-from corebehrt.modules.cohort_handling.advanced.apply import (
-    apply_criteria_with_stats,
-)
+from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
@@ -69,9 +68,10 @@ def main(config_path: str):
     index_dates = pd.read_csv(
         join(cohort_path, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
     )
+    pids = torch.load(join(cohort_path, PID_FILE))
     logger.info(f"Extracting criteria for {len(index_dates)} patients")
     criteria_df = extract_and_save_criteria(
-        meds_path, index_dates, cfg, save_path, splits
+        meds_path, index_dates, cfg, save_path, splits, pids
     )
 
     logger.info("Applying criteria and saving stats")
