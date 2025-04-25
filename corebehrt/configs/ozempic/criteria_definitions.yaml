@@ -1,6 +1,22 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ### Inputs
+  cohort: ./outputs/causal/exposure_cohort # Data directory
+  meds: ./example_data/example_MEDS_data_causal
+  splits: [tuning]
+  ### Outputs
+  cohort_advanced: ./outputs/causal/exposure_cohort_advanced_ozempic # Data directory
+
+cv_folds: 2 # can be set to 1 if only a simple train/val split is needed
+val_ratio: 0.1 # only used if cv_folds is set to 1
+test_ratio: 0 # can be set to 1 for test set creation only
+
 # provide expressions for inclusion and exclusion
 inclusion: "type2_diabetes & (older_than_50_and_clinical_evidence_of_cvd | older_than_60_and_subclinical_evidence_of_cvd) & hba1c_level & insulin"
-exclusion: "max_age_60 & criteria_3 & criteria_4"
+exclusion: "type1_diabetes | exclusion_drugs | acute_decompensation_of_glycemic_control | pancreatitis | acute_coronary_or_cv_event | dialysis | end_stage_liver_disease | prior_solid_organ_transplant | cancer | multiple_endocrine_neoplasia_type_2 | medullary_thyroid_carcinoma | calcitonin | pregnancy_and_birth"
 
 
 criteria_definitions:
@@ -140,7 +156,7 @@ criteria_definitions:
     codes:
       - ^(?:D|RD|RPO)/DN185.*
 
-  hemodialysis:
+  chronic_hemodialysis:
     codes:
       - BJFD20.*
 
@@ -244,6 +260,16 @@ criteria_definitions:
   malignant_neoplasms:
     expression: cancer & ~ skin_cancer 
 
+  #### Combined exclusion criteria ####
+  exclusion_drugs:
+    expression: glp1_receptor_agonist | dpp4_inhibitors | insulin_except_basal
+
+  pancreatitis:
+    expression: chronic_pancreatitis | idiopathic_acute_pancreatitis
+
+  dialysis:
+    expression: chronic_hemodialysis | peritoneal_dialysis
+
 ###################### End of main criteria ######################
 
 delays:
@@ -257,12 +283,11 @@ delays:
 unique_code_limits:
   anti_diabetic_drugs:
     max_count: 2
-    use_patterns:
-      - metformin
-      - sulphonylureas
-      - sglt2_inhibitors
-      - thiazolidinediones
-
+    criteria: # list of criteria.
+      - exclusion_drugs
+      - glp1_receptor_agonist
+      - dpp4_inhibitors
+      - insulin_except_basal
 
 
   
