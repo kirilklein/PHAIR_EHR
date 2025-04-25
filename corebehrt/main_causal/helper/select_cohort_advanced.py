@@ -17,6 +17,7 @@ from corebehrt.constants.paths import (
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
 from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
+from corebehrt.constants.data import CONCEPT_COL
 
 logger = logging.getLogger("select_cohort_advanced")
 
@@ -41,6 +42,7 @@ def extract_and_save_criteria(
     for shard_path in iterate_splits_and_shards(meds_path, splits):
         logger.info(f"Processing shard: {os.path.basename(shard_path)}")
         shard = pd.read_parquet(shard_path)
+        shard[CONCEPT_COL] = shard[CONCEPT_COL].astype("category")
         if pids is not None:
             logger.info(f"Filtering shard for {len(pids)} patients")
             shard = shard[shard[PID_COL].isin(pids)]
