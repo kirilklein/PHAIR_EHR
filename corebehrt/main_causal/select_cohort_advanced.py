@@ -69,7 +69,7 @@ def main(config_path: str):
         join(cohort_path, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
     )
     pids = torch.load(join(cohort_path, PID_FILE))
-    logger.info(f"Extracting criteria for {len(index_dates)} patients")
+
     criteria_df = extract_and_save_criteria(
         meds_path, index_dates, cfg, save_path, splits, pids
     )

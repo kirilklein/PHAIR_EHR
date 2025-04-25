@@ -42,7 +42,9 @@ def extract_and_save_criteria(
         logger.info(f"Processing shard: {os.path.basename(shard_path)}")
         shard = pd.read_parquet(shard_path)
         if pids is not None:
+            logger.info(f"Filtering shard for {len(pids)} patients")
             shard = shard[shard[PID_COL].isin(pids)]
+        logger.info(f"Extracting criteria for {shard[PID_COL].nunique()} patients")
         cohort_extractor = CohortExtractor(
             cfg.get(CRITERIA_DEFINITIONS),
             cfg.get(DELAYS),
