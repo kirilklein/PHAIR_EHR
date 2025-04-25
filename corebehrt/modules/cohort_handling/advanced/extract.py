@@ -44,7 +44,7 @@ The module supports three types of criteria:
 
 import logging
 from tqdm import tqdm
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import pandas as pd
 
@@ -181,7 +181,7 @@ class CohortExtractor:
             self.delays_config.get(CODE_GROUPS, []),
             self.delays_config.get(DAYS, 0),
         )
-        base_df = compute_time_window_columns(base_df)
+        base_df = compute_time_window_columns(base_df, self.delays_config.get(TIME_WINDOW_DAYS, 36500))
         base_df[TIME_MASK] = compute_time_mask(base_df)
 
         results = []
