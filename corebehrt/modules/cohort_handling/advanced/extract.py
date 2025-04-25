@@ -42,6 +42,7 @@ The module supports three types of criteria:
 3. Expression-based: Combine other criteria using boolean expressions
 """
 
+import logging
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -82,6 +83,8 @@ from corebehrt.functional.cohort_handling.advanced.extract import (
     rename_result,
 )
 
+logger = logging.getLogger("select_cohort_advanced")
+
 
 class CohortExtractor:
     def __init__(self, criteria_definitions: dict, delays_config: dict = None):
@@ -105,23 +108,25 @@ class CohortExtractor:
         3. Expression-based criteria (hierarchical)
         """
         relevant_index_dates = self._get_relevant_index_dates(events, index_dates)
-        print(f"Processing {len(relevant_index_dates)} patients")
-
+        logger.info(f":Processing {len(relevant_index_dates)} patients")
+        logger.info(f":Computing age at index date: {relevant_index_dates.head()}")
         age_df = compute_age_at_index_date(relevant_index_dates, events)
+        logger.info(f":partitioning criteria")
 
         simple_criteria, age_criteria, expression_criteria = self._partition_criteria()
+        logger.info(f":processing simple criteria")
         simple_results = self._process_simple_criteria(
             events, relevant_index_dates, simple_criteria
         )
 
         all_results = simple_results.merge(age_df, on=PID_COL, how="left")
-
+        logger.info(f":processing age criteria")
         all_results = self._process_age_criteria(all_results, age_criteria)
-
+        logger.info(f":processing expression criteria")
         all_results = self._process_expression_criteria(
             all_results, expression_criteria
         )
-
+        logger.info(f":done")
         return all_results
 
     def _get_relevant_index_dates(
