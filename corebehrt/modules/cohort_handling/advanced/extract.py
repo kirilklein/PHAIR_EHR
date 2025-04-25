@@ -109,29 +109,29 @@ class CohortExtractor:
         3. Expression-based criteria (hierarchical)
         """
         relevant_index_dates = self._get_relevant_index_dates(events, index_dates)
-        logger.info(f":Number of patients in index dates: {len(relevant_index_dates)}")
-        logger.info(f":Computing age at index date")
+        logger.info(f"\tNumber of patients in index dates: {len(relevant_index_dates)}")
+        logger.info(f"\tComputing age at index date")
         age_df = compute_age_at_index_date(relevant_index_dates, events)
 
-        logger.info(f":partitioning criteria")
+        logger.info("\tPartitioning criteria")
         simple_criteria, age_criteria, expression_criteria = self._partition_criteria()
 
-        logger.info(f":processing simple criteria")
+        logger.info("\tProcessing simple criteria")
         simple_results = self._process_simple_criteria(
             events, relevant_index_dates, simple_criteria
         )
 
-        logger.info(f":merging age df")
+        logger.info("\tMerging age df")
         all_results = simple_results.merge(age_df, on=PID_COL, how="left")
 
-        logger.info(f":processing age criteria")
+        logger.info("\tProcessing age criteria")
         all_results = self._process_age_criteria(all_results, age_criteria)
 
-        logger.info(f":processing expression criteria")
+        logger.info("\tProcessing expression criteria")
         all_results = self._process_expression_criteria(
             all_results, expression_criteria
         )
-        logger.info(f":done")
+        logger.info("\tDone")
         return all_results
 
     def _get_relevant_index_dates(
@@ -195,9 +195,9 @@ class CohortExtractor:
             results.append(res)
 
         if results:
-            logger.info(f":Combining results")
+            logger.info("\tCombining results")
             return self.combine_results(results)
-        logger.info(f":No results to combine")
+        logger.info("\tNo results to combine")
         return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
 
     @staticmethod
@@ -400,13 +400,13 @@ class CriteriaExtraction:
         Fully vectorized extraction for a code/numeric criterion.
         """
         df = base_df.copy()  # Use a shallow copy to avoid modifying the base_df
-        logger.info(f"::Computing code mask")
+        logger.info(f"\t\tComputing code mask")
         df[CODE_MASK] = compute_code_masks(
             df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
         )
-        logger.info(f"::Computing final mask")
+        logger.info(f"\t\tComputing final mask")
         df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
-        logger.info(f"::Grouping by PID and computing final mask")
+        logger.info(f"\t\tGrouping by PID and computing final mask")
         flag_df = (
             df.groupby(PID_COL)[FINAL_MASK]
             .any()
@@ -416,12 +416,12 @@ class CriteriaExtraction:
 
         has_numeric = NUMERIC_VALUE in crit_cfg
         if has_numeric:
-            logger.info(f"::Extracting numeric values")
+            logger.info(f"\t\tExtracting numeric values")
             min_val = crit_cfg.get(MIN_VALUE)
             max_val = crit_cfg.get(MAX_VALUE)
             res = extract_numeric_values(df, flag_df, min_val, max_val)
         else:
-            logger.info(f"::no numeric values, returning flag only")
+            logger.info(f"\t\tno numeric values, returning flag only")
             res = flag_df.copy()
             res[NUMERIC_VALUE] = None
         return res
