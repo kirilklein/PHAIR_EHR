@@ -193,9 +193,9 @@ class CohortExtractor:
             results.append(res)
 
         if results:
-            # Merge all results
+            logger.info(f":Combining results")
             return self.combine_results(results)
-        # Return empty DataFrame if no results
+        logger.info(f":No results to combine")
         return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
 
     @staticmethod
