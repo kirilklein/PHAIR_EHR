@@ -381,6 +381,130 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
         self.assertFalse(result.loc[result[PID_COL] == 2, CRITERION_FLAG].iloc[0])
         self.assertFalse(result.loc[result[PID_COL] == 3, CRITERION_FLAG].iloc[0])
 
+    def test_time_window_filtering(self):
+        """Test that time_window_days properly filters events."""
+        # Create events spanning different time periods
+        events = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1],
+                TIMESTAMP_COL: to_datetime(
+                    [
+                        "2023-01-01",  # 5 months before index
+                        "2022-06-01",  # 12 months before index
+                        "2021-06-01",  # 24 months before index
+                    ]
+                ),
+                CONCEPT_COL: ["D/TST01", "D/TST01", "D/TST01"],
+                VALUE_COL: [1.0, 2.0, 3.0],
+            }
+        )
+
+        index_dates = pd.DataFrame(
+            {
+                PID_COL: [1],
+                TIMESTAMP_COL: to_datetime(["2023-06-01"]),  # Index date
+            }
+        )
+
+        # Setup base DataFrame
+        base_df = merge_index_dates(events, index_dates)
+        base_df = compute_delay_column(
+            base_df,
+            self.delays_config.get(CODE_GROUPS, []),
+            self.delays_config.get(DAYS, 0),
+        )
+
+        # Test different time windows
+        test_cases = [
+            (180, 1),  # 6 months - should only include first event
+            (365, 2),  # 1 year - should include first two events
+            (730, 3),  # 2 years - should include all events
+            (90, 0),  # 3 months - should include no events
+        ]
+
+        for time_window, expected_matches in test_cases:
+            base_df_with_window = compute_time_window_columns(
+                base_df.copy(), time_window
+            )
+            base_df_with_window[TIME_MASK] = compute_time_mask(base_df_with_window)
+
+            crit_cfg = {CODE_ENTRY: ["^D/TST.*"]}
+            result = CriteriaExtraction.extract_codes(base_df_with_window, crit_cfg)
+
+            self.assertEqual(
+                result.iloc[0][CRITERION_FLAG],
+                expected_matches > 0,
+                f"Time window of {time_window} days should {'not ' if expected_matches == 0 else ''}match events",
+            )
+
+    def test_time_window_with_numeric_values(self):
+        """Test that time_window_days works correctly with numeric criteria."""
+        # Create events with numeric values at different times
+        events = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1],
+                TIMESTAMP_COL: to_datetime(
+                    [
+                        "2023-05-01",  # 1 month before index - value 7.5
+                        "2023-01-01",  # 5 months before index - value 8.0
+                        "2022-06-01",  # 12 months before index - value 8.5
+                    ]
+                ),
+                CONCEPT_COL: ["HBA1C", "HBA1C", "HBA1C"],
+                VALUE_COL: [7.5, 8.0, 8.5],
+            }
+        )
+
+        index_dates = pd.DataFrame(
+            {PID_COL: [1], TIMESTAMP_COL: to_datetime(["2023-06-01"])}
+        )
+
+        # Setup base DataFrame
+        base_df = merge_index_dates(events, index_dates)
+        base_df = compute_delay_column(
+            base_df,
+            self.delays_config.get(CODE_GROUPS, []),
+            self.delays_config.get(DAYS, 0),
+        )
+
+        # Test cases with different time windows and expected values
+        test_cases = [
+            (90, 7.5),  # 3 months - should get most recent value (7.5)
+            (180, 7.5),  # 6 months - should still get most recent value (7.5)
+            (365, 7.5),  # 1 year - should still get most recent value (7.5)
+            (30, None),  # 1 month - should find no values
+        ]
+
+        crit_cfg = {CODE_ENTRY: ["HBA1C"], NUMERIC_VALUE: {MIN_VALUE: 7.0}}
+
+        for time_window, expected_value in test_cases:
+            base_df_with_window = compute_time_window_columns(
+                base_df.copy(), time_window
+            )
+            base_df_with_window[TIME_MASK] = compute_time_mask(base_df_with_window)
+
+            result = CriteriaExtraction.extract_codes(base_df_with_window, crit_cfg)
+
+            if expected_value is None:
+                self.assertFalse(
+                    result.iloc[0][CRITERION_FLAG],
+                    f"Time window of {time_window} days should not match any events",
+                )
+                self.assertIsNone(
+                    result.iloc[0][NUMERIC_VALUE],
+                    f"Time window of {time_window} days should not have a numeric value",
+                )
+            else:
+                self.assertTrue(
+                    result.iloc[0][CRITERION_FLAG],
+                    f"Time window of {time_window} days should match events",
+                )
+                self.assertAlmostEqual(
+                    result.iloc[0][NUMERIC_VALUE],
+                    expected_value,
+                    msg=f"Time window of {time_window} days should return value {expected_value}",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
