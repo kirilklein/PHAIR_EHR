@@ -53,8 +53,7 @@ criteria_definitions:
 
   arterial_revascularization:
     codes:
-      - ^(?:P|RPO|RPS)/KFNG.*
-      - ^(?:P|RPO|RPS)/KFNF.*
+      - ^(?:P|RPO|RPS)/KFN[G,F].*
 
   glomerular_filtration_rate:
     codes:
@@ -110,9 +109,7 @@ criteria_definitions:
 
   glp1_receptor_agonist:
     codes:
-      - ^(?:M|RM)/A10BJ02.* # Liraglutide
-      - ^(?:M|RM)/A10BJ05.* # Dulaglutid
-      - ^(?:M|RM)/A10BJ06.* # Semaglutide
+      - ^(?:M|RM)/A10BJ0[2,5,6].* # Liraglutide, Dulaglutid, Semaglutide
       - ^(?:M|RM)/A10AE56.* # Insulin/Liraglutid combination
     time_window_days: 90  
 
@@ -120,8 +117,7 @@ criteria_definitions:
     codes:
       - ^(?:M|RM)/A10BH.*
       - ^(?:M|RM)/A10BD0[7-9].*
-      - ^(?:M|RM)/A10BD1[0-3].*
-      - ^(?:M|RM)/A10BD1[8-9].*
+      - ^(?:M|RM)/A10BD1[0-3, 8-9].*
       - ^(?:M|RM)/A10BD2.* # summarize original codes
     time_window_days: 30
 
@@ -147,8 +143,7 @@ criteria_definitions:
 
   acute_coronary_or_cv_event:
     codes:
-      - ^(?:D|RD|RPO)/DI2[1-2].*
-      - ^(?:D|RD|RPO)/DI24.*
+      - ^(?:D|RD|RPO)/DI2[1-2,4].*
       - ^(?:D|RD|RPO)/DI6[3-6].*
     time_window_days: 90
 
@@ -162,9 +157,8 @@ criteria_definitions:
 
   peritoneal_dialysis:
     codes:
-      - BJFD21.*
-      - BJFD2[3-5].*
-      - BJFD27.*
+      - BJFD2[1,3-5,7].*
+
     
   #### End stage liver disease ####
   end_stage_liver_disease_uncertain:
@@ -239,7 +233,6 @@ criteria_definitions:
   calcitonin:
     codes:
       - ^L/CALCITONIN;P
-      - ^L/CALCITONIN;P\(FPT\)
     threshold: 50
     operator: ">="
 
