@@ -1,192 +1,257 @@
-delays:
-  days: 14 # we match diagnoses and register diagnoses up to index_date + delay_days/ assume it is not caused by the trial drug
-  code_groups:
-    - "D/" # diagnoses
-    - "RD/" # register diagnoses
+# provide expressions for inclusion and exclusion
+inclusion: "type2_diabetes & (older_than_50_and_clinical_evidence_of_cvd | older_than_60_and_subclinical_evidence_of_cvd) & hba1c_level & insulin"
+exclusion: "max_age_60 & criteria_3 & criteria_4"
 
-min_age: 50 # minimum age for inclusion  
 
-inclusion_criteria:
-  strict:
-    - type2_diabetes
-    - glycemic_control
-    # at max two unique anti-diabetic drugs should be present. Think about how to do this best.
-  minimum_one:
-    - myocardial_infarction
-    - stroke
-    - transient_ischemic_attack
-    - arterial_revascularization
-    - chronic_renal_impairment
-    
-exclusion_criteria:
-  - type1_diabetes
-  - glp1_receptor_agonist
-  - dpp4_inhibitor
-  - acute_decompensation_of_glycemic_control
-  - cancer
-  - end_stage_liver_disease
-  - insulin
-  - pregnancy_and_birth
-
-# we always check for both normal and register medication/diagnoses as well as for all procedures P, RPO, RPS
 criteria_definitions:
-  # Inclusion Criteria (At least one of the following should be true)
-  type2_diabetes:
-    use_patterns:
-      - metformin
-      - dpp4_inhibitors
-      - sglt2_inhibitors
-      - sulphonylureas
-      - thiazolidinediones
-    codes:
-      - ^(?:D|RD)/C11.*
+  # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
+  min_age_50: # would be the age at index_date
+    min_age: 50
 
+  max_age_60:
+    max_age: 60
+
+  type2_diabetes:
+    codes:
+      - ^(?:D|RD)/DC11.*
+      - ^(?:M|RM)/A10B.*
+
+  ### diabetic medication ###
+  insulin:
+    codes:
+      - ^(?:M|RM)/A10A[C-E].*
+
+  #################################################################
+  ### Clinical Evidence of CVD ###
   myocardial_infarction:
     codes:
-      - ^(?:D|RD)/I2[1-3].*  # starts with D/I21, D/I22, D/I23
+      - ^(?:D|RD)/DI2[1-3].*
 
   stroke:
     codes:
-      - ^(?:D|RD)/I6[3-6].*  # starts with D/I63, D/I64, D/I65, D/I66
-      - ^(?:D|RD)/H341.*     # starts with D/H341
+      - ^(?:D|RD)/DI6[3-6].*
 
   transient_ischemic_attack:
     codes:
-      - ^(?:D|RD)/G45.*      # starts with D/G45
+      - ^(?:D|RD)/DG45.*
 
   arterial_revascularization:
     codes:
       - ^(?:P|RPO|RPS)/KFNG.*
       - ^(?:P|RPO|RPS)/KFNF.*
 
-  chronic_renal_impairment:
+  glomerular_filtration_rate:
     codes:
-      - ^L/.*egfr.*1[.,]73.*
+      - ^L/.*EGFR.*1[.,]73.*
     threshold: 60
     operator: "<="
-      
-  # Glycemic Control
-  glycemic_control:
+
+  clinical_evidence_of_cvd:
+    expression: myocardial_infarction | stroke | transient_ischemic_attack | arterial_revascularization
+  ##################################################################
+  ### Subclinical Evidence of CVD ###
+
+  #### Microalbuminuria ####
+  microalbuminuria_min:
     codes:
-      - ^L/.*hba1c.*
+      - ^L/ALBUMIN;U
+      - ^L/ALBUMIN \(LOKAL\);U
+    threshold: 30
+    operator: ">="
+  microalbuminuria_max:
+    codes:
+      - ^L/ALBUMIN;U
+      - ^L/ALBUMIN \(LOKAL\);U
+    threshold: 299
+    operator: "<="
+
+  microalbuminuria:
+    expression: microalbuminuria_min | microalbuminuria_max
+
+  low_brachial_index:
+    codes:
+      - ^(?:D|RD)/I739.* 
+      - ^(?:D|RD)/I702.* 
+      - ^(?:P|RD)/KPE[EFHNP].* # only present in Register diagnoses and procedures
+      - ^(?:P|RD)/KPF[EFHN].* # only present in Register diagnoses and procedures
+    time_window_days: 90
+
+  subclinical_evidence_of_cvd:
+    expression: microalbuminuria | low_brachial_index
+
+  hba1c_level:
+    codes:
+      - ^L/.*HBA1C.*
     threshold: 7.0
     operator: ">="
+    time_window_days: 90
 
-
-  #########################################################################
-  # Exclusion Criteria (Remove if at least one of the following is true)
+  ###############################################
+  #### Exclusion Criteria ####
   type1_diabetes:
     codes:
-      - ^D/C10.*
+      - ^(?:D|RD|RPO)/DE10.*
 
   glp1_receptor_agonist:
     codes:
-      - ^(?:M|RM)/A10BJ02.*  # Liraglutide
-      - ^(?:M|RM)/A10BJ05.*  # Dulaglutid
-      - ^(?:M|RM)/A10BJ06.*  # Semaglutide
-      - ^(?:M|RM)/A10AE56.*  # Insulin/Liraglutid combination
-    time_window_days: 90
-
-  dpp4_inhibitor:
-    use_patterns:
-      - dpp4_inhibitors
-    time_window_days: 30
-
-  insulin: 
-    codes:
-      - ^(?:M|RM)/A10A.*
-    time_window_days: 90
-
-  acute_decompensation_of_glycemic_control:
-    codes: 
-      - ^(?:D|RD)/E111.* # ketoacidosis
-      - ^(?:D|RD)/E121.* # hyperosmolar hyperglycemic state
-      - ^(?:D|RD)/E131.* # diabetic coma
-      - ^(?:D|RD)/E141.* # diabetic ketoacidosis
-    time_window_days: 90
-  chronic_pancreatitis:
-    codes:
-      - ^(?:D|RD)/K861.*
-    time_window_days: 730 # 2 years
-
-  idiopathic_acute_pancreatitis:
-    codes:
-      - ^(?:D|RD)/K850.*
-    time_window_days: 730 # 2 years
-
-  acute_coronary_or_cv_event:
-    codes:
-      - ^(?:D|RD)/I2[1-2].*
-      - ^(?:D|RD)/I24.*
-      - ^(?:D|RD)/I6[3-6].*
-    time_window_days: 90
-
-  chronic_hemodialysis: # includes peritoneal dialysis
-    codes:
-      - ^(?:D|RD)/N185.*
-
-  end_stage_liver_disease:
-    codes:
-      - ^(?:D|RD)/K72.* # this will have more potentially, e.g. + bilirubin, albumin, etc. # need to handle this in a smart way
-      # it will be a combination of acute/chronic liver disease + one of the other criteria
-    
-  solid_organ_transplant:
-    codes:
-      - ^(?:D|RD)/Z94.*
-
-  cancer:
-    codes: # DC00-DC99 (except C4491/2)
-      - ^(?:D|RD)/C[0-9][0-9].*
-    exclude_codes:
-      - ^(?:D|RD)/C449.*
-    time_window_days: 1826 # 5 years
-
-  multiple_endocrine_neoplasia:
-    codes:
-      - ^(?:D|RD)/E312.* # ?
-    time_window_days: 1826 # 5 years
-
-  medullary_thyroid_carcinoma:
-    codes:
-      - ^(?:D|RD)/D093.*
-    time_window_days: 1826 # 5 years
-
-  calcitonin_elevated:
-    codes:
-      - ^L/CALCITONIN.*
-    time_window_days: 1826 # 5 years
-
-  pregnancy_and_birth:
-    codes:
-      - ^(?:D|RD)/O[0-9][0-9].*
-
-# Define reusable code patterns
-code_patterns:
-  metformin:
-    codes:
-      - ^(?:M|RM)/A10BA.*
-      - ^(?:M|RM)/A10BD0[1-3].*
-      - ^(?:M|RM)/A10BD05.*
+      - ^(?:M|RM)/A10BJ02.* # Liraglutide
+      - ^(?:M|RM)/A10BJ05.* # Dulaglutid
+      - ^(?:M|RM)/A10BJ06.* # Semaglutide
+      - ^(?:M|RM)/A10AE56.* # Insulin/Liraglutid combination
+    time_window_days: 90  
 
   dpp4_inhibitors:
     codes:
       - ^(?:M|RM)/A10BH.*
       - ^(?:M|RM)/A10BD0[7-9].*
       - ^(?:M|RM)/A10BD1[0-3].*
+      - ^(?:M|RM)/A10BD1[8-9].*
+      - ^(?:M|RM)/A10BD2.* # summarize original codes
+    time_window_days: 30
 
-  sglt2_inhibitors:
+  insulin_except_basal:
     codes:
-      - ^(?:M|RM)/A10BK.*
-      - ^(?:M|RM)/A10BD1[5-6].*
+      - ^(?:M|RM)/A10AB.*
+    time_window_days: 90
 
-  sulphonylureas:
+  acute_decompensation_of_glycemic_control:
     codes:
-      - ^(?:M|RM)/A10BB.*
-      - ^(?:M|RM)/A10BC.*
+      - ^(?:D|RD|RPO)/DE1[1-4]1.* 
+    time_window_days: 90
 
-  thiazolidinediones:
+  chronic_pancreatitis:
     codes:
-      - ^(?:M|RM)/A10BG.*
+      - ^(?:D|RD|RPO)/DK86.*
+    time_window_days: 730 # 2 years
+
+  idiopathic_acute_pancreatitis:
+    codes:
+      - ^(?:D|RD|RPO)/DK850.*
+    time_window_days: 730 # 2 years
+
+  acute_coronary_or_cv_event:
+    codes:
+      - ^(?:D|RD|RPO)/DI2[1-2].*
+      - ^(?:D|RD|RPO)/DI24.*
+      - ^(?:D|RD|RPO)/DI6[3-6].*
+    time_window_days: 90
+
+  renal_failure:
+    codes:
+      - ^(?:D|RD|RPO)/DN185.*
+
+  hemodialysis:
+    codes:
+      - BJFD20.*
+
+  peritoneal_dialysis:
+    codes:
+      - BJFD21.*
+      - BJFD2[3-5].*
+      - BJFD27.*
+    
+  #### End stage liver disease ####
+  end_stage_liver_disease_uncertain:
+    codes:
+      - ^(?:D|RD|RPO)/DK72.*
+
+  end_stage_liver_disease_certain:
+    codes:
+      - ^(?:D|RD|RPO)/DK721.*
+  ascites:
+    codes:
+      - ^(?:D|RD|RPO)/DR18.*
+
+  encephalopathy:
+    codes:
+      - ^(?:D|RD|RPO)/DG92.*
+      - ^(?:D|RD|RPO)/DG934.*
+      - ^(?:D|RD|RPO)/DG943.*
+
+  variceal_bleeding:
+    codes:
+      - ^(?:D|RD|RPO)/DI850.*
+      - ^(?:D|RD|RPO)/DI983.*
+  
+  bilirubin:
+    codes:
+      - Need_to_check
+
+  albumin:
+    codes:
+      - Need_to_check
+
+  prothrombin_time:
+    codes:
+      - Need_to_check
+
+  prior_liver_transplant:
+    codes:
+      - ^(?:RD|P)/KJJC.*
+
+  ### end stage renal disease end ###
+    
+  prior_solid_organ_transplant:
+    codes:
+      - ^(?:D|RD|RPO)/DZ944.*
+      - ^(?:D|RD|RPO)/DY830.*
+      - ^(?:P|RPO|RPS)/KFQ.*
+      - ^(?:P|RPO|RPS)/KGDG.*
+      - ^(?:P|RPO|RPS)/KJJC.*
+      - ^(?:P|RPO|RPS)/KJLE.*
+      - ^(?:P|RPO|RPS)/KKAS.*
+
+  cancer:
+    codes:
+      - ^(?:D|RD|RPO)/DC[0-9][0-9].*
+    time_window_days: 1826  # 5 years
+  
+  skin_cancer:
+    codes:
+      - ^(?:D|RD|RPO)/DC44.*
+    time_window_days: 1826  # 5 years
+
+  multiple_endocrine_neoplasia_type_2:
+    codes:
+      - ^(?:D|RD|RPO)/DE312.*
+    time_window_days: 1826  # 5 years
+
+  medullary_thyroid_carcinoma:
+    codes:
+      - ^(?:D|RD|RPO)/DD093.*
+
+  calcitonin:
+    codes:
+      - ^L/CALCITONIN;P
+      - ^L/CALCITONIN;P\(FPT\)
+    threshold: 50
+    operator: ">="
+
+  pregnancy_and_birth:
+    codes:
+      - ^(?:D|RD|RPO)/DO[0-9][0-9].*
+    time_window_days: 365  # 1 year
+
+  older_than_50_and_clinical_evidence_of_cvd:
+    expression: min_age_50 & clinical_evidence_of_cvd
+  
+  older_than_60_and_subclinical_evidence_of_cvd:
+    expression: max_age_60 & subclinical_evidence_of_cvd
+
+  end_stage_liver_disease:
+    expression: end_stage_liver_disease_certain | end_stage_liver_disease_uncertain & (ascites | encephalopathy | variceal_bleeding | bilirubin | albumin | prothrombin_time | prior_liver_transplant)
+
+  malignant_neoplasms:
+    expression: cancer & ~ skin_cancer 
+
+###################### End of main criteria ######################
+
+delays:
+  days: 14 # we match diagnoses and register diagnoses up to index_date + delay_days/ assume it is not caused by the trial drug
+  code_groups:
+    - "D/" # diagnoses
+    - "RD/" # register diagnoses
+
 
 # Use the same patterns for unique code limits
 unique_code_limits:
