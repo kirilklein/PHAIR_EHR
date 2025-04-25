@@ -117,7 +117,7 @@ criteria_definitions:
     codes:
       - ^(?:M|RM)/A10BH.*
       - ^(?:M|RM)/A10BD0[7-9].*
-      - ^(?:M|RM)/A10BD1[0-3, 8-9].*
+      - ^(?:M|RM)/A10BD1[0-3,8-9].*
       - ^(?:M|RM)/A10BD2.* # summarize original codes
     time_window_days: 30
 
