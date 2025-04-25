@@ -161,21 +161,53 @@ class CohortExtractor:
         relevant_index_dates: pd.DataFrame,
         simple_criteria: list,
     ) -> pd.DataFrame:
-        results = []
+        # Early return if no criteria
+        if not simple_criteria:
+            return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
 
+        # Precompute common operations outside the loop
+        base_df = merge_index_dates(events, relevant_index_dates)
+        base_df = compute_delay_column(
+            base_df,
+            self.delays_config.get(CODE_GROUPS, []),
+            self.delays_config.get(DAYS, 0),
+        )
+        base_df = compute_time_window_columns(base_df)
+        base_df[TIME_MASK] = compute_time_mask(base_df)
+
+        results = []
         for criterion, crit_cfg in tqdm(
             simple_criteria, desc="Processing simple criteria"
         ):
-            res = CriteriaExtraction.extract_codes(
-                events, relevant_index_dates, crit_cfg, self.delays_config
+            # Apply criterion-specific code mask
+            df = base_df.copy()  # Use a shallow copy to avoid modifying the base_df
+            df[CODE_MASK] = compute_code_masks(
+                df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
             )
+            df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
+
+            # Process criterion-specific flags and numeric values
+            flag_df = (
+                df.groupby(PID_COL)[FINAL_MASK]
+                .any()
+                .reset_index()
+                .rename(columns={FINAL_MASK: CRITERION_FLAG})
+            )
+
             has_numeric = NUMERIC_VALUE in crit_cfg
+            if has_numeric:
+                min_val = crit_cfg.get(MIN_VALUE)
+                max_val = crit_cfg.get(MAX_VALUE)
+                res = extract_numeric_values(df, flag_df, min_val, max_val)
+            else:
+                res = flag_df.copy()
+                res[NUMERIC_VALUE] = None
+
+            # Rename columns to use criterion name
             res = rename_result(res, criterion, has_numeric)
             results.append(res)
 
-        if not results:
-            return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
-
+        # Merge all results
         combined = results[0]
         for df in results[1:]:
             combined = combined.merge(df, on=PID_COL, how="outer")
@@ -367,16 +399,8 @@ class CriteriaExtraction:
         """
         Fully vectorized extraction for a code/numeric criterion.
 
-        Steps:
-        1. Merge index_dates into events.
-        2. Compute per-event delay using delays_config.
-        3. Compute the time window (min_timestamp and max_timestamp).
-        4. Build time and code masks and combine them into FINAL_MASK.
-        5. Group by patient: a patient's CRITERION_FLAG is True if any event passes FINAL_MASK.
-        6. If numeric extraction is requested, additionally extract, for each patient, the latest numeric_value
-            (subject to additional range filtering on min_value and/or max_value).
-
-        Returns a DataFrame with columns: PID_COL, CRITERION_FLAG, and (if applicable) NUMERIC_VALUE.
+        Note: This is kept for backward compatibility, but the optimized version
+        should use the _process_simple_criteria method above.
         """
         df = merge_index_dates(events, index_dates)
         df = compute_delay_column(
