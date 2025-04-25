@@ -171,7 +171,7 @@ def extract_numeric_values(
 
     # Group by patient and select the most recent event (by TIMESTAMP_COL)
     if not num_df.empty:
-        num_df = num_df.sort_values(TIMESTAMP_COL).groupby(PID_COL).last().reset_index()
+        num_df = num_df.sort_values(TIMESTAMP_COL).groupby(PID_COL).tail(1).reset_index()
         num_df = num_df[[PID_COL, NUMERIC_VALUE]]
         result = flag_df.merge(num_df, on=PID_COL, how="left")
     else:
