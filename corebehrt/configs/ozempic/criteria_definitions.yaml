@@ -3,25 +3,23 @@ logging:
   path: ./outputs/logs
 
 paths:
-  ### Inputs
-  cohort: ./outputs/causal/exposure_cohort # Data directory
+  # Inputs
+  cohort: ./outputs/causal/exposure_cohort
   meds: ./example_data/example_MEDS_data_causal
   splits: [tuning]
-  ### Outputs
-  cohort_advanced: ./outputs/causal/exposure_cohort_advanced_ozempic # Data directory
+  # Outputs
+  cohort_advanced: ./outputs/causal/exposure_cohort_advanced_ozempic
 
-cv_folds: 2 # can be set to 1 if only a simple train/val split is needed
-val_ratio: 0.1 # only used if cv_folds is set to 1
-test_ratio: 0 # can be set to 1 for test set creation only
+cv_folds: 2  # can be set to 1 if only a simple train/val split is needed
+val_ratio: 0.1  # only used if cv_folds is set to 1
+test_ratio: 0  # can be set to 1 for test set creation only
 
 # provide expressions for inclusion and exclusion
 inclusion: "type2_diabetes & (older_than_50_and_clinical_evidence_of_cvd | older_than_60_and_subclinical_evidence_of_cvd) & hba1c_level & insulin"
 exclusion: "type1_diabetes | exclusion_drugs | acute_decompensation_of_glycemic_control | pancreatitis | acute_coronary_or_cv_event | dialysis | end_stage_liver_disease | prior_solid_organ_transplant | cancer | multiple_endocrine_neoplasia_type_2 | medullary_thyroid_carcinoma | calcitonin | pregnancy_and_birth"
 
-
 criteria_definitions:
-  # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
-  min_age_50: # would be the age at index_date
+  min_age_50:
     min_age: 50
 
   max_age_60:
@@ -73,6 +71,7 @@ criteria_definitions:
       - ^L/ALBUMIN \(LOKAL\);U
     threshold: 30
     operator: ">="
+
   microalbuminuria_max:
     codes:
       - ^L/ALBUMIN;U
@@ -85,8 +84,8 @@ criteria_definitions:
 
   low_brachial_index:
     codes:
-      - ^(?:D|RD)/I739.* 
-      - ^(?:D|RD)/I702.* 
+      - ^(?:D|RD)/I739.*
+      - ^(?:D|RD)/I702.*
       - ^(?:P|RD)/KPE[EFHNP].* # only present in Register diagnoses and procedures
       - ^(?:P|RD)/KPF[EFHN].* # only present in Register diagnoses and procedures
     time_window_days: 90
@@ -118,7 +117,7 @@ criteria_definitions:
       - ^(?:M|RM)/A10BH.*
       - ^(?:M|RM)/A10BD0[7-9].*
       - ^(?:M|RM)/A10BD1[0-3,8-9].*
-      - ^(?:M|RM)/A10BD2.* # summarize original codes
+      - ^(?:M|RM)/A10BD2.*
     time_window_days: 30
 
   insulin_except_basal:
@@ -128,7 +127,7 @@ criteria_definitions:
 
   acute_decompensation_of_glycemic_control:
     codes:
-      - ^(?:D|RD|RPO)/DE1[1-4]1.* 
+      - ^(?:D|RD|RPO)/DE1[1-4]1.*
     time_window_days: 90
 
   chronic_pancreatitis:
@@ -159,7 +158,6 @@ criteria_definitions:
     codes:
       - BJFD2[1,3-5,7].*
 
-    
   #### End stage liver disease ####
   end_stage_liver_disease_uncertain:
     codes:
@@ -168,6 +166,7 @@ criteria_definitions:
   end_stage_liver_disease_certain:
     codes:
       - ^(?:D|RD|RPO)/DK721.*
+
   ascites:
     codes:
       - ^(?:D|RD|RPO)/DR18.*
@@ -182,7 +181,7 @@ criteria_definitions:
     codes:
       - ^(?:D|RD|RPO)/DI850.*
       - ^(?:D|RD|RPO)/DI983.*
-  
+
   bilirubin:
     codes:
       - Need_to_check
@@ -199,8 +198,6 @@ criteria_definitions:
     codes:
       - ^(?:RD|P)/KJJC.*
 
-  ### end stage renal disease end ###
-    
   prior_solid_organ_transplant:
     codes:
       - ^(?:D|RD|RPO)/DZ944.*
@@ -215,7 +212,7 @@ criteria_definitions:
     codes:
       - ^(?:D|RD|RPO)/DC[0-9][0-9].*
     time_window_days: 1826  # 5 years
-  
+
   skin_cancer:
     codes:
       - ^(?:D|RD|RPO)/DC44.*
@@ -232,18 +229,18 @@ criteria_definitions:
 
   calcitonin:
     codes:
-      - ^L/CALCITONIN;P
+      - ^L/CALCITONIN;P(?:\(FPT\))?
     threshold: 50
     operator: ">="
 
   pregnancy_and_birth:
     codes:
       - ^(?:D|RD|RPO)/DO[0-9][0-9].*
-    time_window_days: 365  # 1 year
+    time_window_days: 365
 
   older_than_50_and_clinical_evidence_of_cvd:
     expression: min_age_50 & clinical_evidence_of_cvd
-  
+
   older_than_60_and_subclinical_evidence_of_cvd:
     expression: max_age_60 & subclinical_evidence_of_cvd
 
@@ -251,7 +248,7 @@ criteria_definitions:
     expression: end_stage_liver_disease_certain | end_stage_liver_disease_uncertain & (ascites | encephalopathy | variceal_bleeding | bilirubin | albumin | prothrombin_time | prior_liver_transplant)
 
   malignant_neoplasms:
-    expression: cancer & ~ skin_cancer 
+    expression: cancer & ~skin_cancer
 
   #### Combined exclusion criteria ####
   exclusion_drugs:
@@ -272,22 +269,10 @@ delays:
     - "RD/" # register diagnoses
 
 
-# Use the same patterns for unique code limits
 unique_code_limits:
   anti_diabetic_drugs:
     max_count: 2
-    criteria: # list of criteria.
+    criteria: # at most 2 of the following:
       - glp1_receptor_agonist
       - dpp4_inhibitors
       - insulin_except_basal
-
-
-  
-
-
-
-
-
-
-
-
