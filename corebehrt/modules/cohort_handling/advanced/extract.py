@@ -43,6 +43,7 @@ The module supports three types of criteria:
 """
 
 import logging
+from tqdm import tqdm
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -162,7 +163,9 @@ class CohortExtractor:
     ) -> pd.DataFrame:
         results = []
 
-        for criterion, crit_cfg in simple_criteria:
+        for criterion, crit_cfg in tqdm(
+            simple_criteria, desc="Processing simple criteria"
+        ):
             res = CriteriaExtraction.extract_codes(
                 events, relevant_index_dates, crit_cfg, self.delays_config
             )
