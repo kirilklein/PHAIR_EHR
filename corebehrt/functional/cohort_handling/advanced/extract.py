@@ -161,7 +161,15 @@ def extract_numeric_values(
         The CRITERION_FLAG is updated to True only if a numeric value in the required range is found.
     """
     # Start with events that are marked True by the final mask and have a numeric value.
-    num_df = df[(df[FINAL_MASK]) & (df[NUMERIC_VALUE].notna())].copy()
+    mask = (df[FINAL_MASK]) & (df[NUMERIC_VALUE].notna())
+    num_df = df[mask].copy()
+
+    # Early return if no matching rows
+    if not mask.any():
+        result = flag_df.copy()
+        result[NUMERIC_VALUE] = None
+        result[CRITERION_FLAG] = False
+        return result
 
     # Apply numeric range filtering, if thresholds are specified.
     if min_value is not None:
@@ -171,7 +179,9 @@ def extract_numeric_values(
 
     # Group by patient and select the most recent event (by TIMESTAMP_COL)
     if not num_df.empty:
-        num_df = num_df.sort_values(TIMESTAMP_COL).groupby(PID_COL).tail(1).reset_index()
+        num_df = (
+            num_df.sort_values(TIMESTAMP_COL).groupby(PID_COL).tail(1).reset_index()
+        )
         num_df = num_df[[PID_COL, NUMERIC_VALUE]]
         result = flag_df.merge(num_df, on=PID_COL, how="left")
     else:
