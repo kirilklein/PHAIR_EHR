@@ -40,7 +40,9 @@ def extract_and_save_criteria(
 
     criteria_dfs = []
     for shard_path in iterate_splits_and_shards(meds_path, splits):
-        logger.info(f"========== Processing shard: {os.path.basename(shard_path)} ==========")
+        logger.info(
+            f"========== Processing shard: {os.path.basename(shard_path)} =========="
+        )
         shard = pd.read_parquet(shard_path)
         shard[CONCEPT_COL] = shard[CONCEPT_COL].astype("category")
         if pids is not None:
