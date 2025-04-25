@@ -6,18 +6,27 @@ from typing import List
 import pandas as pd
 import torch
 
-from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, DELAYS
-from corebehrt.constants.data import PID_COL
+from corebehrt.constants.cohort import (
+    CRITERIA_DEFINITIONS,
+    DELAYS,
+    EXCLUSION,
+    INCLUSION,
+)
+from corebehrt.constants.data import CONCEPT_COL, PID_COL
 from corebehrt.constants.paths import (
     FOLDS_FILE,
     INDEX_DATES_FILE,
     PID_FILE,
     TEST_PIDS_FILE,
 )
+from corebehrt.functional.cohort_handling.advanced.checks import (
+    check_criteria_definitions,
+    check_delays_config,
+    check_expression,
+)
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
 from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
-from corebehrt.constants.data import CONCEPT_COL
 
 logger = logging.getLogger("select_cohort_advanced")
 
@@ -38,6 +47,18 @@ def extract_and_save_criteria(
     if pids is not None:
         index_dates = index_dates[index_dates[PID_COL].isin(pids)]
 
+    # Check the criteria definitions and delays config
+    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
+    delays_cfg = cfg.get(DELAYS)
+    check_criteria_definitions(criteria_definitions_cfg)
+    check_delays_config(delays_cfg)
+
+    # Check the inclusion and exclusion expressions
+    criteria_names = list(criteria_definitions_cfg.keys())
+    check_expression(cfg.get(INCLUSION), criteria_names)
+    check_expression(cfg.get(EXCLUSION), criteria_names)
+
+    # Extract criteria
     criteria_dfs = []
     for shard_path in iterate_splits_and_shards(meds_path, splits):
         logger.info(
@@ -50,8 +71,8 @@ def extract_and_save_criteria(
             shard = shard[shard[PID_COL].isin(pids)]
         logger.info(f"Extracting criteria for {shard[PID_COL].nunique()} patients")
         cohort_extractor = CohortExtractor(
-            cfg.get(CRITERIA_DEFINITIONS),
-            cfg.get(DELAYS),
+            criteria_definitions_cfg,
+            delays_cfg,
         )
         criteria_df = cohort_extractor.extract(
             shard,

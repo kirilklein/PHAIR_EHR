@@ -43,10 +43,10 @@ The module supports three types of criteria:
 """
 
 import logging
-from tqdm import tqdm
 from typing import List, Tuple
 
 import pandas as pd
+from tqdm import tqdm
 
 from corebehrt.constants.cohort import (
     AGE_AT_INDEX_DATE,
@@ -68,10 +68,6 @@ from corebehrt.constants.cohort import (
     TIME_WINDOW_DAYS,
 )
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
-from corebehrt.functional.cohort_handling.advanced.checks import (
-    check_criteria_definitions,
-    check_delays_config,
-)
 from corebehrt.functional.cohort_handling.advanced.extract import (
     compute_age_at_index_date,
     compute_code_masks,
@@ -91,9 +87,6 @@ class CohortExtractor:
     def __init__(self, criteria_definitions: dict, delays_config: dict = None):
         self.criteria_definitions = criteria_definitions
         self.delays_config = delays_config or {}
-
-        check_delays_config(self.delays_config)
-        check_criteria_definitions(self.criteria_definitions)
 
     def extract(
         self,
