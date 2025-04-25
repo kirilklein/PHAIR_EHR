@@ -1,6 +1,6 @@
 # provide expressions for inclusion and exclusion
-inclusion: type2_diabetes & (older_than_50_and_clinical_evidence_of_cvd | older_than_60_and_subclinical_evidence_of_cvd) & hba1c_level & insulin
-exclusion: max_age_60 & criteria_3 & criteria_4 
+inclusion: "type2_diabetes & (older_than_50_and_clinical_evidence_of_cvd | older_than_60_and_subclinical_evidence_of_cvd) & hba1c_level & insulin"
+exclusion: "max_age_60 & criteria_3 & criteria_4"
 
 
 criteria_definitions:
