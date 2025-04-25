@@ -4,10 +4,12 @@ from corebehrt.constants.cohort import (
     ALLOWED_OPERATORS,
     CODE_ENTRY,
     CODE_GROUPS,
+    CRITERIA,
     DAYS,
     EXCLUDE_CODES,
     EXPRESSION,
     MAX_AGE,
+    MAX_COUNT,
     MAX_VALUE,
     MIN_AGE,
     MIN_VALUE,
@@ -182,3 +184,34 @@ def check_criteria_names(df, criteria_names):
     missing_criteria = set(criteria_names) - set(df.columns)
     if missing_criteria:
         raise ValueError(f"Criteria not found in DataFrame: {missing_criteria}")
+
+
+def check_unique_code_limits(unique_code_limits: dict, criteria_names: list):
+    """
+    Check that unique code limits configuration is valid.
+
+    Args:
+        unique_code_limits (dict): Dictionary containing code limit configurations.
+            Each configuration must have:
+            - max_count: Maximum number of codes allowed
+            - criteria: List of criterion names to check against
+        criteria_names (list): List of valid criterion names to validate against
+
+    Raises:
+        ValueError: If configuration is invalid:
+            - Missing required fields (max_count or criteria)
+            - criteria is not a list
+            - criteria contains unknown criterion names
+    """
+    for name, cfg in unique_code_limits.items():
+        if cfg.get(MAX_COUNT) is None:
+            raise ValueError(f"Max count must be specified for {name}")
+        if cfg.get(CRITERIA) is None:
+            raise ValueError(f"Criteria must be specified for {name}")
+        if not isinstance(cfg[CRITERIA], list):
+            raise ValueError(f"Criteria for {name} must be a list")
+        missing_criteria = [c for c in cfg[CRITERIA] if c not in criteria_names]
+        if missing_criteria:
+            raise ValueError(
+                f"The following criteria were not found in criteria_names: {missing_criteria}"
+            )

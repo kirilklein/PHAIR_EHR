@@ -11,6 +11,7 @@ from corebehrt.constants.cohort import (
     DELAYS,
     EXCLUSION,
     INCLUSION,
+    UNIQUE_CODE_LIMITS,
 )
 from corebehrt.constants.data import CONCEPT_COL, PID_COL
 from corebehrt.constants.paths import (
@@ -23,6 +24,7 @@ from corebehrt.functional.cohort_handling.advanced.checks import (
     check_criteria_definitions,
     check_delays_config,
     check_expression,
+    check_unique_code_limits,
 )
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
@@ -57,6 +59,10 @@ def extract_and_save_criteria(
     criteria_names = list(criteria_definitions_cfg.keys())
     check_expression(cfg.get(INCLUSION), criteria_names)
     check_expression(cfg.get(EXCLUSION), criteria_names)
+
+    if UNIQUE_CODE_LIMITS in cfg:
+        logger.info("Checking unique code limits")
+        check_unique_code_limits(cfg.get(UNIQUE_CODE_LIMITS), criteria_names)
 
     logger.info("Checks successful, extracting criteria")
     criteria_dfs = []
