@@ -398,12 +398,13 @@ class CriteriaExtraction:
         Fully vectorized extraction for a code/numeric criterion.
         """
         df = base_df.copy()  # Use a shallow copy to avoid modifying the base_df
+        logger.info(f"::Computing code mask")
         df[CODE_MASK] = compute_code_masks(
             df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
         )
+        logger.info(f"::Computing final mask")
         df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
-
-        # Process criterion-specific flags and numeric values
+        logger.info(f"::Grouping by PID and computing final mask")
         flag_df = (
             df.groupby(PID_COL)[FINAL_MASK]
             .any()
@@ -413,10 +414,12 @@ class CriteriaExtraction:
 
         has_numeric = NUMERIC_VALUE in crit_cfg
         if has_numeric:
+            logger.info(f"::Extracting numeric values")
             min_val = crit_cfg.get(MIN_VALUE)
             max_val = crit_cfg.get(MAX_VALUE)
             res = extract_numeric_values(df, flag_df, min_val, max_val)
         else:
+            logger.info(f"::no numeric values, returning flag only")
             res = flag_df.copy()
             res[NUMERIC_VALUE] = None
         return res
