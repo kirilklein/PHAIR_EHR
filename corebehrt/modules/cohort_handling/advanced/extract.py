@@ -161,7 +161,16 @@ class CohortExtractor:
         relevant_index_dates: pd.DataFrame,
         simple_criteria: list,
     ) -> pd.DataFrame:
-        # Early return if no criteria
+        """Process multiple criteria against events data for given index dates.
+
+        Args:
+            events: DataFrame containing medical events with at least 'code' and PID columns
+            relevant_index_dates: DataFrame with index dates for each patient ID
+            simple_criteria: List of (criterion_name, criterion_config) tuples
+
+        Returns:
+            DataFrame with extracted criteria results per patient ID
+        """
         if not simple_criteria:
             return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
 
@@ -179,38 +188,29 @@ class CohortExtractor:
         for criterion, crit_cfg in tqdm(
             simple_criteria, desc="Processing simple criteria"
         ):
-            # Apply criterion-specific code mask
-            df = base_df.copy()  # Use a shallow copy to avoid modifying the base_df
-            df[CODE_MASK] = compute_code_masks(
-                df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
-            )
-            df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
-
-            # Process criterion-specific flags and numeric values
-            flag_df = (
-                df.groupby(PID_COL)[FINAL_MASK]
-                .any()
-                .reset_index()
-                .rename(columns={FINAL_MASK: CRITERION_FLAG})
-            )
-
-            has_numeric = NUMERIC_VALUE in crit_cfg
-            if has_numeric:
-                min_val = crit_cfg.get(MIN_VALUE)
-                max_val = crit_cfg.get(MAX_VALUE)
-                res = extract_numeric_values(df, flag_df, min_val, max_val)
-            else:
-                res = flag_df.copy()
-                res[NUMERIC_VALUE] = None
-
-            # Rename columns to use criterion name
-            res = rename_result(res, criterion, has_numeric)
+            res = CriteriaExtraction.extract_codes(base_df, crit_cfg)
+            res = rename_result(res, criterion, NUMERIC_VALUE in crit_cfg)
             results.append(res)
 
-        # Merge all results
-        combined = results[0]
-        for df in results[1:]:
-            combined = combined.merge(df, on=PID_COL, how="outer")
+        if results:
+            # Merge all results
+            return self.combine_results(results)
+        # Return empty DataFrame if no results
+        return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
+
+    @staticmethod
+    def combine_results(results: List[pd.DataFrame]) -> pd.DataFrame:
+        """Combine results from different criteria."""
+        all_pids = set()
+        for df in results:
+            all_pids.update(df[PID_COL])
+
+        # Create a base DataFrame with all patient IDs
+        combined = pd.DataFrame({PID_COL: list(all_pids)})
+
+        # Left join each result DataFrame
+        for df in results:
+            combined = combined.merge(df, on=PID_COL, how="left")
 
         return combined
 
@@ -391,29 +391,19 @@ class CriteriaExtraction:
 
     @staticmethod
     def extract_codes(
-        events: pd.DataFrame,
-        index_dates: pd.DataFrame,
-        crit_cfg: Dict,
-        delays_config: Dict,
+        base_df: pd.DataFrame,
+        crit_cfg: dict,
     ) -> pd.DataFrame:
         """
         Fully vectorized extraction for a code/numeric criterion.
-
-        Note: This is kept for backward compatibility, but the optimized version
-        should use the _process_simple_criteria method above.
         """
-        df = merge_index_dates(events, index_dates)
-        df = compute_delay_column(
-            df, delays_config.get(CODE_GROUPS, []), delays_config.get(DAYS, 0)
-        )
-        df = compute_time_window_columns(df, crit_cfg.get(TIME_WINDOW_DAYS, 36500))
-
-        df[TIME_MASK] = compute_time_mask(df)
+        df = base_df.copy()  # Use a shallow copy to avoid modifying the base_df
         df[CODE_MASK] = compute_code_masks(
             df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
         )
         df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
 
+        # Process criterion-specific flags and numeric values
         flag_df = (
             df.groupby(PID_COL)[FINAL_MASK]
             .any()
@@ -421,12 +411,12 @@ class CriteriaExtraction:
             .rename(columns={FINAL_MASK: CRITERION_FLAG})
         )
 
-        if NUMERIC_VALUE in crit_cfg:
+        has_numeric = NUMERIC_VALUE in crit_cfg
+        if has_numeric:
             min_val = crit_cfg.get(MIN_VALUE)
             max_val = crit_cfg.get(MAX_VALUE)
-            result = extract_numeric_values(df, flag_df, min_val, max_val)
+            res = extract_numeric_values(df, flag_df, min_val, max_val)
         else:
-            result = flag_df.copy()
-            result[NUMERIC_VALUE] = None
-
-        return result
+            res = flag_df.copy()
+            res[NUMERIC_VALUE] = None
+        return res

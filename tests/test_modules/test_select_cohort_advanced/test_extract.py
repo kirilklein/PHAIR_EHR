@@ -17,11 +17,18 @@ from corebehrt.constants.cohort import (
     NUMERIC_VALUE,
     NUMERIC_VALUE_SUFFIX,
     TIME_WINDOW_DAYS,
+    TIME_MASK,
 )
 from corebehrt.constants.data import CONCEPT_COL, PID_COL, TIMESTAMP_COL, VALUE_COL
 from corebehrt.modules.cohort_handling.advanced.extract import (
     CohortExtractor,
     CriteriaExtraction,
+)
+from corebehrt.functional.cohort_handling.advanced.extract import (
+    compute_delay_column,
+    compute_time_mask,
+    compute_time_window_columns,
+    merge_index_dates,
 )
 
 
@@ -304,10 +311,21 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
         self.delays_config = {DAYS: 14, CODE_GROUPS: ["D/"]}
 
     def test_vectorized_extraction_codes_non_numeric(self):
+        # Setup the base_df with required columns
+        base_df = merge_index_dates(self.events, self.index_dates)
+        base_df = compute_delay_column(
+            base_df,
+            self.delays_config.get(CODE_GROUPS, []),
+            self.delays_config.get(DAYS, 0),
+        )
+        base_df = compute_time_window_columns(base_df)
+        base_df[TIME_MASK] = compute_time_mask(base_df)
+
         crit_cfg = {CODE_ENTRY: ["^D/TST.*"]}
 
         result = CriteriaExtraction.extract_codes(
-            self.events, self.index_dates, crit_cfg, self.delays_config
+            base_df,
+            crit_cfg,
         )
 
         self.assertEqual(result.shape[0], 1)
@@ -315,13 +333,24 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
         self.assertIsNone(result.iloc[0][NUMERIC_VALUE])
 
     def test_vectorized_extraction_codes_numeric_in_range(self):
+        # Setup the base_df with required columns
+        base_df = merge_index_dates(self.events, self.index_dates)
+        base_df = compute_delay_column(
+            base_df,
+            self.delays_config.get(CODE_GROUPS, []),
+            self.delays_config.get(DAYS, 0),
+        )
+        base_df = compute_time_window_columns(base_df)
+        base_df[TIME_MASK] = compute_time_mask(base_df)
+
         crit_cfg = {
             CODE_ENTRY: ["^D/TST.*"],
             NUMERIC_VALUE: {MIN_VALUE: 5},
         }
 
         result = CriteriaExtraction.extract_codes(
-            self.events, self.index_dates, crit_cfg, self.delays_config
+            base_df,
+            crit_cfg,
         )
 
         self.assertEqual(result.shape[0], 1)
