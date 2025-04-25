@@ -277,7 +277,6 @@ unique_code_limits:
   anti_diabetic_drugs:
     max_count: 2
     criteria: # list of criteria.
-      - exclusion_drugs
       - glp1_receptor_agonist
       - dpp4_inhibitors
       - insulin_except_basal
