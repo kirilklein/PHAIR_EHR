@@ -114,7 +114,6 @@ class CohortExtractor:
             events, relevant_index_dates, simple_criteria
         )
 
-        logger.info("\tMerging age df")
         all_results = simple_results.merge(age_df, on=PID_COL, how="left")
 
         logger.info("\tProcessing age criteria")
@@ -167,7 +166,6 @@ class CohortExtractor:
         if not simple_criteria:
             return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
 
-        # Precompute common operations outside the loop
         base_df = merge_index_dates(events, relevant_index_dates)
         base_df = compute_delay_column(
             base_df,
@@ -180,7 +178,6 @@ class CohortExtractor:
         base_df[TIME_MASK] = compute_time_mask(base_df)
 
         results = []
-        logger.info("\tProcessing simple criteria")
         for criterion, crit_cfg in tqdm(
             simple_criteria,
             desc="Processing simple criteria",
@@ -190,9 +187,7 @@ class CohortExtractor:
             results.append(res)
 
         if results:
-            logger.info("\tCombining results")
             return self.combine_results(results)
-        logger.info("\tNo results to combine")
         return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
 
     @staticmethod

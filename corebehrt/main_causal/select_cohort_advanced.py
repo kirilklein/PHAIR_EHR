@@ -66,12 +66,18 @@ def main(config_path: str):
     criteria_config_path = path_cfg.criteria_config
     splits = path_cfg.get("splits", ["tuning"])
 
+    logger.info("Loading index dates")
     index_dates = pd.read_csv(
         join(cohort_path, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
     )
+    logger.info("Loading patient IDs")
     pids = torch.load(join(cohort_path, PID_FILE))
+    logger.info(f"Loaded {len(pids)} patient IDs")
 
+    logger.info("Loading criteria config")
     criteria_config = load_config(criteria_config_path)
+
+    logger.info("Extracting criteria")
     criteria_df = extract_and_save_criteria(
         meds_path, index_dates, criteria_config, save_path, splits, pids
     )
@@ -83,11 +89,12 @@ def main(config_path: str):
         criteria_config[EXCLUSION],
         criteria_config.get(UNIQUE_CODE_LIMITS, {}),
     )
-    # Convert numpy integers to Python integers
+
     stats = {
         k: int(v) if isinstance(v, (np.int32, np.int64)) else v
         for k, v in stats.items()
     }
+    logger.info("Saving stats")
     with open(join(save_path, "stats.json"), "w") as f:
         json.dump(stats, f)
 
