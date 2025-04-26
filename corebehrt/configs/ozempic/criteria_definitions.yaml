@@ -1,5 +1,5 @@
 # provide expressions for inclusion and exclusion
-inclusion: "type2_diabetes & (older_than_50_and_clinical_evidence_of_cvd | older_than_60_and_subclinical_evidence_of_cvd) & hba1c_level & insulin"
+inclusion: "type2_diabetes & (older_than_50_and_clinical_evidence_of_cvd | older_than_60_and_subclinical_evidence_of_cvd) & hba1c_level | insulin"
 exclusion: "type1_diabetes | exclusion_drugs | acute_decompensation_of_glycemic_control | pancreatitis | acute_coronary_or_cv_event | dialysis | end_stage_liver_disease | prior_solid_organ_transplant | cancer | multiple_endocrine_neoplasia_type_2 | medullary_thyroid_carcinoma | calcitonin | pregnancy_and_birth"
 
 criteria_definitions:
