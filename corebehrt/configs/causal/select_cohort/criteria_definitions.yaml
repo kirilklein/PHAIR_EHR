@@ -41,3 +41,6 @@ criteria_definitions:
 
   criteria_4:
     expression: ~ criteria_3
+
+  criteria_5:
+    expression: criteria_1
