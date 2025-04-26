@@ -53,7 +53,8 @@ def extract_and_save_criteria(
     criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
     delays_cfg = cfg.get(DELAYS)
     check_criteria_definitions(criteria_definitions_cfg)
-    check_delays_config(delays_cfg)
+    if delays_cfg is not None:
+        check_delays_config(delays_cfg)
 
     logger.info("Checking inclusion and exclusion expressions")
     criteria_names = list(criteria_definitions_cfg.keys())
