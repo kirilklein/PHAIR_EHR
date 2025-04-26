@@ -156,14 +156,19 @@ def check_expression(expression: str, criteria_names: list) -> None:
     Raises:
         ValueError: if any token is not permitted.
     """
-    # Ensure the expression contains at least one operator.
-    if not any(op in expression for op in ALLOWED_OPERATORS):
+    # Pull out all criterion names from the expression
+    criteria_in_expr = extract_criteria_names_from_expression(expression)
+
+    # If there’s more than one criterion, ensure at least one operator is present
+    if len(criteria_in_expr) > 1 and not any(
+        op in expression for op in ALLOWED_OPERATORS
+    ):
         raise ValueError(
-            f"Expression '{expression}' must contain at least one operator (|, &, ~, and, or, not)."
+            f"Composite expression '{expression}' must contain at least one operator "
+            f"(|, &, ~, and, or, not)."
         )
 
     allowed_names = set(criteria_names)
-    criteria_in_expr = extract_criteria_names_from_expression(expression)
 
     # Check that every extracted criterion name is in the allowed names.
     unknown_criteria = [c for c in criteria_in_expr if c not in allowed_names]
