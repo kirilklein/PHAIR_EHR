@@ -63,6 +63,7 @@ def main(config_path: str):
     cohort_path = path_cfg.cohort
     meds_path = path_cfg.meds
     save_path = path_cfg.cohort_advanced
+    criteria_config_path = path_cfg.criteria_config
     splits = path_cfg.get("splits", ["tuning"])
 
     index_dates = pd.read_csv(
@@ -70,13 +71,17 @@ def main(config_path: str):
     )
     pids = torch.load(join(cohort_path, PID_FILE))
 
+    criteria_config = load_config(criteria_config_path)
     criteria_df = extract_and_save_criteria(
-        meds_path, index_dates, cfg, save_path, splits, pids
+        meds_path, index_dates, criteria_config, save_path, splits, pids
     )
 
     logger.info("Applying criteria and saving stats")
     df, stats = apply_criteria_with_stats(
-        criteria_df, cfg[INCLUSION], cfg[EXCLUSION], cfg.get(UNIQUE_CODE_LIMITS, {})
+        criteria_df,
+        criteria_config[INCLUSION],
+        criteria_config[EXCLUSION],
+        criteria_config.get(UNIQUE_CODE_LIMITS, {}),
     )
     # Convert numpy integers to Python integers
     stats = {
