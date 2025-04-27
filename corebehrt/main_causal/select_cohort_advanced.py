@@ -31,21 +31,20 @@ import json
 import logging
 from os.path import join
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+import torch
 
+from corebehrt.constants.cohort import EXCLUSION, INCLUSION, UNIQUE_CODE_LIMITS
 from corebehrt.constants.data import TIMESTAMP_COL
-from corebehrt.constants.paths import INDEX_DATES_FILE
-from corebehrt.constants.cohort import INCLUSION, EXCLUSION, UNIQUE_CODE_LIMITS
+from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.select_cohort_advanced import (
     extract_and_save_criteria,
     filter_and_save_cohort,
     split_and_save,
 )
-from corebehrt.modules.cohort_handling.advanced.apply import (
-    apply_criteria_with_stats,
-)
+from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
@@ -64,25 +63,38 @@ def main(config_path: str):
     cohort_path = path_cfg.cohort
     meds_path = path_cfg.meds
     save_path = path_cfg.cohort_advanced
+    criteria_config_path = path_cfg.criteria_config
     splits = path_cfg.get("splits", ["tuning"])
 
+    logger.info("Loading index dates")
     index_dates = pd.read_csv(
         join(cohort_path, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
     )
-    logger.info(f"Extracting criteria for {len(index_dates)} patients")
+    logger.info("Loading patient IDs")
+    pids = torch.load(join(cohort_path, PID_FILE))
+    logger.info(f"Loaded {len(pids)} patient IDs")
+
+    logger.info("Loading criteria config")
+    criteria_config = load_config(criteria_config_path)
+
+    logger.info("Extracting criteria")
     criteria_df = extract_and_save_criteria(
-        meds_path, index_dates, cfg, save_path, splits
+        meds_path, index_dates, criteria_config, save_path, splits, pids
     )
 
     logger.info("Applying criteria and saving stats")
     df, stats = apply_criteria_with_stats(
-        criteria_df, cfg[INCLUSION], cfg[EXCLUSION], cfg.get(UNIQUE_CODE_LIMITS, {})
+        criteria_df,
+        criteria_config[INCLUSION],
+        criteria_config[EXCLUSION],
+        criteria_config.get(UNIQUE_CODE_LIMITS, {}),
     )
-    # Convert numpy integers to Python integers
+
     stats = {
         k: int(v) if isinstance(v, (np.int32, np.int64)) else v
         for k, v in stats.items()
     }
+    logger.info("Saving stats")
     with open(join(save_path, "stats.json"), "w") as f:
         json.dump(stats, f)
 

@@ -42,9 +42,11 @@ The module supports three types of criteria:
 3. Expression-based: Combine other criteria using boolean expressions
 """
 
-from typing import Dict, List, Tuple
+import logging
+from typing import List, Tuple
 
 import pandas as pd
+from tqdm import tqdm
 
 from corebehrt.constants.cohort import (
     AGE_AT_INDEX_DATE,
@@ -66,10 +68,6 @@ from corebehrt.constants.cohort import (
     TIME_WINDOW_DAYS,
 )
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
-from corebehrt.functional.cohort_handling.advanced.checks import (
-    check_criteria_definitions,
-    check_delays_config,
-)
 from corebehrt.functional.cohort_handling.advanced.extract import (
     compute_age_at_index_date,
     compute_code_masks,
@@ -82,14 +80,13 @@ from corebehrt.functional.cohort_handling.advanced.extract import (
     rename_result,
 )
 
+logger = logging.getLogger("select_cohort_advanced")
+
 
 class CohortExtractor:
     def __init__(self, criteria_definitions: dict, delays_config: dict = None):
         self.criteria_definitions = criteria_definitions
         self.delays_config = delays_config or {}
-
-        check_delays_config(self.delays_config)
-        check_criteria_definitions(self.criteria_definitions)
 
     def extract(
         self,
@@ -105,23 +102,28 @@ class CohortExtractor:
         3. Expression-based criteria (hierarchical)
         """
         relevant_index_dates = self._get_relevant_index_dates(events, index_dates)
-        print(f"Processing {len(relevant_index_dates)} patients")
-
+        logger.info(f"\tNumber of patients in index dates: {len(relevant_index_dates)}")
+        logger.info(f"\tComputing age at index date")
         age_df = compute_age_at_index_date(relevant_index_dates, events)
 
+        logger.info("\tPartitioning criteria")
         simple_criteria, age_criteria, expression_criteria = self._partition_criteria()
+
+        logger.info("\tProcessing simple criteria")
         simple_results = self._process_simple_criteria(
             events, relevant_index_dates, simple_criteria
         )
 
         all_results = simple_results.merge(age_df, on=PID_COL, how="left")
 
+        logger.info("\tProcessing age criteria")
         all_results = self._process_age_criteria(all_results, age_criteria)
 
+        logger.info("\tProcessing expression criteria")
         all_results = self._process_expression_criteria(
             all_results, expression_criteria
         )
-
+        logger.info("\tDone")
         return all_results
 
     def _get_relevant_index_dates(
@@ -151,22 +153,56 @@ class CohortExtractor:
         relevant_index_dates: pd.DataFrame,
         simple_criteria: list,
     ) -> pd.DataFrame:
-        results = []
+        """Process multiple criteria against events data for given index dates.
 
-        for criterion, crit_cfg in simple_criteria:
-            res = CriteriaExtraction.extract_codes(
-                events, relevant_index_dates, crit_cfg, self.delays_config
-            )
-            has_numeric = NUMERIC_VALUE in crit_cfg
-            res = rename_result(res, criterion, has_numeric)
-            results.append(res)
+        Args:
+            events: DataFrame containing medical events with at least 'code' and PID columns
+            relevant_index_dates: DataFrame with index dates for each patient ID
+            simple_criteria: List of (criterion_name, criterion_config) tuples
 
-        if not results:
+        Returns:
+            DataFrame with extracted criteria results per patient ID
+        """
+        if not simple_criteria:
             return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
 
-        combined = results[0]
-        for df in results[1:]:
-            combined = combined.merge(df, on=PID_COL, how="outer")
+        base_df = merge_index_dates(events, relevant_index_dates)
+        base_df = compute_delay_column(
+            base_df,
+            self.delays_config.get(CODE_GROUPS, []),
+            self.delays_config.get(DAYS, 0),
+        )
+        base_df = compute_time_window_columns(
+            base_df, self.delays_config.get(TIME_WINDOW_DAYS, 36500)
+        )
+        base_df[TIME_MASK] = compute_time_mask(base_df)
+
+        results = []
+        for criterion, crit_cfg in tqdm(
+            simple_criteria,
+            desc="Processing simple criteria",
+        ):
+            res = CriteriaExtraction.extract_codes(base_df, crit_cfg)
+            res = rename_result(res, criterion, NUMERIC_VALUE in crit_cfg)
+            results.append(res)
+
+        if results:
+            return self.combine_results(results)
+        return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
+
+    @staticmethod
+    def combine_results(results: List[pd.DataFrame]) -> pd.DataFrame:
+        """Combine results from different criteria."""
+        all_pids = set()
+        for df in results:
+            all_pids.update(df[PID_COL])
+
+        # Create a base DataFrame with all patient IDs
+        combined = pd.DataFrame({PID_COL: list(all_pids)})
+
+        # Left join each result DataFrame
+        for df in results:
+            combined = combined.merge(df, on=PID_COL, how="left")
 
         return combined
 
@@ -347,37 +383,17 @@ class CriteriaExtraction:
 
     @staticmethod
     def extract_codes(
-        events: pd.DataFrame,
-        index_dates: pd.DataFrame,
-        crit_cfg: Dict,
-        delays_config: Dict,
+        base_df: pd.DataFrame,
+        crit_cfg: dict,
     ) -> pd.DataFrame:
         """
         Fully vectorized extraction for a code/numeric criterion.
-
-        Steps:
-        1. Merge index_dates into events.
-        2. Compute per-event delay using delays_config.
-        3. Compute the time window (min_timestamp and max_timestamp).
-        4. Build time and code masks and combine them into FINAL_MASK.
-        5. Group by patient: a patient's CRITERION_FLAG is True if any event passes FINAL_MASK.
-        6. If numeric extraction is requested, additionally extract, for each patient, the latest numeric_value
-            (subject to additional range filtering on min_value and/or max_value).
-
-        Returns a DataFrame with columns: PID_COL, CRITERION_FLAG, and (if applicable) NUMERIC_VALUE.
         """
-        df = merge_index_dates(events, index_dates)
-        df = compute_delay_column(
-            df, delays_config.get(CODE_GROUPS, []), delays_config.get(DAYS, 0)
-        )
-        df = compute_time_window_columns(df, crit_cfg.get(TIME_WINDOW_DAYS, 36500))
-
-        df[TIME_MASK] = compute_time_mask(df)
+        df = base_df.copy()  # Use a shallow copy to avoid modifying the base_df
         df[CODE_MASK] = compute_code_masks(
             df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
         )
         df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
-
         flag_df = (
             df.groupby(PID_COL)[FINAL_MASK]
             .any()
@@ -385,12 +401,12 @@ class CriteriaExtraction:
             .rename(columns={FINAL_MASK: CRITERION_FLAG})
         )
 
-        if NUMERIC_VALUE in crit_cfg:
+        has_numeric = NUMERIC_VALUE in crit_cfg
+        if has_numeric:
             min_val = crit_cfg.get(MIN_VALUE)
             max_val = crit_cfg.get(MAX_VALUE)
-            result = extract_numeric_values(df, flag_df, min_val, max_val)
+            res = extract_numeric_values(df, flag_df, min_val, max_val)
         else:
-            result = flag_df.copy()
-            result[NUMERIC_VALUE] = None
-
-        return result
+            res = flag_df.copy()
+            res[NUMERIC_VALUE] = None
+        return res

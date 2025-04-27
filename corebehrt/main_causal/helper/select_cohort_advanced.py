@@ -1,20 +1,34 @@
+import logging
 import os
 from os.path import join
 from typing import List
+
 import pandas as pd
 import torch
 
-from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, DELAYS
+from corebehrt.constants.cohort import (
+    CRITERIA_DEFINITIONS,
+    DELAYS,
+    EXCLUSION,
+    INCLUSION,
+    UNIQUE_CODE_LIMITS,
+)
+from corebehrt.constants.data import CONCEPT_COL, PID_COL
 from corebehrt.constants.paths import (
     FOLDS_FILE,
+    INDEX_DATES_FILE,
+    PID_FILE,
     TEST_PIDS_FILE,
 )
-from corebehrt.constants.data import PID_COL
-from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
+from corebehrt.functional.cohort_handling.advanced.checks import (
+    check_criteria_definitions,
+    check_delays_config,
+    check_expression,
+    check_unique_code_limits,
+)
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
 from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
-import logging
 
 logger = logging.getLogger("select_cohort_advanced")
 
@@ -25,19 +39,47 @@ def extract_and_save_criteria(
     cfg: dict,
     save_path: str,
     splits: list[str],
+    pids: List[int] = None,
 ) -> pd.DataFrame:
     """Extracts criteria from medical event data and saves the results to a CSV file."""
 
     if CRITERIA_DEFINITIONS not in cfg:
         raise ValueError(f"Configuration missing required key: {CRITERIA_DEFINITIONS}")
 
+    if pids is not None:
+        index_dates = index_dates[index_dates[PID_COL].isin(pids)]
+
+    logger.info("Checking criteria definitions and delays config")
+    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
+    delays_cfg = cfg.get(DELAYS)
+    check_criteria_definitions(criteria_definitions_cfg)
+    if delays_cfg is not None:
+        check_delays_config(delays_cfg)
+
+    logger.info("Checking inclusion and exclusion expressions")
+    criteria_names = list(criteria_definitions_cfg.keys())
+    check_expression(cfg.get(INCLUSION), criteria_names)
+    check_expression(cfg.get(EXCLUSION), criteria_names)
+
+    if UNIQUE_CODE_LIMITS in cfg:
+        logger.info("Checking unique code limits")
+        check_unique_code_limits(cfg.get(UNIQUE_CODE_LIMITS), criteria_names)
+
+    logger.info("Checks successful, extracting criteria")
     criteria_dfs = []
     for shard_path in iterate_splits_and_shards(meds_path, splits):
-        print(f"Processing shard: {os.path.basename(shard_path)}")
+        logger.info(
+            f"========== Processing shard: {os.path.basename(shard_path)} =========="
+        )
         shard = pd.read_parquet(shard_path)
+        shard[CONCEPT_COL] = shard[CONCEPT_COL].astype("category")
+        if pids is not None:
+            logger.info(f"Filtering shard for {len(pids)} patients")
+            shard = shard[shard[PID_COL].isin(pids)]
+        logger.info(f"Extracting criteria for {shard[PID_COL].nunique()} patients")
         cohort_extractor = CohortExtractor(
-            cfg.get(CRITERIA_DEFINITIONS),
-            cfg.get(DELAYS),
+            criteria_definitions_cfg,
+            delays_cfg,
         )
         criteria_df = cohort_extractor.extract(
             shard,

@@ -1,11 +1,11 @@
 # provide expressions for inclusion and exclusion
-inclusion: "type2_diabetes & (older_than_50_and_clinical_evidence_of_cvd | older_than_60_and_subclinical_evidence_of_cvd) & hba1c_level & insulin"
-exclusion: "max_age_60 & criteria_3 & criteria_4"
-
+inclusion: "type2_diabetes & (older_than_50_and_clinical_evidence_of_cvd | older_than_60_and_subclinical_evidence_of_cvd) & hba1c_level | insulin"
+exclusion: "type1_diabetes | exclusion_drugs | acute_decompensation_of_glycemic_control | pancreatitis | acute_coronary_or_cv_event | dialysis | end_stage_liver_disease | prior_solid_organ_transplant | cancer | multiple_endocrine_neoplasia_type_2 | medullary_thyroid_carcinoma | calcitonin | pregnancy_and_birth"
 
 criteria_definitions:
   # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
-  min_age_50: # would be the age at index_date
+  min_age_50:
+    # would be the age at index_date
     min_age: 50
 
   max_age_60:
@@ -13,36 +13,35 @@ criteria_definitions:
 
   type2_diabetes:
     codes:
-      - ^(?:D|RD)/DC11.*
-      - ^(?:M|RM)/A10B.*
+    - ^(?:D|RD)/DC11.*
+    - ^(?:M|RM)/A10B.*
 
   ### diabetic medication ###
   insulin:
     codes:
-      - ^(?:M|RM)/A10A[C-E].*
+    - ^(?:M|RM)/A10A[C-E].*
 
   #################################################################
   ### Clinical Evidence of CVD ###
   myocardial_infarction:
     codes:
-      - ^(?:D|RD)/DI2[1-3].*
+    - ^(?:D|RD)/DI2[1-3].*
 
   stroke:
     codes:
-      - ^(?:D|RD)/DI6[3-6].*
+    - ^(?:D|RD)/DI6[3-6].*
 
   transient_ischemic_attack:
     codes:
-      - ^(?:D|RD)/DG45.*
+    - ^(?:D|RD)/DG45.*
 
   arterial_revascularization:
     codes:
-      - ^(?:P|RPO|RPS)/KFNG.*
-      - ^(?:P|RPO|RPS)/KFNF.*
+    - ^(?:P|RPO|RPS)/KFN[G,F].*
 
   glomerular_filtration_rate:
     codes:
-      - ^L/.*EGFR.*1[.,]73.*
+    - ^L/.*EGFR.*1[.,]73.*
     threshold: 60
     operator: "<="
 
@@ -54,14 +53,14 @@ criteria_definitions:
   #### Microalbuminuria ####
   microalbuminuria_min:
     codes:
-      - ^L/ALBUMIN;U
-      - ^L/ALBUMIN \(LOKAL\);U
+    - ^L/ALBUMIN;U
+    - ^L/ALBUMIN \(LOKAL\);U
     threshold: 30
     operator: ">="
   microalbuminuria_max:
     codes:
-      - ^L/ALBUMIN;U
-      - ^L/ALBUMIN \(LOKAL\);U
+    - ^L/ALBUMIN;U
+    - ^L/ALBUMIN \(LOKAL\);U
     threshold: 299
     operator: "<="
 
@@ -70,10 +69,10 @@ criteria_definitions:
 
   low_brachial_index:
     codes:
-      - ^(?:D|RD)/I739.* 
-      - ^(?:D|RD)/I702.* 
-      - ^(?:P|RD)/KPE[EFHNP].* # only present in Register diagnoses and procedures
-      - ^(?:P|RD)/KPF[EFHN].* # only present in Register diagnoses and procedures
+    - ^(?:D|RD)/I739.*
+    - ^(?:D|RD)/I702.*
+    - ^(?:P|RD)/KPE[EFHNP].* # only present in Register diagnoses and procedures
+    - ^(?:P|RD)/KPF[EFHN].* # only present in Register diagnoses and procedures
     time_window_days: 90
 
   subclinical_evidence_of_cvd:
@@ -81,7 +80,7 @@ criteria_definitions:
 
   hba1c_level:
     codes:
-      - ^L/.*HBA1C.*
+    - ^L/.*HBA1C.*
     threshold: 7.0
     operator: ">="
     time_window_days: 90
@@ -90,151 +89,144 @@ criteria_definitions:
   #### Exclusion Criteria ####
   type1_diabetes:
     codes:
-      - ^(?:D|RD|RPO)/DE10.*
+    - ^(?:D|RD|RPO)/DE10.*
 
   glp1_receptor_agonist:
     codes:
-      - ^(?:M|RM)/A10BJ02.* # Liraglutide
-      - ^(?:M|RM)/A10BJ05.* # Dulaglutid
-      - ^(?:M|RM)/A10BJ06.* # Semaglutide
-      - ^(?:M|RM)/A10AE56.* # Insulin/Liraglutid combination
-    time_window_days: 90  
+    - ^(?:M|RM)/A10BJ0[2,5,6].* # Liraglutide, Dulaglutid, Semaglutide
+    - ^(?:M|RM)/A10AE56.* # Insulin/Liraglutid combination
+    time_window_days: 90
 
   dpp4_inhibitors:
     codes:
-      - ^(?:M|RM)/A10BH.*
-      - ^(?:M|RM)/A10BD0[7-9].*
-      - ^(?:M|RM)/A10BD1[0-3].*
-      - ^(?:M|RM)/A10BD1[8-9].*
-      - ^(?:M|RM)/A10BD2.* # summarize original codes
+    - ^(?:M|RM)/A10BH.*
+    - ^(?:M|RM)/A10BD0[7-9].*
+    - ^(?:M|RM)/A10BD1[0-3,8-9].*
+    - ^(?:M|RM)/A10BD2.* # summarize original codes
     time_window_days: 30
 
   insulin_except_basal:
     codes:
-      - ^(?:M|RM)/A10AB.*
+    - ^(?:M|RM)/A10AB.*
     time_window_days: 90
 
   acute_decompensation_of_glycemic_control:
     codes:
-      - ^(?:D|RD|RPO)/DE1[1-4]1.* 
+    - ^(?:D|RD|RPO)/DE1[1-4]1.*
     time_window_days: 90
 
   chronic_pancreatitis:
     codes:
-      - ^(?:D|RD|RPO)/DK86.*
+    - ^(?:D|RD|RPO)/DK86.*
     time_window_days: 730 # 2 years
 
   idiopathic_acute_pancreatitis:
     codes:
-      - ^(?:D|RD|RPO)/DK850.*
+    - ^(?:D|RD|RPO)/DK850.*
     time_window_days: 730 # 2 years
 
   acute_coronary_or_cv_event:
     codes:
-      - ^(?:D|RD|RPO)/DI2[1-2].*
-      - ^(?:D|RD|RPO)/DI24.*
-      - ^(?:D|RD|RPO)/DI6[3-6].*
+    - ^(?:D|RD|RPO)/DI2[1-2,4].*
+    - ^(?:D|RD|RPO)/DI6[3-6].*
     time_window_days: 90
 
   renal_failure:
     codes:
-      - ^(?:D|RD|RPO)/DN185.*
+    - ^(?:D|RD|RPO)/DN185.*
 
-  hemodialysis:
+  chronic_hemodialysis:
     codes:
-      - BJFD20.*
+    - BJFD20.*
 
   peritoneal_dialysis:
     codes:
-      - BJFD21.*
-      - BJFD2[3-5].*
-      - BJFD27.*
-    
+    - BJFD2[1,3-5,7].*
+
   #### End stage liver disease ####
   end_stage_liver_disease_uncertain:
     codes:
-      - ^(?:D|RD|RPO)/DK72.*
+    - ^(?:D|RD|RPO)/DK72.*
 
   end_stage_liver_disease_certain:
     codes:
-      - ^(?:D|RD|RPO)/DK721.*
+    - ^(?:D|RD|RPO)/DK721.*
   ascites:
     codes:
-      - ^(?:D|RD|RPO)/DR18.*
+    - ^(?:D|RD|RPO)/DR18.*
 
   encephalopathy:
     codes:
-      - ^(?:D|RD|RPO)/DG92.*
-      - ^(?:D|RD|RPO)/DG934.*
-      - ^(?:D|RD|RPO)/DG943.*
+    - ^(?:D|RD|RPO)/DG92.*
+    - ^(?:D|RD|RPO)/DG934.*
+    - ^(?:D|RD|RPO)/DG943.*
 
   variceal_bleeding:
     codes:
-      - ^(?:D|RD|RPO)/DI850.*
-      - ^(?:D|RD|RPO)/DI983.*
-  
+    - ^(?:D|RD|RPO)/DI850.*
+    - ^(?:D|RD|RPO)/DI983.*
+
   bilirubin:
     codes:
-      - Need_to_check
+    - Need_to_check
 
   albumin:
     codes:
-      - Need_to_check
+    - Need_to_check
 
   prothrombin_time:
     codes:
-      - Need_to_check
+    - Need_to_check
 
   prior_liver_transplant:
     codes:
-      - ^(?:RD|P)/KJJC.*
+    - ^(?:RD|P)/KJJC.*
 
   ### end stage renal disease end ###
-    
+
   prior_solid_organ_transplant:
     codes:
-      - ^(?:D|RD|RPO)/DZ944.*
-      - ^(?:D|RD|RPO)/DY830.*
-      - ^(?:P|RPO|RPS)/KFQ.*
-      - ^(?:P|RPO|RPS)/KGDG.*
-      - ^(?:P|RPO|RPS)/KJJC.*
-      - ^(?:P|RPO|RPS)/KJLE.*
-      - ^(?:P|RPO|RPS)/KKAS.*
+    - ^(?:D|RD|RPO)/DZ944.*
+    - ^(?:D|RD|RPO)/DY830.*
+    - ^(?:P|RPO|RPS)/KFQ.*
+    - ^(?:P|RPO|RPS)/KGDG.*
+    - ^(?:P|RPO|RPS)/KJJC.*
+    - ^(?:P|RPO|RPS)/KJLE.*
+    - ^(?:P|RPO|RPS)/KKAS.*
 
   cancer:
     codes:
-      - ^(?:D|RD|RPO)/DC[0-9][0-9].*
-    time_window_days: 1826  # 5 years
-  
+    - ^(?:D|RD|RPO)/DC[0-9][0-9].*
+    time_window_days: 1826 # 5 years
+
   skin_cancer:
     codes:
-      - ^(?:D|RD|RPO)/DC44.*
-    time_window_days: 1826  # 5 years
+    - ^(?:D|RD|RPO)/DC44.*
+    time_window_days: 1826 # 5 years
 
   multiple_endocrine_neoplasia_type_2:
     codes:
-      - ^(?:D|RD|RPO)/DE312.*
-    time_window_days: 1826  # 5 years
+    - ^(?:D|RD|RPO)/DE312.*
+    time_window_days: 1826 # 5 years
 
   medullary_thyroid_carcinoma:
     codes:
-      - ^(?:D|RD|RPO)/DD093.*
+    - ^(?:D|RD|RPO)/DD093.*
 
   calcitonin:
     codes:
-      - ^L/CALCITONIN;P
-      - ^L/CALCITONIN;P\(FPT\)
+    - ^L/CALCITONIN;P
     threshold: 50
     operator: ">="
 
   pregnancy_and_birth:
     codes:
-      - ^(?:D|RD|RPO)/DO[0-9][0-9].*
-    time_window_days: 365  # 1 year
+    - ^(?:D|RD|RPO)/DO[0-9][0-9].*
+    time_window_days: 365 # 1 year
 
   older_than_50_and_clinical_evidence_of_cvd:
     expression: min_age_50 & clinical_evidence_of_cvd
-  
+
   older_than_60_and_subclinical_evidence_of_cvd:
     expression: max_age_60 & subclinical_evidence_of_cvd
 
@@ -242,35 +234,32 @@ criteria_definitions:
     expression: end_stage_liver_disease_certain | end_stage_liver_disease_uncertain & (ascites | encephalopathy | variceal_bleeding | bilirubin | albumin | prothrombin_time | prior_liver_transplant)
 
   malignant_neoplasms:
-    expression: cancer & ~ skin_cancer 
+    expression: cancer & ~ skin_cancer
+
+  #### Combined exclusion criteria ####
+  exclusion_drugs:
+    expression: glp1_receptor_agonist | dpp4_inhibitors | insulin_except_basal
+
+  pancreatitis:
+    expression: chronic_pancreatitis | idiopathic_acute_pancreatitis
+
+  dialysis:
+    expression: chronic_hemodialysis | peritoneal_dialysis
 
 ###################### End of main criteria ######################
 
 delays:
   days: 14 # we match diagnoses and register diagnoses up to index_date + delay_days/ assume it is not caused by the trial drug
   code_groups:
-    - "D/" # diagnoses
-    - "RD/" # register diagnoses
-
+  - "D/" # diagnoses
+  - "RD/" # register diagnoses
 
 # Use the same patterns for unique code limits
 unique_code_limits:
   anti_diabetic_drugs:
     max_count: 2
-    use_patterns:
-      - metformin
-      - sulphonylureas
-      - sglt2_inhibitors
-      - thiazolidinediones
-
-
-
-  
-
-
-
-
-
-
-
-
+    criteria:
+    # list of criteria.
+    - glp1_receptor_agonist
+    - dpp4_inhibitors
+    - insulin_except_basal
