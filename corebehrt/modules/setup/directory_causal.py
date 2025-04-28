@@ -7,11 +7,11 @@ from corebehrt.constants.causal.paths import (
     SIMULATE_CFG,
     TRAIN_MLP_CFG,
     TRAIN_XGB_CFG,
-    COHORT_ADVANCED_CFG,
 )
 from corebehrt.constants.paths import COHORT_CFG, FINETUNE_CFG, PRETRAIN_CFG
 from corebehrt.modules.setup.config import Config
 from corebehrt.modules.setup.directory import DirectoryPreparer
+
 
 logger = logging.getLogger(__name__)  # Get the logger for this module
 
@@ -157,4 +157,4 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.check_directory("meds")
         # Create output directories
         self.create_directory("cohort_advanced")
-        self.write_config("cohort_advanced", name=COHORT_ADVANCED_CFG)
+        self.write_config("cohort", name=COHORT_CFG)
