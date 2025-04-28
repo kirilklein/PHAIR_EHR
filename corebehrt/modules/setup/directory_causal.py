@@ -98,8 +98,10 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         )
         try:
             self.write_config("trained_mlp", source="cohort", name=COHORT_CFG)
-        except:
-            logger.warning("No cohort config found, skipping cohort config write.")
+        except Exception as e:
+            logger.warning(
+                f"No cohort config found, skipping cohort config write. Error: {e}"
+            )
         self.write_config("trained_mlp", name=TRAIN_MLP_CFG)
 
     def setup_train_xgb(self) -> None:
@@ -121,8 +123,10 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.write_config(out, source="calibrated_predictions", name=CALIBRATE_CFG)
         try:
             self.write_config(out, source="cohort", name=COHORT_CFG)
-        except:
-            logger.warning("No cohort config found, skipping cohort config write.")
+        except Exception as e:
+            logger.warning(
+                f"No cohort config found, skipping cohort config write. Error: {e}"
+            )
         self.write_config(out, name=TRAIN_XGB_CFG)
 
     def setup_estimate(self) -> None:
