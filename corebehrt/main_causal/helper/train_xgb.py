@@ -3,7 +3,10 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 import xgboost as xgb
+from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.model_selection import RandomizedSearchCV
+
+from corebehrt.modules.setup.config import instantiate_function
 
 logger = logging.getLogger("train_xgb")
 
@@ -65,7 +68,7 @@ def train_xgb_model(
         n_trials: Number of random search trials
         cv: Number of cross-validation folds
         scoring: Scoring metric for hyperparameter tuning
-        early_stopping_rounds: Number of rounds to stop training if no improvement
+        early_stopping_rounds: Number of rounds to stop training if no improvement (Currently not used, need to switch to XGBoost's native early stopping)
 
     Returns:
         Trained XGBoost classifier model
@@ -95,5 +98,35 @@ def train_xgb_model(
     # Train final model on full training data with best parameters
     final_model = xgb.XGBClassifier(**{**params, **search.best_params_})
     final_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
-
     return final_model
+
+
+def initialize_metrics(metrics: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Initialize metrics from config."""
+    if metrics is None:
+        metrics = {
+            "roc_auc": roc_auc_score,
+            "pr_auc": average_precision_score,
+        }
+    else:
+        metrics = {
+            name: instantiate_function(metric) for name, metric in metrics.items()
+        }
+    return metrics
+
+
+def calculate_metrics(
+    model, X_val: np.ndarray, y_val: np.ndarray, metrics: Dict[str, Any] = None
+) -> Dict[str, float]:
+    """Calculate metrics on validation set."""
+    y_val_pred_proba = model.predict_proba(X_val)[:, 1]
+    logger.info("Validation metrics:")
+    scores = {}
+    for name, metric_fn in metrics.items():
+        try:
+            score = metric_fn(y_val, y_val_pred_proba)
+            logger.info(f"  {name}: {score:.4f}")
+            scores[name] = score
+        except Exception as e:
+            logger.warning(f"Could not compute {name}: {e}")
+    return scores
