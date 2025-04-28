@@ -52,7 +52,7 @@ def main_train(config_path: str):
 
         # Train model (validation data not used in training anymore)
         logger.info("Training XGBoost model...")
-        model, scores = train_xgb_model(
+        model = train_xgb_model(
             X_train,
             y_train,
             X_val,
