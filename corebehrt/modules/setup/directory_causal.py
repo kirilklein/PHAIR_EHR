@@ -7,11 +7,11 @@ from corebehrt.constants.causal.paths import (
     SIMULATE_CFG,
     TRAIN_MLP_CFG,
     TRAIN_XGB_CFG,
-    COHORT_ADVANCED_CFG,
 )
 from corebehrt.constants.paths import COHORT_CFG, FINETUNE_CFG, PRETRAIN_CFG
 from corebehrt.modules.setup.config import Config
 from corebehrt.modules.setup.directory import DirectoryPreparer
+
 
 logger = logging.getLogger(__name__)  # Get the logger for this module
 
@@ -96,7 +96,12 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.write_config(
             "trained_mlp", source="calibrated_predictions", name=CALIBRATE_CFG
         )
-        self.write_config("trained_mlp", source="cohort", name=COHORT_CFG)
+        try:
+            self.write_config("trained_mlp", source="cohort", name=COHORT_CFG)
+        except Exception as e:
+            logger.warning(
+                f"No cohort config found, skipping cohort config write. Error: {e}"
+            )
         self.write_config("trained_mlp", name=TRAIN_MLP_CFG)
 
     def setup_train_xgb(self) -> None:
@@ -116,7 +121,12 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         # Write config in output directory.
         self.write_config(out, source="encoded_data", name=ENCODE_CFG)
         self.write_config(out, source="calibrated_predictions", name=CALIBRATE_CFG)
-        self.write_config(out, source="cohort", name=COHORT_CFG)
+        try:
+            self.write_config(out, source="cohort", name=COHORT_CFG)
+        except Exception as e:
+            logger.warning(
+                f"No cohort config found, skipping cohort config write. Error: {e}"
+            )
         self.write_config(out, name=TRAIN_XGB_CFG)
 
     def setup_estimate(self) -> None:
@@ -151,4 +161,4 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.check_directory("meds")
         # Create output directories
         self.create_directory("cohort_advanced")
-        self.write_config("cohort_advanced", name=COHORT_ADVANCED_CFG)
+        self.write_config("cohort", name=COHORT_CFG)

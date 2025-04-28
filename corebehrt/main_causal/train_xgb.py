@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from os.path import join
@@ -8,7 +9,12 @@ from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.calibrate_xgb import calibrate_predictions
-from corebehrt.main_causal.helper.train_xgb import setup_xgb_params, train_xgb_model
+from corebehrt.main_causal.helper.train_xgb import (
+    calculate_metrics,
+    initialize_metrics,
+    setup_xgb_params,
+    train_xgb_model,
+)
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 from corebehrt.modules.trainer.data_module import EncodedDataModule
@@ -58,6 +64,13 @@ def main_train(config_path: str):
             scoring=cfg.model.get("scoring", "neg_log_loss"),
             early_stopping_rounds=cfg.model.get("early_stopping_rounds", 10),
         )
+
+        logger.info("Validation metrics:")
+        metrics = initialize_metrics(cfg.model.get("metrics", None))
+        scores = calculate_metrics(model, X_val, y_val, metrics)
+        # Save scores dictionary
+        with open(join(fold_folder, "scores.json"), "w") as f:
+            json.dump(scores, f, indent=4)
 
         # Save model
         model.save_model(join(fold_folder, "model.json"))

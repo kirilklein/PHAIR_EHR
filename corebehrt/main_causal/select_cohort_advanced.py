@@ -76,7 +76,8 @@ def main(config_path: str):
 
     logger.info("Loading criteria config")
     criteria_config = load_config(criteria_config_path)
-
+    # Write criteria config to output directory
+    cfg.save_to_yaml(join(save_path, "criteria_config.yaml"))
     logger.info("Extracting criteria")
     criteria_df = extract_and_save_criteria(
         meds_path, index_dates, criteria_config, save_path, splits, pids
