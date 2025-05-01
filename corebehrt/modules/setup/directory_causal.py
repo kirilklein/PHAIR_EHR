@@ -161,4 +161,4 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.check_directory("meds")
         # Create output directories
         self.create_directory("cohort_advanced")
-        self.write_config("cohort", name=COHORT_CFG)
+        self.write_config("cohort_advanced", name=COHORT_CFG)
