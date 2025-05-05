@@ -74,7 +74,6 @@ def train_xgb_model(
         Trained XGBoost classifier model
     """
     logger.info("Starting hyperparameter tuning...")
-    # Create a copy of params to avoid modifying the original
     scale_pos_weight_params = params.pop("scale_pos_weight", None)
     scale_pos_weight: float = get_scale_pos_weight(scale_pos_weight_params, y_train)
 
@@ -181,6 +180,12 @@ def calculate_scale_pos_weight(
             "No positive samples found in training data. Using scale_pos_weight = 1.0"
         )
         return 1.0
+
+    if neg_count == 0:
+        logger.warning("No negative samples found; using scale_pos_weight = 1.0")
+        return 1.0
+
+    logger.info(f"Neg count: {neg_count}, Pos count: {pos_count}")
 
     ratio = neg_count / pos_count
 
