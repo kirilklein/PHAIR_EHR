@@ -1,3 +1,5 @@
+import logging
+
 import lightning as pl
 import torch
 
@@ -7,6 +9,8 @@ from corebehrt.functional.trainer.setup import replace_steps_with_epochs
 from corebehrt.modules.model.mlp import LitMLP
 from corebehrt.modules.trainer.checkpoint import ModelCheckpoint
 from corebehrt.modules.trainer.utils import get_loss_weight
+
+logger = logging.getLogger(__name__)
 
 
 def setup_model(
@@ -28,7 +32,6 @@ def setup_model(
             )
         loss_weight_val = float(get_loss_weight(cfg, y_train.tolist()))
         loss_weight = torch.tensor(loss_weight_val, dtype=torch.float32)
-        logger = logging.getLogger(__name__)
         logger.info("Loss weight: %.4f", loss_weight_val)
     model = LitMLP(
         input_dim=num_features,
