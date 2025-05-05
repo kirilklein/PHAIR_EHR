@@ -22,8 +22,7 @@ model:
   hidden_dims: [64]
 
 trainer_args:
-  sampler: true
-  sample_weight_function:
+  sampler_function:
     _target_: corebehrt.evaluation.utils.inverse_sqrt # function to calculate sample weights
   
   epochs: 10
