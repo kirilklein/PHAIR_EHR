@@ -15,6 +15,8 @@ from corebehrt.main_causal.helper.train_xgb import (
     setup_xgb_params,
     train_xgb_model,
 )
+from sklearn.metrics import confusion_matrix
+
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 from corebehrt.modules.trainer.data_module import EncodedDataModule
@@ -68,9 +70,20 @@ def main_train(config_path: str):
         logger.info("Validation metrics:")
         metrics = initialize_metrics(cfg.model.get("metrics", None))
         scores = calculate_metrics(model, X_val, y_val, metrics)
-        # Save scores dictionary
+        logger.info(scores)
         with open(join(fold_folder, "scores.json"), "w") as f:
             json.dump(scores, f, indent=4)
+
+        logger.info("Confusion Matrix:")
+        y_val_pred = model.predict(X_val)
+        cm = confusion_matrix(y_val, y_val_pred)
+        logger.info(cm)
+        df_cm = pd.DataFrame(
+            cm,
+            index=["Actual_Negative", "Actual_Positive"],
+            columns=["Pred_Negative", "Pred_Positive"],
+        )
+        df_cm.to_csv(join(fold_folder, "confusion_matrix.csv"))
 
         # Save model
         model.save_model(join(fold_folder, "model.json"))
