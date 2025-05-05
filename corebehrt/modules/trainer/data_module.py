@@ -152,11 +152,11 @@ class EncodedDataModule:
         train_fold_ids = torch.tensor([self.pid_to_idx[pid] for pid in fold[TRAIN_KEY]])
 
         return (
-            self.X[train_fold_ids],
-            self.X[val_fold_ids],
-            self.X_cf[val_fold_ids],
-            self.y[train_fold_ids],
-            self.y[val_fold_ids],
+            self.X[train_fold_ids].cpu().numpy(),
+            self.X[val_fold_ids].cpu().numpy(),
+            self.X_cf[val_fold_ids].cpu().numpy(),
+            self.y[train_fold_ids].cpu().numpy(),
+            self.y[val_fold_ids].cpu().numpy(),
         )
 
     def get_fold_dataloaders(
