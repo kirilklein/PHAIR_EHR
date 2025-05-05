@@ -50,7 +50,9 @@ def main_train(config_path: str):
         os.makedirs(fold_folder, exist_ok=True)
 
         # Get training data only for model training and hyperparameter tuning
-        X_train, X_val, X_val_counter, y_train, y_val = data_module.get_fold_data(fold)
+        X_train, X_val, X_val_counter, y_train, y_val = data_module.get_fold_data_numpy(
+            fold
+        )
 
         # Train model (validation data not used in training anymore)
         logger.info("Training XGBoost model...")
