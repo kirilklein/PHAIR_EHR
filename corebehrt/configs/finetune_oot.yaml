@@ -35,7 +35,7 @@ outcome:
 
 trainer_args:
   sampler_function:
-    _target_: corebehrt.evaluation.utils.inverse_sqrt # function to calculate sample weights
+    _target_: corebehrt.modules.trainer.utils.Sampling.inverse_sqrt # function to calculate sample weights
   batch_size: 128
   val_batch_size: 128
   effective_batch_size: 128

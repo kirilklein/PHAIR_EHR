@@ -23,7 +23,7 @@ model:
 
 trainer_args:
   sampler_function:
-    _target_: corebehrt.evaluation.utils.inverse_sqrt # function to calculate sample weights
+    _target_: corebehrt.modules.trainer.utils.Sampling.inverse_sqrt # function to calculate sample weights
 
   epochs: 10
   gradient_clip:
