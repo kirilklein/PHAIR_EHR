@@ -26,10 +26,10 @@ def setup_model(
             raise ValueError(
                 "y_train must be provided if loss_weight_function is defined"
             )
-        loss_weight = get_loss_weight(cfg, y_train.tolist())
-        loss_weight = torch.tensor(float(loss_weight))
-        print("Loss weight: ", loss_weight)
-
+        loss_weight_val = float(get_loss_weight(cfg, y_train.tolist()))
+        loss_weight = torch.tensor(loss_weight_val, dtype=torch.float32)
+        logger = logging.getLogger(__name__)
+        logger.info("Loss weight: %.4f", loss_weight_val)
     model = LitMLP(
         input_dim=num_features,
         hidden_dims=cfg.model.hidden_dims,
