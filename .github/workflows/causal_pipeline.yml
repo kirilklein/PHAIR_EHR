@@ -64,6 +64,7 @@ jobs:
           run_step main.create_outcomes                     outcomes.yaml
           run_step main.select_cohort                      select_cohort/select_cohort_exposure.yaml
           run_step main_causal.select_cohort_advanced      select_cohort/advanced_extraction.yaml
+          run_step main_causal.get_stats                  get_stats.yaml
 
           # ─── Finetuning ────────────────────────────────────
           run_step main.prepare_training_data               finetune/prepare_finetune_exposure.yaml

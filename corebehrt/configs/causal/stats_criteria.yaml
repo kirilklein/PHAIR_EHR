@@ -1,0 +1,42 @@
+delays:
+  days: 14 # we match diagnoses and register diagnoses up to index_date + delay_days/ assume it is not caused by the trial drug
+  code_groups:
+  - "D" # diagnoses
+
+# Use the same patterns for unique code limits
+unique_code_limits:
+  code_limit_1:
+    max_count: 2
+    criteria:
+    - criteria_1
+    - criteria_2
+
+criteria_definitions:
+  # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
+  min_age_50:
+    # would be the age at index_date
+    min_age: 50
+
+  max_age_60:
+    max_age: 60
+
+  criteria_1:
+    codes:
+    # Diagnosis codes
+    - ^D84.*
+    exclude_codes:
+    - ^D84.1
+  criteria_2:
+    codes:
+    - ^LAB6.*
+    numeric_value:
+      min_value: 100
+
+  criteria_3:
+    expression: criteria_1 | criteria_2
+
+  criteria_4:
+    expression: ~ criteria_3
+
+  criteria_5:
+    expression: criteria_1

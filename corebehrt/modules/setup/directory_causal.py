@@ -162,3 +162,16 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         # Create output directories
         self.create_directory("cohort_advanced")
         self.write_config("cohort_advanced", name=COHORT_CFG)
+
+    def setup_get_stats(self) -> None:
+        """
+        Validates path config and sets up directories for get_stats.
+        """
+        # Setup logging
+        self.setup_logging("get_stats")
+        # Check input directories
+        self.check_directory("cohort")
+        self.check_directory("meds")
+        # Create output directories
+        self.create_directory("cohort_stats")
+        self.write_config("cohort_stats", name=COHORT_CFG)
