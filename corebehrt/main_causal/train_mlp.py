@@ -5,7 +5,7 @@ from os.path import join
 import pandas as pd
 import torch
 
-from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE
+from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE, DATA_DIR
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.calibrate_mlp import calibrate_predictions
@@ -37,6 +37,7 @@ def main_train(config_path):
 
     data_module = EncodedDataModule(cfg, logger)
     data_module.setup()
+    data_module.save_data(join(cfg.paths.trained_mlp, DATA_DIR))
 
     all_fold_results = []
     for fold_idx, fold in enumerate(data_module.folds):

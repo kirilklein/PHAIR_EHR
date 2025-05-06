@@ -1,4 +1,5 @@
 import logging
+import os
 from os.path import join
 from typing import Any, Dict, List, Tuple
 
@@ -220,3 +221,12 @@ class EncodedDataModule:
             **self.cfg.trainer_args.val_loader_kwargs,
         )
         return train_loader, val_loader, val_cf_loader
+
+    def save_data(self, write_dir: str):
+        """Save the data to a directory."""
+        if not os.path.exists(write_dir):
+            os.makedirs(write_dir)
+        torch.save(self.X, join(write_dir, "X.pt"))
+        torch.save(self.X_cf, join(write_dir, "X_cf.pt"))
+        torch.save(self.y, join(write_dir, "y.pt"))
+        torch.save(self.pids, join(write_dir, "pids.pt"))

@@ -19,3 +19,5 @@ ESTIMATE_RESULTS_FILE = "estimate_results.csv"
 
 SKS_DUMP_DIR = "corebehrt/main_causal/helper/data/sks_dumps"
 SKS_TREES_DIR = "corebehrt/main_causal/helper/data/sks_trees"
+
+DATA_DIR = "data"
