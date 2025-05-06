@@ -62,7 +62,12 @@ def encode_fold(
     """Encodes a single fold."""
     val_data = data.filter_by_pids(fold[VAL_KEY])
     val_dataset = BinaryOutcomeDataset(val_data.patients)
-    val_loader = DataLoader(val_dataset, collate_fn=dynamic_padding, **loader_cfg)
+    val_loader = DataLoader(
+        val_dataset,
+        collate_fn=dynamic_padding,
+        shuffle=False,
+        **loader_cfg,
+    )
 
     model: CorebehrtForFineTuning = load_model(fold_dir, device)
 

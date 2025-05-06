@@ -15,8 +15,7 @@ outcome:
   n_hours_end_follow_up: null
 
 trainer_args:
-  sampler: false
-  sample_weight_function:
+  sampler_function:
     _target_: corebehrt.evaluation.utils.inverse_sqrt
   batch_size: 512
   val_batch_size: 256

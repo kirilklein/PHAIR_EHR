@@ -47,15 +47,29 @@ def main_train(config_path):
         fold_folder = join(cfg.paths.trained_mlp, f"fold_{fold_idx + 1}")
         os.makedirs(fold_folder, exist_ok=True)
 
+        logger.info("Model input dim: %d", data_module.input_dim)
+        logger.info("Get Data...")
+        X_train, X_val, X_val_counter, y_train, y_val = data_module.get_fold_data(fold)
+        logger.info(f"X_train shape: {X_train.shape}")
+        logger.info(f"Num positive samples: {y_train.sum()}")
+
+        logger.info("Initializing Data loaders...")
+        train_loader, val_loader, val_cf_loader = data_module.get_fold_dataloaders(
+            X_train,
+            X_val,
+            X_val_counter,
+            y_train,
+            y_val,
+        )
+
         logger.info("Initializing model...")
         model = setup_model(
             cfg,
             num_features=data_module.input_dim,
             num_train_samples=len(fold[TRAIN_KEY]),
+            y_train=y_train,
         )
-        logger.info("Model input dim: %d", data_module.input_dim)
-        logger.info("Data loaders...")
-        train_loader, val_loader, val_cf_loader = data_module.get_fold_dataloaders(fold)
+
         logger.info(f"Train loader size: {len(train_loader.dataset)}")
         logger.info(f"Validation loader size: {len(val_loader.dataset)}")
 
@@ -65,6 +79,7 @@ def main_train(config_path):
         trainer.fit(model, train_loader, val_loader)
 
         logger.info("Calibrating predictions...")
+
         fold_results = calibrate_predictions(
             model,
             train_loader,

@@ -2,6 +2,7 @@ import logging
 from os.path import join
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
@@ -159,13 +160,34 @@ class EncodedDataModule:
             self.y[val_fold_ids],
         )
 
-    def get_fold_dataloaders(
+    def get_fold_data_numpy(
         self, fold: Dict[str, List[str]]
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        X_train, X_val, X_val_counter, y_train, y_val = self.get_fold_data(fold)
+        return (
+            X_train.cpu().numpy(),
+            X_val.cpu().numpy(),
+            X_val_counter.cpu().numpy(),
+            y_train.cpu().numpy(),
+            y_val.cpu().numpy(),
+        )
+
+    def get_fold_dataloaders(
+        self,
+        X_train: torch.Tensor,
+        X_val: torch.Tensor,
+        X_val_counter: torch.Tensor,
+        y_train: torch.Tensor,
+        y_val: torch.Tensor,
     ) -> Tuple[DataLoader, DataLoader, DataLoader]:
         """
         Get dataloaders for a given fold.
         Args:
-            fold (Dict): A dictionary containing training and validation patient IDs
+            X_train (torch.Tensor): Training features
+            X_val (torch.Tensor): Validation features
+            X_val_counter (torch.Tensor): Counterfactual validation features
+            y_train (torch.Tensor): Training labels
+            y_val (torch.Tensor): Validation labels
 
         Returns:
             Tuple[DataLoader, DataLoader, DataLoader]: A tuple of three DataLoader objects
@@ -173,7 +195,6 @@ class EncodedDataModule:
             - val_loader: DataLoader for validation data
             - val_counter_loader: DataLoader for counterfactual validation data
         """
-        X_train, X_val, X_val_counter, y_train, y_val = self.get_fold_data(fold)
         train_dataset = SimpleDataset(X_train, y_train)
         val_dataset = SimpleDataset(X_val, y_val)
         val_counter_dataset = SimpleDataset(X_val_counter, y_val)
