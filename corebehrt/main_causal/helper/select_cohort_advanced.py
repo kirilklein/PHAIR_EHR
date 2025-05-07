@@ -58,7 +58,6 @@ def extract_criteria_from_shards(
         meds_path (str): Path to the medical events data
         index_dates (pd.DataFrame): DataFrame containing index dates for patients
         criteria_definitions_cfg (dict): Configuration for criteria definitions
-        delays_cfg (dict): Configuration for delays
         splits (list[str]): List of splits to process
         pids (List[int], optional): List of patient IDs to filter. Defaults to None.
 
@@ -97,7 +96,6 @@ def check_criteria_cfg(cfg: dict) -> None:
     This function performs comprehensive validation of the configuration dictionary
     used for cohort selection, including:
     - Presence of required criteria definitions
-    - Validation of criteria definitions and delays configuration
     - Checking inclusion and exclusion expressions
     - Validation of unique code limits if specified
 

@@ -248,12 +248,6 @@ criteria_definitions:
 
 ###################### End of main criteria ######################
 
-delays:
-  days: 14 # we match diagnoses and register diagnoses up to index_date + delay_days/ assume it is not caused by the trial drug
-  code_groups:
-  - "D/" # diagnoses
-  - "RD/" # register diagnoses
-
 # Use the same patterns for unique code limits
 unique_code_limits:
   anti_diabetic_drugs:

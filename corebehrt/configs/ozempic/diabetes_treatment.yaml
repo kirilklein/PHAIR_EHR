@@ -15,9 +15,3 @@ criteria_definitions:
   type1_diabetes:
     codes:
     - ^(?:D|RD|RPO)/DE10.*
-
-delays:
-  days: 14 # we match diagnoses and register diagnoses up to index_date + delay_days/ assume it is not caused by the trial drug
-  code_groups:
-  - "D/" # diagnoses
-  - "RD/" # register diagnoses

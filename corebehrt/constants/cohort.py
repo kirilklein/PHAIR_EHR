@@ -1,8 +1,6 @@
 # === General Configuration Keys ===
-DELAYS = "delays"
 CRITERIA_DEFINITIONS = "criteria_definitions"
 CRITERIA = "criteria"
-TIME_WINDOW_DAYS = "time_window_days"
 
 # === Criteria Config Keys (used in YAML/JSON configuration) ===
 CODE_ENTRY = "codes"
