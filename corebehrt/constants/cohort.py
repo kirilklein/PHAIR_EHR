@@ -1,6 +1,5 @@
 # === General Configuration Keys ===
 CRITERIA_DEFINITIONS = "criteria_definitions"
-CRITERIA = "criteria"
 
 # === Criteria Config Keys (used in YAML/JSON configuration) ===
 CODE_ENTRY = "codes"
@@ -21,7 +20,6 @@ MIN_VALUE = "min_value"
 MAX_VALUE = "max_value"
 MIN_TIME = "min_time"
 MAX_TIME = "max_time"
-UNIQUE_CODE_LIMITS = "unique_code_limits"
 
 # === Vectorized Extraction / Processing Keys ===
 TIME_MASK = "time_mask"
@@ -40,7 +38,6 @@ INITIAL_TOTAL = "initial_total"
 EXCLUDED_BY_INCLUSION_CRITERIA = "excluded_by_inclusion_criteria"
 EXCLUDED_BY_EXCLUSION_CRITERIA = "excluded_by_exclusion_criteria"
 N_EXCLUDED_BY_EXPRESSION = "n_excluded_by_expression"
-N_EXCLUDED_BY_CODE_LIMITS = "n_excluded_by_code_limits"
 FINAL_INCLUDED = "final_included"
 
 

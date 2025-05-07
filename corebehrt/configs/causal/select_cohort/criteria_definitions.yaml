@@ -2,14 +2,6 @@
 inclusion: min_age_50 & criteria_1 | ~ criteria_2 # use |, &, ~, and, or, ~ together with criteria names separated by space to create arbitrary inclusion criteria
 exclusion: max_age_60 & criteria_3 & criteria_4
 
-# Use the same patterns for unique code limits
-unique_code_limits:
-  code_limit_1:
-    max_count: 2
-    criteria:
-    - criteria_1
-    - criteria_2
-
 criteria_definitions:
   # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
   min_age_50:
