@@ -33,6 +33,12 @@ criteria_definitions:
     numeric_value:
       min_value: 100
 
+  count_criteria_1:
+    unique_criteria_list:
+    - criteria_1
+    - criteria_2
+    min_count: 1
+
   criteria_3:
     expression: criteria_1 | criteria_2
 

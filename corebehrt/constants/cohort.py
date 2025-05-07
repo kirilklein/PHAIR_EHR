@@ -7,12 +7,13 @@ CODE_ENTRY = "codes"
 EXCLUDE_CODES = "exclude_codes"
 OPERATOR = "operator"
 EXPRESSION = "expression"
+UNIQUE_CRITERIA_LIST = "unique_criteria_list"
 
 INCLUSION = "inclusion"
 EXCLUSION = "exclusion"
 
 MAX_COUNT = "max_count"
-
+MIN_COUNT = "min_count"
 # Value/Limit Keys for Criteria
 MIN_AGE = "min_age"
 MAX_AGE = "max_age"

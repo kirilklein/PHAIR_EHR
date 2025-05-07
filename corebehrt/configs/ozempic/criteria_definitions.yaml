@@ -439,8 +439,8 @@ criteria_definitions:
     expression: single_anti_diabetic_drugs & combinations_oral_blood_glucose_lowering_drugs
 
   max2_single_ad_drugs:
-    # if unique_criteria_list is present, then max_count is applied.
     unique_criteria_list:
+    # triggers count based exclusion
     - biguanides
     - sulfonylureas
     - sulfonamides_heterocyclic
@@ -452,7 +452,7 @@ criteria_definitions:
     max_count: 2
 
   max1_ad_drug_combination:
-    criteria_list:
+    unique_criteria_list:
     - phenformin_sulfonylureas
     - metformin_sulfonylureas
     - metformin_rosiglitazone

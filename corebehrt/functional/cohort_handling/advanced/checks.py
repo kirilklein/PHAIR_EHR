@@ -8,10 +8,12 @@ from corebehrt.constants.cohort import (
     EXPRESSION,
     MAX_AGE,
     MAX_COUNT,
+    MIN_COUNT,
     MAX_VALUE,
     MIN_AGE,
     MIN_VALUE,
     NUMERIC_VALUE,
+    UNIQUE_CRITERIA_LIST,
 )
 from corebehrt.functional.cohort_handling.advanced.extract import (
     extract_criteria_names_from_expression,
@@ -21,11 +23,13 @@ from corebehrt.functional.cohort_handling.advanced.extract import (
 def check_criteria_definitions(criteria_definitions: dict) -> None:
     """
     Here we check that each criteria definition is valid.
-    Either codes, expression or min_age/max_age must be present.
+    Either codes, unique_criteria_list, expression or min_age/max_age must be present.
         Codes should be a list of regexes.
+        Unique_criteria_list should be a list of criteria names.
         An expression consists of criteria names separated by | for "OR", & for "AND", ~ for "NOT".
         These criteria names must be present in the criteria_definitions.
     If codes are present, a numeric_value (range) can be defined.
+    If unique_criteria_list is present, min_count or max_count must be defined.
     If numeric_value is present, it must contain min_value or max_value (we take it inclusive).
     """
     criteria_names = list(criteria_definitions.keys())
@@ -34,41 +38,102 @@ def check_criteria_definitions(criteria_definitions: dict) -> None:
         has_codes = CODE_ENTRY in crit_cfg
         has_expression = EXPRESSION in crit_cfg
         has_age_range = MIN_AGE in crit_cfg or MAX_AGE in crit_cfg
+        has_min_count = MIN_COUNT in crit_cfg
+        has_max_count = MAX_COUNT in crit_cfg
+        has_unique_criteria_list = UNIQUE_CRITERIA_LIST in crit_cfg
 
         # Check that at least one is present and they are mutually exclusive
-        if not (has_codes or has_expression or has_age_range):
+        if not (
+            has_codes or has_expression or has_age_range or has_unique_criteria_list
+        ):
             raise ValueError(
-                f"Criterion {criterion} must have either codes, expression, or age range (min_age/max_age)"
+                f"Criterion '{criterion}' must have exactly one of: "
+                "codes, expression, age range, or unique_criteria_list."
             )
-
         # Check that only one type is present
-        if sum([has_codes, has_expression, has_age_range]) > 1:
+        if (
+            sum([has_codes, has_expression, has_age_range, has_unique_criteria_list])
+            > 1
+        ):
             raise ValueError(
                 f"Criterion {criterion} can only have one of: codes, expression, or age range (min_age/max_age). \
                              For complex criteria, use separate criteria definitions and combine them via expression."
             )
 
-        if CODE_ENTRY in crit_cfg:
+        if has_codes:
             codes = crit_cfg[CODE_ENTRY]
             check_codes(codes, criterion)
 
         if EXCLUDE_CODES in crit_cfg:
-            if CODE_ENTRY not in crit_cfg:
+            if not has_codes:
                 raise ValueError(f"exclude_codes for {criterion} must have codes")
             exclude_codes = crit_cfg[EXCLUDE_CODES]
             check_codes(exclude_codes, criterion)
 
-        if EXPRESSION in crit_cfg:
+        if has_unique_criteria_list:
+            unique_criteria_list = crit_cfg[UNIQUE_CRITERIA_LIST]
+            if (not has_min_count) and (not has_max_count):
+                raise ValueError(
+                    f"Criteria with unique_criteria_list must have min_count or max_count"
+                )
+            check_unique_criteria_list(
+                unique_criteria_list,
+                criterion,
+                criteria_names,
+                crit_cfg.get(MIN_COUNT),
+                crit_cfg.get(MAX_COUNT),
+            )
+
+        if has_expression:
             expression = crit_cfg[EXPRESSION]
             check_expression(expression, criteria_names)
 
         check_age(criterion, crit_cfg.get(MIN_AGE), crit_cfg.get(MAX_AGE))
 
         if NUMERIC_VALUE in crit_cfg:
-            if CODE_ENTRY not in crit_cfg:
+            if not has_codes:
                 raise ValueError(f"numeric_value for {criterion} must have codes")
             numeric_value = crit_cfg[NUMERIC_VALUE]
             check_numeric_value(numeric_value, criterion)
+
+
+def check_unique_criteria_list(
+    unique_criteria_list: list,
+    criterion: str,
+    criteria_names: list,
+    min_count: int = None,
+    max_count: int = None,
+) -> None:
+    """Check that unique_criteria_list is valid."""
+    if not isinstance(unique_criteria_list, list):
+        raise ValueError(f"unique_criteria_list for {criterion} must be a list")
+
+    if min_count is not None:
+        if not isinstance(min_count, int) or min_count < 0:
+            raise ValueError(
+                f"min_count for {criterion} must be a non-negative integer"
+            )
+        if min_count > len(unique_criteria_list):
+            raise ValueError(
+                f"min_count for {criterion} must be less than or equal to the number of criteria in unique_criteria_list"
+            )
+    if max_count is not None:
+        if not isinstance(max_count, int) or max_count < 0:
+            raise ValueError(
+                f"max_count for {criterion} must be a non-negative integer"
+            )
+    if min_count is not None and max_count is not None:
+        if min_count >= max_count:
+            raise ValueError(f"min_count for {criterion} must be less than max_count")
+
+    if not unique_criteria_list:
+        raise ValueError(f"unique_criteria_list for '{criterion}' cannot be empty")
+
+    for sub_criterion in unique_criteria_list:
+        if sub_criterion not in set(criteria_names):
+            raise ValueError(
+                f"unique_criteria_list for {criterion} must be a list of valid criterion names"
+            )
 
 
 def check_numeric_value(numeric_value: dict, criterion: str) -> None:

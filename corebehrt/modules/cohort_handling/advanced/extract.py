@@ -69,6 +69,9 @@ from corebehrt.constants.cohort import (
     START_DAYS,
     END_DAYS,
     TIME_MASK,
+    UNIQUE_CRITERIA_LIST,
+    MIN_COUNT,
+    MAX_COUNT,
 )
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 from corebehrt.functional.cohort_handling.advanced.extract import (
@@ -107,7 +110,9 @@ class CohortExtractor:
         age_df = compute_age_at_index_date(relevant_index_dates, events)
 
         logger.info("\tPartitioning criteria")
-        simple_criteria, age_criteria, expression_criteria = self._partition_criteria()
+        simple_criteria, age_criteria, expression_criteria, count_criteria = (
+            self._partition_criteria()
+        )
 
         logger.info("\tProcessing simple criteria")
         simple_results = self._process_simple_criteria(
@@ -118,6 +123,9 @@ class CohortExtractor:
 
         logger.info("\tProcessing age criteria")
         all_results = self._process_age_criteria(all_results, age_criteria)
+
+        logger.info("\tProcessing count criteria")
+        all_results = self._process_count_criteria(all_results, count_criteria)
 
         logger.info("\tProcessing expression criteria")
         all_results = self._process_expression_criteria(
@@ -135,7 +143,12 @@ class CohortExtractor:
 
     def _partition_criteria(self) -> Tuple[List, List, List]:
         """Separate criteria into simple, age-based, and expression-based criteria."""
-        simple_criteria, age_criteria, expression_criteria = [], [], []
+        simple_criteria, age_criteria, expression_criteria, count_criteria = (
+            [],
+            [],
+            [],
+            [],
+        )
 
         for criterion, crit_cfg in self.criteria_definitions.items():
             if CODE_ENTRY in crit_cfg:
@@ -144,8 +157,10 @@ class CohortExtractor:
                 age_criteria.append((criterion, crit_cfg))
             elif EXPRESSION in crit_cfg:
                 expression_criteria.append((criterion, crit_cfg))
+            elif UNIQUE_CRITERIA_LIST in crit_cfg:
+                count_criteria.append((criterion, crit_cfg))
 
-        return simple_criteria, age_criteria, expression_criteria
+        return simple_criteria, age_criteria, expression_criteria, count_criteria
 
     def _process_simple_criteria(
         self,
@@ -180,6 +195,55 @@ class CohortExtractor:
         if results:
             return self.combine_results(results)
         return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
+
+    def _process_count_criteria(
+        self,
+        all_results: pd.DataFrame,
+        count_criteria: list,
+    ) -> pd.DataFrame:
+        """
+        Evaluate and merge count-based criteria into the cohort results.
+
+        For each (name, crit_cfg) in count_criteria:
+          - Confirms each UNIQUE_CRITERIA_LIST column exists in all_results.
+          - Computes the rule’s boolean flag via extract_count_criteria.
+          - Renames the flag column to the criterion name.
+        Finally, left-joins all new flag columns back into all_results.
+
+        Args:
+            all_results: DataFrame with PID_COL and precomputed criteria flags.
+            count_criteria: List of tuples (criterion_name, crit_cfg), where crit_cfg contains:
+                UNIQUE_CRITERIA_LIST: List[str] of flag columns to count.
+                MIN_COUNT (int, optional): Minimum required true flags (default 0).
+                MAX_COUNT (int, optional): Maximum allowed true flags (default ∞).
+
+        Returns:
+            DataFrame: original all_results with added boolean columns for each count criterion.
+        """
+        if not count_criteria:
+            return all_results
+
+        results = []
+        for criterion, crit_cfg in count_criteria:
+            # Validate required flags exist
+            missing = [
+                c
+                for c in crit_cfg.get(UNIQUE_CRITERIA_LIST, [])
+                if c not in all_results.columns
+            ]
+            if missing:
+                raise ValueError(
+                    f"Count criterion '{criterion}' missing columns: {missing}."
+                )
+
+            # Extract and rename
+            res = CriteriaExtraction.extract_count_criteria(all_results, crit_cfg)
+            res = rename_result(res, criterion, False)
+            results.append(res)
+
+        # Merge all count criteria back into the main results
+        combined = self.combine_results(results)
+        return all_results.merge(combined, on=PID_COL, how="left")
 
     @staticmethod
     def combine_results(results: List[pd.DataFrame]) -> pd.DataFrame:
@@ -407,6 +471,39 @@ class CriteriaExtraction:
             res = flag_df.copy()
             res[NUMERIC_VALUE] = None
         return res
+
+    @staticmethod
+    def extract_count_criteria(
+        initial_results: pd.DataFrame, crit_cfg: dict
+    ) -> pd.DataFrame:
+        """
+        Check if the count of true flags among specified criteria is within bounds.
+
+        For each patient, this method:
+          1. Casts columns in UNIQUE_CRITERIA_LIST to bool.
+          2. Sums the true values.
+          3. Verifies MIN_COUNT ≤ sum ≤ MAX_COUNT (defaults: 0 and ∞).
+
+        Args:
+            initial_results: DataFrame with PID_COL and boolean flag columns.
+            crit_cfg: Dict with:
+                UNIQUE_CRITERIA_LIST: List of flag column names to count.
+                MIN_COUNT (int, optional): Lower inclusive bound (default 0).
+                MAX_COUNT (int, optional): Upper inclusive bound (default ∞).
+
+        Returns:
+            DataFrame with PID_COL and CRITERION_FLAG (True if within bounds).
+        """
+        df = initial_results.copy()
+        # Ensure booleans
+        for c in crit_cfg[UNIQUE_CRITERIA_LIST]:
+            df[c] = df[c].astype(bool)
+        count = df[crit_cfg[UNIQUE_CRITERIA_LIST]].sum(axis=1)
+
+        low = crit_cfg.get(MIN_COUNT, 0)
+        high = crit_cfg.get(MAX_COUNT, float("inf"))
+        df[CRITERION_FLAG] = (count >= low) & (count <= high)
+        return df[[PID_COL, CRITERION_FLAG]]
 
     @staticmethod
     def _compute_time_window_for_criterion(
