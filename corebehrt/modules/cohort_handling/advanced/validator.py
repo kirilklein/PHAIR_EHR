@@ -176,6 +176,12 @@ class CriteriaValidator:
         unknown = [c for c in ulist if c not in self.names]
         if unknown:
             raise ValueError(f"'{name}': unknown sub-criteria: {unknown}")
+
+        if name in ulist:
+            raise ValueError(
+                f"'{name}': cannot reference itself in UNIQUE_CRITERIA_LIST"
+            )
+
         lo, hi = cfg.get(MIN_COUNT, 0), cfg.get(MAX_COUNT, int(1e6))
         for val, label in ((lo, MIN_COUNT), (hi, MAX_COUNT)):
             if not isinstance(val, int) or val < 0:

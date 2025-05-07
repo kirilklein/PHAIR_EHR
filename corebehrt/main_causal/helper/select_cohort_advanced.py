@@ -58,12 +58,17 @@ def extract_criteria_from_shards(
 
     Returns:
         pd.DataFrame: Combined DataFrame containing extracted criteria for all patients
+
+    Raises:
+        ValueError: If no criteria data is found for any patients
     """
     cohort_extractor = CohortExtractor(
         criteria_definitions_cfg,
     )
 
     criteria_dfs = []
+    total_patients_processed = 0
+
     for shard_path in iterate_splits_and_shards(meds_path, splits):
         logger.info(
             f"========== Processing shard: {os.path.basename(shard_path)} =========="
@@ -74,14 +79,37 @@ def extract_criteria_from_shards(
         if pids is not None:
             logger.info(f"Filtering shard for {len(pids)} patients")
             shard = shard[shard[PID_COL].isin(pids)]
+            if shard.empty:
+                logger.warning(f"No matching patients found in shard {shard_path}")
+                continue
+
+        if shard.empty:
+            logger.warning(f"Empty shard found: {shard_path}")
+            continue
 
         logger.info(f"Extracting criteria for {shard[PID_COL].nunique()} patients")
         criteria_df = cohort_extractor.extract(
             shard,
             index_dates,
         )
-        criteria_dfs.append(criteria_df)
 
+        if not criteria_df.empty:
+            criteria_dfs.append(criteria_df)
+            total_patients_processed += len(criteria_df)
+        else:
+            logger.warning(
+                f"No criteria matched for any patients in shard {shard_path}"
+            )
+
+    if not criteria_dfs:
+        error_msg = "No criteria data found for any patients"
+        if pids is not None:
+            error_msg += f" in the provided list of {len(pids)} patient IDs"
+        raise ValueError(error_msg)
+
+    logger.info(
+        f"Successfully processed criteria for {total_patients_processed} patients"
+    )
     return pd.concat(criteria_dfs)
 
 
