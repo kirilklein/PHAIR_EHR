@@ -24,7 +24,6 @@ from corebehrt.constants.cohort import (
     CRITERIA_DEFINITIONS,
     EXCLUSION,
     INCLUSION,
-    UNIQUE_CODE_LIMITS,
 )
 from corebehrt.constants.data import CONCEPT_COL, PID_COL
 from corebehrt.constants.paths import (
@@ -33,11 +32,7 @@ from corebehrt.constants.paths import (
     PID_FILE,
     TEST_PIDS_FILE,
 )
-from corebehrt.functional.cohort_handling.advanced.checks import (
-    check_criteria_definitions,
-    check_expression,
-    check_unique_code_limits,
-)
+from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidator
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
 from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
@@ -110,25 +105,18 @@ def check_criteria_cfg(cfg: dict) -> None:
 
     logger.info("Checking criteria definitions")
     criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
-    check_criteria_definitions(criteria_definitions_cfg)
-
-    logger.info("Checking inclusion and exclusion expressions")
-    criteria_names = list(criteria_definitions_cfg.keys())
-    if UNIQUE_CODE_LIMITS in cfg:
-        logger.info("Checking unique code limits")
-        check_unique_code_limits(cfg.get(UNIQUE_CODE_LIMITS), criteria_names)
+    validator = CriteriaValidator(criteria_definitions_cfg)
+    validator.validate()
 
 
-def check_inclusion_exclusion(cfg: dict) -> None:
+def check_inclusion_exclusion(validator: CriteriaValidator, cfg: dict) -> None:
     """Check inclusion and exclusion expressions."""
-    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
-    criteria_names = list(criteria_definitions_cfg.keys())
     if INCLUSION in cfg:
-        check_expression(cfg.get(INCLUSION), criteria_names)
+        validator.validate_expression(INCLUSION, cfg[INCLUSION])
     else:
         raise ValueError(f"Configuration missing required key: {INCLUSION}")
     if EXCLUSION in cfg:
-        check_expression(cfg.get(EXCLUSION), criteria_names)
+        validator.validate_expression(EXCLUSION, cfg[EXCLUSION])
     else:
         raise ValueError(f"Configuration missing required key: {EXCLUSION}")
 

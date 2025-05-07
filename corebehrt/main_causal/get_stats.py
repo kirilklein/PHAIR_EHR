@@ -15,9 +15,9 @@ from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
 from corebehrt.functional.preparation.filter import filter_table_by_pids
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.select_cohort_advanced import (
-    check_criteria_cfg,
     extract_criteria_from_shards,
 )
+from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidator
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
@@ -50,7 +50,7 @@ def main(config_path: str):
     logger.info("Loading criteria config")
     criteria_config = load_config(criteria_config_path)
     criteria_config.save_to_yaml(join(save_path, CRITERIA_CONFIG_FILE))
-    check_criteria_cfg(criteria_config)
+    CriteriaValidator(criteria_config.get(CRITERIA_DEFINITIONS)).validate()
     logger.info("Extracting criteria")
     index_dates = filter_table_by_pids(index_dates, pids)
     criteria_df = extract_criteria_from_shards(

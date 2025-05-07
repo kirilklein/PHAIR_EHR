@@ -42,7 +42,6 @@ from corebehrt.constants.cohort import (
     N_EXCLUDED_BY_CODE_LIMITS,
     N_EXCLUDED_BY_EXPRESSION,
 )
-from corebehrt.functional.cohort_handling.advanced.checks import check_criteria_names
 from corebehrt.functional.cohort_handling.advanced.extract import (
     extract_criteria_names_from_expression,
 )
@@ -53,7 +52,6 @@ def apply_criteria_with_stats(
     df: pd.DataFrame,
     inclusion_expression: str,
     exclusion_expression: str,
-    unique_code_limits: Dict = None,
     verbose: bool = True,
 ) -> Tuple[pd.DataFrame, Dict]:
     """
@@ -63,7 +61,6 @@ def apply_criteria_with_stats(
         df (pd.DataFrame): Criteria flags per patient.
         inclusion_expression (str): Boolean expression combining inclusion criteria.
         exclusion_expression (str): Boolean expression combining exclusion criteria.
-        unique_code_limits (dict, optional): Limits for grouped criteria (e.g., max 2 meds).
         verbose (bool): If True, prints the flow summary.
 
     Returns:
@@ -87,8 +84,6 @@ def apply_criteria_with_stats(
     exclusion_criteria_names = extract_criteria_names_from_expression(
         exclusion_expression
     )
-    check_criteria_names(df, inclusion_criteria_names)
-    check_criteria_names(df, exclusion_criteria_names)
     # --- Compute criteria-specific statistics ---
     # For inclusion: count how many patients DO NOT meet the criteria.
     for crit in inclusion_criteria_names:
@@ -113,14 +108,6 @@ def apply_criteria_with_stats(
 
     # --- Subset the DataFrame ---
     included = df[final_mask].copy()
-
-    # --- Apply optional unique code limits ---
-    if unique_code_limits:
-        included, code_limit_stats = apply_unique_code_limits(
-            included, unique_code_limits
-        )
-        stats[N_EXCLUDED_BY_CODE_LIMITS] = code_limit_stats
-
     stats[FINAL_INCLUDED] = len(included)
 
     if verbose:
