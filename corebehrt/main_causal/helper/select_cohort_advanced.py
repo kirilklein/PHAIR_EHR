@@ -91,29 +91,6 @@ def extract_criteria_from_shards(
     return pd.concat(criteria_dfs)
 
 
-def extract_criteria(
-    meds_path: str,
-    index_dates: pd.DataFrame,
-    cfg: dict,
-    splits: list[str],
-    pids: List[int] = None,
-) -> pd.DataFrame:
-    """Extracts criteria from medical event data and saves the results to a CSV file."""
-    if pids is not None:
-        index_dates = index_dates[index_dates[PID_COL].isin(pids)]
-
-    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
-
-    criteria_df = extract_criteria_from_shards(
-        meds_path=meds_path,
-        index_dates=index_dates,
-        criteria_definitions_cfg=criteria_definitions_cfg,
-        splits=splits,
-        pids=pids,
-    )
-    return criteria_df
-
-
 def check_criteria_cfg(cfg: dict) -> None:
     """Validate the cohort selection criteria configuration.
 

@@ -6,6 +6,7 @@ TRAIN_MLP_CFG = "train_mlp_config.yaml"
 TRAIN_XGB_CFG = "train_xgb_config.yaml"
 ESTIMATE_CFG = "estimate_config.yaml"
 ENCODINGS_FILE = "encodings.pt"
+
 # Files
 PREDICTIONS_FILE = "predictions_and_targets.csv"
 CALIBRATED_PREDICTIONS_FILE = "predictions_and_targets_calibrated.csv"
@@ -19,5 +20,8 @@ ESTIMATE_RESULTS_FILE = "estimate_results.csv"
 
 SKS_DUMP_DIR = "corebehrt/main_causal/helper/data/sks_dumps"
 SKS_TREES_DIR = "corebehrt/main_causal/helper/data/sks_trees"
+
+CRITERIA_CONFIG_FILE = "criteria_config.yaml"
+CRITERIA_FLAGS_FILE = "criteria_flags.csv"
 
 DATA_DIR = "data"

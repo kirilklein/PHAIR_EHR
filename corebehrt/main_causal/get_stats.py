@@ -8,12 +8,15 @@ from os.path import join
 import pandas as pd
 import torch
 
+from corebehrt.constants.causal.paths import CRITERIA_CONFIG_FILE, CRITERIA_FLAGS_FILE
+from corebehrt.constants.cohort import CRITERIA_DEFINITIONS
 from corebehrt.constants.data import TIMESTAMP_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
+from corebehrt.functional.preparation.filter import filter_table_by_pids
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.select_cohort_advanced import (
-    extract_criteria,
     check_criteria_cfg,
+    extract_criteria_from_shards,
 )
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
@@ -34,6 +37,7 @@ def main(config_path: str):
     meds_path = path_cfg.meds
     save_path = path_cfg.cohort_stats
     criteria_config_path = path_cfg.criteria_config
+    splits = path_cfg.get("splits", ["tuning"])
 
     logger.info("Loading index dates")
     index_dates = pd.read_csv(
@@ -45,10 +49,18 @@ def main(config_path: str):
 
     logger.info("Loading criteria config")
     criteria_config = load_config(criteria_config_path)
-    criteria_config.save_to_yaml(join(save_path, "criteria_config.yaml"))
+    criteria_config.save_to_yaml(join(save_path, CRITERIA_CONFIG_FILE))
     check_criteria_cfg(criteria_config)
     logger.info("Extracting criteria")
-    extract_criteria(meds_path, index_dates, criteria_config, save_path, pids)
+    index_dates = filter_table_by_pids(index_dates, pids)
+    criteria_df = extract_criteria_from_shards(
+        meds_path=meds_path,
+        index_dates=index_dates,
+        criteria_definitions_cfg=criteria_config.get(CRITERIA_DEFINITIONS),
+        splits=splits,
+        pids=pids,
+    )
+    criteria_df.to_csv(join(save_path, CRITERIA_FLAGS_FILE), index=False)
 
 
 if __name__ == "__main__":
