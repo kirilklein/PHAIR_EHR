@@ -8,7 +8,8 @@ paths:
   calibrated_predictions: ./outputs/causal/calibrated_predictions # to extract exposure
   cohort: ./outputs/causal/exposure_cohort
 
-  outcomes: ./outputs/causal/outcomes/OUTCOME.csv
+  outcomes: ./outputs/causal/outcomes
+  outcome: OUTCOME.csv
 
   ## OUTPUTS
   trained_mlp: ./outputs/causal/trained_mlp
