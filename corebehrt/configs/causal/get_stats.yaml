@@ -1,0 +1,12 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ### Inputs
+  cohort: ./outputs/causal/exposure_cohort # Data directory
+  meds: ./example_data/example_MEDS_data_causal
+  splits: [ tuning ]
+  criteria_config: ./corebehrt/configs/causal/stats_criteria.yaml
+  ### Outputs
+  cohort_stats: ./outputs/causal/exposure_cohort_stats # Data directory

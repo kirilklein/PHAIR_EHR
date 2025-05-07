@@ -5,7 +5,7 @@ from os.path import join
 
 import pandas as pd
 
-from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE
+from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE, DATA_DIR
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.calibrate_xgb import calibrate_predictions
@@ -36,7 +36,7 @@ def main_train(config_path: str):
     # Setup data
     data_module = EncodedDataModule(cfg, logger)
     data_module.setup()
-
+    data_module.save_data(join(cfg.paths.trained_xgb, DATA_DIR))
     # Setup XGBoost parameters
     params, param_space = setup_xgb_params(cfg.model)
 

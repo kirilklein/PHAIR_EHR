@@ -1,7 +1,3 @@
-# provide expressions for inclusion and exclusion
-inclusion: min_age_50 & criteria_1 | ~ criteria_2 # use |, &, ~, and, or, ~ together with criteria names separated by space to create arbitrary inclusion criteria
-exclusion: max_age_60 & criteria_3 & criteria_4
-
 criteria_definitions:
   # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
   min_age_50:
@@ -24,12 +20,6 @@ criteria_definitions:
     - ^LAB6.*
     numeric_value:
       min_value: 100
-
-  count_criteria_1:
-    unique_criteria_list:
-    - criteria_1
-    - criteria_2
-    min_count: 1
 
   criteria_3:
     expression: criteria_1 | criteria_2

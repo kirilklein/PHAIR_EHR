@@ -1,12 +1,12 @@
 import unittest
 import pandas as pd
 from pandas import to_datetime
+import re
 
 # Import the constants used in the helper functions.
 from corebehrt.constants.cohort import (
     AGE_AT_INDEX_DATE,
     CRITERION_FLAG,
-    DELAY,
     FINAL_MASK,
     INDEX_DATE,
     MAX_TIME,
@@ -18,19 +18,20 @@ from corebehrt.constants.data import (
     CONCEPT_COL,
     PID_COL,
     TIMESTAMP_COL,
+    BIRTH_CODE,
 )
 
 # Import helper functions from your extract module.
 from corebehrt.functional.cohort_handling.advanced.extract import (
     compute_age_at_index_date,
     get_birth_date_for_each_patient,
-    compute_delay_column,
-    compute_time_window_columns,
     compute_code_masks,
     merge_index_dates,
-    compute_time_mask,
+    compute_time_mask_exclusive,
     rename_result,
     extract_numeric_values,
+    extract_criteria_names_from_expression,
+    _compile_regex,
 )
 
 
@@ -40,7 +41,7 @@ class TestExtractHelpers(unittest.TestCase):
         events = pd.DataFrame(
             {
                 PID_COL: [1, 1, 2],
-                CONCEPT_COL: ["DOB", "D/TEST", "DOB"],
+                CONCEPT_COL: [BIRTH_CODE, "D/TEST", BIRTH_CODE],
                 TIMESTAMP_COL: to_datetime(["2000-01-01", "2023-01-01", "1990-05-01"]),
             }
         )
@@ -55,14 +56,14 @@ class TestExtractHelpers(unittest.TestCase):
             {
                 PID_COL: [1, 2],
                 # Provide index_date already as column "index_date"
-                "index_date": to_datetime(["2023-06-01", "2023-06-01"]),
+                INDEX_DATE: to_datetime(["2023-06-01", "2023-06-01"]),
             }
         )
         # Create events with DOB events.
         events = pd.DataFrame(
             {
                 PID_COL: [1, 2],
-                CONCEPT_COL: ["DOB", "DOB"],
+                CONCEPT_COL: [BIRTH_CODE, BIRTH_CODE],
                 TIMESTAMP_COL: to_datetime(["1968-01-01", "1990-01-01"]),
             }
         )
@@ -73,42 +74,15 @@ class TestExtractHelpers(unittest.TestCase):
         self.assertAlmostEqual(age1, 55, delta=1)
         self.assertAlmostEqual(age2, 33, delta=1)
 
-    def test_compute_delay_column(self):
-        # Create a simple DataFrame with concept codes.
-        df = pd.DataFrame({PID_COL: [1, 2], CONCEPT_COL: ["D/ABC", "X/DEF"]})
-        # Use code_groups that match "D/" and delay of 14.
-        updated_df = compute_delay_column(df.copy(), ["D/"], 14)
-        self.assertEqual(updated_df.loc[0, DELAY], 14)
-        self.assertEqual(updated_df.loc[1, DELAY], 0)
-
-    def test_compute_time_window_columns(self):
-        # Create a DataFrame with an INDEX_DATE and DELAY columns.
-        df = pd.DataFrame(
-            {
-                PID_COL: [1, 2],
-                INDEX_DATE: to_datetime(["2023-06-01", "2023-06-01"]),
-                DELAY: [14, 0],
-            }
-        )
-        # Use a time window of 365 days.
-        updated_df = compute_time_window_columns(df.copy(), 365)
-        # For both rows: MIN_TIME = index_date - 365 days.
-        expected_min = (to_datetime("2023-06-01") - pd.Timedelta(days=365)).strftime(
-            "%Y-%m-%d"
-        )
-        self.assertEqual(updated_df.loc[0, MIN_TIME].strftime("%Y-%m-%d"), expected_min)
-        self.assertEqual(updated_df.loc[1, MIN_TIME].strftime("%Y-%m-%d"), expected_min)
-        # For row 0 (with DELAY 14), MAX_TIME = index_date + 14 days; for row 1 (DELAY 0), MAX_TIME = index_date.
-        expected_max_row0 = (
-            to_datetime("2023-06-01") + pd.Timedelta(days=14)
-        ).strftime("%Y-%m-%d")
-        expected_max_row1 = to_datetime("2023-06-01").strftime("%Y-%m-%d")
-        self.assertEqual(
-            updated_df.loc[0, MAX_TIME].strftime("%Y-%m-%d"), expected_max_row0
-        )
-        self.assertEqual(
-            updated_df.loc[1, MAX_TIME].strftime("%Y-%m-%d"), expected_max_row1
-        )
+    def test_compile_regex(self):
+        # Test the regex compilation function
+        patterns = ("^A", "B$")
+        compiled_regex = _compile_regex(patterns)
+        self.assertIsInstance(compiled_regex, re.Pattern)
+        # Check that it properly matches our patterns
+        self.assertTrue(compiled_regex.search("ABC"))
+        self.assertTrue(compiled_regex.search("XB"))
+        self.assertFalse(compiled_regex.search("XYZ"))
 
     def test_compute_code_masks(self):
         # Create a sample DataFrame with codes.
@@ -119,6 +93,14 @@ class TestExtractHelpers(unittest.TestCase):
         # row 1 "B123" doesn't match allowed -> False; row 2 "A999" matches allowed and not excluded -> True.
         expected = [False, False, True]
         self.assertListEqual(mask.tolist(), expected)
+
+        # Test with empty allowed codes list
+        mask = compute_code_masks(df, [], ["A123"])
+        self.assertListEqual(mask.tolist(), [False, False, False])
+
+        # Test with empty exclude codes list
+        mask = compute_code_masks(df, ["^A"], [])
+        self.assertListEqual(mask.tolist(), [True, False, True])
 
     def test_merge_index_dates(self):
         # Create a sample events DataFrame.
@@ -144,18 +126,19 @@ class TestExtractHelpers(unittest.TestCase):
             "2023-06-01",
         )
 
-    def test_compute_time_mask(self):
+    def test_compute_time_mask_exclusive(self):
         # Create a DataFrame with MIN_TIME, MAX_TIME, and TIMESTAMP_COL.
         df = pd.DataFrame(
             {
-                PID_COL: [1, 2],
-                MIN_TIME: to_datetime(["2023-05-01", "2023-05-01"]),
-                MAX_TIME: to_datetime(["2023-06-01", "2023-06-01"]),
-                TIMESTAMP_COL: to_datetime(["2023-05-15", "2023-07-01"]),
+                PID_COL: [1, 2, 3],
+                MIN_TIME: to_datetime(["2023-05-01", "2023-05-01", "2023-05-01"]),
+                MAX_TIME: to_datetime(["2023-06-01", "2023-06-01", "2023-04-01"]),
+                TIMESTAMP_COL: to_datetime(["2023-05-15", "2023-07-01", "2023-04-15"]),
             }
         )
-        mask = compute_time_mask(df)
-        self.assertListEqual(mask.tolist(), [True, False])
+        mask = compute_time_mask_exclusive(df)
+        # The first row has timestamp between min and max, second is after max, third is after min but max < min
+        self.assertListEqual(mask.tolist(), [True, False, False])
 
     def test_rename_result(self):
         # Create a DataFrame with PID_COL, CRITERION_FLAG, and NUMERIC_VALUE.
@@ -191,6 +174,50 @@ class TestExtractHelpers(unittest.TestCase):
         self.assertAlmostEqual(val2, 8.0)
         # Additionally, if a patient had no event in range, the flag would be False.
         # For simplicity here, both patients have valid events.
+
+        # Test case for empty dataframe
+        empty_df = pd.DataFrame(
+            columns=[PID_COL, TIMESTAMP_COL, NUMERIC_VALUE, FINAL_MASK]
+        )
+        empty_df[FINAL_MASK] = False  # To ensure it's a boolean column
+        result = extract_numeric_values(empty_df, flag_df)
+        self.assertEqual(result.shape[0], 2)
+        self.assertTrue(result[CRITERION_FLAG].eq(False).all())
+        self.assertTrue(result[NUMERIC_VALUE].isna().all())
+
+        # Test with no matching values in range
+        result = extract_numeric_values(df, flag_df, min_value=10, max_value=20)
+        self.assertEqual(result.shape[0], 2)
+        self.assertTrue(result[CRITERION_FLAG].eq(False).all())
+        self.assertTrue(result[NUMERIC_VALUE].isna().all())
+
+    def test_extract_criteria_names_from_expression(self):
+        # Test simple expressions
+        expr1 = "A & B"
+        criteria1 = extract_criteria_names_from_expression(expr1)
+        self.assertEqual(criteria1, ("A", "B"))
+
+        # Test complex expressions with parentheses and operators
+        expr2 = "(A & B) | (C & ~D)"
+        criteria2 = extract_criteria_names_from_expression(expr2)
+        self.assertEqual(criteria2, ("A", "B", "C", "D"))
+
+        # Test case sensitivity
+        expr3 = "A & a"
+        criteria3 = extract_criteria_names_from_expression(expr3)
+        self.assertEqual(criteria3, ("A", "a"))
+
+        # Test complex nesting
+        expr4 = "((A & B) | C) & (~D | (E & F))"
+        criteria4 = extract_criteria_names_from_expression(expr4)
+        self.assertEqual(criteria4, ("A", "B", "C", "D", "E", "F"))
+
+        # Test LRU cache
+        # Call with the same expression should use cached result
+        criteria1_again = extract_criteria_names_from_expression(expr1)
+        self.assertEqual(criteria1, criteria1_again)
+        # Verify they're the same object (due to caching)
+        self.assertIs(criteria1, criteria1_again)
 
 
 if __name__ == "__main__":
