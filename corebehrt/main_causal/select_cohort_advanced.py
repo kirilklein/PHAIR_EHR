@@ -40,9 +40,11 @@ from corebehrt.constants.data import TIMESTAMP_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.select_cohort_advanced import (
-    extract_and_save_criteria,
+    extract_criteria,
     filter_and_save_cohort,
     split_and_save,
+    check_criteria_cfg,
+    check_inclusion_exclusion,
 )
 from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
 from corebehrt.modules.setup.config import load_config
@@ -77,11 +79,15 @@ def main(config_path: str):
     logger.info("Loading criteria config")
     criteria_config = load_config(criteria_config_path)
     # Write criteria config to output directory
-    cfg.save_to_yaml(join(save_path, "criteria_config.yaml"))
-    logger.info("Extracting criteria")
-    criteria_df = extract_and_save_criteria(
-        meds_path, index_dates, criteria_config, save_path, splits, pids
+    criteria_config.save_to_yaml(join(save_path, "criteria_config.yaml"))
+
+    check_criteria_cfg(criteria_config)
+    check_inclusion_exclusion(criteria_config)
+    logger.info("Checks successful, extracting criteria")
+    criteria_df = extract_criteria(
+        meds_path, index_dates, criteria_config, splits, pids
     )
+    criteria_df.to_csv(join(save_path, "criteria_flags.csv"), index=False)  #
 
     logger.info("Applying criteria and saving stats")
     df, stats = apply_criteria_with_stats(

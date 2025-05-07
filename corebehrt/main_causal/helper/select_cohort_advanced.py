@@ -33,39 +33,32 @@ from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
 logger = logging.getLogger("select_cohort_advanced")
 
 
-def extract_and_save_criteria(
+def extract_criteria_from_shards(
     meds_path: str,
     index_dates: pd.DataFrame,
-    cfg: dict,
-    save_path: str,
+    criteria_definitions_cfg: dict,
+    delays_cfg: dict,
     splits: list[str],
     pids: List[int] = None,
 ) -> pd.DataFrame:
-    """Extracts criteria from medical event data and saves the results to a CSV file."""
+    """Extract criteria from medical event data across multiple shards.
 
-    if CRITERIA_DEFINITIONS not in cfg:
-        raise ValueError(f"Configuration missing required key: {CRITERIA_DEFINITIONS}")
+    Args:
+        meds_path (str): Path to the medical events data
+        index_dates (pd.DataFrame): DataFrame containing index dates for patients
+        criteria_definitions_cfg (dict): Configuration for criteria definitions
+        delays_cfg (dict): Configuration for delays
+        splits (list[str]): List of splits to process
+        pids (List[int], optional): List of patient IDs to filter. Defaults to None.
 
-    if pids is not None:
-        index_dates = index_dates[index_dates[PID_COL].isin(pids)]
+    Returns:
+        pd.DataFrame: Combined DataFrame containing extracted criteria for all patients
+    """
+    cohort_extractor = CohortExtractor(
+        criteria_definitions_cfg,
+        delays_cfg,
+    )
 
-    logger.info("Checking criteria definitions and delays config")
-    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
-    delays_cfg = cfg.get(DELAYS)
-    check_criteria_definitions(criteria_definitions_cfg)
-    if delays_cfg is not None:
-        check_delays_config(delays_cfg)
-
-    logger.info("Checking inclusion and exclusion expressions")
-    criteria_names = list(criteria_definitions_cfg.keys())
-    check_expression(cfg.get(INCLUSION), criteria_names)
-    check_expression(cfg.get(EXCLUSION), criteria_names)
-
-    if UNIQUE_CODE_LIMITS in cfg:
-        logger.info("Checking unique code limits")
-        check_unique_code_limits(cfg.get(UNIQUE_CODE_LIMITS), criteria_names)
-
-    logger.info("Checks successful, extracting criteria")
     criteria_dfs = []
     for shard_path in iterate_splits_and_shards(meds_path, splits):
         logger.info(
@@ -73,22 +66,92 @@ def extract_and_save_criteria(
         )
         shard = pd.read_parquet(shard_path)
         shard[CONCEPT_COL] = shard[CONCEPT_COL].astype("category")
+
         if pids is not None:
             logger.info(f"Filtering shard for {len(pids)} patients")
             shard = shard[shard[PID_COL].isin(pids)]
+
         logger.info(f"Extracting criteria for {shard[PID_COL].nunique()} patients")
-        cohort_extractor = CohortExtractor(
-            criteria_definitions_cfg,
-            delays_cfg,
-        )
         criteria_df = cohort_extractor.extract(
             shard,
             index_dates,
         )
         criteria_dfs.append(criteria_df)
-    criteria_df = pd.concat(criteria_dfs)
-    criteria_df.to_csv(join(save_path, "criteria_flags.csv"), index=False)
+
+    return pd.concat(criteria_dfs)
+
+
+def extract_criteria(
+    meds_path: str,
+    index_dates: pd.DataFrame,
+    cfg: dict,
+    splits: list[str],
+    pids: List[int] = None,
+) -> pd.DataFrame:
+    """Extracts criteria from medical event data and saves the results to a CSV file."""
+    if pids is not None:
+        index_dates = index_dates[index_dates[PID_COL].isin(pids)]
+
+    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
+    delays_cfg = cfg.get(DELAYS)
+
+    criteria_df = extract_criteria_from_shards(
+        meds_path=meds_path,
+        index_dates=index_dates,
+        criteria_definitions_cfg=criteria_definitions_cfg,
+        delays_cfg=delays_cfg,
+        splits=splits,
+        pids=pids,
+    )
     return criteria_df
+
+
+def check_criteria_cfg(cfg: dict) -> None:
+    """Validate the cohort selection criteria configuration.
+
+    This function performs comprehensive validation of the configuration dictionary
+    used for cohort selection, including:
+    - Presence of required criteria definitions
+    - Validation of criteria definitions and delays configuration
+    - Checking inclusion and exclusion expressions
+    - Validation of unique code limits if specified
+
+    Args:
+        cfg (dict): Configuration dictionary containing cohort selection criteria
+
+    Raises:
+        ValueError: If required configuration keys are missing or if validation fails
+    """
+    if CRITERIA_DEFINITIONS not in cfg:
+        raise ValueError(f"Configuration missing required key: {CRITERIA_DEFINITIONS}")
+
+    logger.info("Checking criteria definitions")
+    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
+    check_criteria_definitions(criteria_definitions_cfg)
+
+    logger.info("Checking delays config")
+    delays_cfg = cfg.get(DELAYS)
+    check_delays_config(delays_cfg)
+
+    logger.info("Checking inclusion and exclusion expressions")
+    criteria_names = list(criteria_definitions_cfg.keys())
+    if UNIQUE_CODE_LIMITS in cfg:
+        logger.info("Checking unique code limits")
+        check_unique_code_limits(cfg.get(UNIQUE_CODE_LIMITS), criteria_names)
+
+
+def check_inclusion_exclusion(cfg: dict) -> None:
+    """Check inclusion and exclusion expressions."""
+    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
+    criteria_names = list(criteria_definitions_cfg.keys())
+    if INCLUSION in cfg:
+        check_expression(cfg.get(INCLUSION), criteria_names)
+    else:
+        raise ValueError(f"Configuration missing required key: {INCLUSION}")
+    if EXCLUSION in cfg:
+        check_expression(cfg.get(EXCLUSION), criteria_names)
+    else:
+        raise ValueError(f"Configuration missing required key: {EXCLUSION}")
 
 
 def split_and_save(
