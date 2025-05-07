@@ -1,14 +1,12 @@
 import re
 from functools import lru_cache
 
-import numpy as np
 import pandas as pd
 
 from corebehrt.constants.cohort import (
     AGE_AT_INDEX_DATE,
     ALLOWED_OPERATORS,
     CRITERION_FLAG,
-    DELAY,
     FINAL_MASK,
     INDEX_DATE,
     MAX_TIME,
@@ -57,38 +55,6 @@ def get_birth_date_for_each_patient(events: pd.DataFrame) -> pd.Series:
     return birth_dates
 
 
-def compute_delay_column(
-    df: pd.DataFrame, code_groups: list, delay_in_days: int
-) -> pd.DataFrame:
-    """
-    Compute a 'delay' column in df based on whether its code starts with any prefix in delays_config["code_groups"].
-    If a match is found the delay (in days) is set to delays_config["days"], otherwise 0.
-    """
-    if code_groups:
-        prefixes = tuple(code_groups)
-        df[DELAY] = np.where(df[CONCEPT_COL].str.startswith(prefixes), delay_in_days, 0)
-    else:
-        df[DELAY] = 0
-    return df
-
-
-def compute_time_window_columns(
-    df: pd.DataFrame, time_window_days: float = 36500
-) -> pd.DataFrame:
-    """
-    Compute two new columns:
-      - 'min_time': index_date minus the time_window_days (default 36500 days if not specified).
-      - 'max_time': index_date plus the computed delay (if delay > 0; otherwise, just index_date).
-    """
-    df[MIN_TIME] = df[INDEX_DATE] - pd.to_timedelta(time_window_days, unit="D")
-    df[MAX_TIME] = np.where(
-        df[DELAY] > 0,
-        df[INDEX_DATE] + pd.to_timedelta(df[DELAY], unit="D"),
-        df[INDEX_DATE],
-    )
-    return df
-
-
 @lru_cache(maxsize=128)
 def _compile_regex(patterns: tuple) -> re.Pattern:
     """Cache compiled regex patterns."""
@@ -131,11 +97,12 @@ def merge_index_dates(events: pd.DataFrame, index_dates: pd.DataFrame) -> pd.Dat
     return events.merge(index_dates, on=PID_COL, how="left")
 
 
-def compute_time_mask(df: pd.DataFrame) -> pd.Series:
+def compute_time_mask_exclusive(df: pd.DataFrame) -> pd.Series:
     """
     Create a Boolean mask indicating whether each event's time is between min_timestamp and max_timestamp.
+    Require the columns TIMESTAMP_COL, MIN_TIME and MAX_TIME to be present in the DataFrame.
     """
-    return (df[TIMESTAMP_COL] >= df[MIN_TIME]) & (df[TIMESTAMP_COL] <= df[MAX_TIME])
+    return (df[MIN_TIME] < df[TIMESTAMP_COL]) & (df[TIMESTAMP_COL] < df[MAX_TIME])
 
 
 def rename_result(df: pd.DataFrame, criterion: str, has_numeric: bool) -> pd.DataFrame:

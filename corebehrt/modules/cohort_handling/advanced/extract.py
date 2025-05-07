@@ -18,7 +18,13 @@ extractor = CohortExtractor(
     criteria_definitions={
         "diabetes": {
             "code_entry": ["E11%"],
-            "time_window_days": 365
+            "start_days": -365,  # 365 days before index date
+            "end_days": 0        # Up to (not including) index date
+        },
+        "post_index_meds": {
+            "code_entry": ["R%"],
+            "start_days": 0,     # From index date
+            "end_days": 30       # Up to 30 days after index date
         },
         "elderly": {
             "min_age": 65
@@ -26,10 +32,6 @@ extractor = CohortExtractor(
         "high_risk": {
             "expression": "diabetes & elderly"
         }
-    },
-    delays_config={
-        "code_groups": ["medications"],
-        "days": 30
     }
 )
 
@@ -51,10 +53,8 @@ from tqdm import tqdm
 from corebehrt.constants.cohort import (
     AGE_AT_INDEX_DATE,
     CODE_ENTRY,
-    CODE_GROUPS,
     CODE_MASK,
     CRITERION_FLAG,
-    DAYS,
     EXCLUDE_CODES,
     EXPRESSION,
     FINAL_MASK,
@@ -62,31 +62,31 @@ from corebehrt.constants.cohort import (
     MAX_AGE,
     MAX_VALUE,
     MIN_AGE,
+    MIN_TIME,
+    MAX_TIME,
     MIN_VALUE,
     NUMERIC_VALUE,
+    START_DAYS,
+    END_DAYS,
     TIME_MASK,
-    TIME_WINDOW_DAYS,
 )
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 from corebehrt.functional.cohort_handling.advanced.extract import (
     compute_age_at_index_date,
     compute_code_masks,
-    compute_delay_column,
-    compute_time_mask,
-    compute_time_window_columns,
     extract_criteria_names_from_expression,
     extract_numeric_values,
     merge_index_dates,
     rename_result,
+    compute_time_mask_exclusive,
 )
 
 logger = logging.getLogger("select_cohort_advanced")
 
 
 class CohortExtractor:
-    def __init__(self, criteria_definitions: dict, delays_config: dict = None):
+    def __init__(self, criteria_definitions: dict):
         self.criteria_definitions = criteria_definitions
-        self.delays_config = delays_config or {}
 
     def extract(
         self,
@@ -166,23 +166,14 @@ class CohortExtractor:
         if not simple_criteria:
             return pd.DataFrame({PID_COL: relevant_index_dates[PID_COL].unique()})
 
-        base_df = merge_index_dates(events, relevant_index_dates)
-        base_df = compute_delay_column(
-            base_df,
-            self.delays_config.get(CODE_GROUPS, []),
-            self.delays_config.get(DAYS, 0),
-        )
-        base_df = compute_time_window_columns(
-            base_df, self.delays_config.get(TIME_WINDOW_DAYS, 36500)
-        )
-        base_df[TIME_MASK] = compute_time_mask(base_df)
+        combined_df = merge_index_dates(events, relevant_index_dates)
 
         results = []
         for criterion, crit_cfg in tqdm(
             simple_criteria,
             desc="Processing simple criteria",
         ):
-            res = CriteriaExtraction.extract_codes(base_df, crit_cfg)
+            res = CriteriaExtraction.extract_codes(combined_df, crit_cfg)
             res = rename_result(res, criterion, NUMERIC_VALUE in crit_cfg)
             results.append(res)
 
@@ -383,13 +374,19 @@ class CriteriaExtraction:
 
     @staticmethod
     def extract_codes(
-        base_df: pd.DataFrame,
+        combined_df: pd.DataFrame,
         crit_cfg: dict,
     ) -> pd.DataFrame:
         """
         Fully vectorized extraction for a code/numeric criterion.
         """
-        df = base_df.copy()  # Use a shallow copy to avoid modifying the base_df
+        df = combined_df.copy()
+
+        df = CriteriaExtraction._compute_time_window_for_criterion(
+            df, crit_cfg.get(START_DAYS), crit_cfg.get(END_DAYS)
+        )
+        df[TIME_MASK] = compute_time_mask_exclusive(df)
+
         df[CODE_MASK] = compute_code_masks(
             df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
         )
@@ -410,3 +407,30 @@ class CriteriaExtraction:
             res = flag_df.copy()
             res[NUMERIC_VALUE] = None
         return res
+
+    @staticmethod
+    def _compute_time_window_for_criterion(
+        df: pd.DataFrame, start_days: float = None, end_days: float = None
+    ) -> pd.DataFrame:
+        """
+        Compute time window columns (MIN_TIME and MAX_TIME) based on start_days and end_days.
+
+        Args:
+            df: DataFrame containing INDEX_DATE column
+            start_days: float, number of days before index date
+            end_days: float, number of days after index date
+
+        Returns:
+            DataFrame with added MIN_TIME and MAX_TIME columns
+        """
+        if start_days is not None:
+            df[MIN_TIME] = df[INDEX_DATE] + pd.to_timedelta(start_days, unit="D")
+        else:
+            df[MIN_TIME] = pd.Timestamp.min
+
+        if end_days is not None:
+            df[MAX_TIME] = df[INDEX_DATE] + pd.to_timedelta(end_days, unit="D")
+        else:
+            df[MAX_TIME] = df[INDEX_DATE]
+
+        return df

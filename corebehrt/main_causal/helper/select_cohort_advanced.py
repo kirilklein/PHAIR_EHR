@@ -1,3 +1,17 @@
+"""Advanced cohort selection and extraction utilities for medical event data.
+
+This module provides functionality for extracting and validating patient cohorts based on
+medical event criteria. It supports:
+- Complex criteria definitions with inclusion/exclusion rules
+- Multi-shard data processing
+- Age-based filtering
+- Train/test/validation splits
+- Cohort persistence
+
+The module is designed to work with medical event data in parquet format, where each event
+is associated with a patient ID, timestamp, and medical concept code.
+"""
+
 import logging
 import os
 from os.path import join
@@ -8,7 +22,6 @@ import torch
 
 from corebehrt.constants.cohort import (
     CRITERIA_DEFINITIONS,
-    DELAYS,
     EXCLUSION,
     INCLUSION,
     UNIQUE_CODE_LIMITS,
@@ -22,7 +35,6 @@ from corebehrt.constants.paths import (
 )
 from corebehrt.functional.cohort_handling.advanced.checks import (
     check_criteria_definitions,
-    check_delays_config,
     check_expression,
     check_unique_code_limits,
 )
@@ -37,7 +49,6 @@ def extract_criteria_from_shards(
     meds_path: str,
     index_dates: pd.DataFrame,
     criteria_definitions_cfg: dict,
-    delays_cfg: dict,
     splits: list[str],
     pids: List[int] = None,
 ) -> pd.DataFrame:
@@ -56,7 +67,6 @@ def extract_criteria_from_shards(
     """
     cohort_extractor = CohortExtractor(
         criteria_definitions_cfg,
-        delays_cfg,
     )
 
     criteria_dfs = []
@@ -93,13 +103,11 @@ def extract_criteria(
         index_dates = index_dates[index_dates[PID_COL].isin(pids)]
 
     criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
-    delays_cfg = cfg.get(DELAYS)
 
     criteria_df = extract_criteria_from_shards(
         meds_path=meds_path,
         index_dates=index_dates,
         criteria_definitions_cfg=criteria_definitions_cfg,
-        delays_cfg=delays_cfg,
         splits=splits,
         pids=pids,
     )
@@ -128,10 +136,6 @@ def check_criteria_cfg(cfg: dict) -> None:
     logger.info("Checking criteria definitions")
     criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
     check_criteria_definitions(criteria_definitions_cfg)
-
-    logger.info("Checking delays config")
-    delays_cfg = cfg.get(DELAYS)
-    check_delays_config(delays_cfg)
 
     logger.info("Checking inclusion and exclusion expressions")
     criteria_names = list(criteria_definitions_cfg.keys())
