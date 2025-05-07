@@ -39,7 +39,6 @@ from corebehrt.constants.cohort import (
     CRITERIA_DEFINITIONS,
     EXCLUSION,
     INCLUSION,
-    UNIQUE_CODE_LIMITS,
 )
 from corebehrt.constants.causal.paths import CRITERIA_FLAGS_FILE, CRITERIA_CONFIG_FILE
 from corebehrt.constants.data import TIMESTAMP_COL
@@ -109,7 +108,6 @@ def main(config_path: str):
         criteria_df,
         criteria_config[INCLUSION],
         criteria_config[EXCLUSION],
-        criteria_config.get(UNIQUE_CODE_LIMITS, {}),
     )
 
     stats = {

@@ -5,7 +5,6 @@ from corebehrt.constants.cohort import (
     N_EXCLUDED_BY_EXPRESSION,
     INCLUSION,
     EXCLUSION,
-    UNIQUE_CODE_LIMITS,
 )
 from corebehrt.constants.data import AGE_COL, PID_COL
 from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
@@ -34,7 +33,6 @@ class TestApplyCriteria(unittest.TestCase):
         self.config = {
             INCLUSION: "type2_diabetes & (myocardial_infarction | stroke | glycemic_control)",
             EXCLUSION: "type1_diabetes | cancer | pregnancy",
-            UNIQUE_CODE_LIMITS: None,
         }
 
     def test_inclusion_expression(self):

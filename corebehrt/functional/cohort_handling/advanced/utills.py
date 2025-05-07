@@ -3,7 +3,6 @@ from corebehrt.constants.cohort import (
     EXCLUDED_BY_INCLUSION_CRITERIA,
     EXCLUDED_BY_EXCLUSION_CRITERIA,
     FINAL_INCLUDED,
-    N_EXCLUDED_BY_CODE_LIMITS,
 )
 
 
@@ -17,10 +16,6 @@ def print_stats(stats: Dict):
 
     print("\nExcluded by individual exclusion criteria:")
     for k, v in stats[EXCLUDED_BY_EXCLUSION_CRITERIA].items():
-        print(f"  - {k}: {v}")
-
-    print("\nExcluded by unique code limits:")
-    for k, v in stats[N_EXCLUDED_BY_CODE_LIMITS].items():
         print(f"  - {k}: {v}")
 
     print(f"\nFinal included: {stats[FINAL_INCLUDED]}")
