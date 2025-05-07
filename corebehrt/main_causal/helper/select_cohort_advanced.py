@@ -21,7 +21,6 @@ import pandas as pd
 import torch
 
 from corebehrt.constants.cohort import (
-    CRITERIA_DEFINITIONS,
     EXCLUSION,
     INCLUSION,
 )
@@ -111,30 +110,6 @@ def extract_criteria_from_shards(
         f"Successfully processed criteria for {total_patients_processed} patients"
     )
     return pd.concat(criteria_dfs)
-
-
-def check_criteria_cfg(cfg: dict) -> None:
-    """Validate the cohort selection criteria configuration.
-
-    This function performs comprehensive validation of the configuration dictionary
-    used for cohort selection, including:
-    - Presence of required criteria definitions
-    - Checking inclusion and exclusion expressions
-    - Validation of unique code limits if specified
-
-    Args:
-        cfg (dict): Configuration dictionary containing cohort selection criteria
-
-    Raises:
-        ValueError: If required configuration keys are missing or if validation fails
-    """
-    if CRITERIA_DEFINITIONS not in cfg:
-        raise ValueError(f"Configuration missing required key: {CRITERIA_DEFINITIONS}")
-
-    logger.info("Checking criteria definitions")
-    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
-    validator = CriteriaValidator(criteria_definitions_cfg)
-    validator.validate()
 
 
 def check_inclusion_exclusion(validator: CriteriaValidator, cfg: dict) -> None:
