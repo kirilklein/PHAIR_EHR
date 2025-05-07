@@ -11,8 +11,10 @@ import torch
 from corebehrt.constants.data import TIMESTAMP_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main_causal.helper.select_cohort_advanced import \
-    extract_and_save_criteria
+from corebehrt.main_causal.helper.select_cohort_advanced import (
+    extract_criteria,
+    check_criteria_cfg,
+)
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
@@ -43,10 +45,10 @@ def main(config_path: str):
 
     logger.info("Loading criteria config")
     criteria_config = load_config(criteria_config_path)
-    # Write criteria config to output directory
-    cfg.save_to_yaml(join(save_path, "criteria_config.yaml"))
+    criteria_config.save_to_yaml(join(save_path, "criteria_config.yaml"))
+    check_criteria_cfg(criteria_config)
     logger.info("Extracting criteria")
-    extract_and_save_criteria(meds_path, index_dates, criteria_config, save_path, pids)
+    extract_criteria(meds_path, index_dates, criteria_config, save_path, pids)
 
 
 if __name__ == "__main__":
