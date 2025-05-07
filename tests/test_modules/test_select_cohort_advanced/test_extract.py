@@ -15,6 +15,9 @@ from corebehrt.constants.cohort import (
     NUMERIC_VALUE_SUFFIX,
     START_DAYS,
     END_DAYS,
+    UNIQUE_CRITERIA_LIST,
+    MAX_COUNT,
+    MIN_COUNT,
 )
 from corebehrt.constants.data import CONCEPT_COL, PID_COL, TIMESTAMP_COL, VALUE_COL
 from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
@@ -221,6 +224,72 @@ class TestExtraction(unittest.TestCase):
         # Patient 2 has only type2_diabetes, not stroke
         patient2 = final_results.loc[final_results[PID_COL] == 2].iloc[0]
         self.assertFalse(patient2["diabetes_and_stroke"])
+
+    def test_unique_criteria_list(self):
+        """Test count-based criteria using UNIQUE_CRITERIA_LIST."""
+        # Add a count-based criterion to the existing criteria definitions
+        self.criteria_definitions["max_two_conditions"] = {
+            UNIQUE_CRITERIA_LIST: [
+                "type2_diabetes",
+                "stroke",
+                "cancer",
+                "pregnancy_and_birth",
+            ],
+            MAX_COUNT: 2,
+        }
+
+        final_results = CohortExtractor(self.criteria_definitions).extract(
+            self.df, self.index_dates
+        )
+
+        # Patient 1: has type2_diabetes, stroke, and HbA1c -> should fail (3 conditions)
+        patient1 = final_results.loc[final_results[PID_COL] == 1].iloc[0]
+        self.assertFalse(patient1["max_two_conditions"])
+
+        # Patient 2: has only type2_diabetes -> should pass (1 condition)
+        patient2 = final_results.loc[final_results[PID_COL] == 2].iloc[0]
+        self.assertTrue(patient2["max_two_conditions"])
+
+        # Patient 3: has type2_diabetes and cancer -> should pass (2 conditions)
+        patient3 = final_results.loc[final_results[PID_COL] == 3].iloc[0]
+        self.assertTrue(patient3["max_two_conditions"])
+
+        # Patient 4: has only type1_diabetes -> should pass (1 condition)
+        patient4 = final_results.loc[final_results[PID_COL] == 4].iloc[0]
+        self.assertTrue(patient4["max_two_conditions"])
+
+    def test_unique_criteria_list_min_count(self):
+        """Test count-based criteria with MIN_COUNT requirement."""
+        # Add a count-based criterion that requires at least 2 conditions
+        self.criteria_definitions["at_least_two_conditions"] = {
+            UNIQUE_CRITERIA_LIST: [
+                "type2_diabetes",
+                "stroke",
+                "cancer",
+                "pregnancy_and_birth",
+            ],
+            MIN_COUNT: 2,
+        }
+
+        final_results = CohortExtractor(self.criteria_definitions).extract(
+            self.df, self.index_dates
+        )
+
+        # Patient 1: has type2_diabetes, stroke, and HbA1c -> should pass (3 conditions)
+        patient1 = final_results.loc[final_results[PID_COL] == 1].iloc[0]
+        self.assertTrue(patient1["at_least_two_conditions"])
+
+        # Patient 2: has type2_diabetes and HbA1c -> should pass (2 conditions)
+        patient2 = final_results.loc[final_results[PID_COL] == 2].iloc[0]
+        self.assertTrue(patient2["at_least_two_conditions"])
+
+        # Patient 3: has type2_diabetes and cancer -> should pass (2 conditions)
+        patient3 = final_results.loc[final_results[PID_COL] == 3].iloc[0]
+        self.assertTrue(patient3["at_least_two_conditions"])
+
+        # Patient 4: has only type1_diabetes -> should fail (1 condition)
+        patient4 = final_results.loc[final_results[PID_COL] == 4].iloc[0]
+        self.assertFalse(patient4["at_least_two_conditions"])
 
 
 class TestPatternUsage(unittest.TestCase):
