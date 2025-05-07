@@ -1,3 +1,16 @@
+"""Core functions for extracting and evaluating patient criteria from medical event data.
+
+This module provides vectorized functions for:
+- Computing patient ages at index dates
+- Matching medical codes with regex patterns
+- Filtering events by time windows
+- Extracting numeric values with thresholds
+- Evaluating boolean expressions for composite criteria
+
+The functions are designed to work with pandas DataFrames containing medical events
+and support efficient processing of large datasets through vectorized operations.
+"""
+
 import re
 from functools import lru_cache
 
