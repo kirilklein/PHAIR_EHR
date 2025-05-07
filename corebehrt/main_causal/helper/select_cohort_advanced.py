@@ -1,3 +1,17 @@
+"""Advanced cohort selection and extraction utilities for medical event data.
+
+This module provides functionality for extracting and validating patient cohorts based on
+medical event criteria. It supports:
+- Complex criteria definitions with inclusion/exclusion rules
+- Multi-shard data processing
+- Age-based filtering
+- Train/test/validation splits
+- Cohort persistence
+
+The module is designed to work with medical event data in parquet format, where each event
+is associated with a patient ID, timestamp, and medical concept code.
+"""
+
 import logging
 import os
 from os.path import join
@@ -7,11 +21,8 @@ import pandas as pd
 import torch
 
 from corebehrt.constants.cohort import (
-    CRITERIA_DEFINITIONS,
-    DELAYS,
     EXCLUSION,
     INCLUSION,
-    UNIQUE_CODE_LIMITS,
 )
 from corebehrt.constants.data import CONCEPT_COL, PID_COL
 from corebehrt.constants.paths import (
@@ -20,12 +31,7 @@ from corebehrt.constants.paths import (
     PID_FILE,
     TEST_PIDS_FILE,
 )
-from corebehrt.functional.cohort_handling.advanced.checks import (
-    check_criteria_definitions,
-    check_delays_config,
-    check_expression,
-    check_unique_code_limits,
-)
+from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidator
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
 from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
@@ -33,62 +39,89 @@ from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
 logger = logging.getLogger("select_cohort_advanced")
 
 
-def extract_and_save_criteria(
+def extract_criteria_from_shards(
     meds_path: str,
     index_dates: pd.DataFrame,
-    cfg: dict,
-    save_path: str,
+    criteria_definitions_cfg: dict,
     splits: list[str],
     pids: List[int] = None,
 ) -> pd.DataFrame:
-    """Extracts criteria from medical event data and saves the results to a CSV file."""
+    """Extract criteria from medical event data across multiple shards.
 
-    if CRITERIA_DEFINITIONS not in cfg:
-        raise ValueError(f"Configuration missing required key: {CRITERIA_DEFINITIONS}")
+    Args:
+        meds_path (str): Path to the medical events data
+        index_dates (pd.DataFrame): DataFrame containing index dates for patients
+        criteria_definitions_cfg (dict): Configuration for criteria definitions
+        splits (list[str]): List of splits to process
+        pids (List[int], optional): List of patient IDs to filter. Defaults to None.
 
-    if pids is not None:
-        index_dates = index_dates[index_dates[PID_COL].isin(pids)]
+    Returns:
+        pd.DataFrame: Combined DataFrame containing extracted criteria for all patients
 
-    logger.info("Checking criteria definitions and delays config")
-    criteria_definitions_cfg = cfg.get(CRITERIA_DEFINITIONS)
-    delays_cfg = cfg.get(DELAYS)
-    check_criteria_definitions(criteria_definitions_cfg)
-    if delays_cfg is not None:
-        check_delays_config(delays_cfg)
+    Raises:
+        ValueError: If no criteria data is found for any patients
+    """
+    cohort_extractor = CohortExtractor(
+        criteria_definitions_cfg,
+    )
 
-    logger.info("Checking inclusion and exclusion expressions")
-    criteria_names = list(criteria_definitions_cfg.keys())
-    check_expression(cfg.get(INCLUSION), criteria_names)
-    check_expression(cfg.get(EXCLUSION), criteria_names)
-
-    if UNIQUE_CODE_LIMITS in cfg:
-        logger.info("Checking unique code limits")
-        check_unique_code_limits(cfg.get(UNIQUE_CODE_LIMITS), criteria_names)
-
-    logger.info("Checks successful, extracting criteria")
     criteria_dfs = []
+    total_patients_processed = 0
+
     for shard_path in iterate_splits_and_shards(meds_path, splits):
         logger.info(
             f"========== Processing shard: {os.path.basename(shard_path)} =========="
         )
         shard = pd.read_parquet(shard_path)
         shard[CONCEPT_COL] = shard[CONCEPT_COL].astype("category")
+
         if pids is not None:
             logger.info(f"Filtering shard for {len(pids)} patients")
             shard = shard[shard[PID_COL].isin(pids)]
+            if shard.empty:
+                logger.warning(f"No matching patients found in shard {shard_path}")
+                continue
+
+        if shard.empty:
+            logger.warning(f"Empty shard found: {shard_path}")
+            continue
+
         logger.info(f"Extracting criteria for {shard[PID_COL].nunique()} patients")
-        cohort_extractor = CohortExtractor(
-            criteria_definitions_cfg,
-            delays_cfg,
-        )
         criteria_df = cohort_extractor.extract(
             shard,
             index_dates,
         )
-        criteria_dfs.append(criteria_df)
-    criteria_df = pd.concat(criteria_dfs)
-    criteria_df.to_csv(join(save_path, "criteria_flags.csv"), index=False)
-    return criteria_df
+
+        if not criteria_df.empty:
+            criteria_dfs.append(criteria_df)
+            total_patients_processed += len(criteria_df)
+        else:
+            logger.warning(
+                f"No criteria matched for any patients in shard {shard_path}"
+            )
+
+    if not criteria_dfs:
+        error_msg = "No criteria data found for any patients"
+        if pids is not None:
+            error_msg += f" in the provided list of {len(pids)} patient IDs"
+        raise ValueError(error_msg)
+
+    logger.info(
+        f"Successfully processed criteria for {total_patients_processed} patients"
+    )
+    return pd.concat(criteria_dfs)
+
+
+def check_inclusion_exclusion(validator: CriteriaValidator, cfg: dict) -> None:
+    """Check inclusion and exclusion expressions."""
+    if INCLUSION in cfg:
+        validator.validate_expression(INCLUSION, cfg[INCLUSION])
+    else:
+        raise ValueError(f"Configuration missing required key: {INCLUSION}")
+    if EXCLUSION in cfg:
+        validator.validate_expression(EXCLUSION, cfg[EXCLUSION])
+    else:
+        raise ValueError(f"Configuration missing required key: {EXCLUSION}")
 
 
 def split_and_save(

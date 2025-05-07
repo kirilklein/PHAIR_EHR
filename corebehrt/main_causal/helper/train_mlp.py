@@ -1,15 +1,20 @@
+import logging
+
 import lightning as pl
 import torch
 
+from corebehrt import azure
+from corebehrt.azure.util.pl_logger import AzureLogger
 from corebehrt.functional.trainer.setup import replace_steps_with_epochs
 from corebehrt.modules.model.mlp import LitMLP
 from corebehrt.modules.trainer.checkpoint import ModelCheckpoint
-from corebehrt.azure.util.pl_logger import AzureLogger
-from corebehrt import azure
+from corebehrt.modules.trainer.utils import get_loss_weight
+
+logger = logging.getLogger(__name__)
 
 
 def setup_model(
-    cfg: dict, num_features: int, num_train_samples: int
+    cfg: dict, num_features: int, num_train_samples: int, y_train: torch.Tensor = None
 ) -> pl.LightningModule:
     """Sets up the model with the given configuration and training data."""
     cfg.scheduler = replace_steps_with_epochs(
@@ -17,6 +22,17 @@ def setup_model(
         cfg.trainer_args.train_loader_kwargs.batch_size,
         num_train_samples,
     )
+
+    if cfg.trainer_args.get("loss_weight_function") is None:
+        loss_weight = None
+    else:
+        if y_train is None:
+            raise ValueError(
+                "y_train must be provided if loss_weight_function is defined"
+            )
+        loss_weight_val = float(get_loss_weight(cfg, y_train.tolist()))
+        loss_weight = torch.tensor(loss_weight_val, dtype=torch.float32)
+        logger.info("Loss weight: %.4f", loss_weight_val)
     model = LitMLP(
         input_dim=num_features,
         hidden_dims=cfg.model.hidden_dims,
@@ -24,6 +40,7 @@ def setup_model(
         dropout_rate=cfg.model.get("dropout_rate", 0.1),
         lr=cfg.optimizer.lr,
         scheduler_cfg=cfg.scheduler,
+        loss_weight=loss_weight,
     )
     # Compile the model
     if torch.cuda.is_available() and cfg.trainer_args.get("compile", False):

@@ -3,7 +3,7 @@ logging:
   path: ./outputs/logs
 
 paths:
-## INPUTS
+  ## INPUTS
   features: ./outputs/causal/features
   tokenized: ./outputs/causal/tokenized
   cohort: ./outputs/causal/exposure_cohort # path to cohort directory
@@ -11,19 +11,19 @@ paths:
 
   # tokenized_file: "features_finetune.pt" # can also be a list
   # tokenized_pids: "pids_finetune.pt" # can also be a list
- 
+
   pretrain_model: ./outputs/causal/pretraining
- 
+
   # restart_model: ... # Use for restarting from checkpoint
-  
+
   outcome: ./outputs/causal/outcomes/EXPOSURE.csv
-  
+
   prepared_data: ./outputs/causal/finetuning/processed_data/exposure
 
-## OUTPUTS
+  ## OUTPUTS
   model: ./outputs/causal/finetuning_exposure # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
-  
+
 model:
   cls:
     _target_: ehr2vec.model.heads.ClassifierGRU
@@ -36,40 +36,37 @@ data:
   test_split: 0
   min_len: 0
 
-outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
+outcome:
+  # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
   n_hours_censoring: -10 # censor time after index date (negative means before)
   n_hours_start_follow_up: -1 # start follow up (considering outcomes) time after index date (negative means before)
   n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
-  
+
 trainer_args:
-  sampler: true
-  sample_weight_function:
-    _target_: corebehrt.evaluation.utils.inverse_sqrt # function to calculate sample weights
+  sampler_function:
+    _target_: corebehrt.modules.trainer.utils.Sampling.inverse_sqrt
   batch_size: 256
   val_batch_size: 256
   effective_batch_size: 256
   epochs: 2
   info: true
-  gradient_clip: 
+  gradient_clip:
     clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
   early_stopping: 20
   stopping_criterion: roc_auc
-  
+
 optimizer:
   lr: 5e-4
   eps: 1e-6
 
 scheduler:
   _target_: transformers.get_constant_schedule_with_warmup
-  num_warmup_epochs: 1  
+  num_warmup_epochs: 1
 
 metrics:
   roc_auc:
     _target_: corebehrt.modules.monitoring.metrics.ROC_AUC
   pr_auc:
     _target_: corebehrt.modules.monitoring.metrics.PR_AUC
-  
-
- 

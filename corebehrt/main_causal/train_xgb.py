@@ -5,7 +5,7 @@ from os.path import join
 
 import pandas as pd
 
-from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE
+from corebehrt.constants.causal.paths import CALIBRATED_PREDICTIONS_FILE, DATA_DIR
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.calibrate_xgb import calibrate_predictions
@@ -15,6 +15,8 @@ from corebehrt.main_causal.helper.train_xgb import (
     setup_xgb_params,
     train_xgb_model,
 )
+from sklearn.metrics import confusion_matrix
+
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 from corebehrt.modules.trainer.data_module import EncodedDataModule
@@ -34,7 +36,7 @@ def main_train(config_path: str):
     # Setup data
     data_module = EncodedDataModule(cfg, logger)
     data_module.setup()
-
+    data_module.save_data(join(cfg.paths.trained_xgb, DATA_DIR))
     # Setup XGBoost parameters
     params, param_space = setup_xgb_params(cfg.model)
 
@@ -48,7 +50,9 @@ def main_train(config_path: str):
         os.makedirs(fold_folder, exist_ok=True)
 
         # Get training data only for model training and hyperparameter tuning
-        X_train, X_val, X_val_counter, y_train, y_val = data_module.get_fold_data(fold)
+        X_train, X_val, X_val_counter, y_train, y_val = data_module.get_fold_data_numpy(
+            fold
+        )
 
         # Train model (validation data not used in training anymore)
         logger.info("Training XGBoost model...")
@@ -68,9 +72,20 @@ def main_train(config_path: str):
         logger.info("Validation metrics:")
         metrics = initialize_metrics(cfg.model.get("metrics", None))
         scores = calculate_metrics(model, X_val, y_val, metrics)
-        # Save scores dictionary
+        logger.info(scores)
         with open(join(fold_folder, "scores.json"), "w") as f:
             json.dump(scores, f, indent=4)
+
+        logger.info("Confusion Matrix:")
+        y_val_pred = model.predict(X_val)
+        cm = confusion_matrix(y_val, y_val_pred)
+        logger.info(cm)
+        df_cm = pd.DataFrame(
+            cm,
+            index=["Actual_Negative", "Actual_Positive"],
+            columns=["Pred_Negative", "Pred_Positive"],
+        )
+        df_cm.to_csv(join(fold_folder, "confusion_matrix.csv"))
 
         # Save model
         model.save_model(join(fold_folder, "model.json"))

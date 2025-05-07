@@ -15,21 +15,20 @@ outcome:
   n_hours_end_follow_up: null
 
 trainer_args:
-  sampler: false
-  sample_weight_function:
-    _target_: corebehrt.evaluation.utils.inverse_sqrt
+  sampler_function:
+    _target_: corebehrt.modules.trainer.utils.Sampling.inverse_sqrt
   batch_size: 512
   val_batch_size: 256
   effective_batch_size: 512
   epochs: 10
   info: true
-  gradient_clip: 
+  gradient_clip:
     clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
   early_stopping: 20
   stopping_criterion: roc_auc
-  
+
 optimizer:
   lr: 5e-4
   eps: 1e-6
@@ -63,8 +62,3 @@ metrics:
 
   false_negatives:
     _target_: corebehrt.modules.monitoring.metrics.False_Negatives
-  
-  
-
- 
-

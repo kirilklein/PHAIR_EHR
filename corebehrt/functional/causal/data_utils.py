@@ -29,5 +29,5 @@ def align_df_with_pids(df: pd.DataFrame, pids: list) -> pd.DataFrame:
         )
 
     df2 = df.set_index(PID_COL)
-    df2 = df2.reindex(pids)
+    df2 = df2.loc[pids]
     return df2.reset_index()

@@ -2,19 +2,6 @@
 inclusion: min_age_50 & criteria_1 | ~ criteria_2 # use |, &, ~, and, or, ~ together with criteria names separated by space to create arbitrary inclusion criteria
 exclusion: max_age_60 & criteria_3 & criteria_4
 
-delays:
-  days: 14 # we match diagnoses and register diagnoses up to index_date + delay_days/ assume it is not caused by the trial drug
-  code_groups:
-  - "D" # diagnoses
-
-# Use the same patterns for unique code limits
-unique_code_limits:
-  code_limit_1:
-    max_count: 2
-    criteria:
-    - criteria_1
-    - criteria_2
-
 criteria_definitions:
   # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
   min_age_50:
@@ -30,11 +17,19 @@ criteria_definitions:
     - ^D84.*
     exclude_codes:
     - ^D84.1
+    start_days: -365
+    end_days: 0
   criteria_2:
     codes:
     - ^LAB6.*
     numeric_value:
       min_value: 100
+
+  count_criteria_1:
+    unique_criteria_list:
+    - criteria_1
+    - criteria_2
+    min_count: 1
 
   criteria_3:
     expression: criteria_1 | criteria_2
