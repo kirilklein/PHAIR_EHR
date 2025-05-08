@@ -1,8 +1,10 @@
 """
-Estimate pipeline implementation.
+Estimate pipeline implementation with optional outcomes and exposures.
 """
 
-from corebehrt.azure.pipelines.base import PipelineMeta, PipelineArg
+from typing import Any, Dict
+
+from corebehrt.azure.pipelines.base import PipelineArg, PipelineMeta
 
 FINETUNE_ESTIMATE = PipelineMeta(
     name="FINETUNE_ESTIMATE",
@@ -10,7 +12,7 @@ FINETUNE_ESTIMATE = PipelineMeta(
     inputs=[
         PipelineArg(
             name="data",
-            help="Path to the raw input data. Only required if outcomes is not provided.",
+            help="Path to the raw input data. Required if outcomes or exposures is not provided.",
             required=False,
         ),
         PipelineArg(name="features", help="Path to the features data.", required=True),
@@ -20,11 +22,15 @@ FINETUNE_ESTIMATE = PipelineMeta(
         PipelineArg(
             name="pretrain_model", help="Path to the pretrained model.", required=True
         ),
-        PipelineArg(name="outcomes", help="Path to the outcomes data.", required=False),
+        PipelineArg(
+            name="outcomes",
+            help="Path to the outcomes data. If not provided, will be created from data.",
+            required=False,
+        ),
         PipelineArg(
             name="exposures",
-            help="Path to the exposures data. Used to train propensity model.",
-            required=True,
+            help="Path to the exposures data. Used to train propensity model. If not provided, will be created from data.",
+            required=False,
         ),
     ],
 )
@@ -38,8 +44,7 @@ def create(component: callable):
     which takes arguments job_type (type of job) and optional argument
     name (name of component if different from type of job).
     """
-    from azure.ai.ml import dsl, Input
-    from typing import Dict, Any
+    from azure.ai.ml import Input, dsl
 
     def _common_pipeline_steps(
         features: Input,
@@ -117,59 +122,135 @@ def create(component: callable):
             "calibrated_predictions": calibrate.outputs.calibrated_predictions,
         }
 
+    # Define the four possible pipeline configurations
     @dsl.pipeline(
-        name="finetune_with_outcomes",
-        description="Finetune CoreBEHRT pipeline with provided outcomes",
+        name="finetune_with_both",
+        description="Finetune CoreBEHRT pipeline with provided outcomes and exposures",
     )
-    def _pipeline_with_outcomes(
+    def _pipeline_with_both(
+        features: Input,
+        tokenized: Input,
+        pretrain_model: Input,
+        exposures: Input,
+        outcomes: Input,
+    ) -> dict:
+        return _common_pipeline_steps(
+            features, tokenized, pretrain_model, exposures, outcomes
+        )
+
+    @dsl.pipeline(
+        name="finetune_with_outcomes_only",
+        description="Finetune CoreBEHRT pipeline with provided outcomes but auto-created exposures",
+    )
+    def _pipeline_with_outcomes_only(
+        data: Input,
         features: Input,
         tokenized: Input,
         pretrain_model: Input,
         outcomes: Input,
     ) -> dict:
-        return _common_pipeline_steps(features, tokenized, pretrain_model, outcomes)
+        create_exposures = component("create_outcomes", name="create_exposures")(
+            data=data,
+            features=features,
+        )
+        return _common_pipeline_steps(
+            features,
+            tokenized,
+            pretrain_model,
+            create_exposures.outputs.outcomes,
+            outcomes,
+        )
 
     @dsl.pipeline(
-        name="finetune_without_outcomes",
-        description="Finetune CoreBEHRT pipeline with auto-created outcomes",
+        name="finetune_with_exposures_only",
+        description="Finetune CoreBEHRT pipeline with provided exposures but auto-created outcomes",
     )
-    def _pipeline_without_outcomes(
+    def _pipeline_with_exposures_only(
+        data: Input,
+        features: Input,
+        tokenized: Input,
+        pretrain_model: Input,
+        exposures: Input,
+    ) -> dict:
+        create_outcomes = component("create_outcomes", name="create_outcomes")(
+            data=data,
+            features=features,
+        )
+        return _common_pipeline_steps(
+            features,
+            tokenized,
+            pretrain_model,
+            exposures,
+            create_outcomes.outputs.outcomes,
+        )
+
+    @dsl.pipeline(
+        name="finetune_with_neither",
+        description="Finetune CoreBEHRT pipeline with auto-created outcomes and exposures",
+    )
+    def _pipeline_with_neither(
         data: Input,
         features: Input,
         tokenized: Input,
         pretrain_model: Input,
     ) -> dict:
-        create_outcomes = component(
-            "create_outcomes",
-        )(
+        create_exposures = component("create_outcomes", name="create_exposures")(
+            data=data,
+            features=features,
+        )
+        create_outcomes = component("create_outcomes", name="create_outcomes")(
             data=data,
             features=features,
         )
         return _common_pipeline_steps(
-            features, tokenized, pretrain_model, create_outcomes.outputs.outcomes
+            features,
+            tokenized,
+            pretrain_model,
+            create_exposures.outputs.outcomes,
+            create_outcomes.outputs.outcomes,
         )
 
     # Define a factory function that returns the appropriate pipeline
     def pipeline_factory(**kwargs: Dict[str, Any]):
-        # Check if outcomes is provided
+        has_exposures = "exposures" in kwargs and kwargs["exposures"] is not None
         has_outcomes = "outcomes" in kwargs and kwargs["outcomes"] is not None
 
-        if has_outcomes:
-            # With outcomes, we don't need data
+        # Check if data is provided when needed
+        if not (has_exposures and has_outcomes) and (
+            "data" not in kwargs or kwargs["data"] is None
+        ):
+            missing = []
+            if not has_exposures:
+                missing.append("exposures")
+            if not has_outcomes:
+                missing.append("outcomes")
+            raise ValueError(
+                f"'data' input is required when {' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} not provided"
+            )
+
+        # Select the appropriate pipeline based on what's provided
+        if has_exposures and has_outcomes:
+            # Remove data from kwargs if it exists (not needed)
             if "data" in kwargs:
                 del kwargs["data"]
-            return _pipeline_with_outcomes(**kwargs)
-        else:
-            # Without outcomes, we need data
-            if "data" not in kwargs:
-                raise ValueError(
-                    "'data' input is required when 'outcomes' is not provided"
-                )
-
-            # Remove outcomes from kwargs if it exists but is None
+            return _pipeline_with_both(**kwargs)
+        elif has_outcomes:
+            # With outcomes but no exposures
+            if "exposures" in kwargs:
+                del kwargs["exposures"]
+            return _pipeline_with_outcomes_only(**kwargs)
+        elif has_exposures:
+            # With exposures but no outcomes
             if "outcomes" in kwargs:
                 del kwargs["outcomes"]
-            return _pipeline_without_outcomes(**kwargs)
+            return _pipeline_with_exposures_only(**kwargs)
+        else:
+            # Neither exposures nor outcomes
+            if "exposures" in kwargs:
+                del kwargs["exposures"]
+            if "outcomes" in kwargs:
+                del kwargs["outcomes"]
+            return _pipeline_with_neither(**kwargs)
 
     # Return the factory function instead of a direct pipeline
     return pipeline_factory
