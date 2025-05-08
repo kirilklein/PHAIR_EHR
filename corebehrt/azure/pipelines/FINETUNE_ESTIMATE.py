@@ -97,15 +97,6 @@ def create(component: callable):
             outcomes=outcomes,
         )
 
-        train_xgb = component(
-            "train_xgb",
-        )(
-            encoded_data=encode.outputs.encoded_data,
-            calibrated_predictions=calibrate.outputs.calibrated_predictions,
-            cohort=select_cohort.outputs.cohort,
-            outcomes=outcomes,
-        )
-
         estimate = component(
             "estimate",
         )(
@@ -117,7 +108,6 @@ def create(component: callable):
             "estimate": estimate.outputs.estimate,
             "ps_model": calibrate.outputs.ps_model,
             "outcome_mlp": train_mlp.outputs.trained_mlp,
-            "outcome_xgb": train_xgb.outputs.trained_xgb,
             "encoded_data": encode.outputs.encoded_data,
             "calibrated_predictions": calibrate.outputs.calibrated_predictions,
         }
