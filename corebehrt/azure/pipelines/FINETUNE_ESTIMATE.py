@@ -132,7 +132,7 @@ def create(component: callable):
 
     # 1. All inputs provided (outcomes, exposures, cohort)
     @dsl.pipeline(
-        name="finetune_with_outcomes_exposures_cohort",
+        name="ft_estimate_w_out_exp_cohort",
         description="Pipeline with provided outcomes, exposures, and cohort",
     )
     def _pipeline_all(
