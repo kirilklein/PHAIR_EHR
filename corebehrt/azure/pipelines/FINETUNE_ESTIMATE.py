@@ -62,7 +62,7 @@ def create(component: callable):
             features=features,
             tokenized=tokenized,
             cohort=select_cohort.outputs.cohort,
-            outcomes=outcomes,
+            outcomes=exposures,
         )
 
         finetune = component(
