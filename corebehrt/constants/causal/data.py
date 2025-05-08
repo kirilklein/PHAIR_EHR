@@ -2,6 +2,7 @@
 PROBAS = "probas"
 TARGETS = "targets"
 OUTCOMES = "outcomes"
+EXPOSURES = "exposures"
 
 # Predicted outcome probabilities
 PROB_KEY = "prob"  # Overall predicted outcome probability
