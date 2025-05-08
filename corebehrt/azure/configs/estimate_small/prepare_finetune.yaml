@@ -3,8 +3,8 @@ logging:
   path: ./logs
 
 paths:
-  outcome: "breast_cancer.csv"
-  
+  outcome: "EXPOSURE.csv"
+
 data:
   type: "finetune"
   truncation_len: 512
@@ -13,4 +13,4 @@ data:
 outcome:
   n_hours_censoring: -2190
   n_hours_start_follow_up: 1
-  n_hours_end_follow_up: null 
+  n_hours_end_follow_up: null

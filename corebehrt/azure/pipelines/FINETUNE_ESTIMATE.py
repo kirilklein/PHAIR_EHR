@@ -21,6 +21,11 @@ FINETUNE_ESTIMATE = PipelineMeta(
             name="pretrain_model", help="Path to the pretrained model.", required=True
         ),
         PipelineArg(name="outcomes", help="Path to the outcomes data.", required=False),
+        PipelineArg(
+            name="exposures",
+            help="Path to the exposures data. Used to train propensity model.",
+            required=True,
+        ),
     ],
 )
 
@@ -40,13 +45,14 @@ def create(component: callable):
         features: Input,
         tokenized: Input,
         pretrain_model: Input,
+        exposures: Input,
         outcomes: Input,
     ) -> dict:
         select_cohort = component(
             "select_cohort",
         )(
             features=features,
-            outcomes=outcomes,
+            outcomes=exposures,
         )
 
         prepare_finetune = component(
@@ -65,9 +71,50 @@ def create(component: callable):
             prepared_data=prepare_finetune.outputs.prepared_data,
             pretrain_model=pretrain_model,
         )
+        calibrate = component(
+            "calibrate",
+        )(
+            finetune_model=finetune.outputs.model,
+        )
+        encode = component(
+            "encode",
+        )(
+            finetune_model=finetune.outputs.model,
+            prepared_data=prepare_finetune.outputs.prepared_data,
+        )
+
+        train_mlp = component(
+            "train_mlp",
+        )(
+            encoded_data=encode.outputs.encoded_data,
+            calibrated_predictions=calibrate.outputs.calibrated_predictions,
+            cohort=select_cohort.outputs.cohort,
+            outcomes=outcomes,
+        )
+
+        train_xgb = component(
+            "train_xgb",
+        )(
+            encoded_data=encode.outputs.encoded_data,
+            calibrated_predictions=calibrate.outputs.calibrated_predictions,
+            cohort=select_cohort.outputs.cohort,
+            outcomes=outcomes,
+        )
+
+        estimate = component(
+            "estimate",
+        )(
+            exposure_predictions=calibrate.outputs.calibrated_predictions,
+            outcome_predictions=train_mlp.outputs.trained_mlp,
+        )
 
         return {
-            "model": finetune.outputs.model,
+            "estimate": estimate.outputs.estimate,
+            "ps_model": calibrate.outputs.ps_model,
+            "outcome_mlp": train_mlp.outputs.trained_mlp,
+            "outcome_xgb": train_xgb.outputs.trained_xgb,
+            "encoded_data": encode.outputs.encoded_data,
+            "calibrated_predictions": calibrate.outputs.calibrated_predictions,
         }
 
     @dsl.pipeline(
