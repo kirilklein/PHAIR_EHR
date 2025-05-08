@@ -3,6 +3,8 @@ PROBAS = "probas"
 TARGETS = "targets"
 OUTCOMES = "outcomes"
 EXPOSURES = "exposures"
+COHORT = "cohort"
+DATA = "data"
 
 # Predicted outcome probabilities
 PROB_KEY = "prob"  # Overall predicted outcome probability

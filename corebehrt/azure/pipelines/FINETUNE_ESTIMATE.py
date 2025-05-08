@@ -5,17 +5,15 @@ Estimate pipeline implementation with optional outcomes, exposures, and cohort.
 from typing import Any, Dict
 
 from corebehrt.azure.pipelines.base import PipelineArg, PipelineMeta
-from corebehrt.constants.causal.data import OUTCOMES, EXPOSURES
+from corebehrt.constants.causal.data import OUTCOMES, EXPOSURES, COHORT, DATA
 
-# Add COHORT constant
-COHORT = "cohort"
 
 FINETUNE_ESTIMATE = PipelineMeta(
     name="FINETUNE_ESTIMATE",
     help="Run the estimate pipeline.",
     inputs=[
         PipelineArg(
-            name="data",
+            name=DATA,
             help="Path to the raw input data. Required if outcomes, exposures or cohort is not provided.",
             required=False,
         ),
@@ -55,19 +53,7 @@ def create(component: callable):
     """
     from azure.ai.ml import Input, dsl
 
-    def _get_cohort(features: Input, exposures: Input, cohort: Input = None):
-        """Helper function to get cohort, either from input or by generating it"""
-        if cohort is not None:
-            return cohort
-
-        select_cohort = component(
-            "select_cohort",
-        )(
-            features=features,
-            outcomes=exposures,
-        )
-        return select_cohort.outputs.cohort
-
+    # Core implementation of pipeline steps - not a pipeline itself
     def _common_pipeline_steps(
         features: Input,
         tokenized: Input,
@@ -76,8 +62,18 @@ def create(component: callable):
         outcomes: Input,
         cohort: Input = None,
     ) -> dict:
+        """Helper function containing common pipeline implementation steps"""
         # Get cohort from input or generate it
-        resolved_cohort = _get_cohort(features, exposures, cohort)
+        if cohort is None:
+            select_cohort = component(
+                "select_cohort",
+            )(
+                features=features,
+                outcomes=exposures,
+            )
+            resolved_cohort = select_cohort.outputs.cohort
+        else:
+            resolved_cohort = cohort
 
         prepare_finetune = component(
             "prepare_training_data",
@@ -131,43 +127,52 @@ def create(component: callable):
             "calibrated_predictions": calibrate.outputs.calibrated_predictions,
         }
 
-    # Define pipeline configurations with cohort handling - without cohort as parameter
+    # Define all pipeline variants using a dictionary
+    pipeline_configs = {}
+
+    # 1. All inputs provided (outcomes, exposures, cohort)
     @dsl.pipeline(
-        name="finetune_with_both_with_cohort",
-        description="Finetune CoreBEHRT pipeline with provided outcomes, exposures, and cohort",
+        name="finetune_with_outcomes_exposures_cohort",
+        description="Pipeline with provided outcomes, exposures, and cohort",
     )
-    def _pipeline_with_both_with_cohort(
+    def _pipeline_all(
         features: Input,
         tokenized: Input,
         pretrain_model: Input,
-        exposures: Input,
         outcomes: Input,
+        exposures: Input,
         cohort: Input,
     ) -> dict:
         return _common_pipeline_steps(
             features, tokenized, pretrain_model, exposures, outcomes, cohort
         )
 
+    pipeline_configs[(True, True, True)] = _pipeline_all
+
+    # 2. Outcomes and exposures provided (no cohort)
     @dsl.pipeline(
-        name="finetune_with_both",
-        description="Finetune CoreBEHRT pipeline with provided outcomes and exposures",
+        name="ft_estimate_w_out_exp",
+        description="Pipeline with provided outcomes and exposures",
     )
-    def _pipeline_with_both(
+    def _pipeline_outcomes_exposures(
         features: Input,
         tokenized: Input,
         pretrain_model: Input,
-        exposures: Input,
         outcomes: Input,
+        exposures: Input,
     ) -> dict:
         return _common_pipeline_steps(
             features, tokenized, pretrain_model, exposures, outcomes
         )
 
+    pipeline_configs[(True, True, False)] = _pipeline_outcomes_exposures
+
+    # 3. Outcomes and cohort provided (no exposures)
     @dsl.pipeline(
-        name="finetune_with_outcomes_only_with_cohort",
-        description="Finetune CoreBEHRT pipeline with provided outcomes, cohort but auto-created exposures",
+        name="ft_estimate_w_out_cohort",
+        description="Pipeline with provided outcomes and cohort",
     )
-    def _pipeline_with_outcomes_only_with_cohort(
+    def _pipeline_outcomes_cohort(
         data: Input,
         features: Input,
         tokenized: Input,
@@ -188,11 +193,14 @@ def create(component: callable):
             cohort,
         )
 
+    pipeline_configs[(True, False, True)] = _pipeline_outcomes_cohort
+
+    # 4. Outcomes only provided (no exposures, no cohort)
     @dsl.pipeline(
-        name="finetune_with_outcomes_only",
-        description="Finetune CoreBEHRT pipeline with provided outcomes but auto-created exposures",
+        name="ft_estimate_w_out_only",
+        description="Pipeline with provided outcomes only",
     )
-    def _pipeline_with_outcomes_only(
+    def _pipeline_outcomes_only(
         data: Input,
         features: Input,
         tokenized: Input,
@@ -211,11 +219,14 @@ def create(component: callable):
             outcomes,
         )
 
+    pipeline_configs[(True, False, False)] = _pipeline_outcomes_only
+
+    # 5. Exposures and cohort provided (no outcomes)
     @dsl.pipeline(
-        name="finetune_with_exposures_only_with_cohort",
-        description="Finetune CoreBEHRT pipeline with provided exposures, cohort but auto-created outcomes",
+        name="ft_estimate_w_exp_cohort",
+        description="Pipeline with provided exposures and cohort",
     )
-    def _pipeline_with_exposures_only_with_cohort(
+    def _pipeline_exposures_cohort(
         data: Input,
         features: Input,
         tokenized: Input,
@@ -236,11 +247,14 @@ def create(component: callable):
             cohort,
         )
 
+    pipeline_configs[(False, True, True)] = _pipeline_exposures_cohort
+
+    # 6. Exposures only provided (no outcomes, no cohort)
     @dsl.pipeline(
-        name="finetune_with_exposures_only",
-        description="Finetune CoreBEHRT pipeline with provided exposures but auto-created outcomes",
+        name="ft_estimate_w_exp_only",
+        description="Pipeline with provided exposures only",
     )
-    def _pipeline_with_exposures_only(
+    def _pipeline_exposures_only(
         data: Input,
         features: Input,
         tokenized: Input,
@@ -259,11 +273,14 @@ def create(component: callable):
             create_outcomes.outputs.outcomes,
         )
 
+    pipeline_configs[(False, True, False)] = _pipeline_exposures_only
+
+    # 7. Cohort only provided (no outcomes, no exposures)
     @dsl.pipeline(
-        name="finetune_with_neither_with_cohort",
-        description="Finetune CoreBEHRT pipeline with auto-created outcomes, exposures but provided cohort",
+        name="ft_estimate_w_cohort_only",
+        description="Pipeline with provided cohort only",
     )
-    def _pipeline_with_neither_with_cohort(
+    def _pipeline_cohort_only(
         data: Input,
         features: Input,
         tokenized: Input,
@@ -287,11 +304,14 @@ def create(component: callable):
             cohort,
         )
 
+    pipeline_configs[(False, False, True)] = _pipeline_cohort_only
+
+    # 8. No inputs provided (create outcomes, exposures, cohort)
     @dsl.pipeline(
-        name="finetune_with_neither",
-        description="Finetune CoreBEHRT pipeline with auto-created outcomes and exposures",
+        name="ft_estimate_w_no_optional_inputs",
+        description="Pipeline creating all optional inputs",
     )
-    def _pipeline_with_neither(
+    def _pipeline_basic(
         data: Input,
         features: Input,
         tokenized: Input,
@@ -313,18 +333,18 @@ def create(component: callable):
             create_outcomes.outputs.outcomes,
         )
 
-    # Define a factory function that returns the appropriate pipeline
+    pipeline_configs[(False, False, False)] = _pipeline_basic
+
+    # Factory function to select the appropriate pipeline
     def pipeline_factory(**kwargs: Dict[str, Any]):
         """
         Creates the appropriate pipeline based on available inputs.
 
-        The factory handles combinations of:
-        - Exposures (provided or created)
-        - Outcomes (provided or created)
-        - Cohort (provided or created)
-
-        Why: Provides a unified interface that automatically handles missing data creation
-        and parameter cleanup, ensuring proper pipeline configuration regardless of input state.
+        This factory function:
+        1. Determines which optional inputs are provided
+        2. Validates that data is available when needed
+        3. Selects the appropriate pipeline variant
+        4. Filters kwargs to match the selected pipeline's signature
 
         Args:
             **kwargs: Pipeline inputs (data, features, tokenized, pretrain_model, exposures, outcomes, cohort)
@@ -333,13 +353,13 @@ def create(component: callable):
         Raises:
             ValueError: When data is missing but required for creating exposures/outcomes
         """
-        has_exposures = EXPOSURES in kwargs and kwargs[EXPOSURES] is not None
         has_outcomes = OUTCOMES in kwargs and kwargs[OUTCOMES] is not None
+        has_exposures = EXPOSURES in kwargs and kwargs[EXPOSURES] is not None
         has_cohort = COHORT in kwargs and kwargs[COHORT] is not None
 
         # Validate data availability when needed
         if not (has_exposures and has_outcomes) and (
-            "data" not in kwargs or kwargs["data"] is None
+            DATA not in kwargs or kwargs[DATA] is None
         ):
             missing = []
             if not has_exposures:
@@ -350,58 +370,16 @@ def create(component: callable):
                 f"'data' input is required when {' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} not provided"
             )
 
-        # Create a copy of kwargs to avoid modifying the original
-        pipeline_kwargs = kwargs.copy()
-
         # Select the appropriate pipeline based on what's provided
-        if has_exposures and has_outcomes:
-            # Remove data from kwargs if it exists (not needed)
-            if "data" in pipeline_kwargs:
-                del pipeline_kwargs["data"]
+        pipeline_key = (has_outcomes, has_exposures, has_cohort)
+        selected_pipeline = pipeline_configs[pipeline_key]
 
-            if has_cohort:
-                return _pipeline_with_both_with_cohort(**pipeline_kwargs)
-            else:
-                if COHORT in pipeline_kwargs:
-                    del pipeline_kwargs[COHORT]
-                return _pipeline_with_both(**pipeline_kwargs)
+        # Filter kwargs to only include parameters the selected pipeline accepts
+        from inspect import signature
 
-        elif has_outcomes:
-            # With outcomes but no exposures
-            if EXPOSURES in pipeline_kwargs:
-                del pipeline_kwargs[EXPOSURES]
+        pipeline_params = signature(selected_pipeline).parameters.keys()
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in pipeline_params}
 
-            if has_cohort:
-                return _pipeline_with_outcomes_only_with_cohort(**pipeline_kwargs)
-            else:
-                if COHORT in pipeline_kwargs:
-                    del pipeline_kwargs[COHORT]
-                return _pipeline_with_outcomes_only(**pipeline_kwargs)
-
-        elif has_exposures:
-            # With exposures but no outcomes
-            if OUTCOMES in pipeline_kwargs:
-                del pipeline_kwargs[OUTCOMES]
-
-            if has_cohort:
-                return _pipeline_with_exposures_only_with_cohort(**pipeline_kwargs)
-            else:
-                if COHORT in pipeline_kwargs:
-                    del pipeline_kwargs[COHORT]
-                return _pipeline_with_exposures_only(**pipeline_kwargs)
-
-        else:
-            # Neither exposures nor outcomes
-            if EXPOSURES in pipeline_kwargs:
-                del pipeline_kwargs[EXPOSURES]
-            if OUTCOMES in pipeline_kwargs:
-                del pipeline_kwargs[OUTCOMES]
-
-            if has_cohort:
-                return _pipeline_with_neither_with_cohort(**pipeline_kwargs)
-            else:
-                if COHORT in pipeline_kwargs:
-                    del pipeline_kwargs[COHORT]
-                return _pipeline_with_neither(**pipeline_kwargs)
+        return selected_pipeline(**filtered_kwargs)
 
     return pipeline_factory
