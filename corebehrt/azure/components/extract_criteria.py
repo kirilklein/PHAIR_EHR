@@ -4,15 +4,15 @@ INPUTS = {
     "cohort": {"type": "uri_folder"},
     "meds": {"type": "uri_folder"},
 }
-OUTPUTS = {"cohort_stats": {"type": "uri_folder"}}
+OUTPUTS = {"criteria": {"type": "uri_folder"}}
 
 
 if __name__ == "__main__":
-    from corebehrt.main_causal import get_stats
+    from corebehrt.main_causal.helper_scripts import extract_criteria
 
     job.run_main(
-        "get_stats",
-        get_stats.main,
+        "extract_criteria",
+        extract_criteria.main,
         INPUTS,
         OUTPUTS,
     )

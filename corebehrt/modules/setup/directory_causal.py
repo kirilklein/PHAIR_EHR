@@ -2,6 +2,7 @@ import logging
 
 from corebehrt.constants.causal.paths import (
     CALIBRATE_CFG,
+    EXTRACT_CRITERIA_CFG,
     ENCODE_CFG,
     ESTIMATE_CFG,
     SIMULATE_CFG,
@@ -163,15 +164,15 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.create_directory("cohort_advanced")
         self.write_config("cohort_advanced", name=COHORT_CFG)
 
-    def setup_get_stats(self) -> None:
+    def setup_extract_criteria(self) -> None:
         """
-        Validates path config and sets up directories for get_stats.
+        Validates path config and sets up directories for extract_criteria.
         """
         # Setup logging
-        self.setup_logging("get_stats")
+        self.setup_logging("extract_criteria")
         # Check input directories
         self.check_directory("cohort")
         self.check_directory("meds")
         # Create output directories
-        self.create_directory("cohort_stats")
-        self.write_config("cohort_stats", name=COHORT_CFG)
+        self.create_directory("criteria")
+        self.write_config("criteria", name=EXTRACT_CRITERIA_CFG)
