@@ -4,14 +4,7 @@ logging:
 
 paths:
   ## INPUTS  
-  encoded_data: ./outputs/causal/encoding
-  calibrated_predictions: ./outputs/causal/calibrated_predictions # to extract exposure
-  cohort: ./outputs/causal/exposure_cohort
-
-  outcomes: ./outputs/causal/simulated_outcome_enc_strong
-  outcome: outcomes_with_timestamps.csv
-  ## OUTPUTS
-  trained_mlp: ./outputs/causal/trained_mlp_simulated_enc_strong
+  outcome: OUTCOME.csv
 
 outcome:
   # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
@@ -19,13 +12,17 @@ outcome:
   n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
 
 model:
-  hidden_dims: [ 64 ]
+  hidden_dims: [ 32 ]
 
 trainer_args:
   sampler_function:
-    _target_: corebehrt.modules.trainer.utils.Sampling.inverse_sqrt # function to calculate sample weights
-
-  epochs: 10
+    _target_: corebehrt.modules.trainer.utils.Sampling.effective_n_samples # function to calculate sample weights. Possible options: inverse_sqrt and effective_n_samples
+  loss_weight_function:
+    _target_: corebehrt.modules.trainer.utils.PositiveWeight.effective_n_samples # function to calculate positive weights. Possible options: sqrt and effective_n_samples
+  precision: 16 # Use mixed precision for faster training
+  accelerator: 'gpu'
+  devices: 1
+  epochs: 2
   gradient_clip:
     clip_value: 1.0
   shuffle: true
@@ -48,7 +45,7 @@ trainer_args:
     persistent_workers: false
 
 optimizer:
-  lr: 1e-3
+  lr: 5e-4
 
 scheduler:
   _target_: transformers.get_constant_schedule_with_warmup

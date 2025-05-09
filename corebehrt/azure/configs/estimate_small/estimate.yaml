@@ -1,0 +1,9 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+estimator:
+  methods: [ "IPW", "AIPW", "TMLE" ]
+  effect_type: "ATE"
+  n_bootstrap: 5
+  common_support_threshold: 0.001

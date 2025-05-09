@@ -136,7 +136,7 @@ class EncodedDataModule:
     def _load_outcomes(
         self, index_dates: pd.DataFrame, pids: List[str]
     ) -> torch.Tensor:
-        outcomes = pd.read_csv(self.cfg.paths.outcomes)
+        outcomes = pd.read_csv(join(self.cfg.paths.outcomes, self.cfg.paths.outcome))
         binary_outcomes = get_binary_outcomes(
             index_dates,
             outcomes,
