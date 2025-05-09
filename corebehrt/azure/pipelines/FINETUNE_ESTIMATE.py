@@ -121,7 +121,7 @@ def create(component: callable):
 
         return {
             "estimate": estimate.outputs.estimate,
-            "ps_model": calibrate.outputs.calibrated_predictions,
+            "ps_model": finetune.outputs.model,
             "outcome_mlp": train_mlp.outputs.trained_mlp,
             "encoded_data": encode.outputs.encoded_data,
             "calibrated_predictions": calibrate.outputs.calibrated_predictions,
