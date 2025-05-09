@@ -220,5 +220,203 @@ class TestExtractHelpers(unittest.TestCase):
         self.assertIs(criteria1, criteria1_again)
 
 
+class TestComputeCodeMasks(unittest.TestCase):
+    def setUp(self):
+        # Create a sample DataFrame with various codes
+        self.df = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1, 2, 2, 3, 3, 3],
+                CONCEPT_COL: [
+                    "GENDER//Mand",  # Exact match
+                    "D/C11",  # Regex match
+                    "D/C11.1",  # Regex match
+                    "D/I63",  # Regex match
+                    "D/I64",  # Regex match
+                    "D/C449",  # Exclusion code
+                    "D/C449.1",  # Exclusion code
+                    "OTHER",  # No match
+                ],
+                TIMESTAMP_COL: pd.to_datetime(["2023-01-01"] * 8),
+            }
+        )
+
+    def test_exact_match(self):
+        """Test exact code matching without regex."""
+        codes = ["GENDER//Mand"]
+        exclude_codes = []
+        mask = compute_code_masks(self.df, codes, exclude_codes)
+
+        # Only the first row should match
+        self.assertTrue(mask.iloc[0])
+        self.assertFalse(mask.iloc[1:].any())
+
+    def test_regex_match(self):
+        """Test regex pattern matching."""
+        codes = ["^D/C11.*"]
+        exclude_codes = []
+        mask = compute_code_masks(self.df, codes, exclude_codes)
+
+        # Rows 1 and 2 should match (D/C11 and D/C11.1)
+        self.assertTrue(mask.iloc[1])
+        self.assertTrue(mask.iloc[2])
+        self.assertFalse(mask.iloc[0])
+        self.assertFalse(mask.iloc[3:].any())
+
+    def test_multiple_codes(self):
+        """Test matching multiple code patterns."""
+        codes = ["^D/C11.*", "^D/I6[3-4].*"]
+        exclude_codes = []
+        mask = compute_code_masks(self.df, codes, exclude_codes)
+
+        # Rows 1, 2, 3, and 4 should match
+        self.assertTrue(mask.iloc[1:5].all())
+        self.assertFalse(mask.iloc[0])
+        self.assertFalse(mask.iloc[5:].any())
+
+    def test_exclusion_codes(self):
+        """Test that exclusion codes properly filter out matches."""
+        codes = ["^D/C.*"]  # Match all C codes
+        exclude_codes = ["^D/C449.*"]  # Exclude C449 codes
+        mask = compute_code_masks(self.df, codes, exclude_codes)
+
+        # Rows 1 and 2 should match (D/C11 and D/C11.1)
+        # Rows 5 and 6 should be excluded (D/C449 and D/C449.1)
+        self.assertTrue(mask.iloc[1])
+        self.assertTrue(mask.iloc[2])
+        self.assertFalse(mask.iloc[5])
+        self.assertFalse(mask.iloc[6])
+
+    def test_empty_codes(self):
+        """Test behavior with empty code lists."""
+        # Empty allowed codes
+        mask = compute_code_masks(self.df, [], [])
+        self.assertFalse(mask.any())
+
+        # Empty exclude codes
+        codes = ["^D/C.*"]
+        mask = compute_code_masks(self.df, codes, [])
+        self.assertTrue(mask.iloc[1:3].all())  # C11 codes should match
+        self.assertTrue(mask.iloc[5:7].all())  # C449 codes should match
+
+    def test_case_sensitivity(self):
+        """Test case sensitivity in matching."""
+        # Create a DataFrame with mixed case codes
+        mixed_case_df = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1],
+                CONCEPT_COL: ["GENDER//Mand", "gender//mand", "GENDER//MAND"],
+                TIMESTAMP_COL: pd.to_datetime(["2023-01-01"] * 3),
+            }
+        )
+
+        # Test exact match
+        codes = ["GENDER//Mand"]
+        mask = compute_code_masks(mixed_case_df, codes, [])
+        self.assertTrue(mask.iloc[0])
+        self.assertFalse(mask.iloc[1:].any())
+
+        # Test case-insensitive regex
+        codes = ["(?i)gender//mand"]
+        mask = compute_code_masks(mixed_case_df, codes, [])
+        self.assertTrue(mask.all())
+
+    def test_special_characters(self):
+        """Test handling of special characters in codes."""
+        special_df = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1],
+                CONCEPT_COL: ["CODE//123", "CODE/123", "CODE.123"],
+                TIMESTAMP_COL: pd.to_datetime(["2023-01-01"] * 3),
+            }
+        )
+
+        # Test with special characters in pattern
+        codes = ["CODE//123"]
+        mask = compute_code_masks(special_df, codes, [])
+        self.assertTrue(mask.iloc[0])
+        self.assertFalse(mask.iloc[1:].any())
+
+        # Test with regex special characters
+        codes = ["CODE\\.123"]
+        mask = compute_code_masks(special_df, codes, [])
+        self.assertTrue(mask.iloc[2])
+        self.assertFalse(mask.iloc[:2].any())
+
+    def test_exact_match_with_double_slash(self):
+        """Test exact matching of codes containing //."""
+        # Create a DataFrame with various codes containing //
+        double_slash_df = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1, 1, 1],
+                CONCEPT_COL: [
+                    "GENDER//Mand",  # Exact match
+                    "GENDER//Mand/1",  # Should not match
+                    "GENDER/Mand",  # Should not match
+                    "GENDER//MAND",  # Case sensitive, should not match
+                    "GENDER//Mand/2",  # Should not match
+                ],
+                TIMESTAMP_COL: pd.to_datetime(["2023-01-01"] * 5),
+            }
+        )
+
+        # Test exact match with //
+        codes = [
+            "GENDER//Mand"
+        ]  # this will match everything starting with GENDER//Mand
+        exclude_codes = []
+        mask = compute_code_masks(double_slash_df, codes, exclude_codes)
+
+        # Only the first row should match exactly
+        self.assertTrue(mask.iloc[0], "Exact match with // should work")
+        self.assertTrue(mask.iloc[1], "Also matches when starting with GENDER//Mand")
+        self.assertTrue(mask.iloc[-1], "Also matches when starting with GENDER//Mand")
+
+    def test_multiple_exact_matches(self):
+        double_slash_df = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1, 1, 1],
+                CONCEPT_COL: [
+                    "GENDER//Mand",  # Exact match
+                    "GENDER//Mand/1",  # Should not match
+                    "GENDER/Mand",  # Should not match
+                    "GENDER//MAND",  # Case sensitive, should not match
+                    "GENDER//Mand/2",  # Should not match
+                ],
+                TIMESTAMP_COL: pd.to_datetime(["2023-01-01"] * 5),
+            }
+        )
+        # Test with multiple exact matches
+        codes = ["GENDER//Mand", "GENDER//Mand/1"]
+        mask = compute_code_masks(double_slash_df, codes, [])
+
+        # First two rows should match
+        self.assertTrue(mask.iloc[0], "First exact match should work")
+        self.assertTrue(mask.iloc[1], "Second exact match should work")
+
+    def test_exclusion(self):
+        double_slash_df = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1, 1, 1],
+                CONCEPT_COL: [
+                    "GENDER//Mand",  # Exact match
+                    "GENDER//Mand/1",  # Should not match
+                    "GENDER/Mand",  # Should not match
+                    "GENDER//MAND",  # Case sensitive, should not match
+                    "GENDER//Mand/2",  # Should not match
+                ],
+                TIMESTAMP_COL: pd.to_datetime(["2023-01-01"] * 5),
+            }
+        )
+
+        # Test with exclusion
+        codes = ["GENDER//Mand"]
+        exclude_codes = ["GENDER//Mand/1"]
+        mask = compute_code_masks(double_slash_df, codes, exclude_codes)
+
+        # Only first row should match, second row should be excluded
+        self.assertTrue(mask.iloc[0], "Exact match should work")
+        self.assertTrue(mask.iloc[-1], "Exact match should work")
+
+
 if __name__ == "__main__":
     unittest.main()

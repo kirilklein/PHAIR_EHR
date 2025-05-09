@@ -445,11 +445,12 @@ class CriteriaExtraction:
         Fully vectorized extraction for a code/numeric criterion.
         """
         df = combined_df.copy()
-
         df = CriteriaExtraction._compute_time_window_for_criterion(
             df, crit_cfg.get(START_DAYS), crit_cfg.get(END_DAYS)
         )
         df[TIME_MASK] = compute_time_mask_exclusive(df)
+        is_background = df[TIMESTAMP_COL].isna()
+        df[TIME_MASK] = df[TIME_MASK] | is_background
 
         df[CODE_MASK] = compute_code_masks(
             df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])

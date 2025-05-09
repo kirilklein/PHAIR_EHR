@@ -626,3 +626,61 @@ class TestVectorizedExtractionFunctions(unittest.TestCase):
                     expected_value,
                     msg=f"Time window of {start_days} to {end_days} days should return value {expected_value}",
                 )
+
+    def test_background_variables_time_mask(self):
+        """Test that background variables (NaT in TIMESTAMP_COL) always have time mask set to True."""
+        # Create events with both background and time-dependent variables
+        events = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1],
+                CONCEPT_COL: [
+                    "GENDER//Mand",  # Background variable
+                    "D/C11",  # Time-dependent variable
+                    "D/C11.1",  # Time-dependent variable
+                ],
+                TIMESTAMP_COL: [
+                    pd.NaT,  # NaT for background variable
+                    pd.to_datetime("2023-05-15"),
+                    pd.to_datetime("2023-05-16"),
+                ],
+                VALUE_COL: [None, None, None],
+            }
+        )
+
+        index_dates = pd.DataFrame(
+            {PID_COL: [1], TIMESTAMP_COL: pd.to_datetime(["2023-06-01"])}
+        )
+
+        # Test with a time window that would exclude the time-dependent variables
+        criteria_definitions = {
+            "test_criterion": {
+                CODE_ENTRY: ["GENDER//Mand", "D/C11.*"],
+                START_DAYS: -1,  # Only 1 day before index date
+                END_DAYS: 0,  # Up to index date
+            }
+        }
+
+        extractor = CohortExtractor(criteria_definitions)
+        result = extractor.extract(events, index_dates)
+
+        # The background variable should be included regardless of time window
+        self.assertTrue(
+            result.iloc[0]["test_criterion"],
+            "Background variable should be included regardless of time window",
+        )
+
+        # Test with numeric criteria to ensure it works with all types
+        criteria_definitions = {
+            "test_criterion": {
+                CODE_ENTRY: ["GENDER//Mand", "D/C11.*"],
+                NUMERIC_VALUE: {MIN_VALUE: 7.0},
+                START_DAYS: -1,
+                END_DAYS: 0,
+            }
+        }
+
+        result = extractor.extract(events, index_dates)
+        self.assertTrue(
+            result.iloc[0]["test_criterion"],
+            "Background variable should be included with numeric criteria",
+        )

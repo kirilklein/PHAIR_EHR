@@ -86,7 +86,6 @@ def compute_code_masks(df: pd.DataFrame, codes: list, exclude_codes: list) -> pd
         Boolean mask indicating whether each event's code is allowed.
     """
     if codes:
-        # Convert list to tuple for hashing
         allowed_regex = _compile_regex(tuple(codes))
         allowed_mask = df[CONCEPT_COL].str.contains(allowed_regex, na=False)
     else:
