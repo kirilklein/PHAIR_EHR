@@ -17,6 +17,7 @@ Outputs:
 import logging
 from os.path import join
 
+
 from corebehrt.constants.causal.data import EXPOSURE_COL, PS_COL
 from corebehrt.constants.causal.paths import EFFECTIVE_SAMPLE_SIZE_FILE
 from corebehrt.constants.causal.stats import WEIGHTS_COL
@@ -63,6 +64,16 @@ def main(config_path: str):
         logger,
     )
 
+    if cfg.get("common_support_threshold", None) is not None:
+        from CausalEstimate.filter.propensity import filter_common_support
+
+        criteria = filter_common_support(
+            criteria,
+            ps_col=PS_COL,
+            treatment_col=EXPOSURE_COL,
+            threshold=cfg.common_support_threshold,
+        )
+
     stats = analyze_cohort(criteria)
     print_stats(stats)
     save_stats(stats, save_path)
@@ -83,6 +94,8 @@ def main(config_path: str):
         print(ess_df)
 
         ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
+
+    logger.info("Done")
 
 
 if __name__ == "__main__":

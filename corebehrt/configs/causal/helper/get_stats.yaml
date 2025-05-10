@@ -14,4 +14,6 @@ paths:
   ### Outputs
   stats: ./outputs/causal/stats
 
+# optional
 weights: ATE # chose from ATE, ATT, ATC or null
+common_support_threshold: 0.001 # only used if weights is not null
