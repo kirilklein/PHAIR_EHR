@@ -13,3 +13,5 @@ paths:
 
   ### Outputs
   stats: ./outputs/causal/stats
+
+weights: ATE # chose from ATE, ATT, ATC or null

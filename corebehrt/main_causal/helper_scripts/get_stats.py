@@ -16,9 +16,13 @@ Outputs:
 
 import logging
 
+from corebehrt.constants.causal.data import EXPOSURE_COL, PS_COL
+from corebehrt.constants.causal.stats import WEIGHTS_COL
+from corebehrt.functional.cohort_handling.stats import compute_weights
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     analyze_cohort,
+    analyze_cohort_with_weights,
     load_data,
     print_stats,
     save_stats,
@@ -59,6 +63,18 @@ def main(config_path: str):
     stats = analyze_cohort(criteria)
     print_stats(stats)
     save_stats(stats, save_path)
+
+    if cfg.get("weights", None) is not None:
+        if PS_COL not in criteria.columns:
+            raise ValueError(f"PS_COL {PS_COL} not found in criteria")
+        if EXPOSURE_COL not in criteria.columns:
+            raise ValueError(f"EXPOSURE_COL {EXPOSURE_COL} not found in criteria")
+        criteria[WEIGHTS_COL] = compute_weights(criteria, cfg.weights)
+        stats = analyze_cohort_with_weights(criteria, WEIGHTS_COL)
+        print("--------------------------------")
+        print(f"Weighted stats ({cfg.weights}):")
+        print_stats(stats)
+        save_stats(stats, save_path, weighted=True)
 
 
 if __name__ == "__main__":

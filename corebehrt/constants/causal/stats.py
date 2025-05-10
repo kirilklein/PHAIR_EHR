@@ -1,6 +1,7 @@
 CRIT = "criterion"
 GROUP = "group"
 COUNT = "count"
+NON_NULL_COUNT = "non_null_count"
 PERCENTAGE = "percentage"
 MEAN = "mean"
 STD = "std"
@@ -16,3 +17,5 @@ OVERALL = "Overall"
 
 RAW = "raw"
 FORMATTED = "formatted"
+
+WEIGHTS_COL = "weights"

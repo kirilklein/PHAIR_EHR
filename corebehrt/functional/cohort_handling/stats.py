@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Literal, Set
+from typing import Dict, Literal, Set, Optional
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,7 @@ from corebehrt.constants.causal.stats import (
     P75,
     PERCENTAGE,
     STD,
+    NON_NULL_COUNT,
 )
 from corebehrt.constants.data import PID_COL
 
@@ -42,6 +43,26 @@ def effective_sample_size(w: np.ndarray):
     return np.sum(w) ** 2 / np.sum(w**2)
 
 
+def compute_weights(
+    criteria: pd.DataFrame, weights_type: Literal["ATE", "ATT", "ATC"]
+) -> pd.Series:
+    """Compute weights for the cohort based on the weights type (ATE, ATT, ATC)."""
+    exposure = criteria[EXPOSURE_COL]
+    ps = criteria[PS_COL]
+    if weights_type == "ATE":
+        # Treated: 1/p, Control: 1/(1-p)
+        weights = exposure / ps + (1 - exposure) / (1 - ps)
+    elif weights_type == "ATT":
+        # Treated: 1, Control: p/(1-p)
+        weights = exposure * 1 + (1 - exposure) * (ps / (1 - ps))
+    elif weights_type == "ATC":
+        # Control: 1, Treated: (1-p)/p
+        weights = (1 - exposure) * 1 + exposure * ((1 - ps) / ps)
+    else:
+        raise ValueError(f"Unknown weights_type: {weights_type}")
+    return weights
+
+
 @dataclass
 class StatConfig:
     """Configuration for statistics calculation."""
@@ -49,11 +70,12 @@ class StatConfig:
     special_cols: Set[str] = field(default_factory=lambda: SPECIAL_COLS)
     decimal_places: int = 2
     percentage_decimal_places: int = 1
+    weights_col: Optional[str] = None
 
 
 def format_stats_table(
     stats_dict: Dict[str, pd.DataFrame], config: StatConfig = StatConfig()
-) -> Dict[str, pd.DataFrame]:
+) -> Dict[str, Dict[str, pd.DataFrame]]:
     """
     Format statistics tables for binary and numeric columns.
     """
@@ -77,7 +99,7 @@ def format_stats_table(
                 lambda x: f"{x:.{config.decimal_places}f}" if pd.notna(x) else "N/A"
             )
         formatted[NUMERIC] = numeric_df[
-            [GROUP, CRIT, COUNT, MEAN, STD, MEDIAN, P25, P75]
+            [GROUP, CRIT, MEAN, STD, MEDIAN, P25, P75, NON_NULL_COUNT]
         ]
     else:
         formatted[NUMERIC] = numeric_df
@@ -86,7 +108,7 @@ def format_stats_table(
 
 def get_stratified_stats(
     df: pd.DataFrame, config: StatConfig = StatConfig()
-) -> Dict[str, pd.DataFrame]:
+) -> Dict[str, Dict[str, pd.DataFrame]]:
     """
     Compute statistics for the overall cohort and stratified by exposure status,
     split into binary and numeric DataFrames.
@@ -121,32 +143,82 @@ def get_stratified_stats(
 
 
 def get_stats_for_binary_column(
-    s: pd.Series, n: int, criterion: str, group: GroupType
+    s: pd.Series,
+    n: int,
+    criterion: str,
+    group: GroupType,
+    weights: Optional[pd.Series] = None,
 ) -> Dict:
     """Get statistics for a binary column."""
     non_null = s.dropna()
-    count = non_null.sum()
+    if weights is not None:
+        weights = weights[non_null.index]
+        count = (non_null * weights).sum()
+        total_weight = weights.sum()
+        percentage = (
+            100 * float(count) / total_weight if total_weight > 0 else float("nan")
+        )
+    else:
+        count = non_null.sum()
+        percentage = 100 * float(count) / n if n > 0 else float("nan")
     return {
         CRIT: criterion,
         GROUP: group,
         COUNT: int(count),
-        PERCENTAGE: 100 * float(count) / n if n > 0 else float("nan"),
+        PERCENTAGE: percentage,
     }
 
 
 def get_stats_for_numeric_column(
-    s: pd.Series, criterion: str, group: GroupType
+    s: pd.Series, criterion: str, group: GroupType, weights: Optional[pd.Series] = None
 ) -> Dict:
     non_null = s.dropna()
+
+    if weights is not None:
+        # align weights with non-null values
+        weights = weights.loc[non_null.index]
+
+        # weighted mean & std
+        weighted_mean = np.average(non_null, weights=weights)
+        weighted_var = np.average((non_null - weighted_mean) ** 2, weights=weights)
+        weighted_std = np.sqrt(weighted_var)
+
+        # weighted quantiles
+        # 1) sort data and corresponding weights
+        sorted_idx = np.argsort(non_null)
+        sorted_data = non_null.iloc[sorted_idx]
+        sorted_weights_arr = weights.iloc[sorted_idx].values  # as plain numpy array
+
+        # 2) cumulative sum and normalize
+        cumw = np.cumsum(sorted_weights_arr)
+        cumw = cumw / cumw[-1]  # now cumw[-1] is the total normalized weight (=1)
+
+        # 3) find positions for quantiles
+        median_idx = np.searchsorted(cumw, 0.5)
+        p25_idx = np.searchsorted(cumw, 0.25)
+        p75_idx = np.searchsorted(cumw, 0.75)
+
+        median = sorted_data.iloc[median_idx]
+        p25 = sorted_data.iloc[p25_idx]
+        p75 = sorted_data.iloc[p75_idx]
+
+    else:
+        weighted_mean = non_null.mean()
+        weighted_std = non_null.std()
+        median = non_null.median()
+        p25 = non_null.quantile(0.25)
+        p75 = non_null.quantile(0.75)
+    count = non_null.count()
+
     return {
         CRIT: criterion,
         GROUP: group,
-        COUNT: non_null.count(),
-        MEAN: non_null.mean(),
-        STD: non_null.std(),
-        MEDIAN: non_null.median(),
-        P25: non_null.quantile(0.25),
-        P75: non_null.quantile(0.75),
+        MEAN: weighted_mean,
+        STD: weighted_std,
+        MEDIAN: median,
+        P25: p25,
+        P75: p75,
+        NON_NULL_COUNT: count,
     }
 
 
@@ -166,6 +238,8 @@ def get_stats(
         }
     stat_cols = [col for col in df.columns if col not in config.special_cols]
     n = len(df)
+    weights = df[config.weights_col] if config.weights_col else None
+
     binary_stats = []
     numeric_stats = []
     for col in stat_cols:
@@ -177,9 +251,9 @@ def get_stats(
             True,
             False,
         }:
-            binary_stats.append(get_stats_for_binary_column(s, n, col, group))
+            binary_stats.append(get_stats_for_binary_column(s, n, col, group, weights))
         elif pd.api.types.is_numeric_dtype(s):
-            numeric_stats.append(get_stats_for_numeric_column(s, col, group))
+            numeric_stats.append(get_stats_for_numeric_column(s, col, group, weights))
     return {
         BINARY: pd.DataFrame(binary_stats),
         NUMERIC: pd.DataFrame(numeric_stats),

@@ -29,10 +29,28 @@ def analyze_cohort(
     """
     Analyze cohort and return formatted (and optionally raw) binary and numeric stats.
     """
-
     config = StatConfig(
         decimal_places=decimal_places,
         percentage_decimal_places=percentage_decimal_places,
+    )
+    raw_stats = get_stratified_stats(df, config)
+    result = {RAW: raw_stats}
+    formatted_stats = format_stats_table(raw_stats, config)
+    result[FORMATTED] = formatted_stats
+    return result
+
+
+def analyze_cohort_with_weights(
+    df: pd.DataFrame,
+    weights_col: str,
+    decimal_places: int = 2,
+    percentage_decimal_places: int = 1,
+) -> Dict[str, Dict[str, pd.DataFrame]]:
+    """Analyze cohort with weights and return formatted (and optionally raw) binary and numeric stats."""
+    config = StatConfig(
+        decimal_places=decimal_places,
+        percentage_decimal_places=percentage_decimal_places,
+        weights_col=weights_col,
     )
     raw_stats = get_stratified_stats(df, config)
     result = {RAW: raw_stats}
@@ -49,12 +67,24 @@ def print_stats(stats: Dict[str, pd.DataFrame]):
     print(stats[FORMATTED][NUMERIC].head(30))
 
 
-def save_stats(stats: Dict[str, pd.DataFrame], save_path: str):
+def save_stats(stats: Dict[str, pd.DataFrame], save_path: str, weighted: bool = False):
     """Save statistics tables to csv files."""
-    stats[FORMATTED][BINARY].to_csv(join(save_path, STATS_FILE_BINARY), index=False)
-    stats[RAW][BINARY].to_csv(join(save_path, STATS_RAW_FILE_BINARY), index=False)
-    stats[FORMATTED][NUMERIC].to_csv(join(save_path, STATS_FILE_NUMERIC), index=False)
-    stats[RAW][NUMERIC].to_csv(join(save_path, STATS_RAW_FILE_NUMERIC), index=False)
+    if weighted:
+        suffix = "_weighted"
+    else:
+        suffix = ""
+    stats[FORMATTED][BINARY].to_csv(
+        join(save_path, STATS_FILE_BINARY + suffix), index=False
+    )
+    stats[RAW][BINARY].to_csv(
+        join(save_path, STATS_RAW_FILE_BINARY + suffix), index=False
+    )
+    stats[FORMATTED][NUMERIC].to_csv(
+        join(save_path, STATS_FILE_NUMERIC + suffix), index=False
+    )
+    stats[RAW][NUMERIC].to_csv(
+        join(save_path, STATS_RAW_FILE_NUMERIC + suffix), index=False
+    )
 
 
 def load_data(
