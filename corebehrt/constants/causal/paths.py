@@ -31,3 +31,4 @@ CRITERIA_FLAGS_FILE = "criteria_flags.csv"
 DATA_DIR = "data"
 
 STATS_FILE = "stats.csv"
+STATS_RAW_FILE = "stats_raw.csv"
