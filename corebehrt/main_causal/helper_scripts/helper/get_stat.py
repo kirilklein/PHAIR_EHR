@@ -10,7 +10,6 @@ from corebehrt.constants.causal.data import EXPOSURE_COL, PROBAS, PS_COL, TARGET
 from corebehrt.constants.causal.paths import (
     CALIBRATED_PREDICTIONS_FILE,
     CRITERIA_FLAGS_FILE,
-    PS_PLOT_FILE,
     STATS_FILE_BINARY,
     STATS_FILE_NUMERIC,
     STATS_RAW_FILE_BINARY,
