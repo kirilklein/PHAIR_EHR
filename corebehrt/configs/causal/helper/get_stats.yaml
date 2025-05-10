@@ -1,0 +1,15 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ### Inputs
+  criteria: ./outputs/causal/criteria_for_stats # should contain criteria_flags.csv
+
+  #### Optional
+  cohort: ./outputs/causal/exposure_cohort # should contain pids.pt
+  ps_calibrated_predictions: ./outputs/causal/calibrated_predictions # should contain predictions_and_targets_calibrated.csv
+  outcome_model: ./outputs/causal/trained_mlp # should contain predictions_and_targets_calibrated.csv
+
+  ### Outputs
+  stats: ./outputs/causal/stats

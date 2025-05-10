@@ -7,6 +7,7 @@ TRAIN_XGB_CFG = "train_xgb_config.yaml"
 ESTIMATE_CFG = "estimate_config.yaml"
 EXTRACT_CRITERIA_CFG = "extract_criteria_config.yaml"
 CRITERIA_DEFINITIONS_CFG = "criteria_definitions_config.yaml"
+GET_STATS_CFG = "get_stats_config.yaml"
 
 ENCODINGS_FILE = "encodings.pt"
 
@@ -28,3 +29,5 @@ CRITERIA_CONFIG_FILE = "criteria_config.yaml"
 CRITERIA_FLAGS_FILE = "criteria_flags.csv"
 
 DATA_DIR = "data"
+
+STATS_FILE = "stats.csv"
