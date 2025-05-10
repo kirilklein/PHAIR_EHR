@@ -33,6 +33,12 @@ from corebehrt.functional.cohort_handling.stats import (
     format_stats_table,
     get_stratified_stats,
 )
+from corebehrt.functional.cohort_handling.ps_stats import (
+    common_support_interval,
+    overlap_coefficient,
+    ks_statistic,
+    standardized_mean_difference,
+)
 
 
 def check_ps_columns(criteria: pd.DataFrame):
@@ -42,7 +48,7 @@ def check_ps_columns(criteria: pd.DataFrame):
         raise ValueError(f"EXPOSURE_COL {EXPOSURE_COL} not found in criteria")
 
 
-def ps_plot(criteria: pd.DataFrame, save_path: str):
+def ps_plot(criteria: pd.DataFrame, save_path: str, filename: str):
     from CausalEstimate.vis.plotting import plot_hist_by_groups
 
     bin_edges = np.percentile(criteria[PS_COL], [0.1, 99.9])
@@ -56,7 +62,7 @@ def ps_plot(criteria: pd.DataFrame, save_path: str):
         normalize=True,
         alpha=0.5,
     )
-    fig.savefig(join(save_path, PS_PLOT_FILE), dpi=200)
+    fig.savefig(join(save_path, filename), dpi=200)
 
 
 def analyze_cohort(
@@ -93,6 +99,28 @@ def analyze_cohort_with_weights(
     formatted_stats = format_stats_table(raw_stats, config)
     result[FORMATTED] = formatted_stats
     return result
+
+
+def positivity_summary(ps: pd.Series, exposure: pd.Series) -> pd.DataFrame:
+    """
+    Gather all overlap/positivity diagnostics into a single-row DataFrame.
+    """
+    cs = common_support_interval(ps, exposure)
+    ovl = overlap_coefficient(ps, exposure)
+    ks_stat, ks_pval = ks_statistic(ps, exposure)
+    std_diff = standardized_mean_difference(ps, exposure)
+
+    data = {
+        "cs_low": cs["cs_low"],
+        "cs_high": cs["cs_high"],
+        "pct_outside_control": cs["pct_outside_control"],
+        "pct_outside_treated": cs["pct_outside_treated"],
+        "overlap_coefficient": ovl,
+        "ks_statistic": ks_stat,
+        "ks_pvalue": ks_pval,
+        "std_mean_diff": std_diff,
+    }
+    return pd.DataFrame([data])
 
 
 def print_stats(stats: Dict[str, pd.DataFrame]):

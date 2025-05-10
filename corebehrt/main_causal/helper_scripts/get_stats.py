@@ -20,21 +20,27 @@ Outputs:
 import logging
 from os.path import join
 
-
 from corebehrt.constants.causal.data import EXPOSURE_COL, PS_COL
-from corebehrt.constants.causal.paths import EFFECTIVE_SAMPLE_SIZE_FILE
+from corebehrt.constants.causal.paths import (
+    EFFECTIVE_SAMPLE_SIZE_FILE,
+    PS_SUMMARY_FILE,
+    PS_SUMMARY_FILE_FILTERED,
+    PS_PLOT_FILE,
+    PS_PLOT_FILE_FILTERED,
+)
 from corebehrt.constants.causal.stats import WEIGHTS_COL
 from corebehrt.functional.cohort_handling.stats import compute_weights
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     analyze_cohort,
     analyze_cohort_with_weights,
+    check_ps_columns,
     get_effective_sample_size_df,
     load_data,
+    positivity_summary,
     print_stats,
-    save_stats,
     ps_plot,
-    check_ps_columns,
+    save_stats,
 )
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
@@ -69,6 +75,16 @@ def main(config_path: str):
         logger,
     )
 
+    ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
+    print("--------------------------------")
+    print("Positivity summary before filtering:")
+    print(ps_summary)
+    ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE), index=False)
+
+    if cfg.get("plot_ps", False):
+        check_ps_columns(criteria)
+        ps_plot(criteria, save_path, PS_PLOT_FILE)
+
     if cfg.get("common_support_threshold", None) is not None:
         from CausalEstimate.filter.propensity import filter_common_support
 
@@ -82,6 +98,12 @@ def main(config_path: str):
     stats = analyze_cohort(criteria)
     print_stats(stats)
     save_stats(stats, save_path)
+
+    ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
+    print("--------------------------------")
+    print("Positivity summary after filtering:")
+    print(ps_summary)
+    ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE_FILTERED), index=False)
 
     if cfg.get("weights", None) is not None:
         check_ps_columns(criteria)
@@ -99,7 +121,7 @@ def main(config_path: str):
 
     if cfg.get("plot_ps", False):
         check_ps_columns(criteria)
-        ps_plot(criteria, save_path)
+        ps_plot(criteria, save_path, PS_PLOT_FILE_FILTERED)
 
     logger.info("Done")
 
