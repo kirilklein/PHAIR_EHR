@@ -55,6 +55,7 @@ def add_parser(subparsers) -> None:
             "select_cohort_advanced",
             "evaluate_finetune",
             "extract_criteria",
+            "get_stats",
         },
         help="Job to run.",
     )

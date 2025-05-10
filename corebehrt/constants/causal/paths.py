@@ -7,6 +7,7 @@ TRAIN_XGB_CFG = "train_xgb_config.yaml"
 ESTIMATE_CFG = "estimate_config.yaml"
 EXTRACT_CRITERIA_CFG = "extract_criteria_config.yaml"
 CRITERIA_DEFINITIONS_CFG = "criteria_definitions_config.yaml"
+GET_STATS_CFG = "get_stats_config.yaml"
 
 ENCODINGS_FILE = "encodings.pt"
 
@@ -28,3 +29,13 @@ CRITERIA_CONFIG_FILE = "criteria_config.yaml"
 CRITERIA_FLAGS_FILE = "criteria_flags.csv"
 
 DATA_DIR = "data"
+
+STATS_FILE_BINARY = "stats_binary.csv"
+STATS_RAW_FILE_BINARY = "stats_raw_binary.csv"
+STATS_FILE_NUMERIC = "stats_numeric.csv"
+STATS_RAW_FILE_NUMERIC = "stats_raw_numeric.csv"
+EFFECTIVE_SAMPLE_SIZE_FILE = "effective_sample_size.csv"
+PS_PLOT_FILE = "ps_plot.png"
+PS_PLOT_FILE_FILTERED = "ps_plot_filtered.png"
+PS_SUMMARY_FILE = "ps_summary.csv"
+PS_SUMMARY_FILE_FILTERED = "ps_summary_filtered.csv"

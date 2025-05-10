@@ -5,6 +5,7 @@ from corebehrt.constants.causal.paths import (
     EXTRACT_CRITERIA_CFG,
     ENCODE_CFG,
     ESTIMATE_CFG,
+    GET_STATS_CFG,
     SIMULATE_CFG,
     TRAIN_MLP_CFG,
     TRAIN_XGB_CFG,
@@ -176,3 +177,20 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         # Create output directories
         self.create_directory("criteria")
         self.write_config("criteria", name=EXTRACT_CRITERIA_CFG)
+
+    def setup_get_stats(self) -> None:
+        """
+        Validates path config and sets up directories for get_stats.
+        """
+        self.setup_logging("get_stats")
+        self.create_directory("stats")
+        self.check_directory("criteria")
+        # Optional input directories
+        if self.cfg.paths.get("cohort", None) is not None:
+            self.check_directory("cohort")
+        if self.cfg.paths.get("ps_calibrated_predictions", None) is not None:
+            self.check_directory("ps_calibrated_predictions")
+        if self.cfg.paths.get("outcome_model", None) is not None:
+            self.check_directory("outcome_model")
+
+        self.write_config("stats", name=GET_STATS_CFG)
