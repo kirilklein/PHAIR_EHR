@@ -17,7 +17,7 @@ This pipeline enables rigorous causal inference analysis for patient outcomes by
 
 ### 0. Select Cohort Advanced (Optional)
 
-`select_cohort_advanced.py` - Selects a cohort of patients based on advanced criteria. Is run in addition to [select_cohort.py](../main/select_cohort.py) to create a CONSORT diagram. See module description in [select_cohort_advanced.py](./select_cohort_advanced.py) for more details.
+`select_cohort_advanced.py` - Run on top of [select_cohort.py](../main/select_cohort.py) to select a cohort of patients based on advanced criteria.
 
 ### 1. Propensity Score Estimation
 
@@ -45,49 +45,11 @@ This pipeline enables rigorous causal inference analysis for patient outcomes by
 
 ## Detailed Pipeline Steps
 
-### 1. Build Tree (Helper)
-
-`helper_scripts/build_tree.py` - Organizes medical codes into a hierarchical structure for analysis.
-
-```bash
-python -m corebehrt.main_causal.helper_scripts.build_tree --type [diagnoses|medications] --level [INT]
-```
-
-**Parameters:**
-
-- `--type`: Type of data (diagnoses or medications)
-- `--level`: Hierarchical level for tree construction
-
-**Outputs:**
-
-- Tree dictionary at `./outputs/trees/[type]_tree_level_[level].pkl`
-
-### 2. Generate Outcomes Config (Helper)
-
-`helper_scripts/generate_outcomes_config.py` - Creates outcome configuration files from tree dictionaries.
-
-```bash
-python -m corebehrt.main_causal.helper_scripts.generate_outcomes_config \
-    --input ./outputs/trees/[type]_tree_level_[level].pkl \
-    --output ./outputs/causal/outcomes/generated_outcomes.yaml
-```
-
-**Parameters:**
-
-- `--input`: Path to tree dictionary
-- `--output`: Path for saving the config
-- `--match_how`: Code matching method (startswith, contains, exact)
-- `--prepend`: String to prepend to outcome names
-
-**Outputs:**
-
-- YAML configuration file with outcome definitions
-
-### 3. Propensity Score Model Training
+### 1. Propensity Score Model Training
 
 `finetune_cv.py` - Trains models to estimate exposure probabilities. See main [README.md](../README.md) for more details.
 
-### 4. Calibration
+### 2. Calibration
 
 `calibrate.py` - Ensures propensity scores represent true probabilities. Uses beta calibration.
 
@@ -111,7 +73,7 @@ paths:
 - `predictions_and_targets.csv`: Propensity scores and exposure (for completeness)
 - `predictions_and_targets_calibrated.csv`: Calibrated probability estimates
 
-### 5. Encoding
+### 3. Encoding
 
 `encode.py` - Uses the finetuned model to encode the patient data.
 
@@ -136,9 +98,9 @@ paths:
 - `encodings.pt`: Patient-level vector representations
 - `pids.pt`: Patient IDs
 
-### 6. Outcome Model Training
+### 4. Outcome Model Training
 
-Trains models to predict outcomes based on patient encodings.
+`train_mlp.py` - Trains models to predict outcomes based on patient encodings.
 
 ```bash
 python -m corebehrt.main_causal.train_mlp
@@ -171,7 +133,7 @@ outcome:
 - `mlp_predictions.pt`: Binary predictions
 - Counterfactual predictions
 
-### 7. Outcome Simulation (Optional)
+### 5. Outcome Simulation (Optional)
 
 `simulate.py` - Simulates outcomes with known causal effects for validation.
 
@@ -186,18 +148,18 @@ simulation:
   exposure_coef: 4 # exposure coefficient. Determines the strength of the treatment effect
   enc_coef: .0001 # treatment patient embeddings coefficient. Determines the confounding effect of the treatment
   intercept: -2 # intercept, determines the baseline outcome level
-  enc_sparsity: 0.7 # proportion of treatment patient embeddings that will have non-zero coefficients, in order to simulate that only some treatment features are associated with the outcome
+  enc_sparsity: 0.7 # proportion of treatment patient embeddings that will have non-zero coefficients
   enc_scale: 0.00011 # scale of the normal distribution for treatment patient embeddings coefficients
 ```
 
 **Outputs:**
 
-- `outcome_with_timestamps.csv`: Patient outcomes with known effects. Same output as from `create_outcomes.py`
+- `outcome_with_timestamps.csv`: Patient outcomes with known effects
 - `probas_and_outcomes.csv`: Counterfactual probabilities and outcomes
 
-### 8. Treatment Effect Estimation
+### 6. Treatment Effect Estimation
 
-Implements causal inference methods to estimate effects.
+`estimate.py` - Implements causal inference methods to estimate effects.
 
 ```bash
 python -m corebehrt.main_causal.estimate
@@ -244,16 +206,57 @@ python -m corebehrt.main_causal.get_stats
 - Calculates weighted statistics using propensity scores
 - Evaluates balance between treatment groups
 
+## Future Extension: Large-Scale Adverse Event Detection
+
+A separate branch of the pipeline focused on multi-task learning for detecting adverse events is under development. The following helper scripts support this extension:
+
+### Build Tree (Helper)
+
+`helper_scripts/build_tree.py` - Organizes medical codes into a hierarchical structure for analysis.
+
+```bash
+python -m corebehrt.main_causal.helper_scripts.build_tree --type [diagnoses|medications] --level [INT]
+```
+
+**Parameters:**
+
+- `--type`: Type of data (diagnoses or medications)
+- `--level`: Hierarchical level for tree construction
+
+**Outputs:**
+
+- Tree dictionary at `./outputs/trees/[type]_tree_level_[level].pkl`
+
+### Generate Outcomes Config (Helper)
+
+`helper_scripts/generate_outcomes_config.py` - Creates outcome configuration files from tree dictionaries.
+
+```bash
+python -m corebehrt.main_causal.helper_scripts.generate_outcomes_config \
+    --input ./outputs/trees/[type]_tree_level_[level].pkl \
+    --output ./outputs/causal/outcomes/generated_outcomes.yaml
+```
+
+**Parameters:**
+
+- `--input`: Path to tree dictionary
+- `--output`: Path for saving the config
+- `--match_how`: Code matching method (startswith, contains, exact)
+- `--prepend`: String to prepend to outcome names
+
+**Outputs:**
+
+- YAML configuration file with outcome definitions for multi-task learning
+
 ## Usage Workflow
 
-1. **Optional:** Build tree and generate outcomes config if analyzing many outcomes
-2. **Train propensity score model:** Use `finetune_cv.py`
-3. **Calibrate predictions:** Use `calibrate.py`
-4. **Extract encodings:** Use `encode.py`
-5. **For robustness testing:** Use `simulate.py` to simulate outcomes with known effects
-6. **Train outcome model:** Use `train_mlp.py` on real or simulated data
-7. **Estimate effects:** Use `estimate.py` with selected causal methods
-8. **Analyze results:** Use `simulate.py` to compare estimated vs. true effects (if simulated)
+1. **Train propensity score model:** Use `finetune_cv.py`
+2. **Calibrate predictions:** Use `calibrate.py`
+3. **Extract encodings:** Use `encode.py`
+4. **For robustness testing:** Use `simulate.py` to simulate outcomes with known effects
+5. **Train outcome model:** Use `train_mlp.py` on real or simulated data
+6. **Estimate effects:** Use `estimate.py` with selected causal methods
+7. **Analyze results:** Compare estimated vs. true effects (if simulated)
 
 ## Configuration Files
 
