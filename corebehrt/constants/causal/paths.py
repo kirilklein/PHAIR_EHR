@@ -30,5 +30,7 @@ CRITERIA_FLAGS_FILE = "criteria_flags.csv"
 
 DATA_DIR = "data"
 
-STATS_FILE = "stats.csv"
-STATS_RAW_FILE = "stats_raw.csv"
+STATS_FILE_BINARY = "stats_binary.csv"
+STATS_RAW_FILE_BINARY = "stats_raw_binary.csv"
+STATS_FILE_NUMERIC = "stats_numeric.csv"
+STATS_RAW_FILE_NUMERIC = "stats_raw_numeric.csv"

@@ -20,16 +20,22 @@ from os.path import join
 import pandas as pd
 import torch
 
-from corebehrt.constants.causal.data import (EXPOSURE_COL, PROBAS, PS_COL,
-                                             TARGETS)
-from corebehrt.constants.causal.paths import (CALIBRATED_PREDICTIONS_FILE,
-                                              CRITERIA_FLAGS_FILE, STATS_FILE,
-                                              STATS_RAW_FILE)
+from corebehrt.constants.causal.data import EXPOSURE_COL, PROBAS, PS_COL, TARGETS
+from corebehrt.constants.causal.paths import (
+    CALIBRATED_PREDICTIONS_FILE,
+    CRITERIA_FLAGS_FILE,
+    STATS_FILE_BINARY,
+    STATS_RAW_FILE_BINARY,
+    STATS_FILE_NUMERIC,
+    STATS_RAW_FILE_NUMERIC,
+)
 from corebehrt.constants.data import PID_COL
 from corebehrt.constants.paths import PID_FILE
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper_scripts.helper.get_stat import (
-    StatConfig, analyze_cohort)
+    StatConfig,
+    analyze_cohort,
+)
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
@@ -67,17 +73,21 @@ def main(config_path: str):
     print("Criteria:")
     print(criteria.head())
     print("================================================")
-    custom_config = StatConfig(decimal_places=3, percentage_decimal_places=2)
-
-    stats = analyze_cohort(criteria, config=custom_config, return_raw=True)
+    stats = analyze_cohort(criteria)
     print("================================================")
     print("Raw stats:")
-    print(stats["raw"].head(20))
+    print(stats["raw"]["binary"].head(20))
+    print(stats["raw"]["numeric"].head(20))
     print("================================================")
     print("Formatted stats:")
-    print(stats["formatted"].head(20))
-    stats["formatted"].to_csv(join(save_path, STATS_FILE), index=False)
-    stats["raw"].to_csv(join(save_path, STATS_RAW_FILE), index=False)
+    print(stats["formatted"]["binary"].head(20))
+    print(stats["formatted"]["numeric"].head(20))
+    stats["formatted"]["binary"].to_csv(join(save_path, STATS_FILE_BINARY), index=False)
+    stats["raw"]["binary"].to_csv(join(save_path, STATS_RAW_FILE_BINARY), index=False)
+    stats["formatted"]["numeric"].to_csv(
+        join(save_path, STATS_FILE_NUMERIC), index=False
+    )
+    stats["raw"]["numeric"].to_csv(join(save_path, STATS_RAW_FILE_NUMERIC), index=False)
 
 
 def load_data(
@@ -120,6 +130,7 @@ def load_data(
         logger.info("Merged with predictions and targets")
 
     return criteria
+
 
 def _convert_to_int(df: pd.DataFrame, col: str) -> pd.DataFrame:
     df[col] = df[col].astype(int)
