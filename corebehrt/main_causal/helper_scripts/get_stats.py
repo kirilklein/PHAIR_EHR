@@ -15,14 +15,17 @@ Outputs:
 """
 
 import logging
+from os.path import join
 
 from corebehrt.constants.causal.data import EXPOSURE_COL, PS_COL
+from corebehrt.constants.causal.paths import EFFECTIVE_SAMPLE_SIZE_FILE
 from corebehrt.constants.causal.stats import WEIGHTS_COL
 from corebehrt.functional.cohort_handling.stats import compute_weights
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     analyze_cohort,
     analyze_cohort_with_weights,
+    get_effective_sample_size_df,
     load_data,
     print_stats,
     save_stats,
@@ -75,6 +78,11 @@ def main(config_path: str):
         print(f"Weighted stats ({cfg.weights}):")
         print_stats(stats)
         save_stats(stats, save_path, weighted=True)
+        ess_df = get_effective_sample_size_df(criteria, WEIGHTS_COL)
+        print("True sample size: ", len(criteria))
+        print(ess_df)
+
+        ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
 
 
 if __name__ == "__main__":

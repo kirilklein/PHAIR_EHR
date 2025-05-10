@@ -1,6 +1,7 @@
 import logging
 from os.path import join
 from typing import Dict
+
 import pandas as pd
 import torch
 
@@ -13,11 +14,20 @@ from corebehrt.constants.causal.paths import (
     STATS_RAW_FILE_BINARY,
     STATS_RAW_FILE_NUMERIC,
 )
-from corebehrt.constants.causal.stats import BINARY, FORMATTED, NUMERIC, RAW
+from corebehrt.constants.causal.stats import (
+    BINARY,
+    CONTROL,
+    EXPOSED,
+    FORMATTED,
+    NUMERIC,
+    OVERALL,
+    RAW,
+)
 from corebehrt.constants.data import PID_COL
 from corebehrt.constants.paths import PID_FILE
 from corebehrt.functional.cohort_handling.stats import (
     StatConfig,
+    effective_sample_size,
     format_stats_table,
     get_stratified_stats,
 )
@@ -127,6 +137,26 @@ def load_data(
         logger.info("Merged with predictions and targets")
 
     return criteria
+
+
+def get_effective_sample_size_df(df: pd.DataFrame, weights_col: str) -> pd.DataFrame:
+    """
+    Compute effective sample size for overall, treated (cases), and controls.
+    Returns a DataFrame with columns: group, effective_sample_size
+    """
+
+    groups = [
+        (OVERALL, df),
+        (EXPOSED, df[df[EXPOSURE_COL] == 1]),
+        (CONTROL, df[df[EXPOSURE_COL] == 0]),
+    ]
+    results = []
+    for group_name, subdf in groups:
+        w = subdf[weights_col].values
+        ess = effective_sample_size(w)
+        ess = round(ess, 2)
+        results.append({"group": group_name, "effective_sample_size": ess})
+    return pd.DataFrame(results)
 
 
 def _convert_to_int(df: pd.DataFrame, col: str) -> pd.DataFrame:

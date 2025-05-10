@@ -28,7 +28,7 @@ SPECIAL_COLS = {PID_COL, EXPOSURE_COL, PS_COL}
 STAT_COLS = [GROUP, CRIT, COUNT, PERCENTAGE, MEAN, STD, MEDIAN, P25, P75]
 
 
-GroupType = Literal["overall", "exposed", "control"]
+GroupType = Literal["Overall", "Exposed", "Control"]
 
 
 def effective_sample_size(w: np.ndarray):
