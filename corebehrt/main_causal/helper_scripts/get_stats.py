@@ -1,17 +1,20 @@
 """
 Cohort Statistics Calculator for Causal Inference Analysis.
 
-Extracts descriptive statistics from patient cohorts, supporting stratification (e.g., by exposure), weighted analysis, and optional integration of predictions or propensity scores.
+Computes descriptive statistics for patient cohorts, supporting stratification by exposure,
+weighted analysis (ATE, ATT, ATC), and optional integration of propensity scores and outcome predictions.
 
 Inputs:
-    - Required: Criteria DataFrame (e.g., from extract_criteria.py) a csv file with the criteria flags + age.
-    - Optional:
-        - PS: Predictions or calibrated predictions (for exposed/unexposed stats + weighted stats + common support filtering)
-        - PT: Predictions and targets (for additional stats on outcome)
-        - Cohort (to filter on pids)
+    - Criteria DataFrame (required): Patient-level criteria flags and numeric variables.
+    - Propensity Scores (optional): For weighting and stratification.
+    - Outcome Predictions/Targets (optional): For outcome statistics.
+    - Cohort (optional): Patient IDs to filter.
+    - Weights (optional): Weighting scheme ("ATE", "ATT", "ATC").
 
 Outputs:
-    - Summary statistics by group and overall, for reporting and cohort characterization.
+    - Summary statistics (binary and numeric) for overall and by exposure group.
+    - Weighted statistics and effective sample size (ESS) if weights are used.
+    - All outputs can be printed or saved as CSV files.
 """
 
 import logging
