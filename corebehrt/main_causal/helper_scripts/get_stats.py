@@ -33,6 +33,8 @@ from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     load_data,
     print_stats,
     save_stats,
+    ps_plot,
+    check_ps_columns,
 )
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
@@ -82,10 +84,7 @@ def main(config_path: str):
     save_stats(stats, save_path)
 
     if cfg.get("weights", None) is not None:
-        if PS_COL not in criteria.columns:
-            raise ValueError(f"PS_COL {PS_COL} not found in criteria")
-        if EXPOSURE_COL not in criteria.columns:
-            raise ValueError(f"EXPOSURE_COL {EXPOSURE_COL} not found in criteria")
+        check_ps_columns(criteria)
         criteria[WEIGHTS_COL] = compute_weights(criteria, cfg.weights)
         stats = analyze_cohort_with_weights(criteria, WEIGHTS_COL)
         print("--------------------------------")
@@ -97,6 +96,10 @@ def main(config_path: str):
         print(ess_df)
 
         ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
+
+    if cfg.get("plot_ps", False):
+        check_ps_columns(criteria)
+        ps_plot(criteria, save_path)
 
     logger.info("Done")
 

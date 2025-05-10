@@ -17,3 +17,4 @@ paths:
 # optional
 weights: ATE # chose from ATE, ATT, ATC or null
 common_support_threshold: 0.001 # only used if weights is not null
+plot_ps: true

@@ -2,6 +2,7 @@ import logging
 from os.path import join
 from typing import Dict
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -9,6 +10,7 @@ from corebehrt.constants.causal.data import EXPOSURE_COL, PROBAS, PS_COL, TARGET
 from corebehrt.constants.causal.paths import (
     CALIBRATED_PREDICTIONS_FILE,
     CRITERIA_FLAGS_FILE,
+    PS_PLOT_FILE,
     STATS_FILE_BINARY,
     STATS_FILE_NUMERIC,
     STATS_RAW_FILE_BINARY,
@@ -31,6 +33,30 @@ from corebehrt.functional.cohort_handling.stats import (
     format_stats_table,
     get_stratified_stats,
 )
+
+
+def check_ps_columns(criteria: pd.DataFrame):
+    if PS_COL not in criteria.columns:
+        raise ValueError(f"PS_COL {PS_COL} not found in criteria")
+    if EXPOSURE_COL not in criteria.columns:
+        raise ValueError(f"EXPOSURE_COL {EXPOSURE_COL} not found in criteria")
+
+
+def ps_plot(criteria: pd.DataFrame, save_path: str):
+    from CausalEstimate.vis.plotting import plot_hist_by_groups
+
+    bin_edges = np.percentile(criteria[PS_COL], [0.1, 99.9])
+    fig, _ = plot_hist_by_groups(
+        df=criteria,
+        value_col=PS_COL,
+        group_col=EXPOSURE_COL,
+        group_values=(0, 1),
+        group_labels=("Control", "Exposed"),
+        bin_edges=bin_edges,
+        normalize=True,
+        alpha=0.5,
+    )
+    fig.savefig(join(save_path, PS_PLOT_FILE), dpi=200)
 
 
 def analyze_cohort(
@@ -80,20 +106,20 @@ def print_stats(stats: Dict[str, pd.DataFrame]):
 def save_stats(stats: Dict[str, pd.DataFrame], save_path: str, weighted: bool = False):
     """Save statistics tables to csv files."""
     if weighted:
-        suffix = "_weighted"
+        prefix = "weighted_"
     else:
-        suffix = ""
+        prefix = ""
     stats[FORMATTED][BINARY].to_csv(
-        join(save_path, STATS_FILE_BINARY + suffix), index=False
+        join(save_path, prefix + STATS_FILE_BINARY), index=False
     )
     stats[RAW][BINARY].to_csv(
-        join(save_path, STATS_RAW_FILE_BINARY + suffix), index=False
+        join(save_path, prefix + STATS_RAW_FILE_BINARY), index=False
     )
     stats[FORMATTED][NUMERIC].to_csv(
-        join(save_path, STATS_FILE_NUMERIC + suffix), index=False
+        join(save_path, prefix + STATS_FILE_NUMERIC), index=False
     )
     stats[RAW][NUMERIC].to_csv(
-        join(save_path, STATS_RAW_FILE_NUMERIC + suffix), index=False
+        join(save_path, prefix + STATS_RAW_FILE_NUMERIC), index=False
     )
 
 
