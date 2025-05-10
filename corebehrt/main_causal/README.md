@@ -15,6 +15,10 @@ This pipeline enables rigorous causal inference analysis for patient outcomes by
 
 ## Main Pipeline Components
 
+### 0. Select Cohort Advanced (Optional)
+
+`select_cohort_advanced.py` - Selects a cohort of patients based on advanced criteria. Is run in addition to [select_cohort.py](../main/select_cohort.py) to create a CONSORT diagram. See module description in [select_cohort_advanced.py](./select_cohort_advanced.py) for more details.
+
 ### 1. Propensity Score Estimation
 
 `finetune_cv.py` - Trains models to estimate propensity scores using cross-validation
@@ -81,40 +85,56 @@ python -m corebehrt.main_causal.helper_scripts.generate_outcomes_config \
 
 ### 3. Propensity Score Model Training
 
-`finetune_cv.py` - Trains models to estimate exposure probabilities.
-
-```bash
-python -m corebehrt.main_causal.finetune_cv
-```
-
-**Outputs:**
-
-- Cross-validated propensity scores
-- Model predictions and parameters
+`finetune_cv.py` - Trains models to estimate exposure probabilities. See main [README.md](../README.md) for more details.
 
 ### 4. Calibration
 
-`calibrate.py` - Ensures propensity scores represent true probabilities.
+`calibrate.py` - Ensures propensity scores represent true probabilities. Uses beta calibration.
 
 ```bash
 python -m corebehrt.main_causal.calibrate
 ```
 
+**Configuration:**
+
+```yaml
+paths:
+## INPUTS  
+  finetune_model: ./path/to/finetune_model
+
+## OUTPUTS
+  calibrated_predictions: ./path/to/save/calibrated_predictions
+```
+
 **Outputs:**
 
-- Calibrated probability estimates
+- `predictions_and_targets.csv`: Propensity scores and exposure (for completeness)
+- `predictions_and_targets_calibrated.csv`: Calibrated probability estimates
 
 ### 5. Encoding
 
-`encode.py` - Extracts patient representations from the propensity score model.
+`encode.py` - Uses the finetuned model to encode the patient data.
 
 ```bash
 python -m corebehrt.main_causal.encode
 ```
 
+**Configuration:**
+
+```yaml
+paths:
+## INPUTS  
+  finetune_model: ./path/to/finetune_model
+  prepared_data: ./path/to/prepared_data # same as used in finetune_cv
+
+## OUTPUTS
+  encoded_data: path/to/save/encoded_data
+```
+
 **Outputs:**
 
 - `encodings.pt`: Patient-level vector representations
+- `pids.pt`: Patient IDs
 
 ### 6. Outcome Model Training
 
@@ -127,14 +147,22 @@ python -m corebehrt.main_causal.train_mlp
 **Configuration:**
 
 ```yaml
-model_args:
-  num_layers: 3
-  hidden_dims: [256, 128, 64]
+paths:
+  ## INPUTS  
+  encoded_data: ./path/to/encoded_data
+  calibrated_predictions: ./path/to/calibrated_predictions # to extract exposure
+  cohort: ./path/to/cohort
 
-trainer_args:
-  batch_size: 128
-  epochs: 50
-  early_stopping: 5
+  outcomes: ./path/to/outcomes
+  outcome: <Outcome_name>.csv
+
+  ## OUTPUTS
+  trained_mlp: ./path/to/trained_mlp
+
+outcome:
+  n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+# + model and trainer args
 ```
 
 **Outputs:**
@@ -154,19 +182,18 @@ python -m corebehrt.main_causal.simulate
 **Configuration:**
 
 ```yaml
-outcome_model:
-  type: sigmoid
-  params: {a: 1.5, b: 0.5, c: 0.2}
-
-counterfactual:
-  generate: true
-  method: "inverse probability weighting"
+simulation:
+  exposure_coef: 4 # exposure coefficient. Determines the strength of the treatment effect
+  enc_coef: .0001 # treatment patient embeddings coefficient. Determines the confounding effect of the treatment
+  intercept: -2 # intercept, determines the baseline outcome level
+  enc_sparsity: 0.7 # proportion of treatment patient embeddings that will have non-zero coefficients, in order to simulate that only some treatment features are associated with the outcome
+  enc_scale: 0.00011 # scale of the normal distribution for treatment patient embeddings coefficients
 ```
 
 **Outputs:**
 
-- `simulated_outcomes.csv`: Patient outcomes with known effects
-- `counterfactual_probas.csv`: Counterfactual probabilities
+- `outcome_with_timestamps.csv`: Patient outcomes with known effects. Same output as from `create_outcomes.py`
+- `probas_and_outcomes.csv`: Counterfactual probabilities and outcomes
 
 ### 8. Treatment Effect Estimation
 
@@ -185,8 +212,8 @@ python -m corebehrt.main_causal.estimate
 
 **Outputs:**
 
-- `treatment_effects.csv`: Estimated causal effects
-- `bootstrap_results.pt`: Uncertainty estimates (optional)
+- `estimate_results.csv`: Estimated causal effects
+- `experiment_stats.csv`: Statistics of the experiment
 
 ## Additional Helper Scripts
 
@@ -200,8 +227,8 @@ python -m corebehrt.main_causal.extract_criteria
 
 **Purpose:**
 
-- Identifies conditions present before exposure
-- Creates binary indicators for specific medical codes
+- Identifies conditions present in a time window before or after exposure
+- Creates binary indicators for specific medical codes/combinations of medical codes and criteria
 
 ### Get Statistics
 
@@ -219,7 +246,7 @@ python -m corebehrt.main_causal.get_stats
 
 ## Usage Workflow
 
-1. **Optional:** Build tree and generate outcomes config if analyzing multiple outcomes
+1. **Optional:** Build tree and generate outcomes config if analyzing many outcomes
 2. **Train propensity score model:** Use `finetune_cv.py`
 3. **Calibrate predictions:** Use `calibrate.py`
 4. **Extract encodings:** Use `encode.py`
@@ -230,4 +257,4 @@ python -m corebehrt.main_causal.get_stats
 
 ## Configuration Files
 
-Example configurations are available in the `configs` folder.
+Example configurations are available in the `corebehrt/configs/causal` folder
