@@ -66,6 +66,7 @@ def main(config_path: str):
 
     stats = get_stats(criteria)
 
+    print(stats.head())
     stats.to_csv(join(save_path, STATS_FILE), index=False)
 
 
@@ -112,7 +113,47 @@ def load_data(
 
 
 def get_stats(criteria: pd.DataFrame) -> pd.DataFrame:
-    pass
+    """
+    For each criterion column (excluding subject_id, exposure, ps, targets), compute:
+      - count and fraction (if binary)
+      - mean and std (if numeric)
+    Returns a DataFrame with one row per criterion and columns: count, fraction, mean, std.
+    """
+    # Columns to exclude from stats
+    special_cols = {PID_COL, EXPOSURE_COL, PS_COL, TARGETS}
+    # Only consider columns that are not special
+    stat_cols = [col for col in criteria.columns if col not in special_cols]
+
+    stats = []
+    n = len(criteria)
+    for col in stat_cols:
+        s = criteria[col]
+        # Only consider non-null values for stats
+        non_null = s.dropna()
+        entry = {"criterion": col}
+        if pd.api.types.is_bool_dtype(s) or set(non_null.unique()) <= {
+            0,
+            1,
+            True,
+            False,
+        }:
+            # Binary: count and fraction of True/1
+            count = non_null.sum()
+            entry["count"] = int(count)
+            entry["fraction"] = float(count) / n if n > 0 else float("nan")
+            entry["mean"] = float("nan")
+            entry["std"] = float("nan")
+        elif pd.api.types.is_numeric_dtype(s):
+            # Numeric: mean and std
+            entry["count"] = non_null.count()
+            entry["fraction"] = float("nan")
+            entry["mean"] = non_null.mean()
+            entry["std"] = non_null.std()
+        else:
+            # Skip non-binary, non-numeric columns
+            continue
+        stats.append(entry)
+    return pd.DataFrame(stats)
 
 
 if __name__ == "__main__":
