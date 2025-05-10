@@ -8,7 +8,10 @@ from os.path import join
 import pandas as pd
 import torch
 
-from corebehrt.constants.causal.paths import CRITERIA_CONFIG_FILE, CRITERIA_FLAGS_FILE
+from corebehrt.constants.causal.paths import (
+    CRITERIA_DEFINITIONS_CFG,
+    CRITERIA_FLAGS_FILE,
+)
 from corebehrt.constants.cohort import CRITERIA_DEFINITIONS
 from corebehrt.constants.data import TIMESTAMP_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
@@ -21,22 +24,22 @@ from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidat
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
-CONFIG_PATH = "./corebehrt/configs/causal/get_stats.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/helper/extract_criteria.yaml"
 
 
 def main(config_path: str):
     """Execute cohort selection and save results."""
     cfg = load_config(config_path)
-    CausalDirectoryPreparer(cfg).setup_get_stats()
+    CausalDirectoryPreparer(cfg).setup_extract_criteria()
 
-    logger = logging.getLogger("get_stats")
+    logger = logging.getLogger("extract_criteria")
 
-    logger.info("Starting get stats")
+    logger.info("Starting extract criteria")
     path_cfg = cfg.paths
     cohort_path = path_cfg.cohort
     meds_path = path_cfg.meds
-    save_path = path_cfg.cohort_stats
-    criteria_config_path = path_cfg.criteria_config
+    save_path = path_cfg.criteria
+    criteria_definitions_config_path = path_cfg.criteria_definitions_config
     splits = path_cfg.get("splits", ["tuning"])
 
     logger.info("Loading index dates")
@@ -48,15 +51,15 @@ def main(config_path: str):
     logger.info(f"Loaded {len(pids)} patient IDs")
 
     logger.info("Loading criteria config")
-    criteria_config = load_config(criteria_config_path)
-    criteria_config.save_to_yaml(join(save_path, CRITERIA_CONFIG_FILE))
-    CriteriaValidator(criteria_config.get(CRITERIA_DEFINITIONS)).validate()
+    criteria_definitions_config = load_config(criteria_definitions_config_path)
+    criteria_definitions_config.save_to_yaml(join(save_path, CRITERIA_DEFINITIONS_CFG))
+    CriteriaValidator(criteria_definitions_config.get(CRITERIA_DEFINITIONS)).validate()
     logger.info("Extracting criteria")
     index_dates = filter_table_by_pids(index_dates, pids)
     criteria_df = extract_criteria_from_shards(
         meds_path=meds_path,
         index_dates=index_dates,
-        criteria_definitions_cfg=criteria_config.get(CRITERIA_DEFINITIONS),
+        criteria_definitions_cfg=criteria_definitions_config.get(CRITERIA_DEFINITIONS),
         splits=splits,
         pids=pids,
     )

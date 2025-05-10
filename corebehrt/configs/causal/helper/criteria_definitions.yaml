@@ -6,7 +6,8 @@ criteria_definitions:
 
   max_age_60:
     max_age: 60
-
+  # Be cautious when defining regex patterns: / is a special character in regex.
+  # If you need to match a literal /, you can escape it with \/
   criteria_1:
     codes:
     # Diagnosis codes
