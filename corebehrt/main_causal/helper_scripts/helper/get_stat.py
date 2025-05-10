@@ -1,30 +1,44 @@
+import logging
 from dataclasses import dataclass, field
+from os.path import join
 from typing import Dict, Literal, Set
 
 import pandas as pd
+import torch
 
-from corebehrt.constants.causal.data import EXPOSURE_COL, PS_COL
+from corebehrt.constants.causal.data import EXPOSURE_COL, PROBAS, PS_COL, TARGETS
+from corebehrt.constants.causal.paths import (
+    CALIBRATED_PREDICTIONS_FILE,
+    CRITERIA_FLAGS_FILE,
+    STATS_FILE_BINARY,
+    STATS_FILE_NUMERIC,
+    STATS_RAW_FILE_BINARY,
+    STATS_RAW_FILE_NUMERIC,
+)
 from corebehrt.constants.causal.stats import (
+    BINARY,
+    CONTROL,
     COUNT,
     CRIT,
+    EXPOSED,
+    FORMATTED,
     GROUP,
-    MEDIAN,
     MEAN,
-    PERCENTAGE,
+    MEDIAN,
+    NUMERIC,
+    OVERALL,
     P25,
     P75,
+    PERCENTAGE,
+    RAW,
     STD,
-    BINARY,
-    NUMERIC,
-    EXPOSED,
-    CONTROL,
-    OVERALL,
 )
 from corebehrt.constants.data import PID_COL
-
+from corebehrt.constants.paths import PID_FILE
 
 SPECIAL_COLS = {PID_COL, EXPOSURE_COL, PS_COL}
 STAT_COLS = [GROUP, CRIT, COUNT, PERCENTAGE, MEAN, STD, MEDIAN, P25, P75]
+
 
 GroupType = Literal["overall", "exposed", "control"]
 
@@ -106,6 +120,7 @@ def get_stats(
 def get_stats_for_binary_column(
     s: pd.Series, n: int, criterion: str, group: GroupType
 ) -> Dict:
+    """Get statistics for a binary column."""
     non_null = s.dropna()
     count = non_null.sum()
     return {
@@ -208,7 +223,7 @@ def _sort_stats_table(df: pd.DataFrame) -> pd.DataFrame:
     """
     Sort statistics tables for binary and numeric columns.
     """
-    return df.sort_values(by=[CRIT, GROUP])
+    return df.sort_values(by=[CRIT, GROUP]).reset_index(drop=True)
 
 
 def format_stats_table(
@@ -242,3 +257,67 @@ def format_stats_table(
     else:
         formatted[NUMERIC] = numeric_df
     return formatted
+
+
+def print_stats(stats: Dict[str, pd.DataFrame]):
+    """Print formatted statistics tables."""
+    print("================================================")
+    print("Formatted stats:")
+    print(stats[FORMATTED][BINARY].head(30))
+    print(stats[FORMATTED][NUMERIC].head(30))
+
+
+def save_stats(stats: Dict[str, pd.DataFrame], save_path: str):
+    """Save statistics tables to csv files."""
+    stats[FORMATTED][BINARY].to_csv(join(save_path, STATS_FILE_BINARY), index=False)
+    stats[RAW][BINARY].to_csv(join(save_path, STATS_RAW_FILE_BINARY), index=False)
+    stats[FORMATTED][NUMERIC].to_csv(join(save_path, STATS_FILE_NUMERIC), index=False)
+    stats[RAW][NUMERIC].to_csv(join(save_path, STATS_RAW_FILE_NUMERIC), index=False)
+
+
+def load_data(
+    criteria_path: str,
+    cohort_path: str,
+    ps_calibrated_predictions_path: str,
+    outcome_model_path: str,
+    logger: logging.Logger,
+) -> pd.DataFrame:
+    """Load and merge cohort criteria, patient IDs, propensity scores, and predictions as needed."""
+
+    # Load main criteria DataFrame
+    logger.info("Loading criteria DataFrame")
+    criteria = pd.read_csv(join(criteria_path, CRITERIA_FLAGS_FILE))
+    logger.info(f"Loaded {len(criteria)} criteria")
+
+    # Optionally filter by patient IDs
+    if cohort_path:
+        pids = torch.load(join(cohort_path, PID_FILE))
+        logger.info(f"Loaded {len(pids)} patient IDs")
+        criteria = criteria[criteria[PID_COL].isin(pids)]
+        logger.info(f"Filtered criteria to {len(criteria)} patients")
+
+    # Optionally merge propensity scores and exposures
+    if ps_calibrated_predictions_path:
+        ps_path = join(ps_calibrated_predictions_path, CALIBRATED_PREDICTIONS_FILE)
+        ps_df = pd.read_csv(ps_path).rename(
+            columns={TARGETS: EXPOSURE_COL, PROBAS: PS_COL}
+        )
+        ps_df = _convert_to_int(ps_df, EXPOSURE_COL)
+        criteria = pd.merge(criteria, ps_df, on=PID_COL, how="left")
+        logger.info("Merged with propensity scores and exposures")
+
+    # Optionally merge predictions and targets
+    if outcome_model_path:
+        outcome_path = join(outcome_model_path, CALIBRATED_PREDICTIONS_FILE)
+        outcome_df = pd.read_csv(outcome_path)[[PID_COL, TARGETS]]
+        outcome_df = _convert_to_int(outcome_df, TARGETS)
+        criteria = pd.merge(criteria, outcome_df, on=PID_COL, how="left")
+        logger.info("Merged with predictions and targets")
+
+    return criteria
+
+
+def _convert_to_int(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """Convert a column to integer type."""
+    df[col] = df[col].astype(int)
+    return df

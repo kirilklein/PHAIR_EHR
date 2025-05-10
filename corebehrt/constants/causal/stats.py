@@ -13,3 +13,6 @@ NUMERIC = "numeric"
 EXPOSED = "Exposed"
 CONTROL = "Control"
 OVERALL = "Overall"
+
+RAW = "raw"
+FORMATTED = "formatted"
