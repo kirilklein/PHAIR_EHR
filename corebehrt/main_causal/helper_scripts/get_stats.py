@@ -85,6 +85,8 @@ def main(config_path: str):
         check_ps_columns(criteria)
         ps_plot(criteria, save_path, PS_PLOT_FILE)
 
+    # Track if filtering was done
+    filtered = False
     if cfg.get("common_support_threshold", None) is not None:
         from CausalEstimate.filter.propensity import filter_common_support
 
@@ -94,16 +96,18 @@ def main(config_path: str):
             treatment_col=EXPOSURE_COL,
             threshold=cfg.common_support_threshold,
         )
+        filtered = True
 
     stats = analyze_cohort(criteria)
     print_stats(stats)
     save_stats(stats, save_path)
 
-    ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
-    print("--------------------------------")
-    print("Positivity summary after filtering:")
-    print(ps_summary)
-    ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE_FILTERED), index=False)
+    if filtered:
+        ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
+        print("--------------------------------")
+        print("Positivity summary after filtering:")
+        print(ps_summary)
+        ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE_FILTERED), index=False)
 
     if cfg.get("weights", None) is not None:
         check_ps_columns(criteria)
@@ -116,10 +120,9 @@ def main(config_path: str):
         ess_df = get_effective_sample_size_df(criteria, WEIGHTS_COL)
         print("True sample size: ", len(criteria))
         print(ess_df)
-
         ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
 
-    if cfg.get("plot_ps", False):
+    if cfg.get("plot_ps", False) and filtered:
         check_ps_columns(criteria)
         ps_plot(criteria, save_path, PS_PLOT_FILE_FILTERED)
 
