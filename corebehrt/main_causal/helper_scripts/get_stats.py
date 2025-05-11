@@ -38,7 +38,7 @@ from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     get_effective_sample_size_df,
     load_data,
     positivity_summary,
-    print_stats,
+    log_stats,
     ps_plot,
     save_stats,
 )
@@ -73,7 +73,6 @@ def main(config_path: str):
         cohort_path,
         ps_calibrated_predictions_path,
         outcome_model_path,
-        logger,
     )
     if (PS_COL in criteria.columns) and cfg.get("clip_ps", True):
         outside_count = (criteria[PS_COL] < EPS).sum() + (
@@ -111,7 +110,7 @@ def main(config_path: str):
         filtered = True
 
     stats = analyze_cohort(criteria)
-    print_stats(stats)
+    log_stats(stats)
     save_stats(stats, save_path)
 
     if filtered:
@@ -128,7 +127,7 @@ def main(config_path: str):
         stats = analyze_cohort_with_weights(criteria, WEIGHTS_COL)
         logger.info("--------------------------------")
         logger.info(f"Weighted stats ({cfg.weights}):")
-        print_stats(stats)
+        log_stats(stats)
         save_stats(stats, save_path, weighted=True)
         ess_df = get_effective_sample_size_df(criteria, WEIGHTS_COL)
         logger.info(f"True sample size: {len(criteria)}")

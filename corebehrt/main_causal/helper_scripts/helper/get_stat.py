@@ -38,6 +38,9 @@ from corebehrt.functional.cohort_handling.ps_stats import (
     ks_statistic,
     standardized_mean_difference,
 )
+import logging
+
+logger = logging.getLogger("get_stat")
 
 
 def check_ps_columns(criteria: pd.DataFrame):
@@ -122,12 +125,12 @@ def positivity_summary(ps: pd.Series, exposure: pd.Series) -> pd.DataFrame:
     return pd.DataFrame([data])
 
 
-def print_stats(stats: Dict[str, pd.DataFrame]):
-    """Print formatted statistics tables."""
-    print("================================================")
-    print("Formatted stats:")
-    print(stats[FORMATTED][BINARY].head(30))
-    print(stats[FORMATTED][NUMERIC].head(30))
+def log_stats(stats: Dict[str, pd.DataFrame]):
+    """Log formatted statistics tables."""
+    logger.info("================================================")
+    logger.info("Formatted stats:")
+    logger.info(stats[FORMATTED][BINARY].head(30))
+    logger.info(stats[FORMATTED][NUMERIC].head(30))
 
 
 def save_stats(stats: Dict[str, pd.DataFrame], save_path: str, weighted: bool = False):
@@ -155,17 +158,34 @@ def load_data(
     cohort_path: str,
     ps_calibrated_predictions_path: str,
     outcome_model_path: str,
-    logger: logging.Logger,
 ) -> pd.DataFrame:
-    """Load and merge cohort criteria, patient IDs, propensity scores, and predictions as needed."""
+    """
+    Load and merge cohort data, patient IDs, propensity scores, and outcome predictions as needed.
 
-    # Load main criteria DataFrame
+    This function:
+        - Loads the main criteria DataFrame (patient-level flags and variables).
+        - Optionally filters patients by a provided cohort (patient IDs).
+        - Optionally merges in propensity scores and exposures (inner join).
+        - Optionally merges in outcome predictions and targets (inner join).
+        - Ensures no missing values are introduced for key columns.
+
+    Args:
+        criteria_path (str): Path to the directory containing the criteria CSV file.
+        cohort_path (str): Path to the directory containing patient IDs to filter on (optional).
+        ps_calibrated_predictions_path (str): Path to the directory with propensity score predictions (optional).
+        outcome_model_path (str): Path to the directory with outcome predictions and targets (optional).
+        logger (logging.Logger): Logger for status messages.
+
+    Returns:
+        pd.DataFrame: The merged and filtered cohort DataFrame, ready for analysis.
+    """
+
     logger.info("Loading criteria DataFrame")
     criteria = pd.read_csv(join(criteria_path, CRITERIA_FLAGS_FILE))
     logger.info(f"Loaded {len(criteria)} criteria")
 
-    # Optionally filter by patient IDs
     if cohort_path:
+        logger.info("Cohort path provided - filtering criteria")
         pids = torch.load(join(cohort_path, PID_FILE))
         logger.info(f"Loaded {len(pids)} patient IDs")
         criteria = criteria[criteria[PID_COL].isin(pids)]
@@ -173,24 +193,44 @@ def load_data(
 
     # Optionally merge propensity scores and exposures
     if ps_calibrated_predictions_path:
+        logger.info("Propensity scores and exposures path provided - merging")
         ps_path = join(ps_calibrated_predictions_path, CALIBRATED_PREDICTIONS_FILE)
         ps_df = pd.read_csv(ps_path).rename(
             columns={TARGETS: EXPOSURE_COL, PROBAS: PS_COL}
         )
         ps_df = _convert_to_int(ps_df, EXPOSURE_COL)
         check_binary(ps_df, EXPOSURE_COL)
-        criteria = pd.merge(criteria, ps_df, on=PID_COL, how="left")
-        logger.info("Merged with propensity scores and exposures")
+        logger.info(
+            f"{len(criteria)} Patients in Criteria before merging with propensity scores and exposures"
+        )
+        criteria = _inner_merge_data_on_pid(criteria, ps_df)
+        logger.info(
+            f"{len(criteria)} Patients in Criteria after merging with propensity scores and exposures"
+        )
 
     # Optionally merge predictions and targets
     if outcome_model_path:
+        logger.info("Predictions and targets path provided - merging")
         outcome_path = join(outcome_model_path, CALIBRATED_PREDICTIONS_FILE)
         outcome_df = pd.read_csv(outcome_path)[[PID_COL, TARGETS]]
         outcome_df = _convert_to_int(outcome_df, TARGETS)
         check_binary(outcome_df, TARGETS)
-        criteria = pd.merge(criteria, outcome_df, on=PID_COL, how="left")
-        logger.info("Merged with predictions and targets")
+        logger.info(
+            f"{len(criteria)} Patients in Criteria before merging with predictions and targets"
+        )
+        criteria = _inner_merge_data_on_pid(criteria, outcome_df)
+        logger.info(
+            f"{len(criteria)} Patients in Criteria after merging with predictions and targets"
+        )
 
+    return criteria
+
+
+def _inner_merge_data_on_pid(criteria: pd.DataFrame, data: pd.DataFrame):
+    criteria = pd.merge(criteria, data, on=PID_COL, how="inner")
+    logger.info(
+        f"{len(criteria)} Patients in Criteria after merging with {data.columns[0]}"
+    )
     return criteria
 
 
