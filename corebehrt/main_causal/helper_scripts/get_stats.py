@@ -23,10 +23,10 @@ from os.path import join
 from corebehrt.constants.causal.data import EXPOSURE_COL, PS_COL
 from corebehrt.constants.causal.paths import (
     EFFECTIVE_SAMPLE_SIZE_FILE,
-    PS_SUMMARY_FILE,
-    PS_SUMMARY_FILE_FILTERED,
     PS_PLOT_FILE,
     PS_PLOT_FILE_FILTERED,
+    PS_SUMMARY_FILE,
+    PS_SUMMARY_FILE_FILTERED,
 )
 from corebehrt.constants.causal.stats import WEIGHTS_COL
 from corebehrt.functional.cohort_handling.stats import compute_weights
@@ -76,18 +76,18 @@ def main(config_path: str):
         logger,
     )
     if (PS_COL in criteria.columns) and cfg.get("clip_ps", True):
-        print(
-            (criteria[PS_COL] < EPS).sum() + (criteria[PS_COL] > 1 - EPS).sum(),
-            "ps outside clipping range",
+        logger.info(
+            f"{criteria[PS_COL] < EPS}.sum() + {criteria[PS_COL] > 1 - EPS}.sum() ps outside clipping range"
         )
-        print("Clipping PS")
+        logger.info("Clipping PS")
         criteria[PS_COL] = criteria[PS_COL].clip(lower=EPS, upper=1 - EPS)
 
-    ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
-    print("--------------------------------")
-    print("Positivity summary before filtering:")
-    print(ps_summary)
-    ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE), index=False)
+    if PS_COL in criteria.columns:
+        ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
+        logger.info("--------------------------------")
+        logger.info("Positivity summary before filtering:")
+        logger.info(ps_summary)
+        ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE), index=False)
 
     if cfg.get("plot_ps", False):
         try:
@@ -114,23 +114,24 @@ def main(config_path: str):
     save_stats(stats, save_path)
 
     if filtered:
-        ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
-        print("--------------------------------")
-        print("Positivity summary after filtering:")
-        print(ps_summary)
-        ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE_FILTERED), index=False)
+        if PS_COL in criteria.columns:
+            ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
+            logger.info("--------------------------------")
+            logger.info("Positivity summary after filtering:")
+            logger.info(ps_summary)
+            ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE_FILTERED), index=False)
 
     if cfg.get("weights", None) is not None:
         check_ps_columns(criteria)
         criteria[WEIGHTS_COL] = compute_weights(criteria, cfg.weights)
         stats = analyze_cohort_with_weights(criteria, WEIGHTS_COL)
-        print("--------------------------------")
-        print(f"Weighted stats ({cfg.weights}):")
+        logger.info("--------------------------------")
+        logger.info(f"Weighted stats ({cfg.weights}):")
         print_stats(stats)
         save_stats(stats, save_path, weighted=True)
         ess_df = get_effective_sample_size_df(criteria, WEIGHTS_COL)
-        print("True sample size: ", len(criteria))
-        print(ess_df)
+        logger.info(f"True sample size: {len(criteria)}")
+        logger.info(ess_df)
         ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
 
     if cfg.get("plot_ps", False) and filtered:
