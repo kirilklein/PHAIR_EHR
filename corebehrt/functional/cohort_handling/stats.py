@@ -223,12 +223,13 @@ def get_stats_for_numeric_column(
 
 
 def get_stats(
-    df: pd.DataFrame, group: GroupType = OVERALL, config: StatConfig = StatConfig()
+    df: pd.DataFrame, group: GroupType = OVERALL, config: Optional[StatConfig] = None
 ) -> Dict[str, pd.DataFrame]:
     """
     Compute statistics for all relevant columns in a DataFrame, split into binary and numeric.
     Returns a dict with keys 'binary' and 'numeric'.
     """
+    config = config or StatConfig()
     if df.empty:
         return {
             BINARY: pd.DataFrame(columns=[GROUP, CRIT, COUNT, PERCENTAGE]),

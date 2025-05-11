@@ -46,6 +46,7 @@ from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/helper/get_stats.yaml"
+EPS = 1e-6
 
 
 def main(config_path: str):
@@ -74,6 +75,13 @@ def main(config_path: str):
         outcome_model_path,
         logger,
     )
+    if (PS_COL in criteria.columns) and cfg.get("clip_ps", True):
+        print(
+            (criteria[PS_COL] < EPS).sum() + (criteria[PS_COL] > 1 - EPS).sum(),
+            "ps outside clipping range",
+        )
+        print("Clipping PS")
+        criteria[PS_COL] = criteria[PS_COL].clip(lower=EPS, upper=1 - EPS)
 
     ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
     print("--------------------------------")

@@ -65,9 +65,7 @@ jobs:
           run_step main.select_cohort                      select_cohort/select_cohort_exposure.yaml
           run_step main_causal.select_cohort_advanced      select_cohort/advanced_extraction.yaml
 
-          # ─── Extract criteria & get stats ─────────────────
           run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
-          run_step main_causal.helper_scripts.get_stats     helper/get_stats.yaml
 
           # ─── Finetuning ────────────────────────────────────
           run_step main.prepare_training_data               finetune/prepare_finetune_exposure.yaml
@@ -102,3 +100,11 @@ jobs:
           run_step main_causal.train_xgb                   double_robust/train_xgb_simulated.yaml
           run_step main_causal.estimate                    estimate/estimate_with_true_xgb.yaml
           run_test 0.1 estimate_with_true_xgb
+
+          # ─── Simulated: XGBoost ───────────────────────────
+          run_step main_causal.train_xgb                   double_robust/train_xgb_simulated.yaml
+          run_step main_causal.estimate                    estimate/estimate_with_true_xgb.yaml
+          run_test 0.1 estimate_with_true_xgb
+
+          # ─── Additional tests ───────────────────────────
+          run_step main_causal.helper_scripts.get_stats     helper/get_stats.yaml
