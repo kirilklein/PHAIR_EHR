@@ -31,14 +31,15 @@ from corebehrt.constants.causal.paths import (
 from corebehrt.constants.causal.stats import WEIGHTS_COL
 from corebehrt.functional.cohort_handling.stats import compute_weights
 from corebehrt.functional.setup.args import get_args
+from corebehrt.functional.utils.log import log_table
 from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     analyze_cohort,
     analyze_cohort_with_weights,
     check_ps_columns,
     get_effective_sample_size_df,
     load_data,
-    positivity_summary,
     log_stats,
+    positivity_summary,
     ps_plot,
     save_stats,
 )
@@ -86,7 +87,7 @@ def main(config_path: str):
         ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
         logger.info("--------------------------------")
         logger.info("Positivity summary before filtering:")
-        logger.info(ps_summary)
+        log_table(ps_summary, logger)
         ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE), index=False)
 
     if cfg.get("plot_ps", False):
@@ -118,7 +119,7 @@ def main(config_path: str):
             ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
             logger.info("--------------------------------")
             logger.info("Positivity summary after filtering:")
-            logger.info(ps_summary)
+            log_table(ps_summary, logger)
             ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE_FILTERED), index=False)
 
     if cfg.get("weights", None) is not None:
@@ -131,7 +132,7 @@ def main(config_path: str):
         save_stats(stats, save_path, weighted=True)
         ess_df = get_effective_sample_size_df(criteria, WEIGHTS_COL)
         logger.info(f"True sample size: {len(criteria)}")
-        logger.info(ess_df)
+        log_table(ess_df, logger)
         ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
 
     if cfg.get("plot_ps", False) and filtered:

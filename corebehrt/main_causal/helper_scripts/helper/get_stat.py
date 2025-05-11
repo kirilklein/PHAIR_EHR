@@ -38,6 +38,7 @@ from corebehrt.functional.cohort_handling.stats import (
     format_stats_table,
     get_stratified_stats,
 )
+from corebehrt.functional.utils.log import log_table
 
 logger = logging.getLogger("get_stat")
 
@@ -106,6 +107,10 @@ def positivity_summary(ps: pd.Series, exposure: pd.Series) -> pd.DataFrame:
     """
     Gather all overlap/positivity diagnostics into a single-row DataFrame.
     """
+
+    logger.info("Computing positivity summary")
+    check_ps_group_variance(ps, exposure)
+
     cs = common_support_interval(ps, exposure)
     ovl = overlap_coefficient(ps, exposure)
     ks_stat, ks_pval = ks_statistic(ps, exposure)
@@ -128,8 +133,8 @@ def log_stats(stats: Dict[str, pd.DataFrame]):
     """Log formatted statistics tables."""
     logger.info("================================================")
     logger.info("Formatted stats:")
-    logger.info(stats[FORMATTED][BINARY].head(30))
-    logger.info(stats[FORMATTED][NUMERIC].head(30))
+    log_table(stats[FORMATTED][BINARY].head(30), logger)
+    log_table(stats[FORMATTED][NUMERIC].head(30), logger)
 
 
 def save_stats(stats: Dict[str, pd.DataFrame], save_path: str, weighted: bool = False):
@@ -173,7 +178,6 @@ def load_data(
         cohort_path (str): Path to the directory containing patient IDs to filter on (optional).
         ps_calibrated_predictions_path (str): Path to the directory with propensity score predictions (optional).
         outcome_model_path (str): Path to the directory with outcome predictions and targets (optional).
-        logger (logging.Logger): Logger for status messages.
 
     Returns:
         pd.DataFrame: The merged and filtered cohort DataFrame, ready for analysis.
@@ -264,3 +268,27 @@ def _convert_to_int(df: pd.DataFrame, col: str) -> pd.DataFrame:
     """Convert a column to integer type."""
     df[col] = df[col].astype(int)
     return df
+
+
+def check_ps_group_variance(ps: pd.Series, exposure: pd.Series):
+    """
+    Check if the propensity score has zero variance in either group.
+    Issues a warning if so, and returns True if an edge case is detected.
+    """
+    ps_control = ps[exposure == 0]
+    ps_treated = ps[exposure == 1]
+    std_control = np.std(ps_control)
+    std_treated = np.std(ps_treated)
+    edge_case = False
+
+    if std_control == 0 or std_treated == 0:
+        msg = (
+            "Warning: Propensity score has zero standard deviation in "
+            f"{'control' if std_control == 0 else ''}"
+            f"{' and ' if std_control == 0 and std_treated == 0 else ''}"
+            f"{'treated' if std_treated == 0 else ''} group(s). "
+            "Some diagnostics will be undefined."
+        )
+        logger.warning(msg)
+        edge_case = True
+    return edge_case
