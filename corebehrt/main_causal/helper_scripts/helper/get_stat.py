@@ -178,6 +178,7 @@ def load_data(
             columns={TARGETS: EXPOSURE_COL, PROBAS: PS_COL}
         )
         ps_df = _convert_to_int(ps_df, EXPOSURE_COL)
+        check_binary(ps_df, EXPOSURE_COL)
         criteria = pd.merge(criteria, ps_df, on=PID_COL, how="left")
         logger.info("Merged with propensity scores and exposures")
 
@@ -186,10 +187,18 @@ def load_data(
         outcome_path = join(outcome_model_path, CALIBRATED_PREDICTIONS_FILE)
         outcome_df = pd.read_csv(outcome_path)[[PID_COL, TARGETS]]
         outcome_df = _convert_to_int(outcome_df, TARGETS)
+        check_binary(outcome_df, TARGETS)
         criteria = pd.merge(criteria, outcome_df, on=PID_COL, how="left")
         logger.info("Merged with predictions and targets")
 
     return criteria
+
+
+def check_binary(df: pd.DataFrame, col: str):
+    if not df[col].isin([0, 1]).all():
+        raise ValueError(
+            f"Column {col} is not binary. Example values: {df[col].value_counts()}"
+        )
 
 
 def get_effective_sample_size_df(df: pd.DataFrame, weights_col: str) -> pd.DataFrame:
