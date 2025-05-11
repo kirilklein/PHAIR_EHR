@@ -26,19 +26,18 @@ from corebehrt.constants.causal.stats import (
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.constants.paths import PID_FILE
+from corebehrt.functional.cohort_handling.ps_stats import (
+    common_support_interval,
+    ks_statistic,
+    overlap_coefficient,
+    standardized_mean_difference,
+)
 from corebehrt.functional.cohort_handling.stats import (
     StatConfig,
     effective_sample_size,
     format_stats_table,
     get_stratified_stats,
 )
-from corebehrt.functional.cohort_handling.ps_stats import (
-    common_support_interval,
-    overlap_coefficient,
-    ks_statistic,
-    standardized_mean_difference,
-)
-import logging
 
 logger = logging.getLogger("get_stat")
 
