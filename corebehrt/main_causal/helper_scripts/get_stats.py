@@ -90,8 +90,11 @@ def main(config_path: str):
     ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE), index=False)
 
     if cfg.get("plot_ps", False):
-        check_ps_columns(criteria)
-        ps_plot(criteria, save_path, PS_PLOT_FILE)
+        try:
+            check_ps_columns(criteria)
+            ps_plot(criteria, save_path, PS_PLOT_FILE)
+        except Exception as e:
+            logger.warning(f"Error plotting PS: {e}")
 
     # Track if filtering was done
     filtered = False
@@ -131,8 +134,11 @@ def main(config_path: str):
         ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
 
     if cfg.get("plot_ps", False) and filtered:
-        check_ps_columns(criteria)
-        ps_plot(criteria, save_path, PS_PLOT_FILE_FILTERED)
+        try:
+            check_ps_columns(criteria)
+            ps_plot(criteria, save_path, PS_PLOT_FILE_FILTERED)
+        except Exception as e:
+            logger.warning(f"Error plotting PS: {e}")
 
     logger.info("Done")
 
