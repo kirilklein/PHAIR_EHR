@@ -76,9 +76,10 @@ def main(config_path: str):
         logger,
     )
     if (PS_COL in criteria.columns) and cfg.get("clip_ps", True):
-        logger.info(
-            f"{criteria[PS_COL] < EPS}.sum() + {criteria[PS_COL] > 1 - EPS}.sum() ps outside clipping range"
-        )
+        outside_count = (criteria[PS_COL] < EPS).sum() + (
+            criteria[PS_COL] > 1 - EPS
+        ).sum()
+        logger.info(f"{outside_count} ps outside clipping range - clipping")
         logger.info("Clipping PS")
         criteria[PS_COL] = criteria[PS_COL].clip(lower=EPS, upper=1 - EPS)
 
