@@ -8,8 +8,6 @@ def common_support_interval(ps: pd.Series, exposure: pd.Series) -> Dict[str, flo
     """
     Compute the common-support interval for propensity scores and the fraction outside it.
     """
-    if not exposure.isin([0, 1]).all():
-        raise ValueError("Exposure must be binary (0/1).")
     p0 = ps[exposure == 0]
     p1 = ps[exposure == 1]
     min0, max0 = p0.min(), p0.max()
