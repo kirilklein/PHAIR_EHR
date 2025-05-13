@@ -1,16 +1,15 @@
 # provide expressions for inclusion and exclusion
-inclusion: "min_age_50 & diabetes_treatment"
+inclusion: type2_diabetes & adult
 exclusion: type1_diabetes
 
 criteria_definitions:
-  # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
-  min_age_50:
-    # would be the age at index_date
-    min_age: 50
+  adult:
+    min_age: 18
 
-  diabetes_treatment:
+  type2_diabetes:
     codes:
-    - ^(?:M|RM)/A10.*
+    - ^(?:D|RD)/DC11.*
+    - ^(?:M|RM)/A10B.*
 
   type1_diabetes:
     codes:

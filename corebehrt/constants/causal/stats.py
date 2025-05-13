@@ -1,0 +1,21 @@
+CRIT = "criterion"
+GROUP = "group"
+COUNT = "count"
+NON_NULL_COUNT = "non_null_count"
+PERCENTAGE = "percentage"
+MEAN = "mean"
+STD = "std"
+MEDIAN = "median"
+P25 = "p25"
+P75 = "p75"
+
+BINARY = "binary"
+NUMERIC = "numeric"
+EXPOSED = "Exposed"
+CONTROL = "Control"
+OVERALL = "Overall"
+
+RAW = "raw"
+FORMATTED = "formatted"
+
+WEIGHTS_COL = "weights"
