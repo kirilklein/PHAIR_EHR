@@ -1,12 +1,15 @@
 from dataclasses import dataclass
+from typing import List
 
 import pandas as pd
 import torch
 
 from corebehrt.constants.causal.data import EXPOSURE
-
-from corebehrt.modules.preparation.dataset import PatientData, PatientDataset
-from corebehrt.modules.preparation.dataset import BinaryOutcomeDataset
+from corebehrt.modules.preparation.dataset import (
+    BinaryOutcomeDataset,
+    PatientData,
+    PatientDataset,
+)
 
 
 @dataclass
@@ -45,6 +48,9 @@ class ExposureOutcomeDataset(BinaryOutcomeDataset):
     exposures: absolute position when exposure occured for each patient
     For details on the dataset structure, see corebehrt.modules.preparation.dataset.BinaryOutcomeDataset.
     """
+
+    def __init__(self, patients: List[CausalPatientData]):
+        super().__init__(patients)
 
     def __getitem__(self, index: int) -> dict:
         sample = super().__getitem__(index)

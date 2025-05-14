@@ -13,7 +13,9 @@ from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
 from corebehrt.functional.features.normalize import normalize_segments_for_patient
 from corebehrt.functional.io_operations.load import load_vocabulary
 from corebehrt.functional.io_operations.save import save_vocabulary
-from corebehrt.functional.preparation.convert import dataframe_to_patient_list
+from corebehrt.functional.preparation.convert_causal import (
+    dataframe_to_causal_patient_list,
+)
 from corebehrt.functional.preparation.filter import (
     censor_patient,
     censor_patient_with_delays,
@@ -87,7 +89,7 @@ class CausalDatasetPreparer(DatasetPreparer):
                 df = self._cutoff_data(df, data_cfg.cutoff_date)
             # !TODO: if index date is the same for all patients, then we can censor here.
             self._check_sorted(df)
-            batch_patient_list = dataframe_to_patient_list(df)
+            batch_patient_list = dataframe_to_causal_patient_list(df)
             patient_list.extend(batch_patient_list)
         logger.info(f"Number of patients: {len(patient_list)}")
         data = CausalPatientDataset(patients=patient_list)
