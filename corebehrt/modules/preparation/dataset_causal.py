@@ -4,7 +4,7 @@ from typing import List
 import pandas as pd
 import torch
 
-from corebehrt.constants.causal.data import EXPOSURE
+from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.modules.preparation.dataset import (
     BinaryOutcomeDataset,
     PatientData,
@@ -54,7 +54,7 @@ class ExposureOutcomeDataset(BinaryOutcomeDataset):
 
     def __getitem__(self, index: int) -> dict:
         sample = super().__getitem__(index)
-        sample[EXPOSURE] = torch.tensor(
+        sample[EXPOSURE_TARGET] = torch.tensor(
             self.patients[index].exposure, dtype=torch.float
         )
         return sample

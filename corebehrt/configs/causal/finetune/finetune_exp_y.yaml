@@ -1,0 +1,66 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ## INPUTS
+  features: ./outputs/causal/features
+  tokenized: ./outputs/causal/tokenized
+  cohort: ./outputs/causal/exposure_cohort # path to cohort directory
+  # test_pids: pids_path # path to file with pids to use for test set
+
+  # tokenized_file: "features_finetune.pt" # can also be a list
+  # tokenized_pids: "pids_finetune.pt" # can also be a list
+
+  pretrain_model: ./outputs/causal/pretraining
+
+  # restart_model: ... # Use for restarting from checkpoint
+
+  # outcome: ./outputs/causal/outcomes/EXPOSURE.csv
+
+  prepared_data: ./outputs/causal/finetuning/processed_data/exposure_outcome
+
+  ## OUTPUTS
+  model: ./outputs/causal/finetuning/ft_exp_y # Save model/outputs to this folder
+  #runs: ./outputs/pretraining # Use for generating a new model folder
+
+model:
+  cls:
+    _target_: ehr2vec.model.heads.ClassifierGRU
+    bidirectional: true
+
+data:
+  predefined_folds: true # using predefined folds, ignore cv_folds if true
+  truncation_len: 256
+  save_processed: true
+  test_split: 0
+  min_len: 0
+
+trainer_args:
+  sampler_function:
+    _target_: corebehrt.modules.trainer.utils.Sampling.inverse_sqrt
+  batch_size: 256
+  val_batch_size: 256
+  effective_batch_size: 256
+  epochs: 2
+  info: true
+  gradient_clip:
+    clip_value: 1.0
+  shuffle: true
+  checkpoint_frequency: 1
+  early_stopping: 20
+  stopping_criterion: roc_auc
+
+optimizer:
+  lr: 5e-4
+  eps: 1e-6
+
+scheduler:
+  _target_: transformers.get_constant_schedule_with_warmup
+  num_warmup_epochs: 1
+
+metrics:
+  roc_auc:
+    _target_: corebehrt.modules.monitoring.metrics.ROC_AUC
+  pr_auc:
+    _target_: corebehrt.modules.monitoring.metrics.PR_AUC

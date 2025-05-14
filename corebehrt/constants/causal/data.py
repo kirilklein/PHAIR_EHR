@@ -6,6 +6,7 @@ EXPOSURES = "exposures"
 COHORT = "cohort"
 DATA = "data"
 
+# Prepare causal finetune data
 EXPOSURE = "exposure"
 OUTCOME = "outcome"
 
@@ -43,3 +44,7 @@ FLOW_AFTER_STRICT = "after_strict"
 FLOW_FINAL = "final"
 
 CALIBRATION_COLLAPSE_THRESHOLD = 0.01
+
+
+# Training
+EXPOSURE_TARGET = "exposure_target"

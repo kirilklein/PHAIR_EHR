@@ -1,0 +1,92 @@
+"""
+Causal inference models for EHR data.
+
+This module extends the base Corebehrt models to support causal inference tasks,
+enabling simultaneous prediction of both exposure and outcome variables.
+"""
+
+import logging
+
+import torch
+import torch.nn as nn
+
+from corebehrt.constants.data import ATTENTION_MASK, TARGET
+from corebehrt.constants.causal.data import EXPOSURE_TARGET
+from corebehrt.modules.model.heads import FineTuneHead
+from corebehrt.modules.model.model import CorebehrtForFineTuning
+
+logger = logging.getLogger(__name__)
+
+
+class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
+    """
+    Fine-tuning model for causal inference on EHR sequences.
+
+    This model extends CorebehrtForFineTuning to simultaneously predict both exposure and outcome
+    variables. It uses two separate classification heads, each with its own BCEWithLogitsLoss,
+    to predict the probability of exposure and outcome occurrence. The final loss is computed
+    as the sum of both individual losses.
+
+    The model is designed for causal inference tasks where we need to predict both the treatment
+    (exposure) and the outcome of interest, allowing for joint learning of both predictions.
+
+    Attributes:
+        exposure_loss_fct (nn.BCEWithLogitsLoss): Loss function for exposure prediction
+        outcome_loss_fct (nn.BCEWithLogitsLoss): Loss function for outcome prediction
+        exposure_cls (FineTuneHead): Classification head for exposure prediction
+        outcome_cls (FineTuneHead): Classification head for outcome prediction
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+        # Initialize loss functions for both targets
+        if getattr(config, "pos_weight", None):
+            pos_weight = torch.tensor(config.pos_weight)
+        else:
+            pos_weight = None
+
+        self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+
+        # Two separate classification heads
+        self.exposure_cls = FineTuneHead(hidden_size=config.hidden_size)
+        self.outcome_cls = FineTuneHead(hidden_size=config.hidden_size)
+
+    def forward(self, batch: dict):
+        """
+        Forward pass for causal fine-tuning.
+
+        Args:
+            batch (dict): must contain:
+                - 'concept', 'segment', 'age', 'abspos', 'attention_mask'
+                - 'exposure_target' and 'target' as labels
+
+        Returns:
+            BaseModelOutput: with exposure_logits, outcome_logits and optional losses if targets provided.
+        """
+        outputs = super().forward(batch)
+
+        sequence_output = outputs[0]  # Last hidden state
+
+        # Get predictions for both exposure and outcome
+        exposure_logits = self.exposure_cls(sequence_output, batch[ATTENTION_MASK])
+        outcome_logits = self.outcome_cls(sequence_output, batch[ATTENTION_MASK])
+
+        outputs.exposure_logits = exposure_logits
+        outputs.outcome_logits = outcome_logits
+
+        # Calculate losses if targets are provided
+        if batch.get(EXPOSURE_TARGET) is not None and batch.get(TARGET) is not None:
+            exposure_loss = self.get_exposure_loss(
+                exposure_logits, batch[EXPOSURE_TARGET]
+            )
+            outcome_loss = self.get_outcome_loss(outcome_logits, batch[TARGET])
+            outputs.loss = exposure_loss + outcome_loss  # Combined loss
+        return outputs
+
+    def get_exposure_loss(self, logits, labels):
+        return self.exposure_loss_fct(logits.view(-1), labels.view(-1))
+
+    def get_outcome_loss(self, logits, labels):
+        return self.outcome_loss_fct(logits.view(-1), labels.view(-1))
