@@ -56,6 +56,7 @@ def add_parser(subparsers) -> None:
             "evaluate_finetune",
             "extract_criteria",
             "get_stats",
+            "prepare_ft_exp_y",
         },
         help="Job to run.",
     )

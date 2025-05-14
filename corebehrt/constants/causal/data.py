@@ -6,6 +6,9 @@ EXPOSURES = "exposures"
 COHORT = "cohort"
 DATA = "data"
 
+EXPOSURE = "exposure"
+OUTCOME = "outcome"
+
 # Predicted outcome probabilities
 PROB_KEY = "prob"  # Overall predicted outcome probability
 PROB_T_KEY = "prob_t"  # Predicted outcome probability under treatment
