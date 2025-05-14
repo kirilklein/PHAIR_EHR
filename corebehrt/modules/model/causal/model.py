@@ -10,9 +10,9 @@ import logging
 import torch
 import torch.nn as nn
 
-from corebehrt.constants.data import ATTENTION_MASK, TARGET
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
-from corebehrt.modules.model.heads import FineTuneHead
+from corebehrt.constants.data import ATTENTION_MASK, TARGET
+from corebehrt.modules.model.causal.heads import CausalFineTuneHead
 from corebehrt.modules.model.model import CorebehrtForFineTuning
 
 logger = logging.getLogger(__name__)
@@ -29,12 +29,14 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
     The model is designed for causal inference tasks where we need to predict both the treatment
     (exposure) and the outcome of interest, allowing for joint learning of both predictions.
+    The exposure status is appended to the BiGRU output vector for outcome prediction.
 
     Attributes:
         exposure_loss_fct (nn.BCEWithLogitsLoss): Loss function for exposure prediction
         outcome_loss_fct (nn.BCEWithLogitsLoss): Loss function for outcome prediction
-        exposure_cls (FineTuneHead): Classification head for exposure prediction
-        outcome_cls (FineTuneHead): Classification head for outcome prediction
+        exposure_cls (CausalFineTuneHead): Classification head for exposure prediction
+        outcome_cls (CausalFineTuneHead): Classification head for outcome prediction with exposure input
+        counterfactual (bool): Whether to use counterfactual exposure values
     """
 
     def __init__(self, config):
@@ -50,8 +52,14 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
         # Two separate classification heads
-        self.exposure_cls = FineTuneHead(hidden_size=config.hidden_size)
-        self.outcome_cls = FineTuneHead(hidden_size=config.hidden_size)
+        self.exposure_cls = CausalFineTuneHead(
+            hidden_size=config.hidden_size, with_exposure=False
+        )
+        # Outcome head needs extra dimension for exposure
+        self.outcome_cls = CausalFineTuneHead(
+            hidden_size=config.hidden_size, with_exposure=True
+        )
+        self.counterfactual = getattr(config, "counterfactual", False)
 
     def forward(self, batch: dict):
         """
@@ -69,11 +77,22 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
         sequence_output = outputs[0]  # Last hidden state
 
-        # Get predictions for both exposure and outcome
-        exposure_logits = self.exposure_cls(sequence_output, batch[ATTENTION_MASK])
-        outcome_logits = self.outcome_cls(sequence_output, batch[ATTENTION_MASK])
-
+        # Get exposure prediction at sequence level
+        exposure_logits = self.exposure_cls(
+            sequence_output, batch[ATTENTION_MASK]
+        )  # shape: (batch_size, 1)
         outputs.exposure_logits = exposure_logits
+
+        # Get exposure status (0/1) and convert to -1/1
+        exposure_status = torch.sigmoid(exposure_logits)  # shape: (batch_size, 1)
+        if self.counterfactual:
+            exposure_status = 1 - exposure_status
+        exposure_status = 2 * exposure_status - 1  # Convert from 0/1 to -1/1
+
+        # Get outcome prediction using sequence output with exposure
+        outcome_logits = self.outcome_cls(
+            sequence_output, batch[ATTENTION_MASK], exposure_status=exposure_status
+        )
         outputs.outcome_logits = outcome_logits
 
         # Calculate losses if targets are provided
@@ -83,10 +102,14 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             )
             outcome_loss = self.get_outcome_loss(outcome_logits, batch[TARGET])
             outputs.loss = exposure_loss + outcome_loss  # Combined loss
+            print("exposure_loss", exposure_loss)
+            print("outcome_loss", outcome_loss)
         return outputs
 
     def get_exposure_loss(self, logits, labels):
+        """Calculate binary cross-entropy loss for exposure prediction."""
         return self.exposure_loss_fct(logits.view(-1), labels.view(-1))
 
     def get_outcome_loss(self, logits, labels):
+        """Calculate binary cross-entropy loss for outcome prediction."""
         return self.outcome_loss_fct(logits.view(-1), labels.view(-1))

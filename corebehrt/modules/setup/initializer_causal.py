@@ -7,7 +7,7 @@ extending the base initializer to handle both exposure and outcome predictions.
 
 import logging
 
-from corebehrt.modules.model.model_causal import CorebehrtForCausalFineTuning
+from corebehrt.modules.model.causal.model import CorebehrtForCausalFineTuning
 from corebehrt.modules.setup.initializer import Initializer
 from corebehrt.modules.trainer.utils import get_loss_weight
 
