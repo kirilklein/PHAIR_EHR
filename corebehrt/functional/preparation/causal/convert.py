@@ -3,14 +3,14 @@ from typing import List
 import pandas as pd
 from tqdm import tqdm
 
-from corebehrt.modules.preparation.dataset_causal import CausalPatientData
 from corebehrt.constants.data import (
     ABSPOS_COL,
+    AGE_COL,
     CONCEPT_COL,
     PID_COL,
     SEGMENT_COL,
-    AGE_COL,
 )
+from corebehrt.modules.preparation.causal.dataset import CausalPatientData
 
 
 def dataframe_to_causal_patient_list(df: pd.DataFrame) -> List[CausalPatientData]:

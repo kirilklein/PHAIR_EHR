@@ -12,7 +12,7 @@ from corebehrt.main_causal.helper.finetune_exp_y import cv_loop
 from corebehrt.modules.monitoring.metric_aggregation import (
     compute_and_save_scores_mean_std,
 )
-from corebehrt.modules.preparation.dataset_causal import CausalPatientDataset
+from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 

@@ -13,7 +13,7 @@ from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
 from corebehrt.functional.features.normalize import normalize_segments_for_patient
 from corebehrt.functional.io_operations.load import load_vocabulary
 from corebehrt.functional.io_operations.save import save_vocabulary
-from corebehrt.functional.preparation.convert_causal import (
+from corebehrt.functional.preparation.causal.convert import (
     dataframe_to_causal_patient_list,
 )
 from corebehrt.functional.preparation.filter import (
@@ -31,7 +31,7 @@ from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
 from corebehrt.modules.features.loader import ShardLoader
 from corebehrt.modules.monitoring.logger import TqdmToLogger
-from corebehrt.modules.preparation.dataset_causal import CausalPatientDataset
+from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.preparation.prepare_data import DatasetPreparer
 
 logger = logging.getLogger(__name__)  # Get the logger for this module

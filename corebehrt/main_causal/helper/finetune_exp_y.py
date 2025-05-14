@@ -7,11 +7,11 @@ from corebehrt.azure import setup_metrics_dir
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.trainer.setup import replace_steps_with_epochs
 from corebehrt.main.helper.finetune_cv import log_best_metrics
-from corebehrt.modules.preparation.dataset_causal import (
+from corebehrt.modules.preparation.causal.dataset import (
     CausalPatientDataset,
     ExposureOutcomeDataset,
 )
-from corebehrt.modules.setup.manager_causal import CausalModelManager
+from corebehrt.modules.setup.causal.manager import CausalModelManager
 from corebehrt.modules.trainer.trainer import EHRTrainer
 
 
@@ -106,9 +106,9 @@ def finetune_fold(
     modelmanager_trained = CausalModelManager(cfg, fold)
     checkpoint = modelmanager_trained.load_checkpoint(checkpoints=True)
     model = modelmanager_trained.initialize_finetune_model(checkpoint, outcomes)
-    trainer.model = model
-    trainer.test_dataset = test_dataset
 
-    if len(test_data) > 0:
-        test_loss, test_metrics = trainer._evaluate(epoch, mode="test")
-        log_best_metrics(test_loss, test_metrics, "test")
+    trainer.model = model
+    trainer.test_dataset = val_dataset
+
+    test_loss, test_metrics = trainer._evaluate(epoch, mode="test")
+    log_best_metrics(test_loss, test_metrics, "test")

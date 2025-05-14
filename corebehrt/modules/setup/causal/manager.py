@@ -1,6 +1,6 @@
 import logging
 
-from corebehrt.modules.setup.initializer_causal import CausalInitializer
+from corebehrt.modules.setup.causal.initializer import CausalInitializer
 from corebehrt.modules.setup.manager import ModelManager
 
 logger = logging.getLogger(__name__)

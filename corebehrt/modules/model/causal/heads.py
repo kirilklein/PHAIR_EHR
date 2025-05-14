@@ -145,7 +145,6 @@ class CausalBiGRU(nn.Module):
             else:
                 # If it's already [batch_size, 1] or [batch_size], use it directly
                 last_exposure = exposure_status.view(-1)
-            print("last_exposure", last_exposure)
 
             # Concatenate exposure status to the pooled representation
             x = torch.cat((x, last_exposure.unsqueeze(-1)), dim=-1)
