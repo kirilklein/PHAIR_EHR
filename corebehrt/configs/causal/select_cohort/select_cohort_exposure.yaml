@@ -7,7 +7,7 @@ paths:
   patients_info: ./outputs/causal/features/patient_info.parquet
   initial_pids: ./outputs/causal/tokenized/pids_tuning.pt # Initial patients to select from [list of pids] (optional)
   outcome: ./outputs/causal/outcomes/EXPOSURE.csv # Outcome
-  
+
   ### Outputs
   cohort: ./outputs/causal/exposure_cohort # Data directory
 
@@ -17,10 +17,14 @@ selection:
   age:
     min_years: 0 # Minimum age to include (inclusive)
     max_years: 120 # Maximum age to include (inclusive)
+  compliant:
+    min_exposures: 2
 
-index_date: # if not provided we can use exposures to get the index dates
+index_date:
+  # if not provided we can use exposures to get the index dates
   mode: relative # absolute or relative (to exposure)
-  relative: # takes first exposure as index date
+  relative:
+    # takes first exposure as index date
     n_hours_from_exposure: 0 # negative means before exposure, 0 by default
 
 cv_folds: 5 # can be set to 1 if only a simple train/val split is needed

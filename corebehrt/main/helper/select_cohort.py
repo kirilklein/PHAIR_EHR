@@ -4,6 +4,7 @@ import pandas as pd
 import torch
 
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
+from corebehrt.functional.cohort_handling.advanced.filter import filter_by_compliant
 from corebehrt.functional.features.split import split_test
 from corebehrt.functional.preparation.filter import select_first_event
 from corebehrt.modules.cohort_handling.index_dates import IndexDateHandler
@@ -81,6 +82,12 @@ def select_cohort(
         patients_info = filter_by_categories(patients_info, selection_cfg.categories)
         log_patient_num(logger, patients_info)
 
+    if selection_cfg.get("compliant", False):
+        logger.info("Filtering by compliant")
+        patients_info = filter_by_compliant(
+            patients_info, exposures, selection_cfg.compliant
+        )
+        log_patient_num(logger, patients_info)
     # Determine index dates for all patients
     # For absolute mode, a fixed date is assigned; for relative, it's computed based on exposures.
     logger.info("Determining index dates")
