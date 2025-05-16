@@ -12,7 +12,7 @@ from corebehrt.modules.preparation.causal.dataset import (
     ExposureOutcomeDataset,
 )
 from corebehrt.modules.setup.causal.manager import CausalModelManager
-from corebehrt.modules.trainer.trainer import EHRTrainer
+from corebehrt.modules.trainer.causal.trainer import CausalEHRTrainer
 
 
 def cv_loop(
@@ -70,9 +70,6 @@ def finetune_fold(
 
     train_dataset = ExposureOutcomeDataset(train_data.patients)
     val_dataset = ExposureOutcomeDataset(val_data.patients)
-    test_dataset = (
-        ExposureOutcomeDataset(test_data.patients) if len(test_data) > 0 else None
-    )
 
     modelmanager = CausalModelManager(cfg, fold)
     checkpoint = modelmanager.load_checkpoint()
@@ -84,7 +81,7 @@ def finetune_fold(
     )
     epoch = modelmanager.get_epoch()
 
-    trainer = EHRTrainer(
+    trainer = CausalEHRTrainer(
         model=model,
         optimizer=optimizer,
         train_dataset=train_dataset,
@@ -108,7 +105,7 @@ def finetune_fold(
     model = modelmanager_trained.initialize_finetune_model(checkpoint, outcomes)
 
     trainer.model = model
-    trainer.test_dataset = val_dataset
+    trainer.val_dataset = val_dataset
 
-    test_loss, test_metrics = trainer._evaluate(epoch, mode="test")
-    log_best_metrics(test_loss, test_metrics, "test")
+    test_loss, test_metrics = trainer._evaluate(epoch, mode="val")
+    log_best_metrics(test_loss, test_metrics, "val")
