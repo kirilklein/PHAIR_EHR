@@ -110,6 +110,6 @@ jobs:
           run_step main_causal.helper_scripts.get_stats     helper/get_stats.yaml
 
           # ─── Finetune Exposure & Outcome ───────────────────────────
-          run_step main_causal.prepare_ft_exp_y
-          run_step main_causal.finetune_exp_y
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare_ft_exp_y.yaml
+          run_step main_causal.finetune_exp_y         finetune/finetune_exp_y.yaml
           
