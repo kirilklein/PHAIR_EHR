@@ -11,7 +11,7 @@ from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.calibrate_mlp import calibrate_predictions
 from corebehrt.main_causal.helper.train_mlp import setup_model, setup_trainer
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
+from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.trainer.data_module import EncodedDataModule
 
 CONFIG_PATH = "./corebehrt/configs/causal/double_robust/train_mlp.yaml"

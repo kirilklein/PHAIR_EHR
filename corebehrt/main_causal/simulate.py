@@ -14,7 +14,7 @@ from corebehrt.functional.setup.args import get_args
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.main_causal.helper.simulate import simulate
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
+from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/simulate.yaml"
 

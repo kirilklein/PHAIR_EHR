@@ -3,7 +3,7 @@ import logging
 from corebehrt.functional.setup.args import get_args
 from corebehrt.modules.causal.estimate import EffectEstimator
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
+from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/estimate/estimate.yaml"
 

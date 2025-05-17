@@ -18,7 +18,7 @@ from corebehrt.main_causal.helper.train_xgb import (
 from sklearn.metrics import confusion_matrix
 
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
+from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.trainer.data_module import EncodedDataModule
 
 CONFIG_PATH = "./corebehrt/configs/causal/double_robust/train_xgb.yaml"
