@@ -36,7 +36,7 @@ def compute_and_save_scores_mean_std(
     scores_mean_std = scores.groupby("metric")["value"].agg(["mean", "std"])
     date = datetime.now().strftime("%Y%m%d-%H%M")
     scores_mean_std.to_csv(
-        join(finetune_folder, f"{mode}_{target_type}_scores_mean_std_{date}")
+        join(finetune_folder, f"{mode}_{target_type}_scores_mean_std_{date}.csv")
     )
 
     # Log to Azure
