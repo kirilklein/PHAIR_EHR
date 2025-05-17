@@ -1,19 +1,25 @@
 import logging
+from os.path import join
 
 from corebehrt.constants.causal.paths import (
     CALIBRATE_CFG,
-    EXTRACT_CRITERIA_CFG,
     ENCODE_CFG,
     ESTIMATE_CFG,
+    EXTRACT_CRITERIA_CFG,
     GET_STATS_CFG,
     SIMULATE_CFG,
     TRAIN_MLP_CFG,
     TRAIN_XGB_CFG,
 )
-from corebehrt.constants.paths import COHORT_CFG, FINETUNE_CFG, PRETRAIN_CFG
+from corebehrt.constants.paths import (
+    COHORT_CFG,
+    DATA_CFG,
+    FINETUNE_CFG,
+    PREPARE_FINETUNE_CFG,
+    PRETRAIN_CFG,
+)
 from corebehrt.modules.setup.config import Config
 from corebehrt.modules.setup.directory import DirectoryPreparer
-
 
 logger = logging.getLogger(__name__)  # Get the logger for this module
 
@@ -194,3 +200,34 @@ class CausalDirectoryPreparer(DirectoryPreparer):
             self.check_directory("outcome_model")
 
         self.write_config("stats", name=GET_STATS_CFG)
+
+    def setup_prepare_finetune_exposure_outcome(self, name=None) -> None:
+        """
+        Validates path config and sets up directories for preparing finetune data.
+        """
+        self.setup_logging("prepare finetune data")
+        self.check_directory("features")
+        self.check_directory("tokenized")
+        self.check_directory("cohort")
+
+        # If "outcome" is set, check that it exists.
+        if outcome := self.cfg.paths.get("outcome", False):
+            # If "outcomes" is also set, use as prefix
+            if outcomes := self.cfg.paths.get("outcomes", False):
+                self.cfg.paths.outcome = join(outcomes, outcome)
+
+            self.check_file("outcome")
+
+        if exposure := self.cfg.paths.get("exposure", False):
+            if exposures := self.cfg.paths.get("exposures", False):
+                self.cfg.paths.exposure = join(exposures, exposure)
+
+            self.check_file("exposure")
+
+        self.create_directory("prepared_data", clear=True)
+        if name is None:
+            self.write_config("prepared_data", name=PREPARE_FINETUNE_CFG)
+        else:
+            # If name is given, use it as config name
+            self.write_config("prepared_data", name=name)
+        self.write_config("prepared_data", source="features", name=DATA_CFG)
