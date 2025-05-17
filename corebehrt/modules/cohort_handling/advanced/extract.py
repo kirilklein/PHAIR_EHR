@@ -119,7 +119,9 @@ class CohortExtractor:
             events, relevant_index_dates, simple_criteria
         )
 
-        all_results = simple_results.merge(age_df, on=PID_COL, how="left")
+        all_results = simple_results.merge(
+            age_df, on=PID_COL, how="inner", validate="one_to_one"
+        )
 
         logger.info("\tProcessing age criteria")
         all_results = self._process_age_criteria(all_results, age_criteria)
@@ -243,7 +245,9 @@ class CohortExtractor:
 
         # Merge all count criteria back into the main results
         combined = self.combine_results(results)
-        return all_results.merge(combined, on=PID_COL, how="left")
+        return all_results.merge(
+            combined, on=PID_COL, how="inner", validate="one_to_one"
+        )
 
     @staticmethod
     def combine_results(results: List[pd.DataFrame]) -> pd.DataFrame:
@@ -257,7 +261,7 @@ class CohortExtractor:
 
         # Left join each result DataFrame
         for df in results:
-            combined = combined.merge(df, on=PID_COL, how="left")
+            combined = combined.merge(df, on=PID_COL, how="left", validate="one_to_one")
 
         return combined
 
@@ -281,7 +285,9 @@ class CohortExtractor:
         for df in results[1:]:
             combined = combined.merge(df, on=PID_COL, how="outer")
 
-        return all_results.merge(combined, on=PID_COL, how="left")
+        return all_results.merge(
+            combined, on=PID_COL, how="inner", validate="one_to_one"
+        )
 
     def _process_expression_criteria(
         self, all_results: pd.DataFrame, expression_criteria: list, max_iter: int = 5
