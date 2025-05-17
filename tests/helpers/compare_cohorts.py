@@ -16,12 +16,10 @@ from typing import List, Set
 
 import torch
 
-from corebehrt.constants.paths import PID_FILE
-
 
 def load_pids(directory: str) -> List[int]:
     """Load patient IDs from a directory."""
-    pid_path = os.path.join(directory, PID_FILE)
+    pid_path = os.path.join(directory, "pids.pt")
     if not os.path.exists(pid_path):
         raise FileNotFoundError(f"PID file not found at {pid_path}")
     return torch.load(pid_path)
