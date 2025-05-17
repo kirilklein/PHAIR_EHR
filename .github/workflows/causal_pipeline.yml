@@ -108,3 +108,8 @@ jobs:
 
           # ─── Additional tests ───────────────────────────
           run_step main_causal.helper_scripts.get_stats     helper/get_stats.yaml
+          run_step main_causal.select_cohort_advanced      select_cohort/advanced_extraction_loose.yaml
+          run_step main_causal.select_cohort_advanced      select_cohort/advanced_extraction_strict.yaml
+          # Check that the two loose criteria produce a cohort that is at least as large as the strict criteria
+          python tests/helpers/compare_cohorts.py ./outputs/causal/exposure_cohort_advanced_loose ./outputs/causal/exposure_cohort_advanced_strict
+          
