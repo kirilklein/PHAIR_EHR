@@ -12,8 +12,14 @@ import torch.nn as nn
 from transformers import ModernBertConfig
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
-from corebehrt.constants.data import (ABSPOS_FEAT, AGE_FEAT, ATTENTION_MASK,
-                                      CONCEPT_FEAT, SEGMENT_FEAT, TARGET)
+from corebehrt.constants.data import (
+    ABSPOS_FEAT,
+    AGE_FEAT,
+    ATTENTION_MASK,
+    CONCEPT_FEAT,
+    SEGMENT_FEAT,
+    TARGET,
+)
 from corebehrt.modules.model.causal.model import CorebehrtForCausalFineTuning
 
 
@@ -26,7 +32,7 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
             num_attention_heads=2,
             num_hidden_layers=2,
             type_vocab_size=2,  # Required by ModernBert
-            vocab_size=1000,   # Required by ModernBert
+            vocab_size=1000,  # Required by ModernBert
             intermediate_size=128,  # Required by ModernBert
             pad_token_id=0,
         )
@@ -38,13 +44,43 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
         self.hidden_size = 64
 
         self.batch = {
-            CONCEPT_FEAT: torch.randint(0, 1000, size=(self.batch_size, self.seq_len), device=self.device, dtype=torch.int),
-            SEGMENT_FEAT: torch.randint(0, 2, size=(self.batch_size, self.seq_len), device=self.device, dtype=torch.int),
-            AGE_FEAT: torch.randint(0, 100, size=(self.batch_size, self.seq_len), device=self.device, dtype=torch.int),
-            ABSPOS_FEAT: torch.randint(0, 100, size=(self.batch_size, self.seq_len), device=self.device, dtype=torch.int),
-            ATTENTION_MASK: torch.ones(self.batch_size, self.seq_len, device=self.device).bool(),
-            TARGET: torch.randint(0, 2, size=(self.batch_size, 1), device=self.device, dtype=torch.float),
-            EXPOSURE_TARGET: torch.randint(0, 2, size=(self.batch_size, 1), device=self.device, dtype=torch.float),
+            CONCEPT_FEAT: torch.randint(
+                0,
+                1000,
+                size=(self.batch_size, self.seq_len),
+                device=self.device,
+                dtype=torch.int,
+            ),
+            SEGMENT_FEAT: torch.randint(
+                0,
+                2,
+                size=(self.batch_size, self.seq_len),
+                device=self.device,
+                dtype=torch.int,
+            ),
+            AGE_FEAT: torch.randint(
+                0,
+                100,
+                size=(self.batch_size, self.seq_len),
+                device=self.device,
+                dtype=torch.int,
+            ),
+            ABSPOS_FEAT: torch.randint(
+                0,
+                100,
+                size=(self.batch_size, self.seq_len),
+                device=self.device,
+                dtype=torch.int,
+            ),
+            ATTENTION_MASK: torch.ones(
+                self.batch_size, self.seq_len, device=self.device
+            ).bool(),
+            TARGET: torch.randint(
+                0, 2, size=(self.batch_size, 1), device=self.device, dtype=torch.float
+            ),
+            EXPOSURE_TARGET: torch.randint(
+                0, 2, size=(self.batch_size, 1), device=self.device, dtype=torch.float
+            ),
         }
 
     def test_initialization(self):
@@ -59,24 +95,26 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
         model = CorebehrtForCausalFineTuning(self.config).to(self.device)
         # Forward pass
         outputs = model(self.batch)
-        self.assertTrue(hasattr(outputs, 'exposure_logits'))
-        self.assertTrue(hasattr(outputs, 'outcome_logits'))
-        self.assertTrue(hasattr(outputs, 'loss'))
+        self.assertTrue(hasattr(outputs, "exposure_logits"))
+        self.assertTrue(hasattr(outputs, "outcome_logits"))
+        self.assertTrue(hasattr(outputs, "loss"))
         self.assertIsInstance(outputs.loss, torch.Tensor)
 
     def test_forward_without_labels(self):
         model = CorebehrtForCausalFineTuning(self.config).to(self.device)
         batch_no_labels = {
-            ATTENTION_MASK: torch.ones(self.batch_size, self.seq_len, device=self.device).bool(),
+            ATTENTION_MASK: torch.ones(
+                self.batch_size, self.seq_len, device=self.device
+            ).bool(),
             CONCEPT_FEAT: self.batch[CONCEPT_FEAT],
             SEGMENT_FEAT: self.batch[SEGMENT_FEAT],
             AGE_FEAT: self.batch[AGE_FEAT],
             ABSPOS_FEAT: self.batch[ABSPOS_FEAT],
         }
         outputs = model(batch_no_labels)
-        self.assertTrue(hasattr(outputs, 'exposure_logits'))
-        self.assertTrue(hasattr(outputs, 'outcome_logits'))
-        self.assertFalse(hasattr(outputs, 'loss'))
+        self.assertTrue(hasattr(outputs, "exposure_logits"))
+        self.assertTrue(hasattr(outputs, "outcome_logits"))
+        self.assertFalse(hasattr(outputs, "loss"))
 
     def test_counterfactual_mode(self):
         self.config.counterfactual = True
@@ -86,7 +124,6 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
         batch[TARGET] = torch.ones(self.batch_size, 1, device=self.device)
         batch[EXPOSURE_TARGET] = torch.zeros(self.batch_size, 1, device=self.device)
         model(batch)
-
 
     def test_loss_functions(self):
         model = CorebehrtForCausalFineTuning(self.config).to(self.device)
@@ -99,6 +136,7 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
         self.assertIsInstance(outcome_loss, torch.Tensor)
         self.assertEqual(outcome_loss.shape, torch.Size([]))
         self.assertEqual(exposure_loss, outcome_loss)
+
 
 if __name__ == "__main__":
     unittest.main()
