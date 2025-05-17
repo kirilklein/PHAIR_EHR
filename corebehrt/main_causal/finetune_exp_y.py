@@ -6,10 +6,11 @@ from os.path import join
 import torch
 
 from corebehrt.constants.paths import FOLDS_FILE, PREPARED_ALL_PATIENTS, TEST_PIDS_FILE
+from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main.helper.finetune_cv import check_for_overlap
 from corebehrt.main_causal.helper.finetune_exp_y import cv_loop
-from corebehrt.modules.monitoring.metric_aggregation import (
+from corebehrt.modules.monitoring.causal.metric_aggregation import (
     compute_and_save_scores_mean_std,
 )
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
@@ -61,9 +62,19 @@ def main_finetune(config_path):
         test_data,
     )
 
-    compute_and_save_scores_mean_std(n_folds, cfg.paths.model, mode="val")
+    compute_and_save_scores_mean_std(
+        n_folds, cfg.paths.model, mode="val", target_type=EXPOSURE
+    )
+    compute_and_save_scores_mean_std(
+        n_folds, cfg.paths.model, mode="val", target_type=OUTCOME
+    )
     if len(test_data) > 0:
-        compute_and_save_scores_mean_std(n_folds, cfg.paths.model, mode="test")
+        compute_and_save_scores_mean_std(
+            n_folds, cfg.paths.model, mode="test", target_type=EXPOSURE
+        )
+        compute_and_save_scores_mean_std(
+            n_folds, cfg.paths.model, mode="test", target_type=OUTCOME
+        )
 
     logger.info("Done")
 
