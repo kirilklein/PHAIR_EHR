@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: pip install --no-cache-dir -r requirements.txt
 
+      - name: Install corebehrt in development mode
+        run: pip install -e .
+
       # ─── Pipeline & Tests ────────────────────────────────────
       - name: Run pipeline & estimation checks
         shell: bash
@@ -110,8 +113,6 @@ jobs:
           run_step main_causal.helper_scripts.get_stats     helper/get_stats.yaml
 
           # ─── Finetune Exposure & Outcome ───────────────────────────
-          import sys
-          sys.path.insert(0, './corebehrt')
           run_step main_causal.prepare_ft_exp_y      finetune/prepare_ft_exp_y.yaml
           python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetuning/prepared_data
           run_step main_causal.finetune_exp_y         finetune/finetune_exp_y.yaml
