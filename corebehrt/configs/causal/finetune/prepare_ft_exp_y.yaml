@@ -15,7 +15,7 @@ paths:
   outcome: OUTCOME.csv
 
   ## OUTPUTS
-  prepared_data: ./outputs/causal/finetuning/processed_data/exposure_outcome # Save model/outputs to this folder
+  prepared_data: ./outputs/causal/finetuning/prepared_data # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 

@@ -18,7 +18,7 @@ paths:
 
   # outcome: ./outputs/causal/outcomes/EXPOSURE.csv
 
-  prepared_data: ./outputs/causal/finetuning/processed_data/exposure_outcome
+  prepared_data: ./outputs/causal/finetuning/prepared_data
 
   ## OUTPUTS
   model: ./outputs/causal/finetuning/ft_exp_y # Save model/outputs to this folder
