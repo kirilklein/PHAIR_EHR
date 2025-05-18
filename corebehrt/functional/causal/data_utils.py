@@ -1,4 +1,7 @@
+from typing import Tuple
+
 import pandas as pd
+import torch
 
 from corebehrt.constants.data import PID_COL
 
@@ -31,3 +34,12 @@ def align_df_with_pids(df: pd.DataFrame, pids: list) -> pd.DataFrame:
     df2 = df.set_index(PID_COL)
     df2 = df2.loc[pids]
     return df2.reset_index()
+
+
+def split_data(
+    df: pd.DataFrame, train_pids: torch.Tensor, val_pids: torch.Tensor
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Split the predictions dataframe into train and val dataframes based on the given PIDs."""
+    train: pd.DataFrame = df[df[PID_COL].isin(train_pids)]
+    val: pd.DataFrame = df[df[PID_COL].isin(val_pids)]
+    return train, val

@@ -12,10 +12,13 @@ The module serves as a bridge between model training and causal effect estimatio
 
 import os
 from os.path import join
+from typing import Tuple
 
+import numpy as np
 import pandas as pd
 
 from corebehrt.constants.causal.data import (
+    CALIBRATION_COLLAPSE_THRESHOLD,
     CF_OUTCOME,
     CF_PROBAS,
     EXPOSURE,
@@ -28,16 +31,51 @@ from corebehrt.constants.causal.paths import (
     PREDICTIONS_DIR_OUTCOME,
     PREDICTIONS_FILE,
 )
-from corebehrt.constants.data import PID_COL, VAL_KEY
-from corebehrt.functional.io_operations.causal.predictions import (
-    collect_fold_data,
-)
+from corebehrt.constants.data import PID_COL, TRAIN_KEY, VAL_KEY
+from corebehrt.functional.causal.data_utils import split_data
+from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
+from corebehrt.functional.trainer.calibrate import train_calibrator
+from corebehrt.main_causal.helper.utils import safe_assign_calibrated_probas
+
+
+def calibrate_folds(
+    df: pd.DataFrame,
+    folds: list,
+    epsilon: float = 1e-8,
+    calibration_collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
+):
+    """
+    Calibrate predictions using the calibration method.
+    """
+    calibrated_dfs = []
+    for fold in folds:
+        train_pids = fold[TRAIN_KEY]
+        val_pids = fold[VAL_KEY]
+        train, val = split_data(df, train_pids, val_pids)
+        calibrator = train_calibrator(train[PROBAS], train[TARGETS])
+        calibrated = calibrator.predict(val[PROBAS])
+        calibrated = safe_assign_calibrated_probas(
+            calibrated, val[PROBAS], epsilon, calibration_collapse_threshold
+        )
+        if CF_PROBAS in val.columns:
+            calibrated_cf = calibrator.predict(val[CF_PROBAS])
+            calibrated_cf = safe_assign_calibrated_probas(
+                calibrated_cf,
+                val[CF_PROBAS],
+                epsilon,
+                calibration_collapse_threshold,
+            )
+        calibrated = pd.DataFrame({PID_COL: val_pids, PROBAS: calibrated})
+        if CF_PROBAS in val.columns:
+            calibrated[CF_PROBAS] = calibrated_cf
+        calibrated_dfs.append(calibrated)
+    return pd.concat(calibrated_dfs)
 
 
 def collect_and_save_predictions(
     finetune_dir: str,
     write_dir: str,
-):
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Collect and save exposure and outcome predictions from all folds.
 
@@ -75,8 +113,13 @@ def collect_and_save_predictions(
         collect_targets=False,
     )
 
-    df = pd.merge(df_outcome, df_cf_outcome, on=PID_COL, how="inner", validate="1:1")
-    df.to_csv(join(outcome_predictions_dir, PREDICTIONS_FILE), index=False)
+    df_outcome_combined = pd.merge(
+        df_outcome, df_cf_outcome, on=PID_COL, how="inner", validate="1:1"
+    )
+    df_outcome_combined.to_csv(
+        join(outcome_predictions_dir, PREDICTIONS_FILE), index=False
+    )
+    return df_exp, df_outcome_combined
 
 
 def collect_combined_predictions(
