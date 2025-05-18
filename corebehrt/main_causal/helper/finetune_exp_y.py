@@ -1,3 +1,10 @@
+"""
+Fine-tuning module for causal inference models with exposure-outcome prediction.
+This module provides functionality for training causal models across multiple
+cross-validation folds, saving model checkpoints, and aggregating predictions.
+It handles dataset preparation, model initialization, and training loop execution.
+"""
+
 import os
 from os.path import join
 
