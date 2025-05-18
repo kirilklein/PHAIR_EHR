@@ -10,9 +10,11 @@ factual and counterfactual predictions from trained causal models. It handles:
 """
 
 import os
+import warnings
 from os.path import join
 from typing import Tuple
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -26,17 +28,16 @@ from corebehrt.constants.causal.data import (
     TARGETS,
 )
 from corebehrt.constants.causal.paths import (
+    CALIBRATED_PREDICTIONS_FILE,
     PREDICTIONS_DIR_EXPOSURE,
     PREDICTIONS_DIR_OUTCOME,
     PREDICTIONS_FILE,
-    CALIBRATED_PREDICTIONS_FILE,
 )
 from corebehrt.constants.data import PID_COL, TRAIN_KEY, VAL_KEY
 from corebehrt.constants.paths import FOLDS_FILE
 from corebehrt.functional.causal.data_utils import split_data
 from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
 from corebehrt.functional.trainer.calibrate import train_calibrator
-from corebehrt.main_causal.helper.utils import safe_assign_calibrated_probas
 
 
 def load_calibrate_and_save(finetune_dir: str, write_dir: str) -> None:
@@ -115,13 +116,13 @@ def calibrate_folds(
         calibrator = train_calibrator(train_df[PROBAS], train_df[TARGETS])
 
         calibrated = calibrator.predict(val_df[PROBAS])
-        calibrated = safe_assign_calibrated_probas(
+        calibrated = robust_calibration_with_fallback(
             calibrated, val_df[PROBAS], epsilon, calibration_collapse_threshold
         )
         calibrated_cf = None
         if CF_PROBAS in val_df.columns:
             calibrated_cf = calibrator.predict(val_df[CF_PROBAS])
-            calibrated_cf = safe_assign_calibrated_probas(
+            calibrated_cf = robust_calibration_with_fallback(
                 calibrated_cf,
                 val_df[CF_PROBAS],
                 epsilon,
@@ -205,3 +206,23 @@ def collect_combined_predictions(
     if collect_targets:
         df[targets_name] = targets.astype(int)
     return df
+
+
+def robust_calibration_with_fallback(
+    calibrated_probas: np.ndarray,
+    preds: np.ndarray,
+    epsilon: float = 1e-8,
+    collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
+) -> np.ndarray:
+    """
+    If the calibrated probabilities appear to be collapsed (have very low variance),
+    keeps the original probabilities instead. Returns the updated validation dataframe.
+    """
+    calibrated_probas = np.clip(calibrated_probas, epsilon, 1 - epsilon)
+    if np.std(calibrated_probas) < collapse_threshold:
+        warnings.warn(
+            f"Calibrated probabilities appear to be collapsed (std={np.std(calibrated_probas):.6f}). Using original probabilities instead."
+        )
+        return preds
+    else:
+        return calibrated_probas
