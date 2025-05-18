@@ -3,14 +3,13 @@ Prepare data for finetune with exposure and outcome.
 """
 
 import logging
-import os
 from os.path import join
 
 import torch
 
-from corebehrt.constants.paths import FOLDS_FILE, TEST_PIDS_FILE
+from corebehrt.constants.paths import FOLDS_FILE
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main.helper.pretrain import get_splits_path
+from corebehrt.functional.features.split import create_folds
 from corebehrt.modules.preparation.causal.prepare_data import CausalDatasetPreparer
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.config import load_config
@@ -26,16 +25,17 @@ def main(config_path):
     logger = logging.getLogger("prepare finetune data")
     logger.info("Preparing finetune data")
     # Prepare data
-    _ = CausalDatasetPreparer(cfg).prepare_finetune_data(mode="tuning")
+    data = CausalDatasetPreparer(cfg).prepare_finetune_data(mode="tuning")
 
     # Save splits from cohort selection
-    folds_path = get_splits_path(cfg.paths)
-    folds = torch.load(folds_path)
+    pids = data.get_pids()
+    folds = create_folds(
+        pids,
+        cfg.data.get("cv_folds", 5),
+        cfg.data.get("seed", 42),
+        cfg.data.get("val_ratio", 0.2),
+    )
     torch.save(folds, join(cfg.paths.prepared_data, FOLDS_FILE))
-    test_pids_file = join(cfg.paths.cohort, TEST_PIDS_FILE)
-    if os.path.exists(test_pids_file):
-        test_pids = torch.load(test_pids_file)
-        torch.save(test_pids, join(cfg.paths.prepared_data, TEST_PIDS_FILE))
 
 
 if __name__ == "__main__":
