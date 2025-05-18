@@ -110,31 +110,24 @@ def calibrate_folds(
     for fold in folds:
         train_pids = fold[TRAIN_KEY]
         val_pids = fold[VAL_KEY]
-        
+
         train_df, val_df = split_data(df, train_pids, val_pids)
         calibrator = train_calibrator(train_df[PROBAS], train_df[TARGETS])
-        print("=================")
-        print("val pids", len(val_pids))
-        print("val_df", len(val_df))
-    
+
         calibrated = calibrator.predict(val_df[PROBAS])
-        print("calibrated", len(calibrated))
         calibrated = safe_assign_calibrated_probas(
             calibrated, val_df[PROBAS], epsilon, calibration_collapse_threshold
         )
-        print("calibrated after safe_assign_calibrated_probas", len(calibrated))
         calibrated_cf = None
         if CF_PROBAS in val_df.columns:
-            print("len(val_df[CF_PROBAS])", len(val_df[CF_PROBAS]))
             calibrated_cf = calibrator.predict(val_df[CF_PROBAS])
-            print("calibrated_cf", len(calibrated_cf))
             calibrated_cf = safe_assign_calibrated_probas(
                 calibrated_cf,
                 val_df[CF_PROBAS],
                 epsilon,
                 calibration_collapse_threshold,
             )
-            print("calibrated_cf after safe_assign_calibrated_probas", len(calibrated_cf))
+
         calibrated = pd.DataFrame({PID_COL: val_pids, PROBAS: calibrated})
         if calibrated_cf is not None:
             calibrated[CF_PROBAS] = calibrated_cf
