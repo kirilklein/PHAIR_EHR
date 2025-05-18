@@ -9,6 +9,7 @@ DATA = "data"
 # Prepare causal finetune data
 EXPOSURE = "exposure"
 OUTCOME = "outcome"
+CF_OUTCOME = "cf_outcome"
 
 # Predicted outcome probabilities
 PROB_KEY = "prob"  # Overall predicted outcome probability

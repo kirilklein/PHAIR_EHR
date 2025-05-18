@@ -4,7 +4,12 @@ from typing import Dict
 import torch
 import yaml
 
-from corebehrt.constants.causal.data import EXPOSURE_TARGET
+from corebehrt.constants.causal.data import (
+    EXPOSURE_TARGET,
+    OUTCOME,
+    EXPOSURE,
+    CF_OUTCOME,
+)
 from corebehrt.constants.data import TARGET
 from corebehrt.modules.monitoring.logger import get_tqdm
 from corebehrt.modules.monitoring.metric_aggregation import (
@@ -54,19 +59,19 @@ class CausalEHRTrainer(EHRTrainer):
 
         # Metric tracking for both target types
         prediction_data = {
-            "exposure": CausalPredictionData(
-                metric_values={f"exposure_{name}": [] for name in self.metrics},
+            EXPOSURE: CausalPredictionData(
+                metric_values={f"{EXPOSURE}_{name}": [] for name in self.metrics},
                 logits_list=[] if self.accumulate_logits else None,
                 targets_list=[] if self.accumulate_logits else None,
                 target_key=EXPOSURE_TARGET,
             ),
-            "outcome": CausalPredictionData(
-                metric_values={f"outcome_{name}": [] for name in self.metrics},
+            OUTCOME: CausalPredictionData(
+                metric_values={f"{OUTCOME}_{name}": [] for name in self.metrics},
                 logits_list=[] if self.accumulate_logits else None,
                 targets_list=[] if self.accumulate_logits else None,
                 target_key=TARGET,
             ),
-            "cf_outcome": CausalPredictionData(
+            CF_OUTCOME: CausalPredictionData(
                 logits_list=[] if self.accumulate_logits else None,
             ),
         }
@@ -98,10 +103,10 @@ class CausalEHRTrainer(EHRTrainer):
         else:
             # Average metrics calculated on the fly
             exposure_metrics = compute_avg_metrics(
-                prediction_data["exposure"].metric_values
+                prediction_data[EXPOSURE].metric_values
             )
             outcome_metrics = compute_avg_metrics(
-                prediction_data["outcome"].metric_values
+                prediction_data[OUTCOME].metric_values
             )
             metrics = {**exposure_metrics, **outcome_metrics}
 
@@ -121,13 +126,13 @@ class CausalEHRTrainer(EHRTrainer):
         metrics = {}
 
         # Process exposure and outcome predictions
-        for target_type in ["exposure", "outcome"]:
+        for target_type in [EXPOSURE, OUTCOME]:
             # Concatenate tensors
             targets = torch.cat(prediction_data[target_type].targets_list)
             logits = torch.cat(prediction_data[target_type].logits_list)
 
             # Calculate metrics
-            batch = {"target": targets}
+            batch = {TARGET: targets}
             outputs = namedtuple("Outputs", ["logits"])(logits)
 
             # Compute metrics
@@ -143,13 +148,13 @@ class CausalEHRTrainer(EHRTrainer):
             )
 
         # Process counterfactual outcome
-        cf_logits = torch.cat(prediction_data["cf_outcome"].logits_list)
+        cf_logits = torch.cat(prediction_data[CF_OUTCOME].logits_list)
         save_predictions(
             self.run_folder,
             cf_logits,
             None,
             BEST_MODEL_ID,
-            f"{mode}_outcome_cf",
+            f"{mode}_{CF_OUTCOME}",
             save_targets=False,
         )
 
@@ -164,19 +169,19 @@ class CausalEHRTrainer(EHRTrainer):
     ):
         """Helper method to accumulate predictions for later processing"""
         # Store exposure predictions
-        prediction_data["exposure"].logits_list.append(
+        prediction_data[EXPOSURE].logits_list.append(
             outputs.exposure_logits.float().cpu()
         )
-        prediction_data["exposure"].targets_list.append(batch[EXPOSURE_TARGET].cpu())
+        prediction_data[EXPOSURE].targets_list.append(batch[EXPOSURE_TARGET].cpu())
 
         # Store outcome predictions
-        prediction_data["outcome"].logits_list.append(
+        prediction_data[OUTCOME].logits_list.append(
             outputs.outcome_logits.float().cpu()
         )
-        prediction_data["outcome"].targets_list.append(batch[TARGET].cpu())
+        prediction_data[OUTCOME].targets_list.append(batch[TARGET].cpu())
 
         # Store counterfactual outcome predictions
-        prediction_data["cf_outcome"].logits_list.append(
+        prediction_data[CF_OUTCOME].logits_list.append(
             cf_outputs.outcome_logits.float().cpu()
         )
 
@@ -192,15 +197,15 @@ class CausalEHRTrainer(EHRTrainer):
             exposure_outputs = namedtuple("Outputs", ["logits"])(
                 outputs.exposure_logits
             )
-            exposure_batch = {"target": batch[EXPOSURE_TARGET]}
-            prediction_data["exposure"].metric_values[f"exposure_{name}"].append(
+            exposure_batch = {TARGET: batch[EXPOSURE_TARGET]}
+            prediction_data[EXPOSURE].metric_values[f"{EXPOSURE}_{name}"].append(
                 func(exposure_outputs, exposure_batch)
             )
 
             # Outcome metrics
             outcome_outputs = namedtuple("Outputs", ["logits"])(outputs.outcome_logits)
-            outcome_batch = {"target": batch[TARGET]}
-            prediction_data["outcome"].metric_values[f"outcome_{name}"].append(
+            outcome_batch = {TARGET: batch[TARGET]}
+            prediction_data[OUTCOME].metric_values[f"{OUTCOME}_{name}"].append(
                 func(outcome_outputs, outcome_batch)
             )
 
