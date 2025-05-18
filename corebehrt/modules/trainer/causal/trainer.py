@@ -1,4 +1,5 @@
 from collections import namedtuple
+from typing import List
 
 import torch
 import yaml
@@ -51,13 +52,14 @@ class CausalEHRTrainer(EHRTrainer):
         exposure_targets_list = [] if self.accumulate_logits else None
         outcome_logits_list = [] if self.accumulate_logits else None
         outcome_targets_list = [] if self.accumulate_logits else None
+        cf_outcome_logits_list = [] if self.accumulate_logits else None
 
         with torch.no_grad():
             for batch in loop:
                 self.batch_to_device(batch)
                 with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
                     outputs = self.model(batch)
-
+                    cf_outputs = self.model(batch, cf=True)
                 # Add to total loss if available
                 if hasattr(outputs, "loss"):
                     loss += outputs.loss.item()
@@ -70,6 +72,11 @@ class CausalEHRTrainer(EHRTrainer):
                     # Store outcome predictions
                     outcome_logits_list.append(outputs.outcome_logits.float().cpu())
                     outcome_targets_list.append(batch[TARGET].cpu())
+
+                    # Store counterfactual outcome predictions
+                    cf_outcome_logits_list.append(
+                        cf_outputs.outcome_logits.float().cpu()
+                    )
                 else:
                     # Calculate metrics on the fly
                     for name, func in self.metrics.items():
@@ -100,6 +107,7 @@ class CausalEHRTrainer(EHRTrainer):
                 outcome_targets_list,
                 epoch,
                 mode=mode,
+                cf_outcome_logits=cf_outcome_logits_list,
             )
         else:
             # Average metrics calculated on the fly
@@ -114,11 +122,12 @@ class CausalEHRTrainer(EHRTrainer):
 
     def process_causal_classification_results(
         self,
-        exposure_logits: list,
-        exposure_targets: list,
-        outcome_logits: list,
-        outcome_targets: list,
+        exposure_logits: List[torch.Tensor],
+        exposure_targets: List[torch.Tensor],
+        outcome_logits: List[torch.Tensor],
+        outcome_targets: List[torch.Tensor],
         epoch: int,
+        cf_outcome_logits: List[torch.Tensor] = None,
         mode="val",
     ) -> dict:
         """Process results for both exposure and outcome predictions."""
@@ -133,6 +142,9 @@ class CausalEHRTrainer(EHRTrainer):
         outcome_logits = torch.cat(outcome_logits)
         outcome_batch = {"target": outcome_targets}
         outcome_outputs = namedtuple("Outputs", ["logits"])(outcome_logits)
+
+        # Process counterfactual outcome results
+        cf_outcome_logits = torch.cat(cf_outcome_logits)
 
         # Compute metrics for both outcomes
         metrics = {}
@@ -216,6 +228,15 @@ class CausalEHRTrainer(EHRTrainer):
             outcome_targets,
             BEST_MODEL_ID,
             f"{mode}_outcome",
+        )
+
+        save_predictions(
+            self.run_folder,
+            cf_outcome_logits,
+            None,
+            BEST_MODEL_ID,
+            f"{mode}_outcome_cf",
+            save_targets=False,
         )
 
         return metrics

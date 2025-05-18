@@ -107,5 +107,5 @@ def finetune_fold(
     trainer.model = model
     trainer.val_dataset = val_dataset
 
-    test_loss, test_metrics = trainer._evaluate(epoch, mode="val")
-    log_best_metrics(test_loss, test_metrics, "val")
+    val_loss, val_metrics = trainer._evaluate(epoch, mode="val")
+    log_best_metrics(val_loss, val_metrics, "val")
