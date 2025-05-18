@@ -30,9 +30,6 @@ jobs:
       - name: Install dependencies
         run: pip install --no-cache-dir -r requirements.txt
 
-      - name: Install corebehrt in development mode
-        run: pip install -e .
-
       # ─── Pipeline & Tests ────────────────────────────────────
       - name: Run pipeline & estimation checks
         shell: bash

@@ -12,23 +12,26 @@ Usage:
 """
 
 import argparse
-from os.path import join, exists
+import os
 import sys
+from os.path import exists, join
 
 import numpy as np
 import torch
 
 from corebehrt.constants.causal.data import (
+    CF_OUTCOME,
     EXPOSURE,
     OUTCOME,
-    CF_OUTCOME,
     PROBAS,
     TARGETS,
 )
 from corebehrt.constants.data import VAL_KEY
-from corebehrt.constants.paths import FOLDS_FILE, CHECKPOINTS_DIR
+from corebehrt.constants.paths import CHECKPOINTS_DIR, FOLDS_FILE
 from corebehrt.functional.io_operations.paths import get_fold_folders
 from corebehrt.functional.setup.model import get_last_checkpoint_epoch
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 
 def check_fold_pids_match(finetune_dir: str, fold_name: str, mode: str) -> bool:
