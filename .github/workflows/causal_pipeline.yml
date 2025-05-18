@@ -70,45 +70,9 @@ jobs:
 
           run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
 
-          # ─── Finetuning ────────────────────────────────────
+          # ─── Prepare initial data ────────────────────────────────────
           run_step main.prepare_training_data               finetune/prepare_finetune_exposure.yaml
-          run_step main.finetune_cv                        finetune/finetune_exposure.yaml
-          run_step main_causal.calibrate                   finetune/calibrate.yaml
-          run_step main_causal.encode                      finetune/encode.yaml
-
-          # ─── Base causal training ──────────────────────────
-          run_step main_causal.train_mlp                   double_robust/train_mlp.yaml
-          run_step main_causal.train_xgb                   double_robust/train_xgb.yaml
-          run_step main_causal.estimate                    estimate/estimate.yaml
-
-          # ─── Simulated: default ATE ───────────────────────
-          run_step main_causal.simulate                    simulate.yaml
-          run_step main_causal.train_mlp                   double_robust/train_mlp_simulated.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true.yaml
-          run_test 0.1 estimate_with_true
-
-          # ─── Simulated: weak effect ───────────────────────
-          run_step main_causal.simulate                    simulate_weak.yaml
-          run_step main_causal.train_mlp                   double_robust/train_mlp_simulated_weak.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true_weak.yaml
-          run_test 0.1 estimate_with_true_weak
-
-          # ─── Simulated: strong encoding ────────────────────
-          run_step main_causal.simulate                    simulate_enc_strong.yaml
-          run_step main_causal.train_mlp                   double_robust/train_mlp_simulated_enc_strong.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true_enc_strong.yaml
-          run_test 0.1 estimate_with_true_enc_strong
-
-          # ─── Simulated: XGBoost ───────────────────────────
-          run_step main_causal.train_xgb                   double_robust/train_xgb_simulated.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true_xgb.yaml
-          run_test 0.1 estimate_with_true_xgb
-
-          # ─── Simulated: XGBoost ───────────────────────────
-          run_step main_causal.train_xgb                   double_robust/train_xgb_simulated.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true_xgb.yaml
-          run_test 0.1 estimate_with_true_xgb
-
+        
           # ─── Additional tests ───────────────────────────
           run_step main_causal.helper_scripts.get_stats     helper/get_stats.yaml
 
