@@ -37,7 +37,6 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
             pad_token_id=0,
         )
         self.config.pos_weight = None
-        self.config.counterfactual = False
 
         self.batch_size = 8
         self.seq_len = 10
@@ -89,7 +88,6 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
         self.assertIsInstance(model.outcome_loss_fct, nn.BCEWithLogitsLoss)
         self.assertFalse(model.exposure_cls.pool.with_exposure)
         self.assertTrue(model.outcome_cls.pool.with_exposure)
-        self.assertFalse(model.counterfactual)
 
     def test_forward_with_labels(self):
         model = CorebehrtForCausalFineTuning(self.config).to(self.device)
@@ -110,6 +108,7 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
             SEGMENT_FEAT: self.batch[SEGMENT_FEAT],
             AGE_FEAT: self.batch[AGE_FEAT],
             ABSPOS_FEAT: self.batch[ABSPOS_FEAT],
+            EXPOSURE_TARGET: self.batch[EXPOSURE_TARGET],
         }
         outputs = model(batch_no_labels)
         self.assertTrue(hasattr(outputs, "exposure_logits"))
@@ -117,13 +116,12 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
         self.assertFalse(hasattr(outputs, "loss"))
 
     def test_counterfactual_mode(self):
-        self.config.counterfactual = True
         model = CorebehrtForCausalFineTuning(self.config).to(self.device)
         # Use fixed logits to check inversion
         batch = self.batch.copy()
         batch[TARGET] = torch.ones(self.batch_size, 1, device=self.device)
         batch[EXPOSURE_TARGET] = torch.zeros(self.batch_size, 1, device=self.device)
-        model(batch)
+        model(batch, cf=True)
 
     def test_loss_functions(self):
         model = CorebehrtForCausalFineTuning(self.config).to(self.device)
