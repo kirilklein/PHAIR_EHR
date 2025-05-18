@@ -87,12 +87,15 @@ def collect_combined_predictions(
     targets_name: str = TARGETS,
     collect_targets: bool = True,
 ) -> pd.DataFrame:
-    """Combine predictions from all folds and save to output folder.
+    """
+    Combine predictions from all folds and save to output folder.
     prediction_types: outcome, exposure, cf_outcome (used to construct name and acces the correct files.)
     """
     # Step 1: Collect data from all folds
     pids, predictions, targets = collect_fold_data(
         finetune_model_dir, prediction_type, mode, collect_targets
     )
-    df = pd.DataFrame({PID_COL: pids, probas_name: predictions, targets_name: targets})
+    df = pd.DataFrame({PID_COL: pids, probas_name: predictions})
+    if collect_targets:
+        df[targets_name] = targets.astype(int)
     return df
