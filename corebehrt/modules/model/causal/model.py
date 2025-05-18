@@ -59,9 +59,8 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.outcome_cls = CausalFineTuneHead(
             hidden_size=config.hidden_size, with_exposure=True
         )
-        self.counterfactual = getattr(config, "counterfactual", False)
 
-    def forward(self, batch: dict):
+    def forward(self, batch: dict, cf: bool = False):
         """
         Forward pass for causal fine-tuning.
 
@@ -84,8 +83,8 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         outputs.exposure_logits = exposure_logits
 
         # Get exposure status (0/1) and convert to -1/1
-        exposure_status = torch.sigmoid(exposure_logits)  # shape: (batch_size, 1)
-        if self.counterfactual:
+        exposure_status = batch[EXPOSURE_TARGET]
+        if cf:
             exposure_status = 1 - exposure_status
         exposure_status = 2 * exposure_status - 1  # Convert from 0/1 to -1/1
 
