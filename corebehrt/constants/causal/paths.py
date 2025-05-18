@@ -12,6 +12,9 @@ GET_STATS_CFG = "get_stats_config.yaml"
 ENCODINGS_FILE = "encodings.pt"
 
 # Files
+PREDICTIONS_DIR_EXPOSURE = "predictions_exposure"
+PREDICTIONS_DIR_OUTCOME = "predictions_outcome"
+
 PREDICTIONS_FILE = "predictions_and_targets.csv"
 CALIBRATED_PREDICTIONS_FILE = "predictions_and_targets_calibrated.csv"
 

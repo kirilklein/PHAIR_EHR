@@ -1,0 +1,10 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ## INPUTS  
+  finetune_model: ./outputs/causal/finetuning/ft_exp_y
+
+  ## OUTPUTS
+  calibrated_predictions: ./outputs/causal/finetuning/calibrated_predictions
