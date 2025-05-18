@@ -40,7 +40,7 @@ def get_index_dates_pids(processed_data_dir: str) -> Set[int]:
     if not exists(index_dates_path):
         print(f"Error: Index dates file not found at {index_dates_path}")
         return set()
-    
+
     try:
         df = pd.read_csv(index_dates_path)
         if PID_COL not in df.columns:
@@ -58,7 +58,7 @@ def get_fold_pids(processed_data_dir: str) -> Set[int]:
     if not exists(folds_path):
         print(f"Error: Folds file not found at {folds_path}")
         return set()
-    
+
     try:
         folds = torch.load(folds_path)
         all_pids = set()
@@ -71,61 +71,68 @@ def get_fold_pids(processed_data_dir: str) -> Set[int]:
         return set()
 
 
-def check_pids_consistency(patient_pids: Set[int], fold_pids: Set[int], index_dates_pids: Set[int]) -> bool:
+def check_pids_consistency(
+    patient_pids: Set[int], fold_pids: Set[int], index_dates_pids: Set[int]
+) -> bool:
     """Check if PIDs are consistent across different data sources."""
     all_consistent = True
-    
+
     # Check if all fold PIDs are in patients
     missing_from_patients = fold_pids - patient_pids
     if missing_from_patients:
-        print(f"Error: {len(missing_from_patients)} PIDs in folds are missing from patients")
+        print(
+            f"Error: {len(missing_from_patients)} PIDs in folds are missing from patients"
+        )
         print(f"  First few missing PIDs: {list(missing_from_patients)[:5]}")
         all_consistent = False
-    
+
     # Check if all patients are in folds
     missing_from_folds = patient_pids - fold_pids
     if missing_from_folds:
-        print(f"Warning: {len(missing_from_folds)} PIDs in patients are not in any fold")
+        print(
+            f"Warning: {len(missing_from_folds)} PIDs in patients are not in any fold"
+        )
         print(f"  This may be intentional if test set is separate from folds")
-    
+
     # Check if all patients have an index date
     missing_index_dates = patient_pids - index_dates_pids
     if missing_index_dates:
-        print(f"Error: {len(missing_index_dates)} PIDs in patients do not have an index date")
+        print(
+            f"Error: {len(missing_index_dates)} PIDs in patients do not have an index date"
+        )
         print(f"  First few missing PIDs: {list(missing_index_dates)[:5]}")
         all_consistent = False
     # Check if all index_dates PIDs are in patients
 
-    
     return all_consistent
 
 
 def main(processed_data_dir: str) -> bool:
     """Main validation function."""
     print(f"Checking processed data in: {processed_data_dir}")
-    
+
     # Get PIDs from different sources
     patient_pids = get_patient_pids(processed_data_dir)
     if not patient_pids:
         print("Error: Failed to load patient PIDs")
         return False
     print(f"Found {len(patient_pids)} PIDs in patients")
-    
+
     fold_pids = get_fold_pids(processed_data_dir)
     if not fold_pids:
         print("Error: Failed to load fold PIDs")
         return False
     print(f"Found {len(fold_pids)} PIDs in folds")
-    
+
     index_dates_pids = get_index_dates_pids(processed_data_dir)
     if not index_dates_pids:
         print("Error: Failed to load index dates PIDs")
         return False
     print(f"Found {len(index_dates_pids)} PIDs in index dates")
-    
+
     # Check consistency
     is_consistent = check_pids_consistency(patient_pids, fold_pids, index_dates_pids)
-    
+
     if is_consistent:
         print("✅ All checks passed! PIDs are consistent across data sources.")
         return True
@@ -135,9 +142,11 @@ def main(processed_data_dir: str) -> bool:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Validate consistency in processed data")
+    parser = argparse.ArgumentParser(
+        description="Validate consistency in processed data"
+    )
     parser.add_argument("data_dir", help="Path to processed data directory")
     args = parser.parse_args()
-    
+
     success = main(args.data_dir)
     sys.exit(0 if success else 1)
