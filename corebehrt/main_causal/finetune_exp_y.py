@@ -49,6 +49,7 @@ def main_finetune(config_path):
     # Use folds from prepared data
     folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
     folds = torch.load(folds_path)
+    torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
     check_for_overlap(folds, test_pids, logger)
     n_folds = len(folds)
     logger.info(f"Using {n_folds} predefined folds")
