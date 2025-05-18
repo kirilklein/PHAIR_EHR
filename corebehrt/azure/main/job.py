@@ -44,8 +44,6 @@ def add_parser(subparsers) -> None:
             "select_cohort",
             "finetune_cv",
             "prepare_training_data",
-            "calibrate",
-            "encode",
             "simulate",
             "train_mlp",
             "train_xgb",
@@ -58,6 +56,7 @@ def add_parser(subparsers) -> None:
             "get_stats",
             "prepare_ft_exp_y",
             "finetune_exp_y",
+            "calibrate_exp_y",
         },
         help="Job to run.",
     )
