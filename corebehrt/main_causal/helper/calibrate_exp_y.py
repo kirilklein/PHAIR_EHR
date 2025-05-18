@@ -7,15 +7,14 @@ factual and counterfactual predictions from trained causal models. It handles:
 - Combining factual and counterfactual outcomes
 - Preparing prediction data for calibration procedures
 - Calibrating raw model outputs for improved estimation
-The module serves as a bridge between model training and causal effect estimation.
 """
 
 import os
 from os.path import join
 from typing import Tuple
 
-import numpy as np
 import pandas as pd
+import torch
 
 from corebehrt.constants.causal.data import (
     CALIBRATION_COLLAPSE_THRESHOLD,
@@ -30,12 +29,64 @@ from corebehrt.constants.causal.paths import (
     PREDICTIONS_DIR_EXPOSURE,
     PREDICTIONS_DIR_OUTCOME,
     PREDICTIONS_FILE,
+    CALIBRATED_PREDICTIONS_FILE,
 )
 from corebehrt.constants.data import PID_COL, TRAIN_KEY, VAL_KEY
+from corebehrt.constants.paths import FOLDS_FILE
 from corebehrt.functional.causal.data_utils import split_data
 from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
 from corebehrt.functional.trainer.calibrate import train_calibrator
 from corebehrt.main_causal.helper.utils import safe_assign_calibrated_probas
+
+
+def load_calibrate_and_save(finetune_dir: str, write_dir: str) -> None:
+    """
+    Calibrate exposure and outcome predictions across cross-validation folds.
+
+    This function operates on predictions previously collected and saved by
+    collect_and_save_predictions(). It expects predictions to be already organized
+    in the standard directory structure with separate folders for exposure and
+    outcome predictions.
+
+    The function:
+    1. Loads previously collected predictions from write_dir
+    2. Applies probability calibration using CV folds from finetune_dir
+    3. Saves calibrated results to the same directory structure with a different filename
+
+    Args:
+        finetune_dir: Directory containing fine-tuned model folds for calibration
+        write_dir: Directory where predictions were saved and where calibrated
+                  predictions will be stored, following the established hierarchy:
+                  write_dir/
+                    ├── predictions_exposure/
+                    │   ├── predictions_and_targets.csv
+                    │   └── predictions_and_targets_calibrated.csv
+                    └── predictions_outcome/
+                        ├── predictions_and_targets.csv
+                        └── predictions_and_targets_calibrated.csv
+    """
+    # Load folds
+    folds = torch.load(join(finetune_dir, FOLDS_FILE))
+
+    # Load collected predictions
+    df_exp = pd.read_csv(join(write_dir, PREDICTIONS_DIR_EXPOSURE, PREDICTIONS_FILE))
+    print("len(df_exp)", len(df_exp))
+    df_outcome = pd.read_csv(join(write_dir, PREDICTIONS_DIR_OUTCOME, PREDICTIONS_FILE))
+    print("len(df_outcome)", len(df_outcome))
+
+    # Calibrate
+    df_exp_calibrated = calibrate_folds(df_exp, folds)
+    df_outcome_calibrated = calibrate_folds(df_outcome, folds)
+
+    # Save calibrated predictions
+    df_exp_calibrated.to_csv(
+        join(write_dir, PREDICTIONS_DIR_EXPOSURE, CALIBRATED_PREDICTIONS_FILE),
+        index=False,
+    )
+    df_outcome_calibrated.to_csv(
+        join(write_dir, PREDICTIONS_DIR_OUTCOME, CALIBRATED_PREDICTIONS_FILE),
+        index=False,
+    )
 
 
 def calibrate_folds(
@@ -43,33 +94,52 @@ def calibrate_folds(
     folds: list,
     epsilon: float = 1e-8,
     calibration_collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
-):
+) -> pd.DataFrame:
     """
-    Calibrate predictions using the calibration method.
+    Calibrate predictions across cross-validation folds.
+
+    For each fold:
+    1. Splits data into train/validation sets
+    2. Trains a calibrator on training data
+    3. Applies calibration to validation predictions (factual and counterfactual)
+    4. Applies safety bounds to prevent extreme probabilities
+
+    Returns a concatenated DataFrame of all calibrated validation predictions.
     """
-    calibrated_dfs = []
+    all_calibrated_dfs = []
     for fold in folds:
         train_pids = fold[TRAIN_KEY]
         val_pids = fold[VAL_KEY]
-        train, val = split_data(df, train_pids, val_pids)
-        calibrator = train_calibrator(train[PROBAS], train[TARGETS])
-        calibrated = calibrator.predict(val[PROBAS])
+        
+        train_df, val_df = split_data(df, train_pids, val_pids)
+        calibrator = train_calibrator(train_df[PROBAS], train_df[TARGETS])
+        print("=================")
+        print("val pids", len(val_pids))
+        print("val_df", len(val_df))
+    
+        calibrated = calibrator.predict(val_df[PROBAS])
+        print("calibrated", len(calibrated))
         calibrated = safe_assign_calibrated_probas(
-            calibrated, val[PROBAS], epsilon, calibration_collapse_threshold
+            calibrated, val_df[PROBAS], epsilon, calibration_collapse_threshold
         )
-        if CF_PROBAS in val.columns:
-            calibrated_cf = calibrator.predict(val[CF_PROBAS])
+        print("calibrated after safe_assign_calibrated_probas", len(calibrated))
+        calibrated_cf = None
+        if CF_PROBAS in val_df.columns:
+            print("len(val_df[CF_PROBAS])", len(val_df[CF_PROBAS]))
+            calibrated_cf = calibrator.predict(val_df[CF_PROBAS])
+            print("calibrated_cf", len(calibrated_cf))
             calibrated_cf = safe_assign_calibrated_probas(
                 calibrated_cf,
-                val[CF_PROBAS],
+                val_df[CF_PROBAS],
                 epsilon,
                 calibration_collapse_threshold,
             )
+            print("calibrated_cf after safe_assign_calibrated_probas", len(calibrated_cf))
         calibrated = pd.DataFrame({PID_COL: val_pids, PROBAS: calibrated})
-        if CF_PROBAS in val.columns:
+        if calibrated_cf is not None:
             calibrated[CF_PROBAS] = calibrated_cf
-        calibrated_dfs.append(calibrated)
-    return pd.concat(calibrated_dfs)
+        all_calibrated_dfs.append(calibrated)
+    return pd.concat(all_calibrated_dfs)
 
 
 def collect_and_save_predictions(
