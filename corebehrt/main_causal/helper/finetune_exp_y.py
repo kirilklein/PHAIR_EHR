@@ -13,7 +13,6 @@ import torch
 from corebehrt.azure import setup_metrics_dir
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.trainer.setup import replace_steps_with_epochs
-from corebehrt.main.helper.finetune_cv import log_best_metrics
 from corebehrt.modules.preparation.causal.dataset import (
     CausalPatientDataset,
     ExposureOutcomeDataset,
@@ -115,4 +114,3 @@ def finetune_fold(
     trainer.val_dataset = val_dataset
 
     val_loss, val_metrics = trainer._evaluate(epoch, mode="val")
-    log_best_metrics(val_loss, val_metrics, "val")
