@@ -1,3 +1,45 @@
+"""
+Simple causal effect simulation module for EHR data
+
+This module provides functionality to simulate simple causal relationships 
+by inducing exposure and outcome events based on specified trigger conditions. 
+It implements a two-step causal simulation process where:
+
+1. Exposure events are simulated based on the presence of trigger events (e.g., LAB0)
+2. Outcome events are simulated based on the presence of exposure events
+
+Key Features:
+    - Simulates binary exposure and outcome events with configurable probabilities
+    - Maintains temporal relationships between events using specified day offsets
+    - Preserves original data structure while adding simulated events
+    - Handles data sharding for efficient processing of large datasets
+    - Supports configurable effect sizes and base probabilities
+
+The simulation uses a logistic model where:
+    P(event) = expit(logit(p_base) + a * trigger_present)
+    where:
+    - p_base is the base probability of the event
+    - a is the effect size coefficient
+    - trigger_present is a binary indicator (0/1)
+
+Example:
+    >>> # Simulate exposure events triggered by LAB0
+    >>> simulated_df = df.groupby("subject_id").apply(
+    ...     simulate_exposure_for_subject,
+    ...     "EXPOSURE",
+    ...     "LAB0",
+    ...     p_base=0.2,
+    ...     a=2.0,
+    ...     days_offset=100
+    ... )
+
+Note:
+    - Input data should be in parquet format with columns: subject_id, time, code, numeric_value
+    - Time column should be datetime format
+    - Events are inserted chronologically while preserving original data
+    - Demographic events (RACE, ETHNICITY, GENDER) are preserved with NaT timestamps
+"""
+
 import os
 
 import numpy as np
