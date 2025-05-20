@@ -31,7 +31,8 @@ def main_finetune(config_path):
 
     loaded_data = torch.load(join(cfg.paths.prepared_data, PREPARED_ALL_PATIENTS))
     data = CausalPatientDataset(loaded_data)
-
+    print(type(data))
+    print(type(data.patients[0]))
     test_data = CausalPatientDataset([])
 
     # Initialize test and train/val pid lists
