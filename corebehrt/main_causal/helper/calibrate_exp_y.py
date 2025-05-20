@@ -129,7 +129,13 @@ def calibrate_folds(
                 calibration_collapse_threshold,
             )
 
-        calibrated = pd.DataFrame({PID_COL: val_pids, PROBAS: calibrated})
+        calibrated = pd.DataFrame(
+            {
+                PID_COL: val_df[PID_COL].values,
+                PROBAS: calibrated,
+                TARGETS: val_df[TARGETS].values,
+            }
+        )
         if calibrated_cf is not None:
             calibrated[CF_PROBAS] = calibrated_cf
         all_calibrated_dfs.append(calibrated)
