@@ -43,13 +43,17 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         super().__init__(config)
 
         # Initialize loss functions for both targets
-        if getattr(config, "pos_weight", None):
-            pos_weight = torch.tensor(config.pos_weight)
+        if getattr(config, "pos_weight_outcomes", None):
+            pos_weight_outcomes = torch.tensor(config.pos_weight_outcomes)
         else:
-            pos_weight = None
+            pos_weight_outcomes = None
+        if getattr(config, "pos_weight_exposures", None):
+            pos_weight_exposures = torch.tensor(config.pos_weight_exposures)
+        else:
+            pos_weight_exposures = None
 
-        self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-        self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_exposures)
+        self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_outcomes)
 
         # Two separate classification heads
         self.exposure_cls = CausalFineTuneHead(

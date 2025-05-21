@@ -79,8 +79,8 @@ jobs:
           python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetuning/prepared_data
           run_step main_causal.finetune_exp_y         finetune/finetune_exp_y.yaml
           python tests/pipeline/ft_exp_y.py ./outputs/causal/finetuning/ft_exp_y
-          run_step main_causal.calibrate_exp_y        calibrate/calibrate_exp_y.yaml
-          python tests/pipeline/calibrate_exp_y.py ./outputs/causal/finetuning/calibrated_predictions/predictions_outcome
-          python tests/pipeline/calibrate_exp_y.py ./outputs/causal/finetuning/calibrated_predictions/predictions_exposure
+          run_step main_causal.calibrate_exp_y        finetune/calibrate_exp_y.yaml
+          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetuning/calibrated_exp_y/predictions_exposure
+          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetuning/calibrated_exp_y/predictions_outcome
 
 

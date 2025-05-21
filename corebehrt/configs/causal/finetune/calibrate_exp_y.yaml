@@ -7,4 +7,4 @@ paths:
   finetune_model: ./outputs/causal/finetuning/ft_exp_y
 
   ## OUTPUTS
-  calibrated_predictions: ./outputs/causal/finetuning/calibrated_predictions
+  calibrated_predictions: ./outputs/causal/finetuning/calibrated_exp_y

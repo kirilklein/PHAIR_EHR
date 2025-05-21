@@ -80,7 +80,8 @@ def finetune_fold(
     modelmanager = CausalModelManager(cfg, fold)
     checkpoint = modelmanager.load_checkpoint()
     outcomes = train_data.get_outcomes()  # needed for sampler/ can be made optional
-    model = modelmanager.initialize_finetune_model(checkpoint, outcomes)
+    exposures = train_data.get_exposures()
+    model = modelmanager.initialize_finetune_model(checkpoint, outcomes, exposures)
 
     optimizer, sampler, scheduler, cfg = modelmanager.initialize_training_components(
         model, outcomes
@@ -108,9 +109,11 @@ def finetune_fold(
     logger.info("Load best finetuned model to compute test scores")
     modelmanager_trained = CausalModelManager(cfg, fold)
     checkpoint = modelmanager_trained.load_checkpoint(checkpoints=True)
-    model = modelmanager_trained.initialize_finetune_model(checkpoint, outcomes)
+    model = modelmanager_trained.initialize_finetune_model(
+        checkpoint, outcomes, exposures
+    )
 
     trainer.model = model
     trainer.val_dataset = val_dataset
 
-    val_loss, val_metrics = trainer._evaluate(epoch, mode="val")
+    _ = trainer._evaluate(epoch, mode="val")
