@@ -80,9 +80,9 @@ class CausalBiGRU(nn.Module):
         self.rnn = nn.GRU(
             hidden_size, self.rnn_hidden_size, batch_first=True, bidirectional=True
         )
-        self.norm = torch.nn.LayerNorm(hidden_size)
         # Adjust classifier input size based on whether exposure is included
         self.classifier_input_size = hidden_size + 1 if with_exposure else hidden_size
+        self.norm = torch.nn.LayerNorm(self.classifier_input_size)
         self.classifier = nn.Linear(self.classifier_input_size, 1, bias=True)
 
         # Store last pooled output for analysis/debugging
