@@ -149,6 +149,7 @@ class CausalBiGRU(nn.Module):
             # Concatenate exposure status to the pooled representation
             x = torch.cat((x, last_exposure.unsqueeze(-1)), dim=-1)
 
+        x = self.norm(x)
         # Store the pooled output for inspection/debugging
         self.last_pooled_output = x
 
