@@ -22,7 +22,10 @@ def load_pids(directory: str) -> List[int]:
     pid_path = os.path.join(directory, "pids.pt")
     if not os.path.exists(pid_path):
         raise FileNotFoundError(f"PID file not found at {pid_path}")
-    return torch.load(pid_path)
+    pids = torch.load(pid_path)
+    if not isinstance(pids, list) or not all(isinstance(pid, int) for pid in pids):
+        raise TypeError("PIDs file should contain a list of integers")
+    return pids
 
 
 def check_at_least_as_large_cohort(
@@ -36,7 +39,6 @@ def main():
     parser = argparse.ArgumentParser(description="Compare two cohorts")
     parser.add_argument("larger_dir", help="Directory with larger cohort")
     parser.add_argument("smaller_dir", help="Directory with smaller cohort")
-    parser.add_argument("--output", "-o", help="Path to save visualization")
     args = parser.parse_args()
 
     pids_larger = set(load_pids(args.larger_dir))
