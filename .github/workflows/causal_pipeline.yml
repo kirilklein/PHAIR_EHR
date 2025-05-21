@@ -80,7 +80,7 @@ jobs:
           run_step main_causal.finetune_exp_y         finetune/finetune_exp_y.yaml
           python tests/pipeline/ft_exp_y.py ./outputs/causal/finetuning/ft_exp_y
           run_step main_causal.calibrate_exp_y        finetune/calibrate_exp_y.yaml
-          python tests/pipeline/calibrate_exp_y.py ./outputs/causal/finetuning/calibrated_predictions/predictions_outcome
-          python tests/pipeline/calibrate_exp_y.py ./outputs/causal/finetuning/calibrated_predictions/predictions_exposure
+          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetuning/calibrated_predictions/predictions_exposure
+          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetuning/calibrated_predictions/predictions_outcome
 
 
