@@ -1,0 +1,16 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ### Inputs
+  cohort: ./outputs/causal/exposure_cohort # Data directory
+  meds: ./example_data/example_MEDS_data_causal
+  splits: [ tuning ]
+  criteria_config: ./corebehrt/configs/causal/select_cohort/criteria_definitions_strict.yaml
+  ### Outputs
+  cohort_advanced: ./outputs/causal/exposure_cohort_advanced_strict # Data directory
+
+cv_folds: 2 # can be set to 1 if only a simple train/val split is needed
+val_ratio: 0.1 # only used if cv_folds is set to 1
+test_ratio: 0 # can be set to 1 for test set creation only
