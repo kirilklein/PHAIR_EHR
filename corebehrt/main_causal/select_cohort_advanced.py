@@ -54,7 +54,7 @@ from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidat
 from corebehrt.functional.preparation.filter import filter_table_by_pids
 from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
+from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/select_cohort/advanced_extraction.yaml"
 

@@ -6,6 +6,11 @@ EXPOSURES = "exposures"
 COHORT = "cohort"
 DATA = "data"
 
+# Prepare causal finetune data
+EXPOSURE = "exposure"
+OUTCOME = "outcome"
+CF_OUTCOME = "cf_outcome"
+
 # Predicted outcome probabilities
 PROB_KEY = "prob"  # Overall predicted outcome probability
 PROB_T_KEY = "prob_t"  # Predicted outcome probability under treatment
@@ -40,3 +45,7 @@ FLOW_AFTER_STRICT = "after_strict"
 FLOW_FINAL = "final"
 
 CALIBRATION_COLLAPSE_THRESHOLD = 0.01
+
+
+# Training
+EXPOSURE_TARGET = "exposure_target"

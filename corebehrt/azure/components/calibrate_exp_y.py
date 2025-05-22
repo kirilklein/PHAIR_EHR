@@ -6,6 +6,6 @@ OUTPUTS = {
 }
 
 if __name__ == "__main__":
-    from corebehrt.main_causal import calibrate
+    from corebehrt.main_causal.calibrate_exp_y import main_calibrate
 
-    job.run_main("calibrate", calibrate.main_calibrate, INPUTS, OUTPUTS)
+    job.run_main("calibrate", main_calibrate, INPUTS, OUTPUTS)

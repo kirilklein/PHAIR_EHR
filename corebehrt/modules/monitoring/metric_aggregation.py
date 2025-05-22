@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 from sklearn.metrics import precision_recall_curve, roc_curve
 
-from corebehrt.azure import setup_metrics_dir, log_metric
+from corebehrt.azure import log_metric, setup_metrics_dir
 
 
 def compute_avg_metrics(metric_values: dict):
@@ -44,7 +44,12 @@ def save_curves(
 
 
 def save_predictions(
-    run_folder: str, logits: torch.Tensor, targets: torch.Tensor, epoch: int, mode="val"
+    run_folder: str,
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    epoch: int,
+    mode="val",
+    save_targets=True,
 ) -> None:
     """Saves the predictions to npz files in the run folder"""
     probas_name = os.path.join(run_folder, "checkpoints", f"probas_{mode}_{epoch}.npz")
@@ -52,9 +57,10 @@ def save_predictions(
         run_folder, "checkpoints", f"targets_{mode}_{epoch}.npz"
     )
     probas = torch.sigmoid(logits).cpu().numpy()
-    targets = targets.cpu().numpy()
     np.savez_compressed(probas_name, probas=probas)
-    np.savez_compressed(targets_name, targets=targets)
+    if save_targets:
+        targets = targets.cpu().numpy()
+        np.savez_compressed(targets_name, targets=targets)
 
 
 def save_metrics_to_csv(run_folder: str, metrics: dict, epoch: int, mode="val") -> None:
