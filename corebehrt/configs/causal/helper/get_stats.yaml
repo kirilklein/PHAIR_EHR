@@ -9,7 +9,7 @@ paths:
   #### Optional
   cohort: ./outputs/causal/exposure_cohort # should contain pids.pt
   ps_calibrated_predictions: ./outputs/causal/calibrated_predictions # should contain predictions_and_targets_calibrated.csv
-  outcome_model: ./outputs/causal/trained_mlp # should contain predictions_and_targets_calibrated.csv
+  outcome_model: ./outputs/causal/trained_mlp # should contain predictions_and_targets_calibrated.csv ! needs to be updated to use ft_exp
 
   ### Outputs
   stats: ./outputs/causal/stats

@@ -1,4 +1,4 @@
-name: 'Causal Pipeline test'
+name: 'Advanced Cohort Selection'
 
 on:
   workflow_dispatch:
@@ -58,27 +58,14 @@ jobs:
               --dir "./outputs/causal/$dir"
           }
 
-          # ─── Data prep & pretrain ───────────────────────────
           run_step main.create_data                         prepare_and_pretrain/create_data.yaml
-          run_step main.prepare_training_data               prepare_and_pretrain/prepare_pretrain.yaml
-          run_step main.pretrain                            prepare_and_pretrain/pretrain.yaml
-
-          # ─── Outcomes & cohort selection ──────────────────
           run_step main.create_outcomes                     outcomes.yaml
           run_step main.select_cohort                      select_cohort/select_cohort_exposure.yaml
 
-          # ─── Prepare initial data ────────────────────────────────────
-          run_step main.prepare_training_data               finetune/prepare_finetune_exposure.yaml
-          run_step main.finetune_cv                        finetune/finetune_exposure.yaml
-
-          # ─── Finetune Exposure & Outcome ───────────────────────────
-          run_step main_causal.prepare_ft_exp_y      finetune/prepare_ft_exp_y.yaml
-          python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetuning/prepared_data
-          run_step main_causal.finetune_exp_y         finetune/finetune_exp_y.yaml
-          python tests/pipeline/ft_exp_y.py ./outputs/causal/finetuning/ft_exp_y
-          run_step main_causal.calibrate_exp_y        finetune/calibrate_exp_y.yaml
-          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetuning/calibrated_exp_y/predictions_exposure
-          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetuning/calibrated_exp_y/predictions_outcome
-
+          # ─── Additional tests for advanced cohort selection ───────────────────────────
           run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction.yaml
-          run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
+          run_step main_causal.helper_scripts.get_stats     helper/get_stats.yaml
+          run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction_loose.yaml
+          run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction_strict.yaml
+          # Check that the two loose criteria produce a cohort that is at least as large as the strict criteria
+          python tests/helpers/compare_cohorts.py ./outputs/causal/cohorts/advanced/loose ./outputs/causal/cohorts/advanced/strict
