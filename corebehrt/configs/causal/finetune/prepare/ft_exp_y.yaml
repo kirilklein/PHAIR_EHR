@@ -1,6 +1,6 @@
 logging:
   level: INFO
-  path: ./outputs/logs
+  path: ./outputs/logs/causal
 
 paths:
   ## INPUTS
@@ -17,7 +17,6 @@ paths:
   ## OUTPUTS
   prepared_data: ./outputs/causal/finetuning/prepared_data # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
-
 
 data:
   truncation_len: 32

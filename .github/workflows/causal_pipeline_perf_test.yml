@@ -1,0 +1,57 @@
+name: 'Causal Pipeline Performance Test'
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      # ─── Setup ───────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Clean outputs & create venv
+        run: |
+          rm -rf ./outputs/causal
+          python -m venv .venv
+          echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements.txt
+      - name: Set Python path
+        run: |
+          echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
+
+      # ─── Pipeline & Tests ────────────────────────────────────
+      - name: Run pipeline & estimation checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          # ─── Data prep & pretrain ───────────────────────────
+          python -m corebehrt.main.create_data --config_path corebehrt/configs/causal/prepare_and_pretrain/create_data.yaml
+          python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/prepare_and_pretrain/prepare_pretrain.yaml
+          python -m corebehrt.main.pretrain --config_path corebehrt/configs/causal/prepare_and_pretrain/pretrain.yaml
+          python -m corebehrt.main.create_outcomes --config_path corebehrt/configs/causal/outcomes.yaml
+          python -m corebehrt.main.select_cohort --config_path corebehrt/configs/causal/finetune/select_cohort/exposure_simple_val.yaml
+          # ─── Prepare Finetune Data ───────────────────────────
+          python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/finetune/prepare/ft_exp.yaml
+          python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/finetune/prepare/ft_exp_uncensored.yaml
+          # ─── Finetune ───────────────────────────────────────
+          python -m corebehrt.main.finetune_cv --config_path corebehrt/configs/causal/finetune/ft_exp_uncensored.yaml
+          python -m corebehrt.main.finetune_cv --config_path corebehrt/configs/causal/finetune/ft_exp.yaml
+          # ─── Check Performance ───────────────────────────────────────
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure_uncensored --min 0.98
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure --min 0.6 --max 0.9
+         
+          

@@ -1,15 +1,15 @@
 logging:
   level: INFO
-  path: ./outputs/logs
+  path: ./outputs/logs/causal
 
 paths:
   ### Inputs
-  patients_info: ./outputs/causal/features/patient_info.parquet
-  initial_pids: ./outputs/causal/tokenized/pids_tuning.pt # Initial patients to select from [list of pids] (optional)
-  outcome: ./outputs/causal/outcomes/EXPOSURE.csv # Outcome
-  
+  patients_info: ./outputs/causal/data/features/patient_info.parquet
+  initial_pids: ./outputs/causal/data/tokenized/pids_tuning.pt # Initial patients to select from [list of pids] (optional)
+  outcome: ./outputs/causal/data/outcomes/EXPOSURE.csv # Outcome
+
   ### Outputs
-  cohort: ./outputs/causal/exposure_cohort # Data directory
+  cohort: ./outputs/causal/finetune/cohorts/exposure_simple_val # Data directory
 
 selection:
   exclude_prior_outcomes: false # Exclude patients who had the outcome before index date
@@ -23,5 +23,6 @@ index_date: # if not provided we can use exposures to get the index dates
   relative: # takes first exposure as index date
     n_hours_from_exposure: 0 # negative means before exposure, 0 by default
 
-cv_folds: 5 # can be set to 1 if only a simple train/val split is needed
+cv_folds: 1 # can be set to 1 if only a simple train/val split is needed
+val_ratio: 0.2
 test_ratio: 0 # can be set to 1 for test set creation only

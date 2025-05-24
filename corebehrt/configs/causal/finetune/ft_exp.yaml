@@ -1,27 +1,14 @@
 logging:
   level: INFO
-  path: ./outputs/logs
+  path: ./outputs/logs/causal
 
 paths:
   ## INPUTS
-  features: ./outputs/causal/features
-  tokenized: ./outputs/causal/tokenized
-  cohort: ./outputs/causal/exposure_cohort # path to cohort directory
-  # test_pids: pids_path # path to file with pids to use for test set
-
-  # tokenized_file: "features_finetune.pt" # can also be a list
-  # tokenized_pids: "pids_finetune.pt" # can also be a list
-
-  pretrain_model: ./outputs/causal/pretraining
-
-  # restart_model: ... # Use for restarting from checkpoint
-
-  outcome: ./outputs/causal/outcomes/EXPOSURE.csv
-
-  prepared_data: ./outputs/causal/finetuning/processed_data/exposure
+  pretrain_model: ./outputs/causal/pretrain/model
+  prepared_data: ./outputs/causal/finetune/processed_data/exposure
 
   ## OUTPUTS
-  model: ./outputs/causal/finetuning_exposure # Save model/outputs to this folder
+  model: ./outputs/causal/finetune/models/exposure # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 model:
@@ -48,7 +35,7 @@ trainer_args:
   batch_size: 256
   val_batch_size: 256
   effective_batch_size: 256
-  epochs: 2
+  epochs: 4
   info: true
   gradient_clip:
     clip_value: 1.0
@@ -58,12 +45,12 @@ trainer_args:
   stopping_criterion: roc_auc
 
 optimizer:
-  lr: 5e-4
+  lr: 1e-2
   eps: 1e-6
 
 scheduler:
   _target_: transformers.get_constant_schedule_with_warmup
-  num_warmup_epochs: 1
+  num_warmup_epochs: 2
 
 metrics:
   roc_auc:

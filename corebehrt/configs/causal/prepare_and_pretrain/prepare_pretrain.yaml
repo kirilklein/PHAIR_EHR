@@ -1,29 +1,25 @@
 logging:
   level: INFO
-  path: ./outputs/logs
+  path: ./outputs/logs/causal
 
 paths:
-## INPUTS
-  features: ./outputs/causal/features
-  tokenized: ./outputs/causal/tokenized
+  ## INPUTS
+  features: ./outputs/causal/data/features
+  tokenized: ./outputs/causal/data/tokenized
   # tokenized_file: ...
   # tokenized_pids: ...
-  
+
   ## optional
   # cohort: ... # path to cohort directory
 
-## OUTPUTS
-  prepared_data: ./outputs/causal/pretraining/processed_data/ # Save model/outputs to this folder
+  ## OUTPUTS
+  prepared_data: ./outputs/causal/pretrain/processed_data/ # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 data:
   type: "pretrain"
   val_ratio: 0.2 # only used if predefined_splits is false
-  truncation_len: 20
-  min_len: 2
+  truncation_len: 64
+  min_len: 1
   predefined_splits: false # set to true if you want to use predefined splits for reproducibility. Expects a list (of length 1) of dicts with train, val created by select_cohort
-  
-  cutoff_date:
-    year: 2022
-    month: 1
-    day: 1
+
