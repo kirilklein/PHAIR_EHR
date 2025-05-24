@@ -1,0 +1,71 @@
+name: 'Advanced Cohort Selection'
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      # ─── Setup ───────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Clean outputs & create venv
+        run: |
+          rm -rf ./outputs/causal
+          python -m venv .venv
+          echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements.txt
+      - name: Set Python path
+        run: |
+          echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
+
+      # ─── Pipeline & Tests ────────────────────────────────────
+      - name: Run pipeline & estimation checks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Helper: run any corebehrt module with its config
+          run_step() {
+            module="$1"; config="$2"
+            echo
+            echo "🔧 Running corebehrt.$module ($config)"
+            python -m corebehrt.$module \
+              --config_path corebehrt/configs/causal/$config
+          }
+
+          # Helper: check an estimate directory
+          run_test() {
+            margin="$1"; dir="$2"
+            echo
+            echo "✅ Checking estimation in $dir"
+            python -m tests.test_main_causal.test_estimate_result \
+              --margin "$margin" \
+              --dir "./outputs/causal/$dir"
+          }
+
+          run_step main.create_data                         prepare_and_pretrain/create_data.yaml
+          run_step main.create_outcomes                     outcomes.yaml
+          run_step main.select_cohort                      select_cohort/exposure.yaml
+
+          # ─── Additional tests for advanced cohort selection ───────────────────────────
+          run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction.yaml
+          run_step main_causal.helper_scripts.get_stats     helper/get_stats.yaml
+          run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction_loose.yaml
+          run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction_strict.yaml
+          # Check that the two loose criteria produce a cohort that is at least as large as the strict criteria
+          python tests/helpers/compare_cohorts.py ./outputs/causal/cohorts/advanced/loose ./outputs/causal/cohorts/advanced/strict

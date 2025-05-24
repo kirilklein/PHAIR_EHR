@@ -1,0 +1,59 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  pretrain_model: ./outputs/causal/pretrain/model
+  prepared_data: ./outputs/causal/finetune/processed_data/exposure_uncensored
+
+  ## OUTPUTS
+  model: ./outputs/causal/finetune/models/exposure_uncensored # Save model/outputs to this folder
+
+model:
+  cls:
+    _target_: ehr2vec.model.heads.ClassifierGRU
+    bidirectional: true
+
+trainer_args:
+  sampler_function:
+    _target_: corebehrt.modules.trainer.utils.Sampling.inverse_sqrt
+  batch_size: 128
+  val_batch_size: 128
+  effective_batch_size: 128
+  epochs: 5
+  info: true
+  gradient_clip:
+    clip_value: 1.0
+  shuffle: true
+  checkpoint_frequency: 1
+  early_stopping: 20
+  stopping_criterion: roc_auc
+
+optimizer:
+  lr: 1e-2
+  eps: 1e-6
+
+scheduler:
+  _target_: transformers.get_constant_schedule_with_warmup
+  num_warmup_epochs: 2
+
+metrics:
+  roc_auc:
+    _target_: corebehrt.modules.monitoring.metrics.ROC_AUC
+  pr_auc:
+    _target_: corebehrt.modules.monitoring.metrics.PR_AUC
+  precentage_positives:
+    _target_: corebehrt.modules.monitoring.metrics.Percentage_Positives
+  mean_probability:
+    _target_: corebehrt.modules.monitoring.metrics.Mean_Probability
+  true_positives:
+    _target_: corebehrt.modules.monitoring.metrics.True_Positives
+
+  true_negatives:
+    _target_: corebehrt.modules.monitoring.metrics.True_Negatives
+  false_positives:
+    _target_: corebehrt.modules.monitoring.metrics.False_Positives
+
+  false_negatives:
+    _target_: corebehrt.modules.monitoring.metrics.False_Negatives

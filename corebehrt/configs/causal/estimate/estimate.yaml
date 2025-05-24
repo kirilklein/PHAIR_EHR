@@ -1,19 +1,19 @@
 logging:
   level: INFO
-  path: ./outputs/logs
+  path: ./outputs/logs/causal
 
 paths:
-## INPUTS  
-  exposure_predictions: ./outputs/causal/calibrated_predictions # containing predictions_and_targets_calibrated.csv
-  outcome_predictions: ./outputs/causal/trained_mlp # containing predictions_and_targets_calibrated.csv 
+  ## INPUTS
+  exposure_predictions: ./outputs/causal/finetune/models/exp_y/calibrated/predictions_exposure # containing predictions_and_targets_calibrated.csv
+  outcome_predictions: ./outputs/causal/finetune/models/exp_y/calibrated/predictions_outcome # containing predictions_and_targets_calibrated.csv
 
   # counterfactual_outcomes: ./outputs/causal/counterfactual_outcomes # optional
 
-## OUTPUTS
-  estimate: ./outputs/causal/estimate
+  ## OUTPUTS
+  estimate: ./outputs/causal/estimate/simple
 
 estimator:
   methods: ["IPW", "AIPW", "TMLE"]
   effect_type: "ATE"
-  n_bootstrap: 5
+  n_bootstrap: 30
   common_support_threshold: 0.001

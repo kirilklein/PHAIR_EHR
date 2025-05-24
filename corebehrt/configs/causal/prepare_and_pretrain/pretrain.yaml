@@ -1,31 +1,30 @@
 logging:
   level: INFO
-  path: ./outputs/logs
+  path: ./outputs/logs/causal
 
 paths:
-## INPUTS
-  prepared_data: ./outputs/causal/pretraining/processed_data/
+  ## INPUTS
+  prepared_data: ./outputs/causal/pretrain/processed_data/
   # restart_model: ... # Use for restarting from checkpoint
 
-## OUTPUTS
-  model: ./outputs/causal/pretraining # Save model/outputs to this folder
+  ## OUTPUTS
+  model: ./outputs/causal/pretrain/model # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
-  
+
 data:
   dataset:
-    select_ratio: 1.
+    select_ratio: 0.2
     masking_ratio: .8
     replace_ratio: .1
     ignore_special_tokens: true
 
-
 trainer_args:
-  batch_size: 32
-  effective_batch_size: 64
-  epochs: 1
+  batch_size: 128
+  effective_batch_size: 128
+  epochs: 2
   info: true
   sampler: null
-  gradient_clip: 
+  gradient_clip:
     clip_value: 1.0
   shuffle: true
   early_stopping: null # num_epochs or null/false
@@ -35,23 +34,22 @@ model:
   num_hidden_layers: 2
   num_attention_heads: 2
   intermediate_size: 32
-  
+
   type_vocab_size: 1024 # !!! type_vocab_size should be > truncation_len//2 if sep token else >truncation len
-  embedding_dropout: 0.1 
+  embedding_dropout: 0.1
   max_position_embeddings: 512 # the longest sequence length we will use this model with
   age_scale: 1e-2 # 100 -> 1
   abspos_scale: 1e-4 # 400k -> 4
   age_shift: 0 # center around 0
   abspos_shift: 0 # 0 will be around 2015
-  
+
 optimizer:
   lr: 5e-4
   eps: 1e-6
 
 scheduler:
-  _target_: transformers.get_linear_schedule_with_warmup
-  num_warmup_epochs: 2
-  num_training_epochs: 3
+  _target_: transformers.get_constant_schedule_with_warmup
+  num_warmup_epochs: 1
 
 metrics:
   top1:
