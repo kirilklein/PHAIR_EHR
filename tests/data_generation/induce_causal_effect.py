@@ -40,7 +40,7 @@ def create_parser() -> argparse.ArgumentParser:
         help="Code that affects both exposure and outcome",
     )
     parser.add_argument(
-        "--exposure_only_code", default="MIN02", help="Code that only affects exposure"
+        "--exposure_only_code", default="DDZ32", help="Code that only affects exposure"
     )
     parser.add_argument(
         "--outcome_only_code", default="DE11", help="Code that only affects outcome"
@@ -158,7 +158,7 @@ def main() -> None:
         with open(os.path.join(args.write_dir, ".ate.txt"), "w") as f:
             f.write(f"ATE: {ate}")
         simulated_df = simulated_df.drop(columns=["ite"])
-
+    simulated_df.reset_index(drop=True, inplace=True)
     DataManager.write_shards(simulated_df, args.write_dir, shards)
 
 
