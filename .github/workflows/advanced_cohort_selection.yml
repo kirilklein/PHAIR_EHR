@@ -60,7 +60,7 @@ jobs:
 
           run_step main.create_data                         prepare_and_pretrain/create_data.yaml
           run_step main.create_outcomes                     outcomes.yaml
-          run_step main.select_cohort                      select_cohort/select_cohort_exposure.yaml
+          run_step main.select_cohort                      select_cohort/exposure.yaml
 
           # ─── Additional tests for advanced cohort selection ───────────────────────────
           run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction.yaml
