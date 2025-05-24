@@ -12,6 +12,7 @@ def test_roc_performance(
     min_roc: Optional[float] = None,
     max_roc: Optional[float] = None,
     metric_name: str = "roc_auc",
+    file_start: str = "val_scores_mean_std",
 ) -> bool:
     """
     Test whether ROC AUC values in a CSV file are within specified bounds.
@@ -25,7 +26,7 @@ def test_roc_performance(
     Returns:
         bool: True if all ROC values are within bounds, False otherwise
     """
-    file_path = find_roc_auc_file(ft_dir)
+    file_path = find_roc_auc_file(ft_dir, file_start)
     print(f"Found file: {file_path}")
     try:
         # Load the CSV file
@@ -84,10 +85,10 @@ def test_roc_performance(
         return False
 
 
-def find_roc_auc_file(ft_dir: str) -> str:
+def find_roc_auc_file(ft_dir: str, file_start: str) -> str:
     """Look for a file starting with val_scores_mean_std"""
     for file in os.listdir(ft_dir):
-        if file.startswith("val_scores_mean_std"):
+        if file.startswith(file_start):
             return os.path.join(ft_dir, file)
 
 
@@ -95,7 +96,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="Test ROC AUC performance metrics from CSV file"
     )
-    parser.add_argument("path", help="Path to directory containing performance metrics")
+    parser.add_argument(
+        "path", type=str, help="Path to directory containing performance metrics"
+    )
+    parser.add_argument(
+        "file_start", type=str, help="Start of file name", default="val_scores_mean_std"
+    )
     parser.add_argument(
         "--min", type=float, default=0, help="Minimum acceptable value (default: 0)"
     )
@@ -112,7 +118,9 @@ def main():
     args = parser.parse_args()
 
     # Run the test
-    success = test_roc_performance(args.path, args.min, args.max, args.metric_name)
+    success = test_roc_performance(
+        args.path, args.min, args.max, args.metric_name, args.file_start
+    )
 
     # Exit with appropriate code
     sys.exit(0 if success else 1)
