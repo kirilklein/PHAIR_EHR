@@ -6,7 +6,7 @@ paths:
   ### Inputs
   patients_info: ./outputs/causal/data/features/patient_info.parquet
   initial_pids: ./outputs/causal/data/tokenized/pids_tuning.pt # Initial patients to select from [list of pids] (optional)
-  outcome: ./outputs/causal/data/outcomes/EXPOSURE.csv # Outcome
+  outcome: ./outputs/causal/finetune/outcomes/EXPOSURE.csv # Outcome
 
   ### Outputs
   cohort: ./outputs/causal/finetune/cohorts/exposure_simple_val # Data directory

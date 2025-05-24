@@ -38,19 +38,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          run_step() {
+            module="$1"; config="$2"
+            echo
+            echo "🔧 Running corebehrt.$module ($config)"
+            python -m corebehrt.$module \
+              --config_path corebehrt/configs/causal/$config
+          }
+
           # ─── Data prep & pretrain ───────────────────────────
-          python -m corebehrt.main.create_data --config_path corebehrt/configs/causal/prepare_and_pretrain/create_data.yaml
-          python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/prepare_and_pretrain/prepare_pretrain.yaml
-          python -m corebehrt.main.pretrain --config_path corebehrt/configs/causal/prepare_and_pretrain/pretrain.yaml
-          python -m corebehrt.main.create_outcomes --config_path corebehrt/configs/causal/outcomes.yaml
-          python -m corebehrt.main.select_cohort --config_path corebehrt/configs/causal/finetune/select_cohort/exposure_simple_val.yaml
+          run_step main.create_data prepare_and_pretrain/create_data.yaml
+          run_step main.prepare_training_data prepare_and_pretrain/prepare_pretrain.yaml
+          run_step main.pretrain prepare_and_pretrain/pretrain.yaml
+          run_step main.create_outcomes outcomes.yaml
+          run_step main.select_cohort select_cohort/exposure_simple_val.yaml
           # ─── Prepare Finetune Data ───────────────────────────
-          python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/finetune/prepare/ft_exp.yaml
-          python -m corebehrt.main.prepare_training_data --config_path corebehrt/configs/causal/finetune/prepare/ft_exp_uncensored.yaml
-          # ─── Finetune ───────────────────────────────────────
-          python -m corebehrt.main.finetune_cv --config_path corebehrt/configs/causal/finetune/ft_exp_uncensored.yaml
-          python -m corebehrt.main.finetune_cv --config_path corebehrt/configs/causal/finetune/ft_exp.yaml
+          run_step main.prepare_training_data prepare/ft_exp_uncensored.yaml
+          run_step main.finetune_cv ft_exp_uncensored.yaml
+          run_step main.finetune_cv ft_exp.yaml
           # ─── Check Performance ───────────────────────────────────────
+          run_step main.finetune_cv ft_exp_uncensored.yaml
+          run_step main.finetune_cv ft_exp.yaml
+          # ─── Check Performance ───────────────────────────────────────
+          echo "🔧 Checking Performance"
           python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure_uncensored --min 0.98
           python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure --min 0.6 --max 0.9
          
