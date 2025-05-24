@@ -1,7 +1,7 @@
 """
 Enhanced causal effect simulation module for EHR data
 
-This module provides functionality to simulate more complex causal relationships 
+This module provides functionality to simulate more complex causal relationships
 by inducing exposure and outcome events based on multiple trigger conditions:
 1. One code that influences both EXPOSURE and OUTCOME (common cause)
 2. One code that only influences EXPOSURE
@@ -50,6 +50,7 @@ from scipy.special import expit, logit
 EXPOSURE = "EXPOSURE"
 OUTCOME = "OUTCOME"
 
+
 def simulate_exposure_for_subject(
     subj_df: pd.DataFrame,
     common_cause_code: str,
@@ -58,10 +59,11 @@ def simulate_exposure_for_subject(
     common_cause_effect: float,
     exposure_only_effect: float,
     days_offset: int,
+    exposure_name: str,
 ) -> pd.DataFrame:
     """
     Simulation of EXPOSURE as a function of common_cause_code and exposure_only_code.
-    
+
     Args:
         subj_df: DataFrame for a single subject
         common_cause_code: Code that affects both exposure and outcome
@@ -70,7 +72,7 @@ def simulate_exposure_for_subject(
         common_cause_effect: Effect size coefficient for common cause
         exposure_only_effect: Effect size coefficient for exposure-only trigger
         days_offset: Number of days to offset the exposure event
-        
+
     Returns:
         DataFrame with simulated exposure event added if applicable
     """
@@ -83,9 +85,11 @@ def simulate_exposure_for_subject(
 
     # Compute the probability using the logistic function with both triggers
     # p = expit(logit(p_base) + common_cause_effect * common_cause_present + exposure_only_effect * exposure_only_present)
-    logit_p = logit(p_base) + \
-              common_cause_effect * int(common_cause_present) + \
-              exposure_only_effect * int(exposure_only_present)
+    logit_p = (
+        logit(p_base)
+        + common_cause_effect * int(common_cause_present)
+        + exposure_only_effect * int(exposure_only_present)
+    )
     p = expit(logit_p)
 
     # Simulate the binary outcome based on p
@@ -100,10 +104,14 @@ def simulate_exposure_for_subject(
         # If any trigger is present, take the latest trigger event and add the offset
         trigger_times = []
         if common_cause_present:
-            trigger_times.append(subj_df.loc[subj_df["code"] == common_cause_code, "time"].max())
+            trigger_times.append(
+                subj_df.loc[subj_df["code"] == common_cause_code, "time"].max()
+            )
         if exposure_only_present:
-            trigger_times.append(subj_df.loc[subj_df["code"] == exposure_only_code, "time"].max())
-        
+            trigger_times.append(
+                subj_df.loc[subj_df["code"] == exposure_only_code, "time"].max()
+            )
+
         latest_trigger_time = max(trigger_times)
         new_time = latest_trigger_time + pd.Timedelta(days=days_offset)
     else:
@@ -118,9 +126,11 @@ def simulate_exposure_for_subject(
     # Create a new row for the EXPOSURE event
     exposure_event = pd.DataFrame(
         {
-            "subject_id": [subj_df.iloc[0]["subject_id"] if len(subj_df) > 0 else "unknown"],
+            "subject_id": [
+                subj_df.iloc[0]["subject_id"] if len(subj_df) > 0 else "unknown"
+            ],
             "time": [new_time],
-            "code": [EXPOSURE],
+            "code": [exposure_name],
             "numeric_value": [np.nan],
         }
     )
@@ -141,10 +151,11 @@ def simulate_outcome_for_subject(
     outcome_only_effect: float,
     exposure_outcome_effect: float,
     days_offset: int,
+    outcome_name: str,
 ) -> pd.DataFrame:
     """
     Simulation of OUTCOME as a function of common_cause_code, outcome_only_code, and EXPOSURE.
-    
+
     Args:
         subj_df: DataFrame for a single subject
         common_cause_code: Code that affects both exposure and outcome
@@ -154,7 +165,7 @@ def simulate_outcome_for_subject(
         outcome_only_effect: Effect size coefficient for outcome-only trigger
         exposure_outcome_effect: Effect size coefficient for exposure's effect on outcome
         days_offset: Number of days to offset the outcome event
-        
+
     Returns:
         DataFrame with simulated outcome event added if applicable
         Difference in probabilities between treated and untreated status (ATE)
@@ -166,11 +177,13 @@ def simulate_outcome_for_subject(
     common_cause_present = (subj_df["code"] == common_cause_code).any()
     outcome_only_present = (subj_df["code"] == outcome_only_code).any()
     exposure_present = (subj_df["code"] == EXPOSURE).any()
-    
+
     # Compute the probability using the logistic function with all triggers
-    base_logit = logit(p_base) + \
-              common_cause_effect * int(common_cause_present) + \
-              outcome_only_effect * int(outcome_only_present) 
+    base_logit = (
+        logit(p_base)
+        + common_cause_effect * int(common_cause_present)
+        + outcome_only_effect * int(outcome_only_present)
+    )
 
     p_treated = expit(base_logit + exposure_outcome_effect)
     p_control = expit(base_logit)
@@ -192,10 +205,14 @@ def simulate_outcome_for_subject(
         # If no EXPOSURE but other triggers are present, take the latest trigger
         trigger_times = []
         if common_cause_present:
-            trigger_times.append(subj_df.loc[subj_df["code"] == common_cause_code, "time"].max())
+            trigger_times.append(
+                subj_df.loc[subj_df["code"] == common_cause_code, "time"].max()
+            )
         if outcome_only_present:
-            trigger_times.append(subj_df.loc[subj_df["code"] == outcome_only_code, "time"].max())
-        
+            trigger_times.append(
+                subj_df.loc[subj_df["code"] == outcome_only_code, "time"].max()
+            )
+
         latest_trigger_time = max(trigger_times)
         new_time = latest_trigger_time + pd.Timedelta(days=days_offset)
     else:
@@ -210,9 +227,11 @@ def simulate_outcome_for_subject(
     # Create a new row for the OUTCOME event
     outcome_event = pd.DataFrame(
         {
-            "subject_id": [subj_df.iloc[0]["subject_id"] if len(subj_df) > 0 else "unknown"],
+            "subject_id": [
+                subj_df.iloc[0]["subject_id"] if len(subj_df) > 0 else "unknown"
+            ],
             "time": [new_time],
-            "code": [OUTCOME],
+            "code": [outcome_name],
             "numeric_value": [np.nan],
             "ite": [ite],
         }
@@ -238,10 +257,13 @@ def simulate_causal_effects(
     outcome_only_effect: float,
     exposure_outcome_effect: float,
     days_offset: int,
+    simulate_outcome: bool,
+    exposure_name: str,
+    outcome_name: str,
 ) -> pd.DataFrame:
     """
     Apply the enhanced causal simulation to the entire dataset.
-    
+
     Args:
         df: Input DataFrame with EHR data
         common_cause_code: Code that affects both exposure and outcome
@@ -255,14 +277,14 @@ def simulate_causal_effects(
         outcome_only_effect: Effect size of outcome-only trigger
         exposure_outcome_effect: Effect size of exposure on outcome
         days_offset: Days offset for temporal relationships
-        
+
     Returns:
         DataFrame with simulated exposure and outcome events
     """
     # Ensure time column is datetime
     if not pd.api.types.is_datetime64_dtype(df["time"]):
         df["time"] = pd.to_datetime(df["time"])
-    
+
     # First, simulate exposure events
     simulated_df = df.groupby("subject_id", group_keys=False)[df.columns].apply(
         simulate_exposure_for_subject,
@@ -272,20 +294,24 @@ def simulate_causal_effects(
         common_cause_exposure_effect,
         exposure_only_effect,
         days_offset,
+        exposure_name,
     )
-    
-    # Then, simulate outcome events based on exposures and other factors
-    simulated_df = simulated_df.groupby("subject_id", group_keys=False)[simulated_df.columns].apply(
-        simulate_outcome_for_subject,
-        common_cause_code,
-        outcome_only_code,
-        p_base_outcome,
-        common_cause_outcome_effect,
-        outcome_only_effect,
-        exposure_outcome_effect,
-        days_offset,
-    )
-    
+    if simulate_outcome:
+        # Then, simulate outcome events based on exposures and other factors
+        simulated_df = simulated_df.groupby("subject_id", group_keys=False)[
+            simulated_df.columns
+        ].apply(
+            simulate_outcome_for_subject,
+            common_cause_code,
+            outcome_only_code,
+            p_base_outcome,
+            common_cause_outcome_effect,
+            outcome_only_effect,
+            exposure_outcome_effect,
+            days_offset,
+            outcome_name,
+        )
+
     return simulated_df
 
 
@@ -343,7 +369,9 @@ def main() -> None:
     """Main function to run the enhanced causal simulation"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate enhanced simulated causal data")
+    parser = argparse.ArgumentParser(
+        description="Generate enhanced simulated causal data"
+    )
     parser.add_argument(
         "--source_dir",
         type=str,
@@ -351,27 +379,24 @@ def main() -> None:
         help="Directory containing source data shards",
     )
     parser.add_argument(
-        "--write_dir", 
-        type=str, 
-        required=True, 
-        help="Directory to write output shards"
+        "--write_dir", type=str, required=True, help="Directory to write output shards"
     )
     parser.add_argument(
         "--common_cause_code",
         type=str,
-        default="LAB0",
+        default="LAB8",
         help="Code that affects both exposure and outcome",
     )
     parser.add_argument(
         "--exposure_only_code",
         type=str,
-        default="LAB1",
+        default="MIN02",
         help="Code that only affects exposure",
     )
     parser.add_argument(
         "--outcome_only_code",
         type=str,
-        default="LAB2",
+        default="DE11",
         help="Code that only affects outcome",
     )
     parser.add_argument(
@@ -381,10 +406,7 @@ def main() -> None:
         help="Base probability for exposure",
     )
     parser.add_argument(
-        "--p_base_outcome", 
-        type=float, 
-        default=0.2, 
-        help="Base probability for outcome"
+        "--p_base_outcome", type=float, default=0.2, help="Base probability for outcome"
     )
     parser.add_argument(
         "--common_cause_exposure_effect",
@@ -401,7 +423,7 @@ def main() -> None:
     parser.add_argument(
         "--exposure_only_effect",
         type=float,
-        default=0.5,
+        default=1,
         help="Effect size of exposure-only trigger",
     )
     parser.add_argument(
@@ -422,12 +444,63 @@ def main() -> None:
         default=30,
         help="Days offset for temporal relationships",
     )
-
+    parser.add_argument(
+        "--simulate_outcome",
+        type=bool,
+        default=True,
+        help="Simulate outcome",
+    )
+    parser.add_argument(
+        "--exposure_name",
+        type=str,
+        default=EXPOSURE,
+        help="Name of exposure",
+    )
+    parser.add_argument(
+        "--outcome_name",
+        type=str,
+        default=OUTCOME,
+        help="Name of outcome",
+    )
     args = parser.parse_args()
 
     # Load data
     df, shards = load_data_from_shards(args.source_dir)
-    
+
+    # Count initial presence of trigger codes (correctly by subject)
+    total_subjects = len(df["subject_id"].unique())
+    print(f"\nTotal subjects: {total_subjects}")
+
+    # Group by subject_id and check for code presence within each subject
+    subject_codes = df.groupby("subject_id")["code"].apply(set).reset_index()
+
+    common_cause_count = (
+        subject_codes["code"].apply(lambda codes: args.common_cause_code in codes).sum()
+    )
+    exposure_trigger_count = (
+        subject_codes["code"]
+        .apply(lambda codes: args.exposure_only_code in codes)
+        .sum()
+    )
+    if args.simulate_outcome:
+        outcome_trigger_count = (
+            subject_codes["code"]
+            .apply(lambda codes: args.outcome_only_code in codes)
+            .sum()
+        )
+
+    print("\nTrigger code presence before simulation:")
+    print(
+        f"  Common cause ({args.common_cause_code}): {common_cause_count} subjects ({100 * common_cause_count / total_subjects:.1f}%)"
+    )
+    print(
+        f"  Exposure trigger ({args.exposure_only_code}): {exposure_trigger_count} subjects ({100 * exposure_trigger_count / total_subjects:.1f}%)"
+    )
+    if args.simulate_outcome:
+        print(
+            f"  Outcome trigger ({args.outcome_only_code}): {outcome_trigger_count} subjects ({100 * outcome_trigger_count / total_subjects:.1f}%)"
+        )
+
     # Apply simulation
     simulated_df = simulate_causal_effects(
         df,
@@ -442,14 +515,53 @@ def main() -> None:
         args.outcome_only_effect,
         args.exposure_outcome_effect,
         args.days_offset,
+        args.simulate_outcome,
+        args.exposure_name,
+        args.outcome_name,
     )
-    ate = simulated_df["ite"].mean()
-    simulated_df.drop(columns=["ite"], inplace=True)
-    print(len(simulated_df))
-    print("ate", ate)
-    with open(args.write_dir + "/ate.txt", "w") as f:
-        f.write(f"ATE: {ate}")
-    
+
+    # Calculate stats after simulation
+    exposure_counts = simulated_df.groupby("subject_id")["code"].apply(
+        lambda codes: (codes == args.exposure_name).any()
+    )
+    if args.simulate_outcome:
+        outcome_counts = simulated_df.groupby("subject_id")["code"].apply(
+            lambda codes: (codes == args.outcome_name).any()
+        )
+
+    exposure_count = exposure_counts.sum()
+    if args.simulate_outcome:
+        outcome_count = outcome_counts.sum()
+        exposure_pct = 100 * exposure_count / total_subjects
+        outcome_pct = 100 * outcome_count / total_subjects
+
+    # Calculate conditional probabilities
+    if args.simulate_outcome:
+        outcomes_given_exposure = outcome_counts[exposure_counts].mean() * 100
+        outcomes_given_no_exposure = outcome_counts[~exposure_counts].mean() * 100
+
+    print("\nSimulation results:")
+    print(f"  EXPOSURE events: {exposure_count} subjects ({exposure_pct:.1f}%)")
+
+    if args.simulate_outcome:
+        print(f"  OUTCOME events: {outcome_count} subjects ({outcome_pct:.1f}%)")
+        print(f"  P(Outcome | Exposure): {outcomes_given_exposure:.1f}%")
+        print(f"  P(Outcome | No Exposure): {outcomes_given_no_exposure:.1f}%")
+
+    os.makedirs(args.write_dir, exist_ok=True)
+
+    if args.simulate_outcome:
+        # Calculate and display ATE
+        ate = simulated_df["ite"].mean()
+        print(f"\nAverage Treatment Effect: {ate:.4f}")
+        print(f"Number of records: {len(simulated_df)}")
+
+        # Remove ite column before writing shards
+        simulated_df.drop(columns=["ite"], inplace=True)
+
+        # Write ATE to file
+        with open(os.path.join(args.write_dir, ".ate.txt"), "w") as f:
+            f.write(f"ATE: {ate}")
     # Write results
     write_shards(simulated_df, args.write_dir, shards)
 
