@@ -71,20 +71,27 @@ jobs:
           run_step main.prepare_training_data               finetune/prepare_finetune_exposure.yaml
           run_step main.finetune_cv                        finetune/finetune_exposure.yaml
 
-          # ─── Finetune Exposure & Outcome ───────────────────────────
+          ## ─── Prepare Finetune Data ───────────────────────────
           run_step main_causal.prepare_ft_exp_y      finetune/prepare/ft_exp_y.yaml
           python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetune/processed_data/exp_y
+          
+          # ─── Finetune Exposure & Outcome ───────────────────────────
           run_step main_causal.finetune_exp_y         finetune/finetune_exp_y.yaml
           python tests/pipeline/ft_exp_y.py ./outputs/causal/finetuning/ft_exp_y
-
+          
+          ## ─── Check performance ───────────────────────────────────────
           python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_exposure --min 0.55 --max 0.8 --metric exposure_roc_auc
           python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_outcome --min 0.65 --max 0.9 --metric outcome_roc_auc
 
-
           # ─── Calibration ───────────────────────────────────────
           run_step main_causal.calibrate_exp_y        finetune/calibrate_exp_y.yaml
-          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetuning/calibrated_exp_y/predictions_exposure
-          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetuning/calibrated_exp_y/predictions_outcome
+          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetune/models/exp_y/calibrated/predictions_exposure
+          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetune/models/exp_y/calibrated/predictions_outcome
 
+          # ─── Estimate ───────────────────────────────────────
+          run_step main_causal.estimate        estimate/estimate.yaml
+          python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/MEDS_correlated_causal/tuning
+          
+          
           run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction.yaml
           run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
