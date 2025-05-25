@@ -32,16 +32,16 @@ outcome:
 trainer_args:
   sampler_function:
     _target_: corebehrt.modules.trainer.utils.Sampling.inverse_sqrt
-  batch_size: 256
-  val_batch_size: 256
-  effective_batch_size: 256
+  batch_size: 128
+  val_batch_size: 128
+  effective_batch_size: 128
   epochs: 10
   info: true
   gradient_clip:
     clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
-  early_stopping: 2
+  early_stopping: 3
   stopping_criterion: roc_auc
 
 optimizer:
@@ -50,7 +50,7 @@ optimizer:
 
 scheduler:
   _target_: transformers.get_constant_schedule_with_warmup
-  num_warmup_epochs: 2
+  num_warmup_epochs: 3
 
 metrics:
   roc_auc:
