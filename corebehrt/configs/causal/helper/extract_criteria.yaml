@@ -4,9 +4,9 @@ logging:
 
 paths:
   ### Inputs
-  cohort: ./outputs/causal/exposure_cohort # Data directory
-  meds: ./example_data/example_MEDS_data_causal
-  splits: [ tuning ]
+  cohort: ./outputs/causal/finetune/cohorts/exposure # Data directory
+  meds: ./example_data/MEDS_correlated_causal
+  splits: [tuning]
   criteria_definitions_config: ./corebehrt/configs/causal/helper/criteria_definitions.yaml
   ### Outputs
-  criteria: ./outputs/causal/criteria_for_stats # Data directory
+  criteria: ./outputs/causal/finetune/criteria_for_stats # Data directory
