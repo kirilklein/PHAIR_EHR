@@ -68,16 +68,16 @@ jobs:
           run_step main.select_cohort                      finetune/select_cohort/exposure.yaml
 
           # ─── Prepare initial data ────────────────────────────────────
-          run_step main.prepare_training_data               finetune/prepare_finetune_exposure.yaml
-          run_step main.finetune_cv                        finetune/finetune_exposure.yaml
+          run_step main.prepare_training_data               finetune/prepare/ft_exp.yaml
+          run_step main.finetune_cv                        finetune/ft_exp.yaml
 
           ## ─── Prepare Finetune Data ───────────────────────────
           run_step main_causal.prepare_ft_exp_y      finetune/prepare/ft_exp_y.yaml
           python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetune/processed_data/exp_y
           
           # ─── Finetune Exposure & Outcome ───────────────────────────
-          run_step main_causal.finetune_exp_y         finetune/finetune_exp_y.yaml
-          python tests/pipeline/ft_exp_y.py ./outputs/causal/finetuning/ft_exp_y
+          run_step main_causal.finetune_exp_y         finetune/ft_exp_y.yaml
+          python tests/pipeline/ft_exp_y.py ./outputs/causal/finetune/models/exp_y
           
           ## ─── Check performance ───────────────────────────────────────
           python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_exposure --min 0.55 --max 0.8 --metric exposure_roc_auc
@@ -91,7 +91,7 @@ jobs:
           # ─── Estimate ───────────────────────────────────────
           run_step main_causal.estimate        estimate/estimate.yaml
           python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/MEDS_correlated_causal/tuning
-          
-          
-          run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction.yaml
+
+          # ─── Criteria and stats ───────────────────────────────────────
           run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
+          run_step main_causal.helper_scripts.get_stats helper/get_stats.yaml
