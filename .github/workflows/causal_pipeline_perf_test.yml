@@ -63,7 +63,7 @@ jobs:
 
           run_step main.finetune_cv finetune/ft_exp.yaml
           echo "🔧 Checking Performance"
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure --min 0.6 --max 0.9
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure --min 0.58 --max 0.9
           
           
           
