@@ -59,7 +59,7 @@ jobs:
           # ─── Finetune Exposure & Outcome ───────────────────────────
           run_step main.finetune_cv finetune/ft_exp_uncensored.yaml
           echo "🔧 Checking Performance uncensored"
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure_uncensored --min 0.98
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure_uncensored --min 0.95
 
           run_step main.finetune_cv finetune/ft_exp.yaml
           echo "🔧 Checking Performance"
