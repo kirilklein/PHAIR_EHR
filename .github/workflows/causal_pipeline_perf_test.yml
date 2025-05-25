@@ -51,7 +51,7 @@ jobs:
           run_step main.prepare_training_data prepare_and_pretrain/prepare_pretrain.yaml
           run_step main.pretrain prepare_and_pretrain/pretrain.yaml
           run_step main.create_outcomes outcomes.yaml
-          run_step main.select_cohort select_cohort/exposure_simple_val.yaml
+          run_step main.select_cohort finetune/select_cohort/exposure_simple_val.yaml
           # ─── Prepare Finetune Data ───────────────────────────
           run_step main.prepare_training_data prepare/ft_exp_uncensored.yaml
           run_step main.finetune_cv ft_exp_uncensored.yaml
