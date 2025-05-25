@@ -24,31 +24,24 @@ python -m corebehrt.main.create_outcomes --config_path corebehrt\configs\causal\
 if errorlevel 1 goto :error
 
 echo Running select_cohort...
-python -m corebehrt.main.select_cohort --config_path corebehrt\configs\causal\finetune\select_cohort\exposure.yaml
+python -m corebehrt.main.select_cohort --config_path corebehrt\configs\causal\finetune\select_cohort\exposure_simple_val.yaml
 if errorlevel 1 goto :error
 
-:: Prepare and run finetuning
 echo Running prepare_finetune_data...
-python -m corebehrt.main_causal.prepare_ft_exp_y --config_path corebehrt\configs\causal\finetune\prepare\ft_exp_y.yaml
+python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp.yaml
+if errorlevel 1 goto :error
+
+echo Running prepare_finetune_data uncensored...
+python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp_uncensored.yaml
 if errorlevel 1 goto :error
 
 echo Running finetune...
-python -m corebehrt.main_causal.finetune_exp_y --config_path corebehrt\configs\causal\finetune\ft_exp_y.yaml
+python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\finetune\ft_exp.yaml
 if errorlevel 1 goto :error
 
-
-:: Run Causal Steps
-echo Running calibrate...
-python -m corebehrt.main_causal.calibrate_exp_y --config_path corebehrt\configs\causal\finetune\calibrate_exp_y.yaml
+echo Running finetune uncensored...
+python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\finetune\ft_exp_uncensored.yaml
 if errorlevel 1 goto :error
-
-:: Run Estimation
-echo Running estimate...
-python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\estimate\estimate.yaml
-if errorlevel 1 goto :error
-
-echo Checking estimate...
-python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/MEDS_correlated_causal/tuning
 
 echo Pipeline completed successfully.
 pause

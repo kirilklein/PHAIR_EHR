@@ -6,9 +6,7 @@ from sklearn.calibration import calibration_curve
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
 
-def test_calibration_results(
-    calibrated_dir: str, n_bins: int = 20, plot: bool = False
-):
+def test_calibration_results(calibrated_dir: str, n_bins: int = 20, plot: bool = False):
     """
     Test the calibration results by comparing original and calibrated predictions.
 
@@ -54,11 +52,17 @@ def test_calibration_results(
 
     # Compute calibration curves
     prob_true_orig, prob_pred_orig = calibration_curve(
-        merged_df["targets_orig"], merged_df["probas_orig"], n_bins=n_bins, strategy="quantile"
+        merged_df["targets_orig"],
+        merged_df["probas_orig"],
+        n_bins=n_bins,
+        strategy="quantile",
     )
 
     prob_true_cal, prob_pred_cal = calibration_curve(
-        merged_df["targets_cal"], merged_df["probas_cal"], n_bins=n_bins, strategy="quantile"
+        merged_df["targets_cal"],
+        merged_df["probas_cal"],
+        n_bins=n_bins,
+        strategy="quantile",
     )
 
     # Compute calibration error (mean absolute difference between predicted and true probabilities)
@@ -89,29 +93,41 @@ def test_calibration_results(
         plt.figure(figsize=(10, 10))
         # Plot perfect calibration line
         plt.plot([0, 1], [0, 1], "k--", label="Perfect calibration")
-        
+
         # Plot calibration curves with error bars
-        plt.plot(prob_pred_orig, prob_true_orig, "ro-", 
-                label=f"Original (error: {cal_error_orig:.4f})")
-        plt.plot(prob_pred_cal, prob_true_cal, "bo-", 
-                label=f"Calibrated (error: {cal_error_cal:.4f})")
-        
+        plt.plot(
+            prob_pred_orig,
+            prob_true_orig,
+            "ro-",
+            label=f"Original (error: {cal_error_orig:.4f})",
+        )
+        plt.plot(
+            prob_pred_cal,
+            prob_true_cal,
+            "bo-",
+            label=f"Calibrated (error: {cal_error_cal:.4f})",
+        )
+
         plt.xlabel("Mean predicted probability")
         plt.ylabel("Fraction of positives")
-        plt.title(f"Calibration Curves\n"
-                 f"Original Error: {cal_error_orig:.4f}, "
-                 f"Calibrated Error: {cal_error_cal:.4f}")
-        
-        plt.legend(loc='lower right')
+        plt.title(
+            f"Calibration Curves\n"
+            f"Original Error: {cal_error_orig:.4f}, "
+            f"Calibrated Error: {cal_error_cal:.4f}"
+        )
+
+        plt.legend(loc="lower right")
         plt.grid(True, alpha=0.3)
-        
+
         # Set axis limits and aspect ratio
         plt.xlim([0, 1])
         plt.ylim([0, 1])
-        plt.gca().set_aspect('equal')
-        
+        plt.gca().set_aspect("equal")
+
         plt.tight_layout()
-        plt.savefig(join(calibrated_dir, "calibration_curves.png"), dpi=300, bbox_inches='tight')
+        plt.savefig(
+            join(calibrated_dir, "calibration_curves.png"), dpi=300, bbox_inches="tight"
+        )
         plt.close()
 
         print(f"\nCalibration plot saved in {calibrated_dir}")
@@ -140,9 +156,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    results = test_calibration_results(
-        args.calibrated_dir, plot=args.plot
-    )
+    results = test_calibration_results(args.calibrated_dir, plot=args.plot)
     calibration_improved = (
         results["calibration_error"]["calibrated"]
         < results["calibration_error"]["original"]

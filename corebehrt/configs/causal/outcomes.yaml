@@ -1,21 +1,21 @@
 logging:
   level: INFO
-  path: ./outputs/logs
+  path: ./outputs/logs/causal
 
 paths:
-  data: ./example_data/example_MEDS_data_causal
-  outcomes: ./outputs/causal/outcomes
-  features: ./outputs/causal/features/
+  data: ./example_data/MEDS_correlated_causal
+  features: ./outputs/causal/data/features
+
+  outcomes: ./outputs/causal/finetune/outcomes
 
 outcomes:
-  EXPOSURE: 
+  EXPOSURE:
     type: [code]
-    match: [['EXPOSURE']]
+    match: [["EXPOSURE"]]
     match_how: contains
     case_sensitive: true
   OUTCOME:
     type: [code]
-    match: [['OUTCOME']]
+    match: [["OUTCOME"]]
     match_how: startswith
     case_sensitive: false
-    

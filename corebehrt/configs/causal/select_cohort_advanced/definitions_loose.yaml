@@ -1,0 +1,19 @@
+# provide expressions for inclusion and exclusion
+inclusion: min_age_20 & criteria_1
+exclusion: min_age_90
+
+criteria_definitions:
+  # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
+  min_age_20:
+    # would be the age at index_date
+    min_age: 20
+
+  min_age_90:
+    min_age: 90
+
+  criteria_1:
+    codes:
+      # Diagnosis codes
+      - ^LAB2.*
+    start_days: -365
+    end_days: 0
