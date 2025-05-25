@@ -27,7 +27,7 @@ trainer_args:
     clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
-  early_stopping: 2
+  early_stopping: 3
   stopping_criterion: roc_auc
 
 optimizer:
