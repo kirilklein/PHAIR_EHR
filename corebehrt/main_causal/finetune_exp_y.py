@@ -17,7 +17,7 @@ from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 
-CONFIG_PATH = "./corebehrt/configs/causal/finetune/finetune_exp_y.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/finetune/ft_exp_y.yaml"
 
 
 def main_finetune(config_path):

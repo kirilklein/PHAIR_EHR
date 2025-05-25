@@ -22,6 +22,7 @@ data:
   type: finetune
   truncation_len: 64
   min_len: 2 # 0 by default
+  cv_folds: 2
 
 exposure:
   # we will convert outcomes to binary based on whether at least one outcome is in the follow up window

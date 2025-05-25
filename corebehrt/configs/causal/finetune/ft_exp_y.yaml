@@ -19,11 +19,11 @@ model:
 
 trainer_args:
   loss_weight_function:
-    _target_: corebehrt.modules.trainer.utils.PositiveWeight.effective_n_samples # function to calculate positive weights. Possible options: sqrt and effective_n_samples
+    _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt # function to calculate positive weights. Possible options: sqrt and effective_n_samples
   batch_size: 128
   val_batch_size: 128
   effective_batch_size: 128
-  epochs: 6
+  epochs: 3
   info: true
   gradient_clip:
     clip_value: 1.0
