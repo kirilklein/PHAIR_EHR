@@ -13,14 +13,7 @@ criteria_definitions:
 
   criteria_1:
     codes:
-    # Diagnosis codes
-    - ^D8.*
-    exclude_codes:
-    - ^D84.1
+      # Diagnosis codes
+      - ^LAB2.*
     start_days: -365
     end_days: 0
-  criteria_2:
-    codes:
-    - ^LAB6.*
-    numeric_value:
-      min_value: 20
