@@ -34,7 +34,7 @@ jobs:
           echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
 
       # ─── Pipeline & Tests ────────────────────────────────────
-      - name: Run finetuneperformance test
+      - name: Run finetune performance test
         shell: bash
         run: |
           set -euo pipefail
@@ -55,12 +55,16 @@ jobs:
           # ─── Prepare Finetune Data ───────────────────────────
           run_step main.prepare_training_data finetune/prepare/ft_exp_uncensored.yaml
           run_step main.prepare_training_data finetune/prepare/ft_exp.yaml
+          
           # ─── Finetune Exposure & Outcome ───────────────────────────
           run_step main.finetune_cv finetune/ft_exp_uncensored.yaml
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure_uncensored --min 0.98
+
           run_step main.finetune_cv finetune/ft_exp.yaml
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure --min 0.6 --max 0.9
           # ─── Check Performance ───────────────────────────────────────
           echo "🔧 Checking Performance"
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure_uncensored --min 0.98
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure --min 0.6 --max 0.9
+          
+          
          
           
