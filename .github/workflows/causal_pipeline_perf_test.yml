@@ -53,12 +53,10 @@ jobs:
           run_step main.create_outcomes outcomes.yaml
           run_step main.select_cohort finetune/select_cohort/exposure_simple_val.yaml
           # ─── Prepare Finetune Data ───────────────────────────
-          run_step main.prepare_training_data prepare/ft_exp_uncensored.yaml
-          run_step main.finetune_cv ft_exp_uncensored.yaml
-          run_step main.finetune_cv ft_exp.yaml
-          # ─── Check Performance ───────────────────────────────────────
-          run_step main.finetune_cv ft_exp_uncensored.yaml
-          run_step main.finetune_cv ft_exp.yaml
+          run_step main.prepare_training_data finetune/prepare/ft_exp_uncensored.yaml
+          # ─── Finetune Exposure & Outcome ───────────────────────────
+          run_step main.finetune_cv finetune/ft_exp_uncensored.yaml
+          run_step main.finetune_cv finetune/ft_exp.yaml
           # ─── Check Performance ───────────────────────────────────────
           echo "🔧 Checking Performance"
           python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure_uncensored --min 0.98
