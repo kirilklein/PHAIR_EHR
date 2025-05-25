@@ -8,10 +8,10 @@ paths:
   tokenized: ./outputs/causal/data/tokenized
   cohort: ./outputs/causal/finetune/cohorts/exposure # path to cohort directory
 
-  exposures: ./outputs/causal/data/outcomes
+  exposures: ./outputs/causal/finetune/outcomes
   exposure: EXPOSURE.csv
 
-  outcomes: ./outputs/causal/data/outcomes
+  outcomes: ./outputs/causal/finetune/outcomes
   outcome: OUTCOME.csv
 
   ## OUTPUTS
