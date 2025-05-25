@@ -100,7 +100,11 @@ def main():
         "path", type=str, help="Path to directory containing performance metrics"
     )
     parser.add_argument(
-        "file_start", type=str, help="Start of file name", default="val_scores_mean_std"
+        "file_start",
+        type=str,
+        help="Start of file name",
+        nargs="?",
+        default="val_scores_mean_std",
     )
     parser.add_argument(
         "--min", type=float, default=0, help="Minimum acceptable value (default: 0)"
