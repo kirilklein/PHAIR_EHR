@@ -68,4 +68,4 @@ jobs:
           run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction_loose.yaml
           run_step main_causal.select_cohort_advanced      select_cohort_advanced/extraction_strict.yaml
           # Check that the two loose criteria produce a cohort that is at least as large as the strict criteria
-          python tests/helpers/compare_cohorts.py ./outputs/causal/cohorts/advanced/loose ./outputs/causal/cohorts/advanced/strict
+          python tests/helpers/compare_cohorts.py ./outputs/causal/finetune/cohorts/advanced/loose ./outputs/causal/finetune/cohorts/advanced/strict

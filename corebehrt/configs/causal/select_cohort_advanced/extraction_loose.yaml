@@ -4,12 +4,12 @@ logging:
 
 paths:
   ### Inputs
-  cohort: ./outputs/causal/exposure_cohort # Data directory
+  cohort: ./outputs/causal/finetune/cohorts/exposure # Data directory
   meds: ./example_data/example_MEDS_data_causal
   splits: [tuning]
   criteria_config: ./corebehrt/configs/causal/select_cohort_advanced/definitions_loose.yaml
   ### Outputs
-  cohort_advanced: ./outputs/causal/cohorts/advanced/loose # Data directory
+  cohort_advanced: ./outputs/causal/finetune/cohorts/advanced/loose # Data directory
 
 cv_folds: 2 # can be set to 1 if only a simple train/val split is needed
 val_ratio: 0.1 # only used if cv_folds is set to 1
