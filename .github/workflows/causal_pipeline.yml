@@ -34,7 +34,7 @@ jobs:
           echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
 
       # ─── Pipeline & Tests ────────────────────────────────────
-      - name: Run pipeline & estimation checks
+      - name: Run causal pipeline
         shell: bash
         run: |
           set -euo pipefail

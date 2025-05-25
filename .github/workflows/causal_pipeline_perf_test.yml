@@ -34,7 +34,7 @@ jobs:
           echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
 
       # ─── Pipeline & Tests ────────────────────────────────────
-      - name: Run pipeline & estimation checks
+      - name: Run finetuneperformance test
         shell: bash
         run: |
           set -euo pipefail
@@ -54,6 +54,7 @@ jobs:
           run_step main.select_cohort finetune/select_cohort/exposure_simple_val.yaml
           # ─── Prepare Finetune Data ───────────────────────────
           run_step main.prepare_training_data finetune/prepare/ft_exp_uncensored.yaml
+          run_step main.prepare_training_data finetune/prepare/ft_exp.yaml
           # ─── Finetune Exposure & Outcome ───────────────────────────
           run_step main.finetune_cv finetune/ft_exp_uncensored.yaml
           run_step main.finetune_cv finetune/ft_exp.yaml
