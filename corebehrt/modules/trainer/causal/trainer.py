@@ -108,7 +108,14 @@ class CausalEHRTrainer(EHRTrainer):
             outcome_metrics = compute_avg_metrics(
                 prediction_data[OUTCOME].metric_values
             )
-            metrics = {**exposure_metrics, **outcome_metrics}
+            
+            # Compute simple average metrics
+            simple_metrics = {}
+            for name in self.metrics.keys():
+                if f"{EXPOSURE}_{name}" in exposure_metrics and f"{OUTCOME}_{name}" in outcome_metrics:
+                    simple_metrics[name] = (exposure_metrics[f"{EXPOSURE}_{name}"] + outcome_metrics[f"{OUTCOME}_{name}"]) / 2
+            
+            metrics = {**exposure_metrics, **outcome_metrics, **simple_metrics}
 
         self.model.train()
 
@@ -146,6 +153,13 @@ class CausalEHRTrainer(EHRTrainer):
             self._save_target_results(
                 target_type, logits, targets, metrics, epoch, mode
             )
+
+        # Compute average metrics (simple metric names)
+        for name in self.metrics.keys():
+            if f"{EXPOSURE}_{name}" in metrics and f"{OUTCOME}_{name}" in metrics:
+                avg_value = (metrics[f"{EXPOSURE}_{name}"] + metrics[f"{OUTCOME}_{name}"]) / 2
+                metrics[name] = avg_value
+                self.log(f"{name} (avg): {avg_value}")
 
         # Process counterfactual outcome
         cf_logits = torch.cat(prediction_data[CF_OUTCOME].logits_list)
@@ -198,15 +212,17 @@ class CausalEHRTrainer(EHRTrainer):
                 outputs.exposure_logits
             )
             exposure_batch = {TARGET: batch[EXPOSURE_TARGET]}
+            exposure_value = func(exposure_outputs, exposure_batch)
             prediction_data[EXPOSURE].metric_values[f"{EXPOSURE}_{name}"].append(
-                func(exposure_outputs, exposure_batch)
+                exposure_value
             )
 
             # Outcome metrics
             outcome_outputs = namedtuple("Outputs", ["logits"])(outputs.outcome_logits)
             outcome_batch = {TARGET: batch[TARGET]}
+            outcome_value = func(outcome_outputs, outcome_batch)
             prediction_data[OUTCOME].metric_values[f"{OUTCOME}_{name}"].append(
-                func(outcome_outputs, outcome_batch)
+                outcome_value
             )
 
     def _save_target_results(
