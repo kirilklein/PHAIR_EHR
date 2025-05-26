@@ -15,7 +15,6 @@ from corebehrt.modules.preparation.causal.dataset import CausalPatientData
 
 def dataframe_to_causal_patient_list(df: pd.DataFrame) -> List[CausalPatientData]:
     """Convert a DataFrame containing patient data into a list of PatientData objects.
-
     Args:
         df (pd.DataFrame): DataFrame containing patient data with columns:
             - PID: Patient ID
@@ -23,7 +22,6 @@ def dataframe_to_causal_patient_list(df: pd.DataFrame) -> List[CausalPatientData
             - abspos: Absolute positions/timestamps
             - segment: Segment IDs
             - age: Patient ages
-
     Returns:
         List[PatientData]: List of PatientData objects, where each object contains:
             - pid (str): Patient ID

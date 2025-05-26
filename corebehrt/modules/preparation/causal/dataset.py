@@ -40,6 +40,12 @@ class CausalPatientDataset(PatientDataset):
         Returns:
             PatientDataset: Returns self for method chaining.
         """
+        valid_attributes = {"outcome", "exposure"}
+        if attribute_name not in valid_attributes:
+            raise ValueError(
+                f"Invalid attribute name: {attribute_name}. Must be one of {valid_attributes}"
+            )
+
         for p in self.patients:
             setattr(p, attribute_name, values[p.pid])
 

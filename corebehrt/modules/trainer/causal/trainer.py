@@ -108,13 +108,19 @@ class CausalEHRTrainer(EHRTrainer):
             outcome_metrics = compute_avg_metrics(
                 prediction_data[OUTCOME].metric_values
             )
-            
+
             # Compute simple average metrics
             simple_metrics = {}
             for name in self.metrics.keys():
-                if f"{EXPOSURE}_{name}" in exposure_metrics and f"{OUTCOME}_{name}" in outcome_metrics:
-                    simple_metrics[name] = (exposure_metrics[f"{EXPOSURE}_{name}"] + outcome_metrics[f"{OUTCOME}_{name}"]) / 2
-            
+                if (
+                    f"{EXPOSURE}_{name}" in exposure_metrics
+                    and f"{OUTCOME}_{name}" in outcome_metrics
+                ):
+                    simple_metrics[name] = (
+                        exposure_metrics[f"{EXPOSURE}_{name}"]
+                        + outcome_metrics[f"{OUTCOME}_{name}"]
+                    ) / 2
+
             metrics = {**exposure_metrics, **outcome_metrics, **simple_metrics}
 
         self.model.train()
@@ -157,7 +163,9 @@ class CausalEHRTrainer(EHRTrainer):
         # Compute average metrics (simple metric names)
         for name in self.metrics.keys():
             if f"{EXPOSURE}_{name}" in metrics and f"{OUTCOME}_{name}" in metrics:
-                avg_value = (metrics[f"{EXPOSURE}_{name}"] + metrics[f"{OUTCOME}_{name}"]) / 2
+                avg_value = (
+                    metrics[f"{EXPOSURE}_{name}"] + metrics[f"{OUTCOME}_{name}"]
+                ) / 2
                 metrics[name] = avg_value
                 self.log(f"{name} (avg): {avg_value}")
 
