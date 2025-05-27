@@ -1,17 +1,16 @@
-from collections import namedtuple
+import os
+from collections import defaultdict, namedtuple
 from typing import Dict
 
+import matplotlib.pyplot as plt
 import torch
 import yaml
-import matplotlib.pyplot as plt
-import os
-from collections import defaultdict
 
 from corebehrt.constants.causal.data import (
+    CF_OUTCOME,
+    EXPOSURE,
     EXPOSURE_TARGET,
     OUTCOME,
-    EXPOSURE,
-    CF_OUTCOME,
 )
 from corebehrt.constants.data import TARGET
 from corebehrt.modules.monitoring.logger import get_tqdm
@@ -40,11 +39,15 @@ class CausalPredictionData:
 
 
 class CausalEHRTrainer(EHRTrainer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, plateau_threshold=0.01, **kwargs):
         super().__init__(*args, **kwargs)
         # Initialize metric tracking for plotting
         self.metric_history = defaultdict(list)
         self.epoch_history = []
+        self.plateau_threshold = plateau_threshold
+        self.encoder_frozen = False
+        self.best_exposure_auc = None
+        self.best_outcome_auc = None
 
     def _evaluate(self, epoch: int, mode="val") -> tuple:
         """Returns the validation/test loss and metrics for both exposure and outcome."""
@@ -339,6 +342,7 @@ class CausalEHRTrainer(EHRTrainer):
         self._save_checkpoint_conditionally(
             epoch, epoch_loss, val_loss, val_metrics, test_metrics
         )
+        self._check_and_freeze_encoder(val_metrics)
 
     def _update_metric_history(
         self, epoch, train_loss, val_loss, val_metrics, test_metrics
@@ -449,3 +453,62 @@ class CausalEHRTrainer(EHRTrainer):
         self.log(
             f"Updated model task weights - Exposure: {exposure_weight}, Outcome: {outcome_weight}"
         )
+
+    def _check_and_freeze_encoder(self, metrics: dict):
+        """
+        Freeze the encoder if either exposure or outcome AUC plateaus.
+        """
+        if self.encoder_frozen:
+            return
+
+        exposure_auc = metrics.get(f"{EXPOSURE}_roc_auc", 0.5)
+        outcome_auc = metrics.get(f"{OUTCOME}_roc_auc", 0.5)
+
+        exp_plateau, self.best_exposure_auc = self._task_plateau(
+            exposure_auc, self.best_exposure_auc, True
+        )
+        out_plateau, self.best_outcome_auc = self._task_plateau(
+            outcome_auc, self.best_outcome_auc, True
+        )
+
+        if exp_plateau or out_plateau:
+            self._freeze_encoder()
+            self.log(
+                f"Encoder frozen due to plateau (exp_plateau={exp_plateau}, out_plateau={out_plateau})"
+            )
+            for param_group in self.optimizer.param_groups:
+                param_group["lr"] = param_group["lr"] * 0.1
+                self.log(f"Learning rate updated to {param_group['lr']}")
+
+    def _task_plateau(
+        self, current_auc: float, best_auc: float, higher_is_better: bool
+    ):
+        """
+        Check if a task's AUC has plateaued and update best AUC.
+
+        Returns:
+            plateau (bool): True if improvement < threshold
+            new_best_auc (float): updated best AUC value
+        """
+        if best_auc is None:
+            # Initialize best AUC
+            return False, current_auc
+
+        improvement = (current_auc - best_auc) / best_auc
+        plateau = (
+            improvement < self.plateau_threshold
+            if higher_is_better
+            else improvement > -self.plateau_threshold
+        )
+        improvement = improvement if higher_is_better else -improvement
+        new_best = current_auc if improvement > 0 else best_auc
+        return plateau, new_best
+
+    def _freeze_encoder(self):
+        """
+        Freeze all encoder parameters to stop updating them.
+        """
+        for name, param in self.model.named_parameters():
+            if not ("cls" in name):
+                param.requires_grad = False
+        self.encoder_frozen = True

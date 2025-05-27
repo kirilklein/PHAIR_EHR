@@ -87,7 +87,6 @@ def finetune_fold(
         model, outcomes
     )
     epoch = modelmanager.get_epoch()
-
     trainer = CausalEHRTrainer(
         model=model,
         optimizer=optimizer,
