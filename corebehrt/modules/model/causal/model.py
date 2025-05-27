@@ -63,6 +63,12 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.outcome_cls = CausalFineTuneHead(
             hidden_size=config.hidden_size, with_exposure=True
         )
+        self.register_buffer("exposure_weight", torch.tensor(1.0))
+        self.register_buffer("outcome_weight", torch.tensor(1.0))
+
+    def update_task_weights(self, exposure_weight, outcome_weight):
+        self.exposure_weight.fill_(exposure_weight)
+        self.outcome_weight.fill_(outcome_weight)
 
     def forward(self, batch: dict, cf: bool = False):
         """

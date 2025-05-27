@@ -131,7 +131,8 @@ class CausalEHRTrainer(EHRTrainer):
                     ) / 2
 
             metrics = {**exposure_metrics, **outcome_metrics, **simple_metrics}
-
+        if mode == "val" and metrics:
+            self._update_model_task_weights(metrics)
         self.model.train()
 
         # Return average loss and all metrics
@@ -309,7 +310,6 @@ class CausalEHRTrainer(EHRTrainer):
         # Plot metrics
         self._plot_metrics()
 
-        # ... rest of existing validate_and_log method ...
         if epoch == 1:  # for testing purposes/if first epoch is best
             self._save_checkpoint(
                 epoch,
@@ -436,3 +436,16 @@ class CausalEHRTrainer(EHRTrainer):
             os.path.join(figs_dir, f"{metric_name}.png"), dpi=150, bbox_inches="tight"
         )
         plt.close()  # Close to prevent memory issues
+
+    def _update_model_task_weights(self, metrics: dict):
+        exposure_auc = metrics.get(f"{EXPOSURE}_roc_auc", 0.5)
+        outcome_auc = metrics.get(f"{OUTCOME}_roc_auc", 0.5)
+
+        exposure_weight = max(1 - ((exposure_auc - 0.5) * 2), 0.1)
+        outcome_weight = max(1 - ((outcome_auc - 0.5) * 2), 0.1)
+
+        self.model.update_task_weights(exposure_weight, outcome_weight)
+
+        self.log(
+            f"Updated model task weights - Exposure: {exposure_weight}, Outcome: {outcome_weight}"
+        )
