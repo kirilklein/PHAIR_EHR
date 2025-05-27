@@ -39,7 +39,8 @@ dependencies = [
     "torch==2.5.1",
     "tqdm==4.67.1",
     "transformers>=4.48.0",
-    "xgboost"
+    "xgboost",
+    "matplotlib",
 ]
 
 [tool.setuptools.packages.find]
