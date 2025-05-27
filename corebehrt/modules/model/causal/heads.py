@@ -84,10 +84,12 @@ class CausalBiGRU(nn.Module):
         self.classifier_input_size = hidden_size + 1 if with_exposure else hidden_size
         self.norm = torch.nn.LayerNorm(self.classifier_input_size)
         self.classifier = torch.nn.Sequential(
-            nn.Linear(self.classifier_input_size, self.classifier_input_size//2, bias=True),
+            nn.Linear(
+                self.classifier_input_size, self.classifier_input_size // 2, bias=True
+            ),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(self.classifier_input_size//2, 1, bias=True)
+            nn.Linear(self.classifier_input_size // 2, 1, bias=True),
         )
 
         # Store last pooled output for analysis/debugging
