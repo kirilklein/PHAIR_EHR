@@ -19,6 +19,7 @@ PROB_C_KEY = "prob_c"  # Predicted outcome probability under control
 # Treatment/exposure related
 EXPOSURE_COL = "exposure"
 PS_COL = "ps"  # Propensity score
+OUTCOME_COL = "outcome"
 
 # Counterfactual probabilities
 PROBAS_EXPOSED = "probas_exposed"

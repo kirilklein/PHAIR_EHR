@@ -23,8 +23,11 @@ from corebehrt.constants.causal.data import (
     CF_OUTCOME,
     CF_PROBAS,
     EXPOSURE,
+    EXPOSURE_COL,
     OUTCOME,
+    OUTCOME_COL,
     PROBAS,
+    PS_COL,
     TARGETS,
 )
 from corebehrt.constants.causal.paths import (
@@ -38,6 +41,10 @@ from corebehrt.constants.paths import FOLDS_FILE
 from corebehrt.functional.causal.data_utils import split_data
 from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
 from corebehrt.functional.trainer.calibrate import train_calibrator
+from corebehrt.main_causal.helper.calibrate_plot import (
+    produce_plots,
+    produce_calibration_plots,
+)
 
 
 def load_calibrate_and_save(finetune_dir: str, write_dir: str) -> None:
@@ -71,9 +78,7 @@ def load_calibrate_and_save(finetune_dir: str, write_dir: str) -> None:
 
     # Load collected predictions
     df_exp = pd.read_csv(join(write_dir, PREDICTIONS_DIR_EXPOSURE, PREDICTIONS_FILE))
-    print("len(df_exp)", len(df_exp))
     df_outcome = pd.read_csv(join(write_dir, PREDICTIONS_DIR_OUTCOME, PREDICTIONS_FILE))
-    print("len(df_outcome)", len(df_outcome))
 
     # Calibrate
     df_exp_calibrated = calibrate_folds(df_exp, folds)
@@ -88,6 +93,34 @@ def load_calibrate_and_save(finetune_dir: str, write_dir: str) -> None:
         join(write_dir, PREDICTIONS_DIR_OUTCOME, CALIBRATED_PREDICTIONS_FILE),
         index=False,
     )
+
+    df = combine_predictions(df_exp_calibrated, df_outcome_calibrated)
+    df.to_csv(
+        join(write_dir, "combined_predictions_and_targets_calibrated.csv"), index=False
+    )
+
+    fig_dir = join(write_dir, "figures")
+    os.makedirs(fig_dir, exist_ok=True)
+
+    produce_calibration_plots(
+        df_exp_calibrated, df_exp, fig_dir, "Propensity Score Calibration", "ps"
+    )
+    produce_calibration_plots(
+        df_outcome_calibrated,
+        df_outcome,
+        fig_dir,
+        "Outcome Probability Calibration",
+        "outcome",
+    )
+
+    produce_plots(df, fig_dir)
+
+
+def combine_predictions(exp: pd.DataFrame, out: pd.DataFrame) -> pd.DataFrame:
+    exp = exp.rename(columns={PROBAS: PS_COL, TARGETS: EXPOSURE_COL})
+    out = out.rename(columns={TARGETS: OUTCOME_COL})
+    df = pd.merge(exp, out, on=PID_COL, how="inner", validate="1:1")
+    return df
 
 
 def calibrate_folds(
