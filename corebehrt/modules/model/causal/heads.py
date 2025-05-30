@@ -87,6 +87,7 @@ class CausalBiGRU(nn.Module):
             nn.Linear(
                 self.classifier_input_size, self.classifier_input_size // 2, bias=True
             ),
+            nn.LayerNorm(self.classifier_input_size // 2),
             nn.ReLU(),
             nn.Dropout(0.1),
             nn.Linear(self.classifier_input_size // 2, 1, bias=True),
