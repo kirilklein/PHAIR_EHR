@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK, TARGET
-from corebehrt.modules.model.causal.heads import CausalFineTuneHead
+from corebehrt.modules.model.causal.heads import CausalBiGRU, CausalMLP
 from corebehrt.modules.model.model import CorebehrtForFineTuning
 
 logger = logging.getLogger(__name__)
@@ -55,14 +55,20 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_exposures)
         self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_outcomes)
 
-        # Two separate classification heads
-        self.exposure_cls = CausalFineTuneHead(
-            hidden_size=config.hidden_size, with_exposure=False
-        )
-        # Outcome head needs extra dimension for exposure
-        self.outcome_cls = CausalFineTuneHead(
-            hidden_size=config.hidden_size, with_exposure=True
-        )
+        self.shared_pool_cls = CausalBiGRU(hidden_size=config.hidden_size)
+
+        # Separate normalizations for different input sizes
+        self.exposure_norm = nn.LayerNorm(self.shared_pool_cls.pooled_size)  # Size: 64
+        self.outcome_norm = nn.LayerNorm(
+            self.shared_pool_cls.pooled_size + 1
+        )  # Size: 65 (64 + 1 for exposure)
+
+        # Separate MLP classifiers
+        self.exposure_cls = CausalMLP(self.shared_pool_cls.pooled_size)
+        self.outcome_cls = CausalMLP(
+            self.shared_pool_cls.pooled_size + 1
+        )  # +1 for exposure status
+
         self.register_buffer("exposure_weight", torch.tensor(1.0))
         self.register_buffer("outcome_weight", torch.tensor(1.0))
 
@@ -73,35 +79,31 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
     def forward(self, batch: dict, cf: bool = False):
         """
         Forward pass for causal fine-tuning.
-
-        Args:
-            batch (dict): must contain:
-                - 'concept', 'segment', 'age', 'abspos', 'attention_mask'
-                - 'exposure_target' and 'target' as labels
-
-        Returns:
-            BaseModelOutput: with exposure_logits, outcome_logits and optional losses if targets provided.
         """
         outputs = super().forward(batch)
-
         sequence_output = outputs[0]  # Last hidden state
 
-        # Get exposure prediction at sequence level
-        exposure_logits = self.exposure_cls(
-            sequence_output, batch[ATTENTION_MASK]
-        )  # shape: (batch_size, 1)
+        # Get shared pooled representation (without exposure)
+        shared_embedding = self.shared_pool_cls(sequence_output, batch[ATTENTION_MASK])
+
+        # Get exposure prediction from shared embedding (with normalization)
+        exposure_input = self.exposure_norm(shared_embedding)
+        exposure_logits = self.exposure_cls(exposure_input)
         outputs.exposure_logits = exposure_logits
 
-        # Get exposure status (0/1) and convert to -1/1
-        exposure_status = batch[EXPOSURE_TARGET]
+        # Get exposure status (0/1) and convert to -1/1 as a new tensor
+        exposure_status = batch[EXPOSURE_TARGET].float()  # Ensure it's float
         if cf:
-            exposure_status = 1 - exposure_status
-        exposure_status = 2 * exposure_status - 1  # Convert from 0/1 to -1/1
+            exposure_status = 1.0 - exposure_status
+        exposure_status = 2.0 * exposure_status - 1.0  # Convert from 0/1 to -1/1
 
-        # Get outcome prediction using sequence output with exposure
-        outcome_logits = self.outcome_cls(
-            sequence_output, batch[ATTENTION_MASK], exposure_status=exposure_status
+        # For outcome prediction: concatenate exposure status to shared embedding
+        outcome_input = torch.cat(
+            [shared_embedding, exposure_status.unsqueeze(-1)], dim=-1
         )
+        # Apply normalization to the concatenated input (now with correct size)
+        outcome_input = self.outcome_norm(outcome_input)
+        outcome_logits = self.outcome_cls(outcome_input)
         outputs.outcome_logits = outcome_logits
 
         # Calculate losses if targets are provided
