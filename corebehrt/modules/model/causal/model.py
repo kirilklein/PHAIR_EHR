@@ -110,6 +110,10 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
                 exposure_logits, batch[EXPOSURE_TARGET]
             )
             outcome_loss = self.get_outcome_loss(outcome_logits, batch[TARGET])
+
+            # Store individual losses for tracking
+            outputs.exposure_loss = exposure_loss
+            outputs.outcome_loss = outcome_loss
             outputs.loss = exposure_loss + outcome_loss  # Combined loss
         return outputs
 

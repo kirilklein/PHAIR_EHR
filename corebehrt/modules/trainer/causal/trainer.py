@@ -54,12 +54,12 @@ class CausalEHRTrainer(EHRTrainer):
         if mode == "val":
             if self.val_dataset is None:
                 self.log("No validation dataset provided")
-                return None, None
+                return None, None, None, None
             dataloader = self.get_dataloader(self.val_dataset, mode="val")
         elif mode == "test":
             if self.test_dataset is None:
                 self.log("No test dataset provided")
-                return None, None
+                return None, None, None, None
             dataloader = self.get_dataloader(self.test_dataset, mode="test")
         else:
             raise ValueError(f"Mode {mode} not supported. Use 'val' or 'test'")
@@ -68,6 +68,8 @@ class CausalEHRTrainer(EHRTrainer):
         loop = get_tqdm(dataloader)
         loop.set_description(mode)
         loss = 0
+        exposure_loss_total = 0
+        outcome_loss_total = 0
 
         # Metric tracking for both target types
         prediction_data = {
@@ -97,6 +99,10 @@ class CausalEHRTrainer(EHRTrainer):
                 # Add to total loss if available
                 if hasattr(outputs, "loss"):
                     loss += outputs.loss.item()
+                if hasattr(outputs, "exposure_loss"):
+                    exposure_loss_total += outputs.exposure_loss.item()
+                if hasattr(outputs, "outcome_loss"):
+                    outcome_loss_total += outputs.outcome_loss.item()
 
                 if self.accumulate_logits:
                     # Store predictions for later processing
@@ -138,8 +144,12 @@ class CausalEHRTrainer(EHRTrainer):
             self._update_model_task_weights(metrics)
         self.model.train()
 
-        # Return average loss and all metrics
-        return loss / len(loop), metrics
+        # Return average losses and all metrics
+        avg_loss = loss / len(loop)
+        avg_exposure_loss = exposure_loss_total / len(loop)
+        avg_outcome_loss = outcome_loss_total / len(loop)
+
+        return avg_loss, metrics, avg_exposure_loss, avg_outcome_loss
 
     def process_causal_classification_results(
         self,
@@ -299,15 +309,27 @@ class CausalEHRTrainer(EHRTrainer):
         )
 
     def validate_and_log(self, epoch: int, epoch_loss: float, train_loop) -> None:
-        val_loss, val_metrics = self._evaluate(epoch, mode="val")
-        _, test_metrics = self._evaluate(epoch, mode="test")
+        val_loss, val_metrics, val_exposure_loss, val_outcome_loss = self._evaluate(
+            epoch, mode="val"
+        )
+        _, test_metrics, test_exposure_loss, test_outcome_loss = self._evaluate(
+            epoch, mode="test"
+        )
 
         # Calculate average train loss for this epoch
         avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)
 
         # Store metrics for plotting
         self._update_metric_history(
-            epoch, avg_train_loss, val_loss, val_metrics, test_metrics
+            epoch,
+            avg_train_loss,
+            val_loss,
+            val_metrics,
+            test_metrics,
+            val_exposure_loss,
+            val_outcome_loss,
+            test_exposure_loss,
+            test_outcome_loss,
         )
 
         # Plot metrics
@@ -345,15 +367,38 @@ class CausalEHRTrainer(EHRTrainer):
         self._check_and_freeze_encoder(val_metrics)
 
     def _update_metric_history(
-        self, epoch, train_loss, val_loss, val_metrics, test_metrics
+        self,
+        epoch,
+        train_loss,
+        val_loss,
+        val_metrics,
+        test_metrics,
+        val_exposure_loss=None,
+        val_outcome_loss=None,
+        test_exposure_loss=None,
+        test_outcome_loss=None,
     ):
         """Update the metric history for plotting"""
         self.epoch_history.append(epoch)
 
-        # Store losses
-        self.metric_history["train_loss"].append(train_loss)
+        # Store losses - use val_loss as default for first epoch if train_loss is 0
+        if train_loss == 0 and val_loss is not None:
+            self.metric_history["train_loss"].append(val_loss)
+        else:
+            self.metric_history["train_loss"].append(train_loss)
+
         if val_loss is not None:
             self.metric_history["val_loss"].append(val_loss)
+
+        # Store individual losses
+        if val_exposure_loss is not None:
+            self.metric_history["val_exposure_loss"].append(val_exposure_loss)
+        if val_outcome_loss is not None:
+            self.metric_history["val_outcome_loss"].append(val_outcome_loss)
+        if test_exposure_loss is not None:
+            self.metric_history["test_exposure_loss"].append(test_exposure_loss)
+        if test_outcome_loss is not None:
+            self.metric_history["test_outcome_loss"].append(test_outcome_loss)
 
         # Store validation metrics
         if val_metrics:
