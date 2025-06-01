@@ -17,6 +17,7 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.metrics import brier_score_loss
 
 from corebehrt.constants.causal.data import (
     CALIBRATION_COLLAPSE_THRESHOLD,
@@ -42,8 +43,8 @@ from corebehrt.functional.causal.data_utils import split_data
 from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
 from corebehrt.functional.trainer.calibrate import train_calibrator
 from corebehrt.main_causal.helper.calibrate_plot import (
-    produce_plots,
     produce_calibration_plots,
+    produce_plots,
 )
 
 
@@ -250,6 +251,7 @@ def collect_combined_predictions(
 def robust_calibration_with_fallback(
     calibrated_probas: np.ndarray,
     preds: np.ndarray,
+    targets: np.ndarray,
     epsilon: float = 1e-8,
     collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
 ) -> np.ndarray:
@@ -261,6 +263,13 @@ def robust_calibration_with_fallback(
     if np.std(calibrated_probas) < collapse_threshold:
         warnings.warn(
             f"Calibrated probabilities appear to be collapsed (std={np.std(calibrated_probas):.6f}). Using original probabilities instead."
+        )
+        return preds
+    original_brier_score = brier_score_loss(preds, targets)
+    calibrated_brier_score = brier_score_loss(calibrated_probas, targets)
+    if calibrated_brier_score > original_brier_score:
+        warnings.warn(
+            f"Calibrated Brier score ({calibrated_brier_score:.6f}) is higher than original Brier score ({original_brier_score:.6f}). Using original probabilities instead."
         )
         return preds
     else:

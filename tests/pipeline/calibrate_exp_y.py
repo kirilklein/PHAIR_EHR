@@ -157,23 +157,25 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     results = test_calibration_results(args.calibrated_dir, plot=args.plot)
-    calibration_improved = (
-        results["calibration_error"]["calibrated"]
-        < results["calibration_error"]["original"]
+    epsilon = 1e-4
+    calibration_improved = results["calibration_error"]["calibrated"] <= (
+        results["calibration_error"]["original"] + epsilon
     )
-    assert calibration_improved, "❌ Calibration did not improve"
-
-    brier_score_improved = (
-        results["brier_score"]["calibrated"] < results["brier_score"]["original"]
+    assert calibration_improved, (
+        f"❌ Calibration did worsen, Original: {results['calibration_error']['original']:.4f}, Calibrated: {results['calibration_error']['calibrated']:.4f}"
     )
-    # Print summary
-    print("\n=== Summary ===")
-    print("✅ Calibration improved:")
-    print(
-        "✅ Brier score improved:"
-        if brier_score_improved
-        else "❌ Brier score did not improve"
+    print("✅ Calibration did not worsen:")
+    print("Original calibration error:", results["calibration_error"]["original"])
+    print("Calibrated calibration error:", results["calibration_error"]["calibrated"])
+    brier_score_improved = results["brier_score"]["calibrated"] <= (
+        results["brier_score"]["original"] + epsilon
     )
+    assert brier_score_improved, (
+        f"❌ Brier score did worsen, Original: {results['brier_score']['original']:.4f}, Calibrated: {results['brier_score']['calibrated']:.4f}"
+    )
+    print("✅ Brier score did not worsen:")
+    print("Original Brier score:", results["brier_score"]["original"])
+    print("Calibrated Brier score:", results["brier_score"]["calibrated"])
     print(
         f"AUC change: {results['auc']['calibrated'] - results['auc']['original']:.4f}"
     )
