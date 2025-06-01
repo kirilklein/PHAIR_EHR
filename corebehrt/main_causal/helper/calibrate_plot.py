@@ -130,17 +130,17 @@ def produce_plots(df: pd.DataFrame, fig_dir: str) -> None:
     os.makedirs(cf_fig_dir, exist_ok=True)
     plot_cf_probas_diff_vs_certainty_in_exposure(df, cf_fig_dir)
     plot_cf_diff_vs_probas_by_group(
-        df, cf_fig_dir, EXPOSURE_COL, PROBAS, ("Control", "Exposed")
+        df, cf_fig_dir, EXPOSURE_COL, PROBAS, ("Exposed", "Control")
     )
     plot_cf_diff_vs_probas_by_group(
-        df, cf_fig_dir, OUTCOME_COL, PROBAS, ("Negative", "Positive")
+        df, cf_fig_dir, OUTCOME_COL, PROBAS, ("Positive", "Negative")
     )
 
     plot_cf_diff_vs_probas_by_group(
-        df, cf_fig_dir, EXPOSURE_COL, PS_COL, ("Control", "Exposed")
+        df, cf_fig_dir, EXPOSURE_COL, PS_COL, ("Exposed", "Control")
     )
     plot_cf_diff_vs_probas_by_group(
-        df, cf_fig_dir, OUTCOME_COL, PS_COL, ("Negative", "Positive")
+        df, cf_fig_dir, OUTCOME_COL, PS_COL, ("Positive", "Negative")
     )
 
 
@@ -194,7 +194,7 @@ def plot_cf_probas_diff_vs_certainty_in_exposure(
     ax.scatter(
         df.loc[group_mask, "x"],
         df.loc[group_mask, "diff"],
-        color="#e74c3c",
+        color="#e74c3c",  # red
         alpha=0.7,
         label="Exposed",
         s=1,
@@ -202,7 +202,7 @@ def plot_cf_probas_diff_vs_certainty_in_exposure(
     ax.scatter(
         df.loc[~group_mask, "x"],
         df.loc[~group_mask, "diff"],
-        color="#3498db",
+        color="#3498db",  # blue
         alpha=0.7,
         label="Control",
         s=1,
@@ -235,6 +235,8 @@ def plot_cf_diff_vs_probas_by_group(
 ) -> None:
     """
     Plot the difference between counterfactual and factual probabilities vs outcome probability.
+    Group columns used to get the group mask: group==1 first, group==0 second
+    Group labels: 0 = Control/Negative, 1 = Exposed/Positive
     """
     group_mask = df[group_col] == 1
     # Create the plot
@@ -243,7 +245,7 @@ def plot_cf_diff_vs_probas_by_group(
     ax.scatter(
         df.loc[group_mask, proba_col],
         df.loc[group_mask, "diff"],
-        color="#e74c3c",
+        color="#e74c3c",  # red
         alpha=0.6,
         label=group_labels[0],
         s=1,
@@ -251,7 +253,7 @@ def plot_cf_diff_vs_probas_by_group(
     ax.scatter(
         df.loc[~group_mask, proba_col],
         df.loc[~group_mask, "diff"],
-        color="#3498db",
+        color="#3498db",  # blue
         alpha=0.6,
         label=group_labels[1],
         s=1,
