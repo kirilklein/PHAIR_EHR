@@ -254,7 +254,7 @@ def robust_calibration_with_fallback(
     targets: np.ndarray,
     epsilon: float = 1e-8,
     collapse_threshold: float = CALIBRATION_COLLAPSE_THRESHOLD,
-) -> np.ndarray:
+) -> Tuple[np.ndarray, bool]:
     """
     If the calibrated probabilities appear to be collapsed (have very low variance),
     keeps the original probabilities instead. Returns the updated validation dataframe.
