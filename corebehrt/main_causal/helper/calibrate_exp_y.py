@@ -158,10 +158,11 @@ def calibrate_folds(
             calibration_collapse_threshold,
         )
         calibrated_cf = None
-        if (CF_PROBAS in val_df.columns) and calibration_performed:
-            calibrated_cf = calibrator.predict(val_df[CF_PROBAS])
-        else:
-            calibrated_cf = val_df[CF_PROBAS]
+        if CF_PROBAS in val_df.columns:
+            if calibration_performed:
+                calibrated_cf = calibrator.predict(val_df[CF_PROBAS])
+            else:
+                calibrated_cf = val_df[CF_PROBAS]
 
         calibrated = pd.DataFrame(
             {
@@ -265,8 +266,8 @@ def robust_calibration_with_fallback(
             f"Calibrated probabilities appear to be collapsed (std={np.std(calibrated_probas):.6f}). Using original probabilities instead."
         )
         return preds, False
-    original_brier_score = brier_score_loss(preds, targets)
-    calibrated_brier_score = brier_score_loss(calibrated_probas, targets)
+    original_brier_score = brier_score_loss(targets, preds)
+    calibrated_brier_score = brier_score_loss(targets, calibrated_probas)
     if calibrated_brier_score > original_brier_score:
         warnings.warn(
             f"Calibrated Brier score ({calibrated_brier_score:.6f}) is higher than original Brier score ({original_brier_score:.6f}). Using original probabilities instead."
