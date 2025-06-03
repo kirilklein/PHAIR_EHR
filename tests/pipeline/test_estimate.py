@@ -6,7 +6,6 @@ import sys
 import os
 import glob
 from typing import Optional
-import numpy as np
 
 
 def test_ate_estimate(estimate_dir: str, data_dir: Optional[str] = None) -> bool:
