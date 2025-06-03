@@ -31,12 +31,12 @@ trainer_args:
   checkpoint_frequency: 1
   early_stopping: 4
   stopping_criterion: roc_auc
-  n_layers_to_freeze: 1
+  n_layers_to_freeze: 2
   unfreeze_on_plateau: false # unfreeze all layers if the performance is less than plateau_threshold
   unfreeze_at_epoch: 20 # if unfrezze_on_plateau is true, whichever condition is met first
 
 optimizer:
-  lr: 1e-3
+  lr: 2e-3
   eps: 1e-6
 
 scheduler:
