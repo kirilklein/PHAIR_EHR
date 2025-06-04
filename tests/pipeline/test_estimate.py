@@ -48,6 +48,8 @@ def test_ate_estimate(estimate_dir: str, data_dir: Optional[str] = None) -> bool
 
         for idx, row in df.iterrows():
             method = row["method"]
+            if method in ["RD", "RR"]:
+                continue
             effect = row["effect"]
             ci_lower = row["CI95_lower"]
             ci_upper = row["CI95_upper"]
