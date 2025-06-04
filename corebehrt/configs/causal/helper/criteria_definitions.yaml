@@ -10,17 +10,13 @@ criteria_definitions:
   # If you need to match a literal /, you can escape it with \/
   criteria_1:
     codes:
-    # Diagnosis codes
-    - ^D84.*
-    exclude_codes:
-    - ^D84.1
+      # Diagnosis codes
+      - ^LAB2.*
     start_days: -365
     end_days: 0
   criteria_2:
     codes:
-    - ^LAB6.*
-    numeric_value:
-      min_value: 100
+      - ^LAB6.*
 
   criteria_3:
     expression: criteria_1 | criteria_2

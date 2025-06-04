@@ -22,7 +22,7 @@ from corebehrt.main_causal.helper.select_cohort_advanced import (
 )
 from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidator
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
+from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/helper/extract_criteria.yaml"
 

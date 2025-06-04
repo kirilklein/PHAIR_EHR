@@ -29,9 +29,12 @@ jobs:
 
       - name: Install dependencies
         run: pip install --no-cache-dir -r requirements.txt
+      - name: Set Python path
+        run: |
+          echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
 
       # ─── Pipeline & Tests ────────────────────────────────────
-      - name: Run pipeline & estimation checks
+      - name: Run causal pipeline
         shell: bash
         run: |
           set -euo pipefail
@@ -62,54 +65,29 @@ jobs:
 
           # ─── Outcomes & cohort selection ──────────────────
           run_step main.create_outcomes                     outcomes.yaml
-          run_step main.select_cohort                      select_cohort/select_cohort_exposure.yaml
-          run_step main_causal.select_cohort_advanced      select_cohort/advanced_extraction.yaml
+          run_step main.select_cohort                      finetune/select_cohort/exposure.yaml
 
-          run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
-
-          # ─── Finetuning ────────────────────────────────────
-          run_step main.prepare_training_data               finetune/prepare_finetune_exposure.yaml
-          run_step main.finetune_cv                        finetune/finetune_exposure.yaml
-          run_step main_causal.calibrate                   finetune/calibrate.yaml
-          run_step main_causal.encode                      finetune/encode.yaml
-
-          # ─── Base causal training ──────────────────────────
-          run_step main_causal.train_mlp                   double_robust/train_mlp.yaml
-          run_step main_causal.train_xgb                   double_robust/train_xgb.yaml
-          run_step main_causal.estimate                    estimate/estimate.yaml
-
-          # ─── Simulated: default ATE ───────────────────────
-          run_step main_causal.simulate                    simulate.yaml
-          run_step main_causal.train_mlp                   double_robust/train_mlp_simulated.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true.yaml
-          run_test 0.1 estimate_with_true
-
-          # ─── Simulated: weak effect ───────────────────────
-          run_step main_causal.simulate                    simulate_weak.yaml
-          run_step main_causal.train_mlp                   double_robust/train_mlp_simulated_weak.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true_weak.yaml
-          run_test 0.1 estimate_with_true_weak
-
-          # ─── Simulated: strong encoding ────────────────────
-          run_step main_causal.simulate                    simulate_enc_strong.yaml
-          run_step main_causal.train_mlp                   double_robust/train_mlp_simulated_enc_strong.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true_enc_strong.yaml
-          run_test 0.1 estimate_with_true_enc_strong
-
-          # ─── Simulated: XGBoost ───────────────────────────
-          run_step main_causal.train_xgb                   double_robust/train_xgb_simulated.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true_xgb.yaml
-          run_test 0.1 estimate_with_true_xgb
-
-          # ─── Simulated: XGBoost ───────────────────────────
-          run_step main_causal.train_xgb                   double_robust/train_xgb_simulated.yaml
-          run_step main_causal.estimate                    estimate/estimate_with_true_xgb.yaml
-          run_test 0.1 estimate_with_true_xgb
-
-          # ─── Additional tests ───────────────────────────
-          run_step main_causal.helper_scripts.get_stats     helper/get_stats.yaml
-          run_step main_causal.select_cohort_advanced      select_cohort/advanced_extraction_loose.yaml
-          run_step main_causal.select_cohort_advanced      select_cohort/advanced_extraction_strict.yaml
-          # Check that the two loose criteria produce a cohort that is at least as large as the strict criteria
-          python tests/helpers/compare_cohorts.py ./outputs/causal/exposure_cohort_advanced_loose ./outputs/causal/exposure_cohort_advanced_strict
+          ## ─── Prepare Finetune Data ───────────────────────────
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare/ft_exp_y.yaml
+          python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetune/processed_data/exp_y
           
+          # ─── Finetune Exposure & Outcome ───────────────────────────
+          run_step main_causal.finetune_exp_y         finetune/ft_exp_y.yaml
+          python tests/pipeline/ft_exp_y.py ./outputs/causal/finetune/models/exp_y
+          
+          ## ─── Check performance ───────────────────────────────────────
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_exposure --min 0.55 --max 0.8 --metric exposure_roc_auc
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_outcome --min 0.6 --max 0.9 --metric outcome_roc_auc
+
+          # ─── Calibration ───────────────────────────────────────
+          run_step main_causal.calibrate_exp_y        finetune/calibrate_exp_y.yaml
+          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetune/models/exp_y/calibrated/predictions_exposure
+          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetune/models/exp_y/calibrated/predictions_outcome
+
+          # ─── Estimate ───────────────────────────────────────
+          run_step main_causal.estimate        estimate/estimate.yaml
+          python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/MEDS_correlated_causal/tuning
+
+          # ─── Criteria and stats ───────────────────────────────────────
+          run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
+          run_step main_causal.helper_scripts.get_stats helper/get_stats.yaml

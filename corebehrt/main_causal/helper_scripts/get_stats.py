@@ -44,7 +44,7 @@ from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     save_stats,
 )
 from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.directory_causal import CausalDirectoryPreparer
+from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/helper/get_stats.yaml"
 EPS = 1e-6

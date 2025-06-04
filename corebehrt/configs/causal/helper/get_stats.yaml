@@ -4,15 +4,15 @@ logging:
 
 paths:
   ### Inputs
-  criteria: ./outputs/causal/criteria_for_stats # should contain criteria_flags.csv
+  criteria: ./outputs/causal/finetune/criteria_for_stats # should contain criteria_flags.csv
 
   #### Optional
-  cohort: ./outputs/causal/exposure_cohort # should contain pids.pt
-  ps_calibrated_predictions: ./outputs/causal/calibrated_predictions # should contain predictions_and_targets_calibrated.csv
-  outcome_model: ./outputs/causal/trained_mlp # should contain predictions_and_targets_calibrated.csv
+  cohort: ./outputs/causal/finetune/cohorts/exposure # should contain pids.pt
+  ps_calibrated_predictions: ./outputs/causal/finetune/models/exp_y/calibrated/predictions_exposure # should contain predictions_and_targets_calibrated.csv
+  outcome_model: ./outputs/causal/finetune/models/exp_y/calibrated/predictions_outcome # should contain predictions_and_targets_calibrated.csv ! needs to be updated to use ft_exp
 
   ### Outputs
-  stats: ./outputs/causal/stats
+  stats: ./outputs/causal/finetune/stats
 
 # optional
 weights: ATE # chose from ATE, ATT, ATC or null

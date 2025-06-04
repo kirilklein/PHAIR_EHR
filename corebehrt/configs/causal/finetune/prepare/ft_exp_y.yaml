@@ -1,0 +1,36 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  features: ./outputs/causal/data/features
+  tokenized: ./outputs/causal/data/tokenized
+  cohort: ./outputs/causal/finetune/cohorts/exposure # path to cohort directory
+
+  exposures: ./outputs/causal/finetune/outcomes
+  exposure: EXPOSURE.csv
+
+  outcomes: ./outputs/causal/finetune/outcomes
+  outcome: OUTCOME.csv
+
+  ## OUTPUTS
+  prepared_data: ./outputs/causal/finetune/processed_data/exp_y # Save model/outputs to this folder
+  #runs: ./outputs/pretraining # Use for generating a new model folder
+
+data:
+  type: finetune
+  truncation_len: 64
+  min_len: 2 # 0 by default
+  cv_folds: 2
+
+exposure:
+  # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
+  n_hours_censoring: -10 # censor time after index date (negative means before)
+  n_hours_start_follow_up: -1 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+
+outcome:
+  n_hours_censoring: -10 # censor time after index date (negative means before)
+  n_hours_start_follow_up: 10 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
