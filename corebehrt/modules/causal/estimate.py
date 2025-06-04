@@ -247,7 +247,7 @@ class EffectEstimator:
     ) -> pd.DataFrame:
         """Calculate Risk Ratio with 95% CI using log transformation."""
         # Handle division by zero
-        if risk_unexposed == 0:
+        if risk_unexposed == 0 or risk_exposed == 0:
             risk_ratio = np.inf if risk_exposed > 0 else np.nan
             se_log_rr = np.nan
             ci_lower_rr = np.nan
@@ -279,7 +279,6 @@ class EffectEstimator:
                 "bootstrap": [0],
             }
         )
-
     def _build_multi_estimator(self) -> MultiEstimator:
         estimators = []
         method_args = self.estimation_args["method_args"]
