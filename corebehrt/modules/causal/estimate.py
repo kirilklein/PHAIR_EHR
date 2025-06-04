@@ -2,6 +2,7 @@ from os.path import join
 from typing import Any, Dict
 
 import pandas as pd
+import numpy as np
 from CausalEstimate import MultiEstimator
 from CausalEstimate.estimators import AIPW, IPW, TMLE
 from CausalEstimate.filter.propensity import filter_common_support
@@ -89,6 +90,7 @@ class EffectEstimator:
         df = self._prepare_data()
         effect_df = self._estimate_effects(df)
         effect_df = self._append_true_effect(df, effect_df)
+        effect_df = self._append_unadjusted_effect(df, effect_df)
         self._save_results(df, effect_df)
         self.logger.info("Effect estimation complete.")
 
@@ -135,6 +137,111 @@ class EffectEstimator:
             )
             effect_df[TRUE_EFFECT_COL] = true_effect
         return effect_df
+
+    def _append_unadjusted_effect(
+        self, df: pd.DataFrame, effect_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        Append unadjusted Risk Difference (RD) and Risk Ratio (RR) to the effect estimates.
+
+        Calculates simple two-sample comparisons between exposed and unexposed groups
+        with standard errors and 95% confidence intervals.
+        """
+        # Split data by exposure status
+        exposed = df[df[EXPOSURE_COL] == 1]
+        unexposed = df[df[EXPOSURE_COL] == 0]
+
+        # Calculate basic statistics
+        risk_exposed = exposed[TARGETS].mean()
+        risk_unexposed = unexposed[TARGETS].mean()
+        n_exposed = len(exposed)
+        n_unexposed = len(unexposed)
+
+        # Calculate both measures
+        rd_row = self._calculate_risk_difference(
+            risk_exposed, risk_unexposed, n_exposed, n_unexposed
+        )
+        rr_row = self._calculate_risk_ratio(
+            risk_exposed, risk_unexposed, n_exposed, n_unexposed
+        )
+
+        # Append both rows to existing results
+        return pd.concat([effect_df, rd_row, rr_row], ignore_index=True)
+
+    def _calculate_risk_difference(
+        self,
+        risk_exposed: float,
+        risk_unexposed: float,
+        n_exposed: int,
+        n_unexposed: int,
+    ) -> pd.DataFrame:
+        """Calculate Risk Difference with 95% CI using delta method."""
+        risk_difference = risk_exposed - risk_unexposed
+
+        # Standard error using delta method
+        variance_exposed = risk_exposed * (1 - risk_exposed) / n_exposed
+        variance_unexposed = risk_unexposed * (1 - risk_unexposed) / n_unexposed
+        se_rd = np.sqrt(variance_exposed + variance_unexposed)
+
+        # 95% Confidence Interval
+        ci_margin = 1.96 * se_rd
+        ci_lower_rd = risk_difference - ci_margin
+        ci_upper_rd = risk_difference + ci_margin
+
+        return pd.DataFrame(
+            {
+                "method": ["RD"],
+                "effect": [risk_difference],
+                "std_err": [se_rd],
+                "CI95_lower": [ci_lower_rd],
+                "CI95_upper": [ci_upper_rd],
+                "effect_1": [risk_exposed],
+                "effect_0": [risk_unexposed],
+                "bootstrap": [0],
+            }
+        )
+
+    def _calculate_risk_ratio(
+        self,
+        risk_exposed: float,
+        risk_unexposed: float,
+        n_exposed: int,
+        n_unexposed: int,
+    ) -> pd.DataFrame:
+        """Calculate Risk Ratio with 95% CI using log transformation."""
+        # Handle division by zero
+        if risk_unexposed == 0:
+            risk_ratio = np.inf if risk_exposed > 0 else np.nan
+            se_log_rr = np.nan
+            ci_lower_rr = np.nan
+            ci_upper_rr = np.nan
+        else:
+            risk_ratio = risk_exposed / risk_unexposed
+
+            # Standard error on log scale
+            se_log_rr = np.sqrt(
+                (1 - risk_exposed) / (risk_exposed * n_exposed)
+                + (1 - risk_unexposed) / (risk_unexposed * n_unexposed)
+            )
+
+            # 95% CI on log scale, then exponentiate
+            log_rr = np.log(risk_ratio)
+            ci_margin_log = 1.96 * se_log_rr
+            ci_lower_rr = np.exp(log_rr - ci_margin_log)
+            ci_upper_rr = np.exp(log_rr + ci_margin_log)
+
+        return pd.DataFrame(
+            {
+                "method": ["RR"],
+                "effect": [risk_ratio],
+                "std_err": [se_log_rr],
+                "CI95_lower": [ci_lower_rr],
+                "CI95_upper": [ci_upper_rr],
+                "effect_1": [risk_exposed],
+                "effect_0": [risk_unexposed],
+                "bootstrap": [0],
+            }
+        )
 
     def _build_multi_estimator(self) -> MultiEstimator:
         estimators = []
