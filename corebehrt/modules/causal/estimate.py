@@ -86,11 +86,20 @@ class EffectEstimator:
         }
 
     def run(self) -> None:
+        """Main pipeline: prepare data, estimate effects, add benchmarks, and save results."""
         self.logger.info("Starting effect estimation process")
         df = self._prepare_data()
+
+        # Estimate effects (CausalEstimate applies common support filtering internally)
         effect_df = self._estimate_effects(df)
-        effect_df = self._append_true_effect(df, effect_df)
-        effect_df = self._append_unadjusted_effect(df, effect_df)
+
+        # Apply the same common support filtering to get analysis cohort
+        analysis_df = self._get_analysis_cohort(df)
+
+        # Use filtered cohort for benchmarks to ensure consistency
+        effect_df = self._append_true_effect(analysis_df, effect_df)
+        effect_df = self._append_unadjusted_effect(analysis_df, effect_df)
+
         self._save_results(df, effect_df)
         self.logger.info("Effect estimation complete.")
 
@@ -116,7 +125,28 @@ class EffectEstimator:
         self.logger.info("Data loaded successfully")
         return df
 
+    def _get_analysis_cohort(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Apply the same common support filtering used by CausalEstimate estimators.
+
+        This ensures that true effects and unadjusted effects are computed on the
+        same cohort as the other estimators for fair comparison.
+        """
+        if self.estimation_args["common_support"]:
+            filtered_df = filter_common_support(
+                df,
+                ps_col=PS_COL,
+                treatment_col=EXPOSURE_COL,
+                threshold=self.estimation_args["common_support_threshold"],
+            )
+            self.logger.info(
+                f"Analysis cohort after common support filtering: {len(df)} → {len(filtered_df)} observations"
+            )
+            return filtered_df
+        return df
+
     def _estimate_effects(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Estimate effects using CausalEstimate (applies common support filtering internally)."""
         effect_dict = self.estimator.compute_effects(
             df,
             n_bootstraps=self.estimation_args["n_bootstrap"],
@@ -129,6 +159,12 @@ class EffectEstimator:
     def _append_true_effect(
         self, df: pd.DataFrame, effect_df: pd.DataFrame
     ) -> pd.DataFrame:
+        """
+        Add ground truth effect estimates from simulated counterfactual outcomes.
+
+        Uses the same analysis cohort as other estimators for consistency.
+        Only available when counterfactual outcomes directory is provided (simulation data).
+        """
         if self.counterfactual_outcomes_dir:
             cf_file = join(self.counterfactual_outcomes_dir, SIMULATION_RESULTS_FILE)
             cf_outcomes = pd.read_csv(cf_file)
@@ -144,10 +180,11 @@ class EffectEstimator:
         """
         Append unadjusted Risk Difference (RD) and Risk Ratio (RR) to the effect estimates.
 
+        Uses the same analysis cohort as other estimators for consistency.
         Calculates simple two-sample comparisons between exposed and unexposed groups
         with standard errors and 95% confidence intervals.
         """
-        # Split data by exposure status
+        # Split data by exposure status (uses same filtered cohort as other estimators)
         exposed = df[df[EXPOSURE_COL] == 1]
         unexposed = df[df[EXPOSURE_COL] == 0]
 
@@ -293,16 +330,15 @@ class EffectEstimator:
     def _compute_true_effect_from_counterfactuals(
         self, df: pd.DataFrame, cf_outcomes: pd.DataFrame
     ) -> pd.Series:
-        if self.estimation_args["common_support"]:
-            cf_outcomes = pd.merge(
-                cf_outcomes, df[[PID_COL, PS_COL]], on=PID_COL, validate="1:1"
-            )
-            cf_outcomes = filter_common_support(
-                cf_outcomes,
-                ps_col=PS_COL,
-                treatment_col=EXPOSURE_COL,
-                threshold=self.estimation_args["common_support_threshold"],
-            )
+        """
+        Compute ground truth effects from simulated counterfactual outcomes.
+
+        Uses the analysis cohort to ensure consistency with other estimators.
+        """
+        # Merge with the analysis cohort to get the same subjects
+        cf_outcomes = pd.merge(
+            cf_outcomes, df[[PID_COL, PS_COL]], on=PID_COL, validate="1:1"
+        )
         return compute_effect_from_counterfactuals(
             cf_outcomes, self.estimator_cfg.effect_type
         )
