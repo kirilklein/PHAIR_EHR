@@ -279,6 +279,7 @@ class EffectEstimator:
                 "bootstrap": [0],
             }
         )
+
     def _build_multi_estimator(self) -> MultiEstimator:
         estimators = []
         method_args = self.estimation_args["method_args"]
