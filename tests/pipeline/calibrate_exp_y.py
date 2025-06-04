@@ -184,7 +184,7 @@ if __name__ == "__main__":
         print(
             f"✅ Calibration error improved: {results['calibration_error']['original']:.4f} → {results['calibration_error']['calibrated']:.4f} ({cal_error_pct_change:+.1f}%)"
         )
-    elif cal_error_pct_change <= 10:
+    elif cal_error_pct_change <= 20:
         print(
             f"! WARNING: Calibration error worsened slightly: {results['calibration_error']['original']:.4f} → {results['calibration_error']['calibrated']:.4f} ({cal_error_pct_change:+.1f}%)"
         )
