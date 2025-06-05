@@ -2,6 +2,7 @@ from os.path import join
 from typing import Any, Dict
 
 import pandas as pd
+import numpy as np
 from CausalEstimate import MultiEstimator
 from CausalEstimate.estimators import AIPW, IPW, TMLE
 from CausalEstimate.filter.propensity import filter_common_support
@@ -85,10 +86,20 @@ class EffectEstimator:
         }
 
     def run(self) -> None:
+        """Main pipeline: prepare data, estimate effects, add benchmarks, and save results."""
         self.logger.info("Starting effect estimation process")
         df = self._prepare_data()
+
+        # Estimate effects (CausalEstimate applies common support filtering internally)
         effect_df = self._estimate_effects(df)
-        effect_df = self._append_true_effect(df, effect_df)
+
+        # Apply the same common support filtering to get analysis cohort
+        analysis_df = self._get_analysis_cohort(df)
+
+        # Use filtered cohort for benchmarks to ensure consistency
+        effect_df = self._append_true_effect(analysis_df, effect_df)
+        effect_df = self._append_unadjusted_effect(analysis_df, effect_df)
+
         self._save_results(df, effect_df)
         self.logger.info("Effect estimation complete.")
 
@@ -114,7 +125,28 @@ class EffectEstimator:
         self.logger.info("Data loaded successfully")
         return df
 
+    def _get_analysis_cohort(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Apply the same common support filtering used by CausalEstimate estimators.
+
+        This ensures that true effects and unadjusted effects are computed on the
+        same cohort as the other estimators for fair comparison.
+        """
+        if self.estimation_args["common_support"]:
+            filtered_df = filter_common_support(
+                df,
+                ps_col=PS_COL,
+                treatment_col=EXPOSURE_COL,
+                threshold=self.estimation_args["common_support_threshold"],
+            )
+            self.logger.info(
+                f"Analysis cohort after common support filtering: {len(df)} → {len(filtered_df)} observations"
+            )
+            return filtered_df
+        return df
+
     def _estimate_effects(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Estimate effects using CausalEstimate (applies common support filtering internally)."""
         effect_dict = self.estimator.compute_effects(
             df,
             n_bootstraps=self.estimation_args["n_bootstrap"],
@@ -127,6 +159,12 @@ class EffectEstimator:
     def _append_true_effect(
         self, df: pd.DataFrame, effect_df: pd.DataFrame
     ) -> pd.DataFrame:
+        """
+        Add ground truth effect estimates from simulated counterfactual outcomes.
+
+        Uses the same analysis cohort as other estimators for consistency.
+        Only available when counterfactual outcomes directory is provided (simulation data).
+        """
         if self.counterfactual_outcomes_dir:
             cf_file = join(self.counterfactual_outcomes_dir, SIMULATION_RESULTS_FILE)
             cf_outcomes = pd.read_csv(cf_file)
@@ -135,6 +173,112 @@ class EffectEstimator:
             )
             effect_df[TRUE_EFFECT_COL] = true_effect
         return effect_df
+
+    def _append_unadjusted_effect(
+        self, df: pd.DataFrame, effect_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        Append unadjusted Risk Difference (RD) and Risk Ratio (RR) to the effect estimates.
+
+        Uses the same analysis cohort as other estimators for consistency.
+        Calculates simple two-sample comparisons between exposed and unexposed groups
+        with standard errors and 95% confidence intervals.
+        """
+        # Split data by exposure status (uses same filtered cohort as other estimators)
+        exposed = df[df[EXPOSURE_COL] == 1]
+        unexposed = df[df[EXPOSURE_COL] == 0]
+
+        # Calculate basic statistics
+        risk_exposed = exposed[TARGETS].mean()
+        risk_unexposed = unexposed[TARGETS].mean()
+        n_exposed = len(exposed)
+        n_unexposed = len(unexposed)
+
+        # Calculate both measures
+        rd_row = self._calculate_risk_difference(
+            risk_exposed, risk_unexposed, n_exposed, n_unexposed
+        )
+        rr_row = self._calculate_risk_ratio(
+            risk_exposed, risk_unexposed, n_exposed, n_unexposed
+        )
+
+        # Append both rows to existing results
+        return pd.concat([effect_df, rd_row, rr_row], ignore_index=True)
+
+    def _calculate_risk_difference(
+        self,
+        risk_exposed: float,
+        risk_unexposed: float,
+        n_exposed: int,
+        n_unexposed: int,
+    ) -> pd.DataFrame:
+        """Calculate Risk Difference with 95% CI using delta method."""
+        risk_difference = risk_exposed - risk_unexposed
+
+        # Standard error using delta method
+        variance_exposed = risk_exposed * (1 - risk_exposed) / n_exposed
+        variance_unexposed = risk_unexposed * (1 - risk_unexposed) / n_unexposed
+        se_rd = np.sqrt(variance_exposed + variance_unexposed)
+
+        # 95% Confidence Interval
+        ci_margin = 1.96 * se_rd
+        ci_lower_rd = risk_difference - ci_margin
+        ci_upper_rd = risk_difference + ci_margin
+
+        return pd.DataFrame(
+            {
+                "method": ["RD"],
+                "effect": [risk_difference],
+                "std_err": [se_rd],
+                "CI95_lower": [ci_lower_rd],
+                "CI95_upper": [ci_upper_rd],
+                "effect_1": [risk_exposed],
+                "effect_0": [risk_unexposed],
+                "bootstrap": [0],
+            }
+        )
+
+    def _calculate_risk_ratio(
+        self,
+        risk_exposed: float,
+        risk_unexposed: float,
+        n_exposed: int,
+        n_unexposed: int,
+    ) -> pd.DataFrame:
+        """Calculate Risk Ratio with 95% CI using log transformation."""
+        # Handle division by zero
+        if risk_unexposed == 0 or risk_exposed == 0:
+            risk_ratio = np.inf if risk_exposed > 0 else np.nan
+            se_log_rr = np.nan
+            ci_lower_rr = np.nan
+            ci_upper_rr = np.nan
+        else:
+            risk_ratio = risk_exposed / risk_unexposed
+
+            # Standard error on log scale
+            se_log_rr = np.sqrt(
+                (1 - risk_exposed) / (risk_exposed * n_exposed)
+                + (1 - risk_unexposed) / (risk_unexposed * n_unexposed)
+            )
+
+            # 95% CI on log scale, then exponentiate
+            log_rr = np.log(risk_ratio)
+            ci_margin_log = 1.96 * se_log_rr
+            ci_lower_rr = np.exp(log_rr - ci_margin_log)
+            ci_upper_rr = np.exp(log_rr + ci_margin_log)
+
+        return pd.DataFrame(
+            {
+                "method": ["RR"],
+                "effect": [risk_ratio],
+                "std_err": [se_log_rr],
+                "CI95_lower": [ci_lower_rr],
+                "CI95_upper": [ci_upper_rr],
+                "effect_1": [risk_exposed],
+                "effect_0": [risk_unexposed],
+                "bootstrap": [0],
+            }
+        )
 
     def _build_multi_estimator(self) -> MultiEstimator:
         estimators = []
@@ -186,16 +330,15 @@ class EffectEstimator:
     def _compute_true_effect_from_counterfactuals(
         self, df: pd.DataFrame, cf_outcomes: pd.DataFrame
     ) -> pd.Series:
-        if self.estimation_args["common_support"]:
-            cf_outcomes = pd.merge(
-                cf_outcomes, df[[PID_COL, PS_COL]], on=PID_COL, validate="1:1"
-            )
-            cf_outcomes = filter_common_support(
-                cf_outcomes,
-                ps_col=PS_COL,
-                treatment_col=EXPOSURE_COL,
-                threshold=self.estimation_args["common_support_threshold"],
-            )
+        """
+        Compute ground truth effects from simulated counterfactual outcomes.
+
+        Uses the analysis cohort to ensure consistency with other estimators.
+        """
+        # Merge with the analysis cohort to get the same subjects
+        cf_outcomes = pd.merge(
+            cf_outcomes, df[[PID_COL, PS_COL]], on=PID_COL, validate="1:1"
+        )
         return compute_effect_from_counterfactuals(
             cf_outcomes, self.estimator_cfg.effect_type
         )
