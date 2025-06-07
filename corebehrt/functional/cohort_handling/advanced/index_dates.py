@@ -47,7 +47,7 @@ def select_time_eligible_exposed(index_dates: pd.DataFrame, time_windows: dict) 
     sufficient_lookback = index_dates[TIMESTAMP_COL] - min_lookback >= data_start
     filtered_index_dates = index_dates[sufficient_follow_up & sufficient_lookback]
 
-    return filtered_index_dates[PID_COL].unique()
+    return filtered_index_dates[PID_COL].unique().tolist()
 
 
 def draw_index_dates_for_control_with_redraw(
