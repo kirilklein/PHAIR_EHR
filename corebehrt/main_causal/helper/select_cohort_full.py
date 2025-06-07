@@ -1,3 +1,25 @@
+"""
+Cohort Selection for Causal Studies with Index Date Matching.
+
+This module implements a comprehensive pipeline for selecting matched cohorts in causal
+inference studies using EHR data. It identifies exposed and control patients while
+ensuring proper temporal alignment and applying inclusion/exclusion criteria.
+
+Main Workflow:
+1. Load patient data and identify first exposure events as index dates
+2. Filter exposed patients by time windows and advanced criteria
+3. Assign index dates to control patients by sampling from exposed patients (with death date validation)
+4. Apply same filtering criteria to control patients
+5. Combine results and save outputs with detailed statistics
+
+Key Functions:
+- select_cohort: Main cohort selection pipeline
+- draw_index_dates_for_control: Index date assignment for control patients with death validation
+
+The module ensures control patients receive valid index dates (not after death) through
+retry mechanisms and maintains detailed statistics throughout the filtering process.
+"""
+
 import json
 import logging
 import os
@@ -108,10 +130,7 @@ def select_cohort(
         criteria_definitions_cfg.get(EXCLUSION),
     )
 
-    exposed_stats = {
-        k: int(v) if isinstance(v, (np.int32, np.int64)) else v
-        for k, v in exposed_stats.items()
-    }
+    exposed_stats = _ensure_stats_format(exposed_stats)
     logger.info("Saving stats")
     os.makedirs(join(save_path, STATS_PATH), exist_ok=True)
     with open(join(save_path, STATS_PATH, "exposed.json"), "w") as f:
@@ -156,10 +175,7 @@ def select_cohort(
         join(save_path, STATS_PATH, "filtered_criteria.csv"), index=False
     )
 
-    control_stats = {
-        k: int(v) if isinstance(v, (np.int32, np.int64)) else v
-        for k, v in control_stats.items()
-    }
+    control_stats = _ensure_stats_format(control_stats)
     logger.info("Saving stats")
     with open(join(save_path, STATS_PATH, "control.json"), "w") as f:
         json.dump(control_stats, f)
@@ -173,6 +189,13 @@ def select_cohort(
     pids = index_dates[PID_COL].unique()
 
     return pids
+
+
+def _ensure_stats_format(stats: dict) -> dict:
+    return {
+        k: int(v) if isinstance(v, (np.int32, np.int64)) else v
+        for k, v in stats.items()
+    }
 
 
 def log_patient_num(logger, df, name: str):
