@@ -42,7 +42,10 @@ from corebehrt.main_causal.helper.select_cohort_advanced import (
 )
 from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
 from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidator
-from corebehrt.modules.cohort_handling.patient_filter import exclude_pids_from_df
+from corebehrt.modules.cohort_handling.patient_filter import (
+    exclude_pids_from_df,
+    filter_df_by_pids,
+)
 from corebehrt.modules.features.loader import ConceptLoader
 from corebehrt.modules.setup.config import load_config
 
@@ -89,71 +92,113 @@ def select_cohort(
     patients_info, exposures, index_dates = _load_data(
         features_path, exposures_path, exposure, logger
     )
+    control_patients_info = patients_info[
+        patients_info[PID_COL].isin(index_dates[PID_COL].unique())
+    ]
 
-    time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
-
-    excluded_exposed = exclude_pids_from_df(index_dates, time_eligible_exposed)[
-        PID_COL
-    ].unique()
-    logger.info(f"N excluded_exposed: {len(excluded_exposed)}")
-    patients_info = exclude_pids_from_df(patients_info, excluded_exposed)
-    patients_info_control = exclude_pids_from_df(
-        patients_info, index_dates[PID_COL].unique()
-    )
-    log_patient_num(
-        logger, patients_info, "patients_info after excluding by time windows"
-    )
     criteria_config = load_config(criteria_definitions_path)
-    criteria_exposed = filter_by_criteria(
+    criteria_exposed, index_dates_filtered_exposed = _prepare_exposed(
+        index_dates,
+        time_windows,
+        logger,
         criteria_config,
         meds_path,
-        index_dates,
         splits,
-        time_eligible_exposed,
-        logger,
         save_path,
-        "exposed",
     )
 
-    index_dates_filtered_exposed = index_dates[
-        index_dates[PID_COL].isin(criteria_exposed[PID_COL])
-    ]
-    log_patient_num(
-        logger, index_dates_filtered_exposed, "index_dates_filtered_exposed"
+    criteria_control, control_index_date_filtered = _prepare_control(
+        control_patients_info,
+        index_dates_filtered_exposed,
+        logger,
+        criteria_config,
+        meds_path,
+        splits,
+        save_path,
     )
 
+    criteria = pd.concat([criteria_exposed, criteria_control])
+    criteria.to_csv(join(save_path, STATS_PATH, "criteria.csv"), index=False)
+
+    final_index_dates = pd.concat(
+        [index_dates_filtered_exposed, control_index_date_filtered]
+    )
+    final_index_dates.to_csv(join(save_path, INDEX_DATES_FILE), index=False)
+
+    pids = final_index_dates[PID_COL].unique()
+
+    return pids
+
+
+def _prepare_control(
+    control_patients_info: pd.DataFrame,
+    index_dates: pd.DataFrame,
+    logger: logging.Logger,
+    criteria_config: dict,
+    meds_path: str,
+    splits: List[str],
+    save_path: str,
+):
+    """
+    Prepare control patients for cohort selection.
+    Return criteria and index dates.
+    Save stats.
+    """
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
     control_index_dates, exposure_matching = draw_index_dates_for_control(
-        patients_info_control[PID_COL].unique(),
-        index_dates_filtered_exposed,
-        patients_info_control,
+        control_patients_info[PID_COL].unique(),
+        index_dates,
+        control_patients_info,
     )
     exposure_matching.to_csv(join(save_path, "index_date_matching.csv"), index=False)
     log_patient_num(logger, control_index_dates, "control_index_dates")
 
-    criteria_control = filter_by_criteria(
+    criteria_control, control_stats = filter_by_criteria(
         criteria_config,
         meds_path,
         control_index_dates,
         splits,
         control_index_dates.index.tolist(),
         logger,
-        save_path,
         "control",
     )
+    _save_stats(control_stats, save_path, "control", logger)
+    control_index_date_filtered = filter_df_by_pids(
+        control_index_dates, criteria_control[PID_COL]
+    )
+    return criteria_control, control_index_date_filtered
 
-    criteria = pd.concat([criteria_exposed, criteria_control])
-    criteria.to_csv(join(save_path, STATS_PATH, "criteria.csv"), index=False)
 
-    control_index_date_filtered = control_index_dates[
-        control_index_dates[PID_COL].isin(criteria_control[PID_COL])
-    ]
-    index_dates = pd.concat([index_dates_filtered_exposed, control_index_date_filtered])
-    index_dates.to_csv(join(save_path, INDEX_DATES_FILE), index=False)
+def _prepare_exposed(
+    index_dates: pd.DataFrame,
+    time_windows: dict,
+    logger: logging.Logger,
+    criteria_config: dict,
+    meds_path: str,
+    splits: List[str],
+    save_path: str,
+):
+    """
+    Prepare exposed patients for cohort selection.
+    Return criteria and index dates.
+    Save stats.
+    """
+    time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
+    criteria_exposed, exposed_stats = filter_by_criteria(
+        criteria_config,
+        meds_path,
+        index_dates,
+        splits,
+        time_eligible_exposed,
+        logger,
+        "exposed",
+    )
+    _save_stats(exposed_stats, save_path, "exposed", logger)
 
-    pids = index_dates[PID_COL].unique()
-
-    return pids
+    index_dates_filtered_exposed = filter_df_by_pids(
+        index_dates, criteria_exposed[PID_COL]
+    )
+    return criteria_exposed, index_dates_filtered_exposed
 
 
 def filter_by_criteria(
@@ -163,7 +208,6 @@ def filter_by_criteria(
     splits: List[str],
     pids: List[str],
     logger: logging.Logger,
-    save_path: str,
     description: str,
 ):
     """
@@ -190,13 +234,15 @@ def filter_by_criteria(
         criteria_config.get(INCLUSION),
         criteria_config.get(EXCLUSION),
     )
+    return criteria_filtered, stats
 
+
+def _save_stats(stats: dict, save_path: str, description: str, logger: logging.Logger):
     stats = _ensure_stats_format(stats)
     logger.info("Saving stats")
     os.makedirs(join(save_path, STATS_PATH), exist_ok=True)
     with open(join(save_path, STATS_PATH, f"{description}.json"), "w") as f:
         json.dump(stats, f)
-    return criteria_filtered
 
 
 def _load_data(
@@ -347,37 +393,50 @@ def draw_index_dates_for_control(
 
     # Perform up to 2 additional attempts for invalid dates
     for attempt in range(2):
-        # Create mask vectorized: invalid where index_date > death_date (and death_date is not null)
-        invalid_mask = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
-            temp_df[DEATHDATE_COL]
+        temp_df, resampled = _resample_invalid_dates(
+            temp_df, exposed_dates_array, exposed_pids_array
         )
-
-        # Break if no invalid dates
-        if not invalid_mask.any():
+        if not resampled:
             break
 
-        # Redraw indices for invalid patients and update both columns
-        n_invalid = invalid_mask.sum()
-        new_indices = np.random.choice(n_exposed, size=n_invalid, replace=True)
-        temp_df.loc[invalid_mask, TIMESTAMP_COL] = exposed_dates_array[new_indices]
-        temp_df.loc[invalid_mask, EXPOSED_PID_COL] = exposed_pids_array[new_indices]
+    return _finalize_control(temp_df)
 
-    # Final check and exclusion vectorized
-    final_invalid_mask = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
+
+def _resample_invalid_dates(
+    temp_df: pd.DataFrame,
+    exposed_dates_array: np.ndarray,
+    exposed_pids_array: np.ndarray,
+) -> Tuple[pd.DataFrame, bool]:
+    """
+    Resample invalid dates.
+    Return temp_df with resampled dates and a boolean indicating if any invalid dates were resampled.
+    """
+    invalid = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
         temp_df[DEATHDATE_COL]
     )
-
-    # Keep only valid patients
-    temp_df = temp_df.loc[~final_invalid_mask]
-
-    # Extract results as DataFrame with same structure as exposed_index_dates
-    control_index_dates = pd.DataFrame(
-        {PID_COL: temp_df.index, TIMESTAMP_COL: temp_df[TIMESTAMP_COL]}
+    if not invalid.any():
+        return temp_df, False
+    new_idx = np.random.choice(
+        len(exposed_dates_array), size=invalid.sum(), replace=True
     )
+    temp_df.loc[invalid, TIMESTAMP_COL] = exposed_dates_array[new_idx]
+    temp_df.loc[invalid, EXPOSED_PID_COL] = exposed_pids_array[new_idx]
+    return temp_df, True
 
-    # Create matching information
-    exposure_matching = temp_df[[EXPOSED_PID_COL, TIMESTAMP_COL]].reset_index(
+
+def _finalize_control(temp_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Finalize control index dates and matching.
+    Return index dates and matching.
+    """
+    mask = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
+        temp_df[DEATHDATE_COL]
+    )
+    valid = temp_df.loc[~mask]
+    index_dates = pd.DataFrame(
+        {PID_COL: valid.index, TIMESTAMP_COL: valid[TIMESTAMP_COL]}
+    )
+    matching = valid[[EXPOSED_PID_COL, TIMESTAMP_COL]].reset_index(
         drop=False, names=CONTROL_PID_COL
     )
-
-    return control_index_dates, exposure_matching
+    return index_dates, matching
