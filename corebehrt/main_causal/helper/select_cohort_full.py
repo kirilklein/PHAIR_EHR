@@ -291,47 +291,6 @@ def select_time_eligible_exposed(index_dates: pd.DataFrame, time_windows: dict) 
     return filtered_index_dates[PID_COL].unique()
 
 
-def check_time_windows(time_windows):
-    """
-    Check that the time windows are valid.
-    """
-    if "data_end" not in time_windows:
-        raise ValueError("data_end must be provided")
-    if "data_start" not in time_windows:
-        raise ValueError("data_start must be provided")
-
-    try:
-        data_end = datetime(**time_windows["data_end"])
-    except KeyError:
-        raise ValueError("data_end must be provided as year, month, day")
-    try:
-        data_start = datetime(**time_windows["data_start"])
-    except KeyError:
-        raise ValueError("data_start must be provided as year, month, day")
-
-    if data_end < data_start:
-        raise ValueError("data_end must be greater than data_start")
-
-    if "min_follow_up" not in time_windows:
-        raise ValueError("min_follow_up must be provided")
-    try:
-        pd.Timedelta(**time_windows["min_follow_up"])
-    except KeyError:
-        raise ValueError(
-            "min_follow_up can be given in weeks, days, seconds, minutes, hours"
-        )
-    if "min_lookback" not in time_windows:
-        raise ValueError(
-            "min_lookback can be given in weeks, days, seconds, minutes, hours, or years"
-        )
-    try:
-        pd.Timedelta(**time_windows["min_lookback"])
-    except KeyError:
-        raise ValueError(
-            "min_lookback can be given in weeks, days, seconds, minutes, hours, or years"
-        )
-
-
 def draw_index_dates_for_control(
     control_pids: List[str],
     exposed_index_dates: pd.DataFrame,
@@ -392,7 +351,7 @@ def draw_index_dates_for_control(
     )
 
     # Perform up to 2 additional attempts for invalid dates
-    for attempt in range(2):
+    for _ in range(2):
         temp_df, resampled = _resample_invalid_dates(
             temp_df, exposed_dates_array, exposed_pids_array
         )
@@ -440,3 +399,44 @@ def _finalize_control(temp_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame
         drop=False, names=CONTROL_PID_COL
     )
     return index_dates, matching
+
+
+def check_time_windows(time_windows):
+    """
+    Check that the time windows are valid.
+    """
+    if "data_end" not in time_windows:
+        raise ValueError("data_end must be provided")
+    if "data_start" not in time_windows:
+        raise ValueError("data_start must be provided")
+
+    try:
+        data_end = datetime(**time_windows["data_end"])
+    except KeyError as e:
+        raise ValueError(f"data_end must be provided as year, month, day {e}")
+    try:
+        data_start = datetime(**time_windows["data_start"])
+    except KeyError as e:
+        raise ValueError(f"data_start must be provided as year, month, day {e}")
+
+    if data_end < data_start:
+        raise ValueError("data_end must be greater than data_start")
+
+    if "min_follow_up" not in time_windows:
+        raise ValueError("min_follow_up must be provided")
+    try:
+        pd.Timedelta(**time_windows["min_follow_up"])
+    except KeyError as e:
+        raise ValueError(
+            f"min_follow_up can be given in weeks, days, seconds, minutes, hours {e}"
+        )
+    if "min_lookback" not in time_windows:
+        raise ValueError(
+            "min_lookback can be given in weeks, days, seconds, minutes, hours, or years"
+        )
+    try:
+        pd.Timedelta(**time_windows["min_lookback"])
+    except KeyError as e:
+        raise ValueError(
+            f"min_lookback can be given in weeks, days, seconds, minutes, hours, or years {e}"
+        )
