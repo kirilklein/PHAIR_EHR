@@ -12,7 +12,7 @@ paths:
   criteria_config: ./corebehrt/configs/causal/select_cohort_full/definitions.yaml
 
   ### Outputs
-  cohort: ./outputs/causal/finetune/cohorts/full/ # Data directory
+  cohort: ./outputs/causal/data/cohorts/full/ # Data directory
 
 time_windows: # if not provided we can use exposures to get the index dates
   data_end:

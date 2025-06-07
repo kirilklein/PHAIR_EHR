@@ -6,6 +6,10 @@ EXPOSURES = "exposures"
 COHORT = "cohort"
 DATA = "data"
 
+
+CONTROL_PID_COL = "control_subject_id"
+EXPOSED_PID_COL = "exposed_subject_id"
+
 # Prepare causal finetune data
 EXPOSURE = "exposure"
 OUTCOME = "outcome"
