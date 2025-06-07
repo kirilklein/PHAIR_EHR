@@ -23,18 +23,21 @@ retry mechanisms and maintains detailed statistics throughout the filtering proc
 import json
 import logging
 import os
-from datetime import datetime
 from os.path import join
 from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
 
-from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL
 from corebehrt.constants.causal.paths import STATS_PATH
 from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
-from corebehrt.constants.data import DEATHDATE_COL, PID_COL, TIMESTAMP_COL
+from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE
+from corebehrt.functional.causal.checks import check_time_windows
+from corebehrt.functional.cohort_handling.advanced.index_dates import (
+    draw_index_dates_for_control_with_redraw,
+    select_time_eligible_exposed,
+)
 from corebehrt.functional.preparation.filter import select_first_event
 from corebehrt.main_causal.helper.select_cohort_advanced import (
     check_inclusion_exclusion,
@@ -145,7 +148,7 @@ def _prepare_control(
     Save stats.
     """
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
-    control_index_dates, exposure_matching = draw_index_dates_for_control(
+    control_index_dates, exposure_matching = draw_index_dates_for_control_with_redraw(
         control_patients_info[PID_COL].unique(),
         index_dates,
         control_patients_info,
@@ -266,177 +269,5 @@ def _ensure_stats_format(stats: dict) -> dict:
     }
 
 
-def log_patient_num(logger, df, name: str):
+def log_patient_num(logger: logging.Logger, df: pd.DataFrame, name: str):
     logger.info(f"N {name}: {len(df[PID_COL].unique())}")
-
-
-def select_time_eligible_exposed(index_dates: pd.DataFrame, time_windows: dict) -> list:
-    """
-    We check whether the lookback and followup time windows are satisfied.
-    We exclude patients that do not satisfy the time windows.
-    Return remaining exposed patients.
-    """
-    if index_dates.duplicated(subset=PID_COL).any():
-        raise ValueError("Duplicate patient IDs found in index_dates")
-    if index_dates.empty:
-        return []
-    sufficient_follow_up = index_dates[TIMESTAMP_COL] + pd.Timedelta(
-        **time_windows["min_follow_up"]
-    ) <= datetime(**time_windows["data_end"])
-    sufficient_lookback = index_dates[TIMESTAMP_COL] - pd.Timedelta(
-        **time_windows["min_lookback"]
-    ) >= datetime(**time_windows["data_start"])
-    filtered_index_dates = index_dates[sufficient_follow_up & sufficient_lookback]
-
-    return filtered_index_dates[PID_COL].unique()
-
-
-def draw_index_dates_for_control(
-    control_pids: List[str],
-    exposed_index_dates: pd.DataFrame,
-    patients_info: pd.DataFrame,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Draw index dates for unexposed patients by randomly sampling from exposed patients' index dates.
-
-    This function assigns index dates to unexposed (control) patients by randomly sampling
-    from the index dates of exposed patients. It ensures that assigned index dates do not
-    occur after a patient's death date. If an invalid date is drawn (after death), the
-    function will attempt to redraw up to 2 additional times before excluding the patient.
-
-    Parameters
-    ----------
-    control_pids : List[str]
-        List of patient IDs for unexposed/control patients who need index dates assigned.
-    exposed_index_dates : pd.DataFrame
-        DataFrame with exposed patient data, must include PID_COL and TIMESTAMP_COL columns.
-    patients_info : pd.DataFrame
-        DataFrame containing patient information, must include PID_COL and DEATHDATE_COL columns.
-
-    Returns
-    -------
-    Tuple[pd.DataFrame, pd.DataFrame]
-        - pd.DataFrame: Index dates for valid unexposed patients with columns [PID_COL, TIMESTAMP_COL]
-        - pd.DataFrame: Matching information with columns ['exposed_pid', 'index_date'] showing
-          which exposed patient each unexposed patient was matched to and their assigned index date
-
-    Notes
-    -----
-    - Patients who die before their assigned index date are excluded after 2 failed attempts
-    - The matching process uses random sampling with replacement from exposed patients
-    - The function prioritizes validity over maintaining exact sample size
-    """
-
-    # Get death dates for unexposed patients
-    death_info = patients_info.set_index(PID_COL)[DEATHDATE_COL].reindex(control_pids)
-
-    # Convert exposed info to arrays for faster sampling
-    exposed_dates_array = exposed_index_dates[TIMESTAMP_COL].values
-    exposed_pids_array = exposed_index_dates[PID_COL].values
-    n_exposed = len(exposed_dates_array)
-    n_unexposed = len(control_pids)
-
-    # Draw initial random indices
-    sampled_indices = np.random.choice(n_exposed, size=n_unexposed, replace=True)
-
-    # Create DataFrame with all necessary info
-    temp_df = pd.DataFrame(
-        {
-            TIMESTAMP_COL: exposed_dates_array[sampled_indices],
-            DEATHDATE_COL: death_info.values,
-            EXPOSED_PID_COL: exposed_pids_array[sampled_indices],
-            CONTROL_PID_COL: control_pids,
-        },
-        index=control_pids,
-    )
-
-    # Perform up to 2 additional attempts for invalid dates
-    for _ in range(2):
-        temp_df, resampled = _resample_invalid_dates(
-            temp_df, exposed_dates_array, exposed_pids_array
-        )
-        if not resampled:
-            break
-
-    return _finalize_control(temp_df)
-
-
-def _resample_invalid_dates(
-    temp_df: pd.DataFrame,
-    exposed_dates_array: np.ndarray,
-    exposed_pids_array: np.ndarray,
-) -> Tuple[pd.DataFrame, bool]:
-    """
-    Resample invalid dates.
-    Return temp_df with resampled dates and a boolean indicating if any invalid dates were resampled.
-    """
-    invalid = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
-        temp_df[DEATHDATE_COL]
-    )
-    if not invalid.any():
-        return temp_df, False
-    new_idx = np.random.choice(
-        len(exposed_dates_array), size=invalid.sum(), replace=True
-    )
-    temp_df.loc[invalid, TIMESTAMP_COL] = exposed_dates_array[new_idx]
-    temp_df.loc[invalid, EXPOSED_PID_COL] = exposed_pids_array[new_idx]
-    return temp_df, True
-
-
-def _finalize_control(temp_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Finalize control index dates and matching.
-    Return index dates and matching.
-    """
-    mask = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
-        temp_df[DEATHDATE_COL]
-    )
-    valid = temp_df.loc[~mask]
-    index_dates = pd.DataFrame(
-        {PID_COL: valid.index, TIMESTAMP_COL: valid[TIMESTAMP_COL]}
-    )
-    matching = valid[[EXPOSED_PID_COL, TIMESTAMP_COL]].reset_index(
-        drop=False, names=CONTROL_PID_COL
-    )
-    return index_dates, matching
-
-
-def check_time_windows(time_windows):
-    """
-    Check that the time windows are valid.
-    """
-    if "data_end" not in time_windows:
-        raise ValueError("data_end must be provided")
-    if "data_start" not in time_windows:
-        raise ValueError("data_start must be provided")
-
-    try:
-        data_end = datetime(**time_windows["data_end"])
-    except KeyError as e:
-        raise ValueError(f"data_end must be provided as year, month, day {e}")
-    try:
-        data_start = datetime(**time_windows["data_start"])
-    except KeyError as e:
-        raise ValueError(f"data_start must be provided as year, month, day {e}")
-
-    if data_end < data_start:
-        raise ValueError("data_end must be greater than data_start")
-
-    if "min_follow_up" not in time_windows:
-        raise ValueError("min_follow_up must be provided")
-    try:
-        pd.Timedelta(**time_windows["min_follow_up"])
-    except KeyError as e:
-        raise ValueError(
-            f"min_follow_up can be given in weeks, days, seconds, minutes, hours {e}"
-        )
-    if "min_lookback" not in time_windows:
-        raise ValueError(
-            "min_lookback can be given in weeks, days, seconds, minutes, hours, or years"
-        )
-    try:
-        pd.Timedelta(**time_windows["min_lookback"])
-    except KeyError as e:
-        raise ValueError(
-            f"min_lookback can be given in weeks, days, seconds, minutes, hours, or years {e}"
-        )
