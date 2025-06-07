@@ -151,11 +151,12 @@ def _prepare_control(
     meds_path: str,
     splits: List[str],
     save_path: str,
-):
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Prepare control patients for cohort selection.
     Return criteria and index dates.
     Save stats.
+    Return control criteria and index dates and index dates for controls.
     """
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
     control_index_dates, exposure_matching = draw_index_dates_for_control_with_redraw(
@@ -195,6 +196,7 @@ def _prepare_exposed(
     Prepare exposed patients for cohort selection.
     Return criteria and index dates.
     Save stats.
+    Return exposed criteria and index dates.
     """
     time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
     criteria_exposed, exposed_stats = filter_by_criteria(
@@ -222,11 +224,12 @@ def filter_by_criteria(
     pids: List[str],
     logger: logging.Logger,
     description: str,
-):
+) -> Tuple[pd.DataFrame, dict]:
     """
     Filter patients by criteria.
     Save stats.
     Return filtered criteria.
+    Return stats.
     """
     validator = CriteriaValidator(criteria_config.get(CRITERIA_DEFINITIONS))
     validator.validate()
@@ -260,7 +263,11 @@ def _save_stats(stats: dict, save_path: str, description: str, logger: logging.L
 
 def _load_data(
     features_path: str, exposures_path: str, exposure: str, logger: logging.Logger
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Load data from features and exposures.
+    Return patients info, exposures, and index dates.
+    """
     logger.info("Loading data")
     patients_info = pd.read_parquet(
         join(features_path, "patient_info.parquet")
