@@ -92,9 +92,9 @@ def select_cohort(
     patients_info, exposures, index_dates = _load_data(
         features_path, exposures_path, exposure, logger
     )
-    control_patients_info = patients_info[
-        patients_info[PID_COL].isin(index_dates[PID_COL].unique())
-    ]
+    control_patients_info = exclude_pids_from_df(
+        patients_info, index_dates[PID_COL].unique()
+    )
 
     criteria_config = load_config(criteria_definitions_path)
     criteria_exposed, index_dates_filtered_exposed = _prepare_exposed(
@@ -107,7 +107,7 @@ def select_cohort(
         save_path,
     )
 
-    criteria_control, control_index_date_filtered = _prepare_control(
+    criteria_control, index_dates_filtered_control = _prepare_control(
         control_patients_info,
         index_dates_filtered_exposed,
         logger,
@@ -121,7 +121,7 @@ def select_cohort(
     criteria.to_csv(join(save_path, STATS_PATH, "criteria.csv"), index=False)
 
     final_index_dates = pd.concat(
-        [index_dates_filtered_exposed, control_index_date_filtered]
+        [index_dates_filtered_exposed, index_dates_filtered_control]
     )
     final_index_dates.to_csv(join(save_path, INDEX_DATES_FILE), index=False)
 
@@ -177,7 +177,7 @@ def _prepare_exposed(
     meds_path: str,
     splits: List[str],
     save_path: str,
-):
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Prepare exposed patients for cohort selection.
     Return criteria and index dates.
