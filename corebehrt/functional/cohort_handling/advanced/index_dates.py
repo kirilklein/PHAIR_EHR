@@ -95,7 +95,8 @@ def draw_index_dates_for_control_with_redraw(
     exposed_pids_array = exposed_index_dates[PID_COL].values
     n_exposed = len(exposed_dates_array)
     n_unexposed = len(control_pids)
-
+    if n_exposed == 0:
+        raise ValueError("Cannot draw index dates: no exposed patients available")
     # Draw initial random indices
     sampled_indices = np.random.choice(n_exposed, size=n_unexposed, replace=True)
 
