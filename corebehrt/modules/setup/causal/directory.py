@@ -8,8 +8,6 @@ from corebehrt.constants.causal.paths import (
     EXTRACT_CRITERIA_CFG,
     GET_STATS_CFG,
     SIMULATE_CFG,
-    TRAIN_MLP_CFG,
-    TRAIN_XGB_CFG,
 )
 from corebehrt.constants.paths import (
     COHORT_CFG,
