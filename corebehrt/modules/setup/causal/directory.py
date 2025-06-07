@@ -86,57 +86,6 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         )
         self.write_config("calibrated_predictions", name=CALIBRATE_CFG)
 
-    def setup_train_mlp(self) -> None:
-        """
-        Validates path config and sets up directories for train_mlp.
-        """
-        # Setup logging
-        self.setup_logging("train_mlp")
-
-        # Validate and create directories
-        self.check_directory("encoded_data")
-        self.check_directory("calibrated_predictions")
-        self.check_directory("cohort")
-        self.create_run_directory("trained_mlp", base="runs")
-
-        # Write config in output directory.
-        self.write_config("trained_mlp", source="encoded_data", name=ENCODE_CFG)
-        self.write_config(
-            "trained_mlp", source="calibrated_predictions", name=CALIBRATE_CFG
-        )
-        try:
-            self.write_config("trained_mlp", source="cohort", name=COHORT_CFG)
-        except Exception as e:
-            logger.warning(
-                f"No cohort config found, skipping cohort config write. Error: {e}"
-            )
-        self.write_config("trained_mlp", name=TRAIN_MLP_CFG)
-
-    def setup_train_xgb(self) -> None:
-        """
-        Validates path config and sets up directories for train_xgb.
-        """
-        out = "trained_xgb"
-        # Setup logging
-        self.setup_logging("train_xgb")
-
-        # Validate and create directories
-        self.check_directory("encoded_data")
-        self.check_directory("calibrated_predictions")
-        self.check_directory("cohort")
-        self.create_run_directory(out, base="runs")
-
-        # Write config in output directory.
-        self.write_config(out, source="encoded_data", name=ENCODE_CFG)
-        self.write_config(out, source="calibrated_predictions", name=CALIBRATE_CFG)
-        try:
-            self.write_config(out, source="cohort", name=COHORT_CFG)
-        except Exception as e:
-            logger.warning(
-                f"No cohort config found, skipping cohort config write. Error: {e}"
-            )
-        self.write_config(out, name=TRAIN_XGB_CFG)
-
     def setup_estimate(self) -> None:
         """
         Validates path config and sets up directories for estimate.
@@ -170,6 +119,20 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         # Create output directories
         self.create_directory("cohort_advanced")
         self.write_config("cohort_advanced", name=COHORT_CFG)
+
+    def setup_select_cohort_full(self) -> None:
+        """
+        Validates path config and sets up directories for select_cohort_full.
+        """
+        # Setup logging
+        self.setup_logging("select_cohort_full")
+        # Check input directories
+        self.check_directory("meds")
+        self.check_directory("exposures")
+        self.check_directory("features")
+        # Create output directories
+        self.create_directory("cohort")
+        self.write_config("cohort", name=COHORT_CFG)
 
     def setup_extract_criteria(self) -> None:
         """
