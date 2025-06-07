@@ -1,6 +1,6 @@
 # provide expressions for inclusion and exclusion
 inclusion: min_age_10 | criteria_1 # use |, &, ~, and, or, ~ together with criteria names separated by space to create arbitrary inclusion criteria
-exclusion: max_age_90
+exclusion: min_age_90
 
 criteria_definitions:
   # Define all the criteria that will be needed. You can easily create composite criteria using expressions.
@@ -8,8 +8,8 @@ criteria_definitions:
     # would be the age at index_date
     min_age: 10
 
-  max_age_90:
-    max_age: 90
+  min_age_90:
+    min_age: 90
 
   criteria_1:
     codes:
