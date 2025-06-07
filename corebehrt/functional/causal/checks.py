@@ -14,13 +14,11 @@ def check_time_windows(time_windows: dict):
     try:
         data_end = pd.Timestamp(**time_windows["data_end"])
     except KeyError as e:
-        print(e)
-        raise ValueError("data_end must be provided as year, month, day")
+        raise ValueError("data_end must be provided as year, month, day") from e
     try:
         data_start = pd.Timestamp(**time_windows["data_start"])
     except KeyError as e:
-        print(e)
-        raise ValueError("data_start must be provided as year, month, day")
+        raise ValueError("data_start must be provided as year, month, day") from e
 
     if data_end < data_start:
         raise ValueError("data_end must be greater than data_start")
@@ -30,10 +28,9 @@ def check_time_windows(time_windows: dict):
     try:
         pd.Timedelta(**time_windows["min_follow_up"])
     except KeyError as e:
-        print(e)
         raise ValueError(
             "min_follow_up can be given in weeks, days, seconds, minutes, hours"
-        )
+        ) from e
     if "min_lookback" not in time_windows:
         raise ValueError(
             "min_lookback can be given in weeks, days, seconds, minutes, hours, or years"
@@ -41,7 +38,6 @@ def check_time_windows(time_windows: dict):
     try:
         pd.Timedelta(**time_windows["min_lookback"])
     except KeyError as e:
-        print(e)
         raise ValueError(
             "min_lookback can be given in weeks, days, seconds, minutes, hours, or years"
-        )
+        ) from e
