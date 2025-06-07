@@ -30,10 +30,10 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 
+from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL
 from corebehrt.constants.causal.paths import STATS_PATH
 from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
 from corebehrt.constants.data import DEATHDATE_COL, PID_COL, TIMESTAMP_COL
-from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE
 from corebehrt.functional.preparation.filter import select_first_event
 from corebehrt.main_causal.helper.select_cohort_advanced import (
@@ -86,14 +86,9 @@ def select_cohort(
           - Test patient IDs (list)
     """
     check_time_windows(time_windows)
-    logger.info("Loading data")
-    patients_info = pd.read_parquet(
-        join(features_path, "patient_info.parquet")
-    ).drop_duplicates(subset=PID_COL, keep="first")
-    log_patient_num(logger, patients_info, "patients_info")
-    exposures = ConceptLoader.read_file(join(exposures_path, exposure))
-    log_patient_num(logger, exposures, "exposures")
-    index_dates = select_first_event(exposures, PID_COL, TIMESTAMP_COL)
+    patients_info, exposures, index_dates = _load_data(
+        features_path, exposures_path, exposure, logger
+    )
 
     time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
 
@@ -108,41 +103,24 @@ def select_cohort(
     log_patient_num(
         logger, patients_info, "patients_info after excluding by time windows"
     )
-
-    criteria_definitions_cfg = load_config(criteria_definitions_path)
-    validator = CriteriaValidator(criteria_definitions_cfg.get(CRITERIA_DEFINITIONS))
-    validator.validate()
-    check_inclusion_exclusion(validator, criteria_definitions_cfg)
-    criteria_exposed = extract_criteria_from_shards(
+    criteria_config = load_config(criteria_definitions_path)
+    criteria_exposed = filter_by_criteria(
+        criteria_config,
         meds_path,
         index_dates,
-        criteria_definitions_cfg.get(CRITERIA_DEFINITIONS),
         splits,
-        pids=time_eligible_exposed,
+        time_eligible_exposed,
+        logger,
+        save_path,
+        "exposed",
     )
-    log_patient_num(logger, index_dates, "index_dates")
-    logger.info(f"N time_eligible_exposed: {len(time_eligible_exposed)}")
-    log_patient_num(logger, criteria_exposed, "criteria_exposed")
-    logger.info("Applying criteria to exposedand saving stats")
-    criteria_exposed_filtered, exposed_stats = apply_criteria_with_stats(
-        criteria_exposed,
-        criteria_definitions_cfg.get(INCLUSION),
-        criteria_definitions_cfg.get(EXCLUSION),
-    )
-
-    exposed_stats = _ensure_stats_format(exposed_stats)
-    logger.info("Saving stats")
-    os.makedirs(join(save_path, STATS_PATH), exist_ok=True)
-    with open(join(save_path, STATS_PATH, "exposed.json"), "w") as f:
-        json.dump(exposed_stats, f)
 
     index_dates_filtered_exposed = index_dates[
-        index_dates[PID_COL].isin(criteria_exposed_filtered[PID_COL])
+        index_dates[PID_COL].isin(criteria_exposed[PID_COL])
     ]
     log_patient_num(
         logger, index_dates_filtered_exposed, "index_dates_filtered_exposed"
     )
-    log_patient_num(logger, criteria_exposed_filtered, "criteria_exposed_filtered")
 
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
     control_index_dates, exposure_matching = draw_index_dates_for_control(
@@ -150,38 +128,25 @@ def select_cohort(
         index_dates_filtered_exposed,
         patients_info_control,
     )
-    log_patient_num(logger, control_index_dates, "control_index_dates")
     exposure_matching.to_csv(join(save_path, "index_date_matching.csv"), index=False)
+    log_patient_num(logger, control_index_dates, "control_index_dates")
 
-    criteria_control = extract_criteria_from_shards(
+    criteria_control = filter_by_criteria(
+        criteria_config,
         meds_path,
         control_index_dates,
-        criteria_definitions_cfg.get(CRITERIA_DEFINITIONS),
         splits,
-        pids=control_index_dates.index.tolist(),
+        control_index_dates.index.tolist(),
+        logger,
+        save_path,
+        "control",
     )
 
-    criteria_control_filtered, control_stats = apply_criteria_with_stats(
-        criteria_control,
-        criteria_definitions_cfg.get(INCLUSION),
-        criteria_definitions_cfg.get(EXCLUSION),
-    )
-    raw_criteria = pd.concat([criteria_exposed_filtered, criteria_control_filtered])
-    raw_criteria.to_csv(join(save_path, STATS_PATH, "raw_criteria.csv"), index=False)
-    filtered_criteria = pd.concat(
-        [criteria_exposed_filtered, criteria_control_filtered]
-    )
-    filtered_criteria.to_csv(
-        join(save_path, STATS_PATH, "filtered_criteria.csv"), index=False
-    )
-
-    control_stats = _ensure_stats_format(control_stats)
-    logger.info("Saving stats")
-    with open(join(save_path, STATS_PATH, "control.json"), "w") as f:
-        json.dump(control_stats, f)
+    criteria = pd.concat([criteria_exposed, criteria_control])
+    criteria.to_csv(join(save_path, STATS_PATH, "criteria.csv"), index=False)
 
     control_index_date_filtered = control_index_dates[
-        control_index_dates[PID_COL].isin(criteria_control_filtered[PID_COL])
+        control_index_dates[PID_COL].isin(criteria_control[PID_COL])
     ]
     index_dates = pd.concat([index_dates_filtered_exposed, control_index_date_filtered])
     index_dates.to_csv(join(save_path, INDEX_DATES_FILE), index=False)
@@ -189,6 +154,63 @@ def select_cohort(
     pids = index_dates[PID_COL].unique()
 
     return pids
+
+
+def filter_by_criteria(
+    criteria_config: dict,
+    meds_path: str,
+    index_dates: pd.DataFrame,
+    splits: List[str],
+    pids: List[str],
+    logger: logging.Logger,
+    save_path: str,
+    description: str,
+):
+    """
+    Filter patients by criteria.
+    Save stats.
+    Return filtered criteria.
+    """
+    validator = CriteriaValidator(criteria_config.get(CRITERIA_DEFINITIONS))
+    validator.validate()
+    check_inclusion_exclusion(validator, criteria_config)
+    criteria = extract_criteria_from_shards(
+        meds_path,
+        index_dates,
+        criteria_config.get(CRITERIA_DEFINITIONS),
+        splits,
+        pids=pids,
+    )
+    log_patient_num(logger, index_dates, "index_dates")
+    logger.info(f"N pids {description}: {len(pids)}")
+    log_patient_num(logger, criteria, "criteria")
+    logger.info(f"Applying criteria to {description} and saving stats")
+    criteria_filtered, stats = apply_criteria_with_stats(
+        criteria,
+        criteria_config.get(INCLUSION),
+        criteria_config.get(EXCLUSION),
+    )
+
+    stats = _ensure_stats_format(stats)
+    logger.info("Saving stats")
+    os.makedirs(join(save_path, STATS_PATH), exist_ok=True)
+    with open(join(save_path, STATS_PATH, f"{description}.json"), "w") as f:
+        json.dump(stats, f)
+    return criteria_filtered
+
+
+def _load_data(
+    features_path: str, exposures_path: str, exposure: str, logger: logging.Logger
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    logger.info("Loading data")
+    patients_info = pd.read_parquet(
+        join(features_path, "patient_info.parquet")
+    ).drop_duplicates(subset=PID_COL, keep="first")
+    log_patient_num(logger, patients_info, "patients_info")
+    exposures = ConceptLoader.read_file(join(exposures_path, exposure))
+    log_patient_num(logger, exposures, "exposures")
+    index_dates = select_first_event(exposures, PID_COL, TIMESTAMP_COL)
+    return patients_info, exposures, index_dates
 
 
 def _ensure_stats_format(stats: dict) -> dict:
