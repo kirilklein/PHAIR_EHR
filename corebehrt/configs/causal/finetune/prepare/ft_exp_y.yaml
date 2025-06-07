@@ -6,7 +6,7 @@ paths:
   ## INPUTS
   features: ./outputs/causal/data/features
   tokenized: ./outputs/causal/data/tokenized
-  cohort: ./outputs/causal/finetune/cohorts/exposure # path to cohort directory
+  cohort: ./outputs/causal/finetune/cohorts/full # path to cohort directory
 
   exposures: ./outputs/causal/finetune/outcomes
   exposure: EXPOSURE.csv
