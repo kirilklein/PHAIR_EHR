@@ -68,28 +68,38 @@ def select_cohort(
     Select cohort by applying multiple filtering steps.
 
     The process includes:
-      1. Loading patient data.
-      2. Determine index dates for exposed (first exposure).
-      3. Filtering by time windows (sufficient follow-up and lookback).
-      4. Advanced filtering based on age, comorbities, prior medication.
-      5. Draw index dates for unexposed patients from exposed index dates.
-        5.1. For dead patients, redraw up to 2 times, otherwise exclude.
-        5.2. Keep the connection to which exposed has the same index date.
-      6. Perform filtering by age, comorbities, prior medication.
-      7. Optional compliance filtering (if excluded, exclude also control with same index date to avoid survivor bias)
-      8. Split into train/val/test sets.
+      1. Loading patient data and determining index dates for exposed patients
+      2. Filtering by time windows (sufficient follow-up and lookback)
+      3. Advanced filtering based on age, comorbidities, prior medication
+      4. Drawing index dates for unexposed patients from exposed index dates
+      5. Applying same filtering criteria to control patients
+      6. Combining results and saving outputs
 
-    Args:
-        path_cfg: Configuration dictionary
-        selection_cfg: Configuration dictionary
-        index_date_cfg: Configuration dictionary
-        logger: Logger object
-    Returns:
-        Tuple of:
-          - Final patient IDs (list)
-          - Series of index dates (with potential test shift applied)
-          - Train/validation patient IDs (list)
-          - Test patient IDs (list)
+    Parameters
+    ----------
+    features_path : str
+        Path to patient features directory
+    meds_path : str
+        Path to medication data directory
+    splits : List[str]
+        Data splits to process (e.g., ["train", "val"])
+    exposures_path : str
+        Path to exposure data directory
+    exposure : str
+        Exposure file name
+    save_path : str
+        Directory to save results and statistics
+    time_windows : dict
+        Time window requirements for eligibility
+    criteria_definitions_path : str
+        Path to criteria configuration file
+    logger : logging.Logger
+        Logger for tracking progress
+
+    Returns
+    -------
+    List[str]
+        Final patient IDs after all filtering steps
     """
     check_time_windows(time_windows)
     patients_info, exposures, index_dates = _load_data(
