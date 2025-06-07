@@ -65,7 +65,7 @@ jobs:
 
           # ─── Outcomes & cohort selection ──────────────────
           run_step main.create_outcomes                     outcomes.yaml
-          run_step main.select_cohort                      select_cohort_full/extract.yaml
+          run_step main_causal.select_cohort_full                      select_cohort_full/extract.yaml
 
           ## ─── Prepare Finetune Data ───────────────────────────
           run_step main_causal.prepare_ft_exp_y      finetune/prepare/ft_exp_y.yaml
