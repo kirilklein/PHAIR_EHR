@@ -1,12 +1,61 @@
 """
 Enhanced causal effect simulation module for EHR data.
 
-Simulates binary exposure and outcome events based on multiple trigger conditions:
-- Confounder: affects both exposure and outcome
-- Exposure-only trigger: affects only exposure
-- Outcome-only trigger: affects only outcome
+USAGE:
+    python induce_causal_effect.py --source_dir /path/to/input --write_dir /path/to/output [OPTIONS]
 
-Uses logistic model: P(event) = expit(logit(p_base) + Σ(effect_i * trigger_i))
+DESCRIPTION:
+    This script simulates binary exposure and outcome events in EHR data based on causal relationships.
+    It creates a realistic causal structure where:
+    
+    1. Trigger codes in the original data influence exposure probability
+    2. Exposure events influence outcome probability  
+    3. Some trigger codes act as confounders (affecting both exposure and outcome)
+    
+    The simulation uses a logistic model: P(event) = expit(logit(p_base) + Σ(effect_i * trigger_i))
+
+CAUSAL STRUCTURE:
+    - Confounder codes: Affect both exposure and outcome (creates confounding bias)
+    - Exposure-only codes: Only affect exposure probability
+    - Outcome-only codes: Only affect outcome probability
+    - Exposure events: Directly affect outcome probability (the causal effect of interest)
+
+EXAMPLE USAGE:
+    # Basic usage with default parameters
+    python induce_causal_effect.py \
+        --source_dir ./data/input_shards \
+        --write_dir ./data/simulated_shards
+
+    # Custom causal effects
+    python induce_causal_effect.py \
+        --source_dir ./data/input_shards \
+        --write_dir ./data/simulated_shards \
+        --confounder_exposure_effect 0.5 \
+        --exposure_outcome_effect 1.5 \
+        --p_base_exposure 0.25 \
+        --p_base_outcome 0.15
+
+    # Using custom trigger codes
+    python induce_causal_effect.py \
+        --source_dir ./data/input_shards \
+        --write_dir ./data/simulated_shards \
+        --confounder_code "LAB_GLUCOSE" \
+        --exposure_only_code "DRUG_STATINS" \
+        --outcome_only_code "DIAG_DIABETES"
+
+PARAMETER GUIDANCE:
+    - Effect sizes: Typical range [-2.0, 2.0]. Positive = increases probability, negative = decreases
+    - Base probabilities: Should reflect realistic event rates (0.1-0.4 often reasonable)
+    - Days offset: Time delay between trigger and simulated event (30-90 days typical)
+    
+OUTPUT:
+    - Parquet files with original data + simulated EXPOSURE and OUTCOME events
+    - .ate.txt file containing the Average Treatment Effect for validation
+
+NOTES:
+    - Input directory must contain .parquet shard files
+    - Each shard should have columns: subject_id, time, code, numeric_value
+    - Simulated events are added with temporal ordering preserved
 """
 
 import os
@@ -20,93 +69,133 @@ from tests.data_generation.helper.induce_causal_effect import (
 
 
 def create_parser() -> argparse.ArgumentParser:
-    """Create command line argument parser."""
+    """Create command line argument parser with comprehensive help."""
     parser = argparse.ArgumentParser(
-        description="Generate enhanced simulated causal data"
+        description="""
+        Generate enhanced simulated causal data for EHR analysis.
+        
+        This script adds simulated EXPOSURE and OUTCOME events to existing EHR data
+        based on a realistic causal structure with confounding relationships.
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Basic simulation
+  python %(prog)s --source_dir ./input --write_dir ./output
+  
+  # Custom parameters  
+  python %(prog)s --source_dir ./input --write_dir ./output \\
+    --p_base_exposure 0.25 --exposure_outcome_effect 1.5
+        """,
     )
 
     # Required arguments
     parser.add_argument(
-        "--source_dir", required=True, help="Directory containing source data shards"
+        "--source_dir",
+        required=True,
+        help="Directory containing source data shards (.parquet files)",
     )
     parser.add_argument(
-        "--write_dir", required=True, help="Directory to write output shards"
+        "--write_dir",
+        required=True,
+        help="Directory to write output shards (will be created if needed)",
     )
 
     # Trigger codes
-    parser.add_argument(
+    trigger_group = parser.add_argument_group(
+        "Trigger Codes", "Medical codes that influence event probabilities"
+    )
+    trigger_group.add_argument(
         "--confounder_code",
         default="LAB8",
-        help="Code that affects both exposure and outcome",
+        help="Code that affects both exposure and outcome (creates confounding). Default: LAB8",
     )
-    parser.add_argument(
-        "--exposure_only_code", default="DDZ32", help="Code that only affects exposure"
+    trigger_group.add_argument(
+        "--exposure_only_code",
+        default="DDZ32",
+        help="Code that only affects exposure probability. Default: DDZ32",
     )
-    parser.add_argument(
-        "--outcome_only_code", default="DE11", help="Code that only affects outcome"
+    trigger_group.add_argument(
+        "--outcome_only_code",
+        default="DE11",
+        help="Code that only affects outcome probability. Default: DE11",
     )
 
     # Base probabilities
-    parser.add_argument(
+    prob_group = parser.add_argument_group(
+        "Base Probabilities", "Baseline event rates without any triggers"
+    )
+    prob_group.add_argument(
         "--p_base_exposure",
         type=float,
         default=0.3,
-        help="Base probability for exposure",
+        help="Base probability for exposure events (0-1). Default: 0.3",
     )
-    parser.add_argument(
-        "--p_base_outcome", type=float, default=0.2, help="Base probability for outcome"
+    prob_group.add_argument(
+        "--p_base_outcome",
+        type=float,
+        default=0.2,
+        help="Base probability for outcome events (0-1). Default: 0.2",
     )
 
     # Effect sizes
-    parser.add_argument(
+    effects_group = parser.add_argument_group(
+        "Effect Sizes", "Logistic regression coefficients for causal relationships"
+    )
+    effects_group.add_argument(
         "--confounder_exposure_effect",
         type=float,
-        default=-0.5,
-        help="Effect of confounder on exposure",
+        default=0.3,
+        help="Effect of confounder on exposure (positive increases probability). Default: 0.3",
     )
-    parser.add_argument(
+    effects_group.add_argument(
         "--confounder_outcome_effect",
         type=float,
         default=-0.3,
-        help="Effect of confounder on outcome",
+        help="Effect of confounder on outcome (negative decreases probability). Default: -0.3",
     )
-    parser.add_argument(
+    effects_group.add_argument(
         "--exposure_only_effect",
         type=float,
-        default=1.0,
-        help="Effect of exposure-only trigger",
+        default=1.5,
+        help="Effect of exposure-only trigger on exposure. Default: 1.5",
     )
-    parser.add_argument(
+    effects_group.add_argument(
         "--outcome_only_effect",
         type=float,
         default=0.5,
-        help="Effect of outcome-only trigger",
+        help="Effect of outcome-only trigger on outcome. Default: 0.5",
     )
-    parser.add_argument(
+    effects_group.add_argument(
         "--exposure_outcome_effect",
         type=float,
         default=2.0,
-        help="Effect of exposure on outcome",
+        help="Causal effect of exposure on outcome (main effect of interest). Default: 2.0",
     )
 
     # Other parameters
-    parser.add_argument(
+    other_group = parser.add_argument_group("Other Parameters")
+    other_group.add_argument(
         "--days_offset",
         type=int,
         default=30,
-        help="Days offset for temporal relationships",
+        help="Days after trigger before simulated event can occur. Default: 30",
     )
-    parser.add_argument(
+    other_group.add_argument(
         "--simulate_outcome",
         type=bool,
         default=True,
-        help="Whether to simulate outcome",
+        help="Whether to simulate outcome events (set False for exposure-only). Default: True",
     )
-    parser.add_argument(
-        "--exposure_name", default="EXPOSURE", help="Name of exposure event"
+    other_group.add_argument(
+        "--exposure_name",
+        default="EXPOSURE",
+        help="Code name for simulated exposure events. Default: EXPOSURE",
     )
-    parser.add_argument(
-        "--outcome_name", default="OUTCOME", help="Name of outcome event"
+    other_group.add_argument(
+        "--outcome_name",
+        default="OUTCOME",
+        help="Code name for simulated outcome events. Default: OUTCOME",
     )
 
     return parser
