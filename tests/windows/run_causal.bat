@@ -24,7 +24,7 @@ python -m corebehrt.main.create_outcomes --config_path corebehrt\configs\causal\
 if errorlevel 1 goto :error
 
 echo Running select_cohort...
-python -m corebehrt.main.select_cohort --config_path corebehrt\configs\causal\finetune\select_cohort\exposure.yaml
+python -m corebehrt.main_causal.select_cohort_full --config_path corebehrt\configs\causal\select_cohort_full\extract.yaml
 if errorlevel 1 goto :error
 
 :: Prepare and run finetuning
