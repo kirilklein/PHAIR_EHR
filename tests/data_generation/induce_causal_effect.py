@@ -107,12 +107,12 @@ Examples:
     )
     trigger_group.add_argument(
         "--confounder_code",
-        default="LAB8",
+        default="DDZ32",
         help="Code that affects both exposure and outcome (creates confounding). Default: LAB8",
     )
     trigger_group.add_argument(
         "--exposure_only_code",
-        default="DDZ32",
+        default="DO60",
         help="Code that only affects exposure probability. Default: DDZ32",
     )
     trigger_group.add_argument(

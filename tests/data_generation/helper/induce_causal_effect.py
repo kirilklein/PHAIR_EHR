@@ -1,5 +1,4 @@
 import os
-import random
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -36,28 +35,10 @@ class CausalSimulator:
     def _get_event_time(
         self,
         subj_df: pd.DataFrame,
-        trigger_codes: List[str],
         days_offset: int,
-        fallback_strategy: str = "random",
     ) -> pd.Timestamp:
-        """Determine timing for new event based on triggers."""
-        # Find latest trigger time if any triggers present
-        trigger_times = []
-        for code in trigger_codes:
-            if (subj_df["code"] == code).any():
-                trigger_times.append(subj_df.loc[subj_df["code"] == code, "time"].max())
-
-        if trigger_times:
-            return max(trigger_times) + pd.Timedelta(days=days_offset)
-
-        # Fallback strategies when no triggers present
-        if len(subj_df) == 0:
-            return pd.Timestamp.now()
-
-        if fallback_strategy == "random":
-            return subj_df.iloc[random.randint(0, len(subj_df) - 1)]["time"]
-        else:  # median
-            return subj_df.iloc[len(subj_df) // 2]["time"]
+        """Assign as last event + days offset."""
+        return subj_df.time.max() + pd.Timedelta(days=days_offset)
 
     def _add_event(
         self,
@@ -88,7 +69,6 @@ class CausalSimulator:
         p_base: float,
         confounder_effect: float,
         exposure_only_effect: float,
-        days_offset: int,
     ) -> pd.DataFrame:
         """Simulate exposure event for a single subject."""
         subj_df = subj_df.sort_values("time").reset_index(drop=True)
@@ -107,17 +87,7 @@ class CausalSimulator:
         if not np.random.binomial(1, prob):
             return subj_df
 
-        # Determine event timing
-        trigger_codes = [
-            code
-            for code, present in [
-                (self.confounder_code, confounder_present),
-                (self.exposure_only_code, exposure_only_present),
-            ]
-            if present
-        ]
-
-        event_time = self._get_event_time(subj_df, trigger_codes, days_offset)
+        event_time = self._get_event_time(subj_df, 1)
         return self._add_event(subj_df, self.exposure_name, event_time)
 
     def simulate_outcome(
@@ -154,21 +124,7 @@ class CausalSimulator:
         if not np.random.binomial(1, p_actual):
             return subj_df
 
-        # Determine event timing
-        trigger_codes = []
-        if exposure_present:
-            trigger_codes = [self.exposure_name]
-        else:
-            trigger_codes = [
-                code
-                for code, present in [
-                    (self.confounder_code, confounder_present),
-                    (self.outcome_only_code, outcome_only_present),
-                ]
-                if present
-            ]
-
-        event_time = self._get_event_time(subj_df, trigger_codes, days_offset, "median")
+        event_time = self._get_event_time(subj_df, days_offset)
         return self._add_event(subj_df, self.outcome_name, event_time, ite=ite)
 
     def simulate_dataset(
@@ -188,7 +144,6 @@ class CausalSimulator:
         # Ensure datetime format
         if not pd.api.types.is_datetime64_dtype(df["time"]):
             df["time"] = pd.to_datetime(df["time"])
-
         # Simulate exposures
         result_df = df.groupby("subject_id", group_keys=False).apply(
             lambda x: self.simulate_exposure(
@@ -196,10 +151,8 @@ class CausalSimulator:
                 p_base_exposure,
                 confounder_exposure_effect,
                 exposure_only_effect,
-                days_offset,
             )
         )
-
         # Simulate outcomes if requested
         if simulate_outcome:
             result_df = result_df.groupby("subject_id", group_keys=False).apply(
