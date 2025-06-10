@@ -112,7 +112,7 @@ Examples:
     )
     trigger_group.add_argument(
         "--exposure_only_code",
-        default="DO60",
+        default="DDZ34",
         help="Code that only affects exposure probability. Default: DDZ32",
     )
     trigger_group.add_argument(
@@ -128,7 +128,7 @@ Examples:
     prob_group.add_argument(
         "--p_base_exposure",
         type=float,
-        default=0.3,
+        default=0.2,
         help="Base probability for exposure events (0-1). Default: 0.3",
     )
     prob_group.add_argument(
@@ -145,7 +145,7 @@ Examples:
     effects_group.add_argument(
         "--confounder_exposure_effect",
         type=float,
-        default=0.3,
+        default=-0.3,
         help="Effect of confounder on exposure (positive increases probability). Default: 0.3",
     )
     effects_group.add_argument(
@@ -157,7 +157,7 @@ Examples:
     effects_group.add_argument(
         "--exposure_only_effect",
         type=float,
-        default=1.5,
+        default=1.0,
         help="Effect of exposure-only trigger on exposure. Default: 1.5",
     )
     effects_group.add_argument(
@@ -230,7 +230,6 @@ def main() -> None:
         args.exposure_only_effect,
         args.outcome_only_effect,
         args.exposure_outcome_effect,
-        args.days_offset,
         args.simulate_outcome,
     )
 

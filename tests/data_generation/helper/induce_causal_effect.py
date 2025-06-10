@@ -1,4 +1,5 @@
 import os
+import random
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -22,7 +23,6 @@ class CausalSimulator:
         self.outcome_only_code = outcome_only_code
         self.exposure_name = exposure_name
         self.outcome_name = outcome_name
-        self.ite_records = []  # Store ITE for all subjects
 
     def _compute_probability(
         self, base_prob: float, effects: List[Tuple[float, bool]]
@@ -36,10 +36,105 @@ class CausalSimulator:
     def _get_event_time(
         self,
         subj_df: pd.DataFrame,
+        trigger_codes: List[str],
         days_offset: int,
+        fallback_strategy: str = "random",
+        outcome: bool = False,
     ) -> pd.Timestamp:
-        """Assign as last event + days offset."""
-        return subj_df.time.max() + pd.Timedelta(days=days_offset)
+        """Determine timing for new event based on triggers, ensuring it's before DOD.
+
+        Args:
+            subj_df: Subject dataframe
+            trigger_codes: List of codes that can trigger the event (e.g., confounder, exposure)
+            days_offset: Days to add after the latest trigger
+            fallback_strategy: Strategy when no triggers present ("random" or "second_half")
+
+        Returns:
+            Event timestamp that is guaranteed to be before DOD (if DOD exists)
+        """
+        # First, check for DOD and establish time boundary
+        dod_time = None
+        dod_events = subj_df[subj_df["code"] == "DOD"]
+        if not dod_events.empty:
+            dod_time = dod_events["time"].min()
+            # Validate DOD time
+            if pd.isna(dod_time):
+                dod_time = None
+
+        # Find trigger times (first occurrence of each trigger code)
+        trigger_times = []
+        for code in trigger_codes:
+            trigger_events = subj_df[subj_df["code"] == code]
+            if not trigger_events.empty:
+                trigger_time = trigger_events["time"].min()
+                # Only add valid (non-NaT) times
+                if not pd.isna(trigger_time):
+                    trigger_times.append(trigger_time)
+
+        # Calculate proposed event time based on triggers
+        if trigger_times:
+            # Use latest trigger time + offset
+            latest_trigger = max(trigger_times)
+            proposed_time = latest_trigger + pd.Timedelta(days=days_offset)
+
+            # Ensure proposed time is before DOD (with small buffer)
+            if dod_time is not None:
+                # If proposed time would be after DOD, place it before DOD with buffer
+                if proposed_time >= dod_time:
+                    # Place event just before DOD, but after latest trigger
+                    buffer_time = dod_time - pd.Timedelta(hours=2 if not outcome else 1)
+
+                    proposed_time = buffer_time
+
+            return proposed_time
+
+        # Fallback strategies when no triggers present
+        if len(subj_df) == 0:
+            return pd.Timestamp.now()
+
+        # Establish time bounds for fallback
+        min_time = subj_df["time"].min()
+        max_time = subj_df["time"].max()
+
+        # Validate min/max times
+        if pd.isna(min_time) or pd.isna(max_time):
+            return None
+
+        # Adjust max_time if DOD is present
+        if dod_time is not None:
+            max_time = min(max_time, dod_time - pd.Timedelta(days=1))
+
+        # Ensure we have a valid time window
+        if max_time <= min_time:
+            return None
+
+        if fallback_strategy == "second_half":
+            median_idx = len(subj_df) // 2
+            median_time = subj_df.iloc[median_idx]["time"]
+
+            # Validate median time
+            if pd.isna(median_time):
+                # Fallback to min_time if median is invalid
+                median_time = min_time
+
+            # Randomly place in second half, but before max_time
+            start_time = max(median_time, min_time)
+            if start_time >= max_time:
+                return None
+
+            # Generate random timestamp between start_time and max_time
+            time_diff_seconds = (max_time - start_time).total_seconds()
+
+            # Check for invalid time difference
+            if pd.isna(time_diff_seconds) or time_diff_seconds <= 0:
+                # If we can't calculate a proper difference, place at start_time
+                return start_time
+
+            random_seconds = random.uniform(0, time_diff_seconds)
+            return start_time + pd.Timedelta(seconds=random_seconds)
+        else:
+            # Place near end of timeline but before DOD
+            return max_time - pd.Timedelta(hours=12)  # Small buffer from max_time
 
     def _add_event(
         self,
@@ -88,7 +183,25 @@ class CausalSimulator:
         if not np.random.binomial(1, prob):
             return subj_df
 
-        event_time = self._get_event_time(subj_df, 1)
+        # Determine trigger codes for timing
+        trigger_codes = []
+        if confounder_present:
+            trigger_codes.append(self.confounder_code)
+        if exposure_only_present:
+            trigger_codes.append(self.exposure_only_code)
+
+        event_time = self._get_event_time(
+            subj_df,
+            trigger_codes,
+            days_offset=1,
+            fallback_strategy="second_half",
+            outcome=False,
+        )
+
+        # If event_time is None, we can't place the event safely
+        if event_time is None:
+            return subj_df
+
         return self._add_event(subj_df, self.exposure_name, event_time)
 
     def simulate_outcome(
@@ -98,7 +211,6 @@ class CausalSimulator:
         confounder_effect: float,
         outcome_only_effect: float,
         exposure_outcome_effect: float,
-        days_offset: int,
     ) -> pd.DataFrame:
         """Simulate outcome event for a single subject."""
         subj_df = subj_df.sort_values("time").reset_index(drop=True)
@@ -122,7 +234,7 @@ class CausalSimulator:
         ite = p_treated - p_control
 
         # Store ITE for this subject (regardless of outcome realization)
-        subject_id = subj_df.iloc[0]["subject_id"] if len(subj_df) > 0 else "unknown"
+        subject_id = subj_df.iloc[0]["subject_id"]
         self.ite_records.append({"subject_id": subject_id, "ite": ite})
 
         p_actual = p_treated if exposure_present else p_control
@@ -130,7 +242,27 @@ class CausalSimulator:
         if not np.random.binomial(1, p_actual):
             return subj_df
 
-        event_time = self._get_event_time(subj_df, days_offset)
+        # Determine trigger codes for timing
+        trigger_codes = []
+        if confounder_present:
+            trigger_codes.append(self.confounder_code)
+        if outcome_only_present:
+            trigger_codes.append(self.outcome_only_code)
+        if exposure_present:
+            trigger_codes.append(self.exposure_name)
+
+        event_time = self._get_event_time(
+            subj_df,
+            trigger_codes,
+            days_offset=1,
+            fallback_strategy="latest",
+            outcome=True,
+        )
+
+        # If event_time is None, we can't place the event (e.g., would be after DOD)
+        if event_time is None:
+            return subj_df
+
         return self._add_event(subj_df, self.outcome_name, event_time)
 
     def simulate_dataset(
@@ -143,39 +275,84 @@ class CausalSimulator:
         exposure_only_effect: float,
         outcome_only_effect: float,
         exposure_outcome_effect: float,
-        days_offset: int,
         simulate_outcome: bool = True,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Apply causal simulation to entire dataset."""
         # Reset ITE records for new simulation
         self.ite_records = []
 
+        # Track simulation statistics
+        exposure_attempted = 0
+        exposure_blocked_by_dod = 0
+        outcome_attempted = 0
+        outcome_blocked_by_dod = 0
+
         # Ensure datetime format
         if not pd.api.types.is_datetime64_dtype(df["time"]):
             df["time"] = pd.to_datetime(df["time"])
 
         # Simulate exposures
-        result_df = df.groupby("subject_id", group_keys=False).apply(
-            lambda x: self.simulate_exposure(
+        def simulate_exposure_with_tracking(x):
+            nonlocal exposure_attempted, exposure_blocked_by_dod
+            exposure_attempted += 1
+
+            original_len = len(x)
+            result = self.simulate_exposure(
                 x,
                 p_base_exposure,
                 confounder_exposure_effect,
                 exposure_only_effect,
             )
+
+            # Check if exposure was added
+            if len(result) == original_len:
+                # Check if it was blocked by DOD
+                has_dod = (x["code"] == "DOD").any()
+                if has_dod:
+                    exposure_blocked_by_dod += 1
+
+            return result
+
+        result_df = df.groupby("subject_id", group_keys=False).apply(
+            simulate_exposure_with_tracking
         )
 
         # Simulate outcomes if requested
         if simulate_outcome:
-            result_df = result_df.groupby("subject_id", group_keys=False).apply(
-                lambda x: self.simulate_outcome(
+
+            def simulate_outcome_with_tracking(x):
+                nonlocal outcome_attempted, outcome_blocked_by_dod
+                outcome_attempted += 1
+
+                original_len = len(x)
+                result = self.simulate_outcome(
                     x,
                     p_base_outcome,
                     confounder_outcome_effect,
                     outcome_only_effect,
                     exposure_outcome_effect,
-                    days_offset,
                 )
+
+                # Check if outcome was added
+                if len(result) == original_len:
+                    # Check if it was blocked by DOD
+                    has_dod = (x["code"] == "DOD").any()
+                    if has_dod:
+                        outcome_blocked_by_dod += 1
+
+                return result
+
+            result_df = result_df.groupby("subject_id", group_keys=False).apply(
+                simulate_outcome_with_tracking
             )
+
+        # Print simulation statistics
+        print(f"\nSimulation Statistics:")
+        print(f"Exposure simulations attempted: {exposure_attempted}")
+        print(f"Exposures blocked by DOD: {exposure_blocked_by_dod}")
+        if simulate_outcome:
+            print(f"Outcome simulations attempted: {outcome_attempted}")
+            print(f"Outcomes blocked by DOD: {outcome_blocked_by_dod}")
 
         # Create ITE dataframe
         ite_df = pd.DataFrame(self.ite_records) if simulate_outcome else pd.DataFrame()
@@ -292,8 +469,7 @@ class SimulationReporter:
             print(f"  P(Outcome | Exposure): {outcomes_given_exposure:.1f}%")
             print(f"  P(Outcome | No Exposure): {outcomes_given_no_exposure:.1f}%")
 
-            # Calculate ATE from stored ITE records
-            if hasattr(simulator, "ite_records") and simulator.ite_records:
-                ite_values = [record["ite"] for record in simulator.ite_records]
-                ate = np.mean(ite_values)
+            # Calculate ATE
+            if "ite" in df.columns:
+                ate = df["ite"].mean()
                 print(f"\nAverage Treatment Effect: {ate:.4f}")
