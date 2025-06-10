@@ -22,6 +22,7 @@ class CausalSimulator:
         self.outcome_only_code = outcome_only_code
         self.exposure_name = exposure_name
         self.outcome_name = outcome_name
+        self.ite_records = []  # Store ITE for all subjects
 
     def _compute_probability(
         self, base_prob: float, effects: List[Tuple[float, bool]]
@@ -119,13 +120,18 @@ class CausalSimulator:
         )
 
         ite = p_treated - p_control
+
+        # Store ITE for this subject (regardless of outcome realization)
+        subject_id = subj_df.iloc[0]["subject_id"] if len(subj_df) > 0 else "unknown"
+        self.ite_records.append({"subject_id": subject_id, "ite": ite})
+
         p_actual = p_treated if exposure_present else p_control
 
         if not np.random.binomial(1, p_actual):
             return subj_df
 
         event_time = self._get_event_time(subj_df, days_offset)
-        return self._add_event(subj_df, self.outcome_name, event_time, ite=ite)
+        return self._add_event(subj_df, self.outcome_name, event_time)
 
     def simulate_dataset(
         self,
@@ -139,11 +145,15 @@ class CausalSimulator:
         exposure_outcome_effect: float,
         days_offset: int,
         simulate_outcome: bool = True,
-    ) -> pd.DataFrame:
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Apply causal simulation to entire dataset."""
+        # Reset ITE records for new simulation
+        self.ite_records = []
+
         # Ensure datetime format
         if not pd.api.types.is_datetime64_dtype(df["time"]):
             df["time"] = pd.to_datetime(df["time"])
+
         # Simulate exposures
         result_df = df.groupby("subject_id", group_keys=False).apply(
             lambda x: self.simulate_exposure(
@@ -153,6 +163,7 @@ class CausalSimulator:
                 exposure_only_effect,
             )
         )
+
         # Simulate outcomes if requested
         if simulate_outcome:
             result_df = result_df.groupby("subject_id", group_keys=False).apply(
@@ -166,7 +177,10 @@ class CausalSimulator:
                 )
             )
 
-        return result_df
+        # Create ITE dataframe
+        ite_df = pd.DataFrame(self.ite_records) if simulate_outcome else pd.DataFrame()
+
+        return result_df, ite_df
 
 
 class DataManager:
@@ -278,7 +292,8 @@ class SimulationReporter:
             print(f"  P(Outcome | Exposure): {outcomes_given_exposure:.1f}%")
             print(f"  P(Outcome | No Exposure): {outcomes_given_no_exposure:.1f}%")
 
-            # Calculate ATE
-            if "ite" in df.columns:
-                ate = df["ite"].mean()
+            # Calculate ATE from stored ITE records
+            if hasattr(simulator, "ite_records") and simulator.ite_records:
+                ite_values = [record["ite"] for record in simulator.ite_records]
+                ate = np.mean(ite_values)
                 print(f"\nAverage Treatment Effect: {ate:.4f}")

@@ -221,7 +221,7 @@ def main() -> None:
     SimulationReporter.print_trigger_stats(df, simulator, args.simulate_outcome)
 
     # Run simulation
-    simulated_df = simulator.simulate_dataset(
+    simulated_df, ite_df = simulator.simulate_dataset(
         df,
         args.p_base_exposure,
         args.p_base_outcome,
@@ -242,11 +242,14 @@ def main() -> None:
     # Save results
     os.makedirs(args.write_dir, exist_ok=True)
 
-    if args.simulate_outcome and "ite" in simulated_df.columns:
-        ate = simulated_df["ite"].mean()
+    # Save ITE data separately if outcomes were simulated
+    if args.simulate_outcome and not ite_df.empty:
+        ite_df.to_csv(os.path.join(args.write_dir, ".ite.csv"), index=False)
+        ate = ite_df["ite"].mean()
         with open(os.path.join(args.write_dir, ".ate.txt"), "w") as f:
             f.write(f"ATE: {ate}")
-        simulated_df = simulated_df.drop(columns=["ite"])
+
+    # Save main simulation results
     simulated_df.reset_index(drop=True, inplace=True)
     DataManager.write_shards(simulated_df, args.write_dir, shards)
 
