@@ -234,7 +234,7 @@ class EffectEstimator:
                 "CI95_upper": [ci_upper_rd],
                 "effect_1": [risk_exposed],
                 "effect_0": [risk_unexposed],
-                "bootstrap": [0],
+                "n_bootstraps": [0],
             }
         )
 
@@ -276,7 +276,7 @@ class EffectEstimator:
                 "CI95_upper": [ci_upper_rr],
                 "effect_1": [risk_exposed],
                 "effect_0": [risk_unexposed],
-                "bootstrap": [0],
+                "n_bootstraps": [0],
             }
         )
 
