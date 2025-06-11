@@ -5,6 +5,8 @@ import pandas as pd
 import sys
 from typing import Optional
 import os
+import re
+from datetime import datetime
 
 
 def test_roc_performance(
@@ -86,10 +88,42 @@ def test_roc_performance(
 
 
 def find_roc_auc_file(ft_dir: str, file_start: str) -> str:
-    """Look for a file starting with val_scores_mean_std"""
+    """Look for the file starting with file_start that has the latest datetime"""
+    matching_files = []
     for file in os.listdir(ft_dir):
         if file.startswith(file_start):
-            return os.path.join(ft_dir, file)
+            matching_files.append(file)
+
+    if not matching_files:
+        raise FileNotFoundError(
+            f"No files found starting with '{file_start}' in {ft_dir}"
+        )
+
+    if len(matching_files) == 1:
+        return os.path.join(ft_dir, matching_files[0])
+
+    # Parse datetime from filenames and find the latest
+    latest_file = None
+    latest_datetime = None
+
+    for file in matching_files:
+        # Extract datetime pattern from filename (assuming format like YYYY-MM-DD_HH-MM-SS)
+        datetime_match = re.search(r"(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})", file)
+        if datetime_match:
+            datetime_str = datetime_match.group(1)
+            try:
+                file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d_%H-%M-%S")
+                if latest_datetime is None or file_datetime > latest_datetime:
+                    latest_datetime = file_datetime
+                    latest_file = file
+            except ValueError:
+                continue
+
+    if latest_file is None:
+        # Fallback to first file if datetime parsing fails
+        latest_file = matching_files[0]
+
+    return os.path.join(ft_dir, latest_file)
 
 
 def main():
