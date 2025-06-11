@@ -81,9 +81,11 @@ class CausalSimulator:
 
             # Ensure proposed time is before DOD (with appropriate buffer)
             if dod_time is not None:
-                min_buffer_hours = 1 if outcome else 24  # Outcomes can be closer to death
+                min_buffer_hours = (
+                    1 if outcome else 24
+                )  # Outcomes can be closer to death
                 buffer_time = dod_time - pd.Timedelta(hours=min_buffer_hours)
-                
+
                 # If proposed time would be after the buffer, check if it's feasible
                 if proposed_time >= buffer_time:
                     # If there's insufficient time between trigger and DOD, reject
@@ -178,27 +180,27 @@ class CausalSimulator:
         dod_events = subj_df[subj_df["code"] == "DOD"]
         if not dod_events.empty:
             dod_time = dod_events["time"].min()
-            
+
             # Check if triggers occur before DOD
             confounder_events = subj_df[subj_df["code"] == self.confounder_code]
             exposure_only_events = subj_df[subj_df["code"] == self.exposure_only_code]
-            
+
             # If triggers exist, ensure they're before DOD
             valid_triggers = True
             if not confounder_events.empty:
                 latest_confounder = confounder_events["time"].max()
                 if latest_confounder >= dod_time:
                     valid_triggers = False
-            
+
             if not exposure_only_events.empty:
                 latest_exposure_trigger = exposure_only_events["time"].max()
                 if latest_exposure_trigger >= dod_time:
                     valid_triggers = False
-            
+
             # If triggers are invalid (after DOD), cannot simulate exposure
             if not valid_triggers:
                 return subj_df
-        
+
         # Check trigger presence (only valid triggers)
         confounder_present = (subj_df["code"] == self.confounder_code).any()
         exposure_only_present = (subj_df["code"] == self.exposure_only_code).any()
@@ -231,7 +233,7 @@ class CausalSimulator:
         # If event_time is None, we can't place the event safely
         if event_time is None:
             return subj_df
-        
+
         # FINAL CHECK: Ensure proposed exposure time is before DOD
         if not dod_events.empty:
             dod_time = dod_events["time"].min()
@@ -331,7 +333,10 @@ class CausalSimulator:
 
         # Simulate exposures
         def simulate_exposure_with_tracking(x):
-            nonlocal exposure_attempted, exposure_blocked_by_dod, exposure_invalid_triggers
+            nonlocal \
+                exposure_attempted, \
+                exposure_blocked_by_dod, \
+                exposure_invalid_triggers
             exposure_attempted += 1
 
             original_len = len(x)
@@ -360,7 +365,7 @@ class CausalSimulator:
         def validate_exposure_dod_order(subject_data):
             exposure_events = subject_data[subject_data["code"] == self.exposure_name]
             dod_events = subject_data[subject_data["code"] == "DOD"]
-            
+
             if not exposure_events.empty and not dod_events.empty:
                 exposure_time = exposure_events["time"].min()
                 dod_time = dod_events["time"].min()
@@ -372,21 +377,28 @@ class CausalSimulator:
         temporal_violations = violations.sum()
 
         if temporal_violations > 0:
-            print(f"⚠️  WARNING: {temporal_violations} subjects have EXPOSURE after DOD!")
-            
+            print(
+                f"⚠️  WARNING: {temporal_violations} subjects have EXPOSURE after DOD!"
+            )
+
             # Remove invalid exposures
             def fix_temporal_violations(subject_data):
                 if validate_exposure_dod_order(subject_data):
                     # Remove exposure events that occur after DOD
                     dod_time = subject_data[subject_data["code"] == "DOD"]["time"].min()
-                    exposure_mask = (subject_data["code"] == self.exposure_name) & (subject_data["time"] >= dod_time)
+                    exposure_mask = (subject_data["code"] == self.exposure_name) & (
+                        subject_data["time"] >= dod_time
+                    )
                     return subject_data[~exposure_mask].reset_index(drop=True)
                 return subject_data
-            
-            result_df = result_df.groupby("subject_id", group_keys=False).apply(fix_temporal_violations)
+
+            result_df = result_df.groupby("subject_id", group_keys=False).apply(
+                fix_temporal_violations
+            )
 
         # Simulate outcomes if requested
         if simulate_outcome:
+
             def simulate_outcome_with_tracking(x):
                 nonlocal outcome_attempted, outcome_blocked_by_dod
                 outcome_attempted += 1
