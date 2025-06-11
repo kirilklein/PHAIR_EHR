@@ -112,7 +112,7 @@ Examples:
     )
     trigger_group.add_argument(
         "--exposure_only_code",
-        default="DDZ34",
+        default="MME01",
         help="Code that only affects exposure probability. Default: DDZ32",
     )
     trigger_group.add_argument(
@@ -145,7 +145,7 @@ Examples:
     effects_group.add_argument(
         "--confounder_exposure_effect",
         type=float,
-        default=-0.3,
+        default=1.2,
         help="Effect of confounder on exposure (positive increases probability). Default: 0.3",
     )
     effects_group.add_argument(
@@ -157,7 +157,7 @@ Examples:
     effects_group.add_argument(
         "--exposure_only_effect",
         type=float,
-        default=1.0,
+        default=0.8,
         help="Effect of exposure-only trigger on exposure. Default: 1.5",
     )
     effects_group.add_argument(
@@ -175,12 +175,6 @@ Examples:
 
     # Other parameters
     other_group = parser.add_argument_group("Other Parameters")
-    other_group.add_argument(
-        "--days_offset",
-        type=int,
-        default=30,
-        help="Days after trigger before simulated event can occur. Default: 30",
-    )
     other_group.add_argument(
         "--simulate_outcome",
         type=bool,

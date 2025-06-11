@@ -48,9 +48,10 @@ class CausalSimulator:
             trigger_codes: List of codes that can trigger the event (e.g., confounder, exposure)
             days_offset: Days to add after the latest trigger
             fallback_strategy: Strategy when no triggers present ("random" or "second_half")
+            outcome: Whether this is for outcome simulation (allows closer to DOD)
 
         Returns:
-            Event timestamp that is guaranteed to be before DOD (if DOD exists)
+            Event timestamp that is guaranteed to be before DOD (if DOD exists), or None if impossible
         """
         # First, check for DOD and establish time boundary
         dod_time = None
@@ -67,9 +68,10 @@ class CausalSimulator:
             trigger_events = subj_df[subj_df["code"] == code]
             if not trigger_events.empty:
                 trigger_time = trigger_events["time"].min()
-                # Only add valid (non-NaT) times
+                # Only add valid (non-NaT) times that are before DOD
                 if not pd.isna(trigger_time):
-                    trigger_times.append(trigger_time)
+                    if dod_time is None or trigger_time < dod_time:
+                        trigger_times.append(trigger_time)
 
         # Calculate proposed event time based on triggers
         if trigger_times:
@@ -77,13 +79,17 @@ class CausalSimulator:
             latest_trigger = max(trigger_times)
             proposed_time = latest_trigger + pd.Timedelta(days=days_offset)
 
-            # Ensure proposed time is before DOD (with small buffer)
+            # Ensure proposed time is before DOD (with appropriate buffer)
             if dod_time is not None:
-                # If proposed time would be after DOD, place it before DOD with buffer
-                if proposed_time >= dod_time:
-                    # Place event just before DOD, but after latest trigger
-                    buffer_time = dod_time - pd.Timedelta(hours=2 if not outcome else 1)
-
+                min_buffer_hours = 1 if outcome else 24  # Outcomes can be closer to death
+                buffer_time = dod_time - pd.Timedelta(hours=min_buffer_hours)
+                
+                # If proposed time would be after the buffer, check if it's feasible
+                if proposed_time >= buffer_time:
+                    # If there's insufficient time between trigger and DOD, reject
+                    if buffer_time <= latest_trigger:
+                        return None
+                    # Otherwise, place just before the buffer
                     proposed_time = buffer_time
 
             return proposed_time
@@ -100,9 +106,10 @@ class CausalSimulator:
         if pd.isna(min_time) or pd.isna(max_time):
             return None
 
-        # Adjust max_time if DOD is present
+        # Adjust max_time if DOD is present - be more conservative
         if dod_time is not None:
-            max_time = min(max_time, dod_time - pd.Timedelta(days=1))
+            conservative_buffer = pd.Timedelta(days=7 if not outcome else 1)
+            max_time = min(max_time, dod_time - conservative_buffer)
 
         # Ensure we have a valid time window
         if max_time <= min_time:
@@ -114,7 +121,6 @@ class CausalSimulator:
 
             # Validate median time
             if pd.isna(median_time):
-                # Fallback to min_time if median is invalid
                 median_time = min_time
 
             # Randomly place in second half, but before max_time
@@ -127,14 +133,13 @@ class CausalSimulator:
 
             # Check for invalid time difference
             if pd.isna(time_diff_seconds) or time_diff_seconds <= 0:
-                # If we can't calculate a proper difference, place at start_time
-                return start_time
+                return None
 
             random_seconds = random.uniform(0, time_diff_seconds)
             return start_time + pd.Timedelta(seconds=random_seconds)
         else:
-            # Place near end of timeline but before DOD
-            return max_time - pd.Timedelta(hours=12)  # Small buffer from max_time
+            # Place near end of timeline but before DOD with buffer
+            return max_time - pd.Timedelta(hours=12)
 
     def _add_event(
         self,
@@ -169,7 +174,32 @@ class CausalSimulator:
         """Simulate exposure event for a single subject."""
         subj_df = subj_df.sort_values("time").reset_index(drop=True)
 
-        # Check trigger presence
+        # CRITICAL: Check if patient has DOD and validate timeline
+        dod_events = subj_df[subj_df["code"] == "DOD"]
+        if not dod_events.empty:
+            dod_time = dod_events["time"].min()
+            
+            # Check if triggers occur before DOD
+            confounder_events = subj_df[subj_df["code"] == self.confounder_code]
+            exposure_only_events = subj_df[subj_df["code"] == self.exposure_only_code]
+            
+            # If triggers exist, ensure they're before DOD
+            valid_triggers = True
+            if not confounder_events.empty:
+                latest_confounder = confounder_events["time"].max()
+                if latest_confounder >= dod_time:
+                    valid_triggers = False
+            
+            if not exposure_only_events.empty:
+                latest_exposure_trigger = exposure_only_events["time"].max()
+                if latest_exposure_trigger >= dod_time:
+                    valid_triggers = False
+            
+            # If triggers are invalid (after DOD), cannot simulate exposure
+            if not valid_triggers:
+                return subj_df
+        
+        # Check trigger presence (only valid triggers)
         confounder_present = (subj_df["code"] == self.confounder_code).any()
         exposure_only_present = (subj_df["code"] == self.exposure_only_code).any()
 
@@ -201,6 +231,12 @@ class CausalSimulator:
         # If event_time is None, we can't place the event safely
         if event_time is None:
             return subj_df
+        
+        # FINAL CHECK: Ensure proposed exposure time is before DOD
+        if not dod_events.empty:
+            dod_time = dod_events["time"].min()
+            if event_time >= dod_time:
+                return subj_df
 
         return self._add_event(subj_df, self.exposure_name, event_time)
 
@@ -284,8 +320,10 @@ class CausalSimulator:
         # Track simulation statistics
         exposure_attempted = 0
         exposure_blocked_by_dod = 0
+        exposure_invalid_triggers = 0
         outcome_attempted = 0
         outcome_blocked_by_dod = 0
+        temporal_violations = 0
 
         # Ensure datetime format
         if not pd.api.types.is_datetime64_dtype(df["time"]):
@@ -293,7 +331,7 @@ class CausalSimulator:
 
         # Simulate exposures
         def simulate_exposure_with_tracking(x):
-            nonlocal exposure_attempted, exposure_blocked_by_dod
+            nonlocal exposure_attempted, exposure_blocked_by_dod, exposure_invalid_triggers
             exposure_attempted += 1
 
             original_len = len(x)
@@ -306,10 +344,11 @@ class CausalSimulator:
 
             # Check if exposure was added
             if len(result) == original_len:
-                # Check if it was blocked by DOD
                 has_dod = (x["code"] == "DOD").any()
                 if has_dod:
                     exposure_blocked_by_dod += 1
+                else:
+                    exposure_invalid_triggers += 1
 
             return result
 
@@ -317,9 +356,37 @@ class CausalSimulator:
             simulate_exposure_with_tracking
         )
 
+        # CRITICAL: Validate no exposures occur after DOD
+        def validate_exposure_dod_order(subject_data):
+            exposure_events = subject_data[subject_data["code"] == self.exposure_name]
+            dod_events = subject_data[subject_data["code"] == "DOD"]
+            
+            if not exposure_events.empty and not dod_events.empty:
+                exposure_time = exposure_events["time"].min()
+                dod_time = dod_events["time"].min()
+                if exposure_time >= dod_time:
+                    return True
+            return False
+
+        violations = result_df.groupby("subject_id").apply(validate_exposure_dod_order)
+        temporal_violations = violations.sum()
+
+        if temporal_violations > 0:
+            print(f"⚠️  WARNING: {temporal_violations} subjects have EXPOSURE after DOD!")
+            
+            # Remove invalid exposures
+            def fix_temporal_violations(subject_data):
+                if validate_exposure_dod_order(subject_data):
+                    # Remove exposure events that occur after DOD
+                    dod_time = subject_data[subject_data["code"] == "DOD"]["time"].min()
+                    exposure_mask = (subject_data["code"] == self.exposure_name) & (subject_data["time"] >= dod_time)
+                    return subject_data[~exposure_mask].reset_index(drop=True)
+                return subject_data
+            
+            result_df = result_df.groupby("subject_id", group_keys=False).apply(fix_temporal_violations)
+
         # Simulate outcomes if requested
         if simulate_outcome:
-
             def simulate_outcome_with_tracking(x):
                 nonlocal outcome_attempted, outcome_blocked_by_dod
                 outcome_attempted += 1
@@ -335,7 +402,6 @@ class CausalSimulator:
 
                 # Check if outcome was added
                 if len(result) == original_len:
-                    # Check if it was blocked by DOD
                     has_dod = (x["code"] == "DOD").any()
                     if has_dod:
                         outcome_blocked_by_dod += 1
@@ -350,6 +416,8 @@ class CausalSimulator:
         print(f"\nSimulation Statistics:")
         print(f"Exposure simulations attempted: {exposure_attempted}")
         print(f"Exposures blocked by DOD: {exposure_blocked_by_dod}")
+        print(f"Exposures blocked by invalid triggers: {exposure_invalid_triggers}")
+        print(f"Temporal violations detected and fixed: {temporal_violations}")
         if simulate_outcome:
             print(f"Outcome simulations attempted: {outcome_attempted}")
             print(f"Outcomes blocked by DOD: {outcome_blocked_by_dod}")
