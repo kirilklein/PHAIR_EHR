@@ -44,3 +44,4 @@ PS_SUMMARY_FILE_FILTERED = "ps_summary_filtered.csv"
 EXPOSURES_FILE = "exposures.csv"
 
 STATS_PATH = "stats"
+PATIENTS_FILE = "patients.pt"
