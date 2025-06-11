@@ -136,11 +136,14 @@ class CausalDatasetPreparer(DatasetPreparer):
             data.patients = data.process_in_parallel(
                 censor_patient_with_delays,
                 censor_dates=censor_dates,
+                predict_token_id=self.predict_token,
                 concept_id_to_delay=concept_id_to_delay,
             )
         else:
             data.patients = data.process_in_parallel(
-                censor_patient, censor_dates=censor_dates
+                censor_patient,
+                censor_dates=censor_dates,
+                predict_token_id=self.predict_token,
             )
         background_length = get_background_length(data, vocab)
         # Exclude short sequences
