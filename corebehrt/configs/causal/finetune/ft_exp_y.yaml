@@ -36,12 +36,12 @@ trainer_args:
   unfreeze_at_epoch: 20 # if unfrezze_on_plateau is true, whichever condition is met first
 
 optimizer:
-  lr: 2e-3
+  lr: 1e-3
   eps: 1e-6
 
 scheduler:
   _target_: transformers.get_constant_schedule_with_warmup
-  num_warmup_epochs: 3
+  num_warmup_epochs: 4
 
 metrics:
   roc_auc:

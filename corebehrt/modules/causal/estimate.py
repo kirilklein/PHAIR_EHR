@@ -3,10 +3,12 @@ from typing import Any, Dict
 
 import pandas as pd
 import numpy as np
+import torch
 from CausalEstimate import MultiEstimator
 from CausalEstimate.estimators import AIPW, IPW, TMLE
 from CausalEstimate.filter.propensity import filter_common_support
 from CausalEstimate.stats.stats import compute_treatment_outcome_table
+from corebehrt.constants.causal.paths import PATIENTS_FILE
 
 from corebehrt.constants.causal.data import (
     CF_PROBAS,
@@ -132,17 +134,19 @@ class EffectEstimator:
         This ensures that true effects and unadjusted effects are computed on the
         same cohort as the other estimators for fair comparison.
         """
+        initial_len = len(df)
         if self.estimation_args["common_support"]:
-            filtered_df = filter_common_support(
+            df = filter_common_support(
                 df,
                 ps_col=PS_COL,
                 treatment_col=EXPOSURE_COL,
                 threshold=self.estimation_args["common_support_threshold"],
             )
             self.logger.info(
-                f"Analysis cohort after common support filtering: {len(df)} → {len(filtered_df)} observations"
+                f"Analysis cohort after common support filtering: {initial_len} → {len(df)} observations"
             )
-            return filtered_df
+
+        torch.save(df[PID_COL].values, join(self.exp_dir, PATIENTS_FILE))
         return df
 
     def _estimate_effects(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -234,7 +238,7 @@ class EffectEstimator:
                 "CI95_upper": [ci_upper_rd],
                 "effect_1": [risk_exposed],
                 "effect_0": [risk_unexposed],
-                "bootstrap": [0],
+                "n_bootstraps": [0],
             }
         )
 
@@ -276,7 +280,7 @@ class EffectEstimator:
                 "CI95_upper": [ci_upper_rr],
                 "effect_1": [risk_exposed],
                 "effect_0": [risk_unexposed],
-                "bootstrap": [0],
+                "n_bootstraps": [0],
             }
         )
 

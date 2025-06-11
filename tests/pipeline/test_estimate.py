@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse
-import pandas as pd
-import sys
-import os
 import glob
+import os
+import sys
 from typing import Optional
+
+import pandas as pd
+import torch
+
+from corebehrt.constants.data import PID_COL
 
 
 def test_ate_estimate(estimate_dir: str, data_dir: Optional[str] = None) -> bool:
@@ -36,8 +40,8 @@ def test_ate_estimate(estimate_dir: str, data_dir: Optional[str] = None) -> bool
             print(f"Available columns: {list(df.columns)}")
             return False
 
-        # Load true ATE
-        true_ate = load_true_ate(data_dir)
+        # Load true ATE from filtered patients
+        true_ate = load_true_ate_from_ite(estimate_dir, data_dir)
         if true_ate is None:
             return False
 
@@ -139,6 +143,79 @@ def load_true_ate(data_dir: str) -> Optional[float]:
         return None
 
 
+def load_true_ate_from_ite(estimate_dir: str, data_dir: str) -> Optional[float]:
+    """
+    Load true ATE from .ite.csv file filtered by common support patients.
+
+    Args:
+        estimate_dir: Directory containing patients.pt file
+        data_dir: Directory containing .ite.csv file
+
+    Returns:
+        True ATE value computed from filtered ITEs or None if not found/invalid
+    """
+    try:
+        # Load common support patient IDs
+        patients_file = os.path.join(estimate_dir, "patients.pt")
+        if not os.path.exists(patients_file):
+            print(f"❌ Error: patients.pt not found in {estimate_dir}")
+            return None
+
+        patient_ids = torch.load(patients_file)
+        print(f"Loaded {len(patient_ids)} patient IDs from common support filtering")
+
+        # Find .ite.csv file
+        print(data_dir)
+        print(os.listdir(data_dir))
+        ite_file = os.path.join(data_dir, ".ite.csv")
+
+        # Load ITE data
+        ite_df = pd.read_csv(ite_file)
+        print(f"Loaded {len(ite_df)} individual treatment effects")
+
+        # Filter by common support patient IDs
+        # Assuming the ITE file has a patient ID column (adjust column name as needed)
+        if PID_COL in ite_df.columns:
+            pid_col = PID_COL
+        else:
+            print(f"❌ Error: Could not find patient ID column in {ite_file}")
+            print(f"Available columns: {list(ite_df.columns)}")
+            return None
+
+        filtered_ite_df = ite_df[ite_df[pid_col].isin(patient_ids)]
+        print(
+            f"Filtered to {len(filtered_ite_df)} patients after common support filtering"
+        )
+
+        if len(filtered_ite_df) == 0:
+            print("❌ Error: No patients remained after filtering")
+            return None
+
+        # Compute ATE from filtered ITEs
+        # Assuming the effect column is named 'effect' or 'ite' (adjust as needed)
+        if "effect" in filtered_ite_df.columns:
+            effect_col = "effect"
+        elif "ite" in filtered_ite_df.columns:
+            effect_col = "ite"
+        elif "treatment_effect" in filtered_ite_df.columns:
+            effect_col = "treatment_effect"
+        else:
+            print(f"❌ Error: Could not find effect column in {ite_file}")
+            print(f"Available columns: {list(filtered_ite_df.columns)}")
+            return None
+
+        true_ate = filtered_ite_df[effect_col].mean()
+        print(
+            f"Computed ATE from {len(filtered_ite_df)} filtered patients: {true_ate:.4f}"
+        )
+
+        return true_ate
+
+    except Exception as e:
+        print(f"❌ Error loading true ATE from ITE: {e}")
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Test ATE estimates against true values"
@@ -146,13 +223,12 @@ def main():
     parser.add_argument(
         "estimate_dir",
         type=str,
-        help="Path to directory containing estimate_results.csv",
+        help="Path to directory containing estimate_results.csv and patients.pt",
     )
     parser.add_argument(
         "data_dir",
         type=str,
-        default=None,
-        help="Path to directory containing .ate.txt file",
+        help="Path to directory containing .ite.csv file",
     )
 
     args = parser.parse_args()
