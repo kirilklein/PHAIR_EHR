@@ -31,13 +31,14 @@ import pandas as pd
 
 from corebehrt.constants.causal.paths import STATS_PATH
 from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
-from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
+from corebehrt.constants.data import PID_COL, TIMESTAMP_COL, ABSPOS_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE
 from corebehrt.functional.causal.checks import check_time_windows
 from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
     select_time_eligible_exposed,
 )
+from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.functional.preparation.filter import select_first_event
 from corebehrt.main_causal.helper.select_cohort_advanced import (
     check_inclusion_exclusion,
@@ -135,6 +136,9 @@ def select_cohort(
 
     final_index_dates = pd.concat(
         [index_dates_filtered_exposed, index_dates_filtered_control]
+    )
+    final_index_dates[ABSPOS_COL] = get_hours_since_epoch(
+        final_index_dates[TIMESTAMP_COL]
     )
     final_index_dates.to_csv(join(save_path, INDEX_DATES_FILE), index=False)
 
