@@ -40,9 +40,10 @@ def get_binary_outcomes(
     if n_hours_end_follow_up is not None:
         in_window &= merged["rel_pos"] <= n_hours_end_follow_up
     if n_hours_compliance is not None:
-        in_window = adjust_windows_for_compliance(
-            in_window, merged, exposures, index_date_matching, n_hours_compliance
+        compliance_mask = adjust_windows_for_compliance(
+            merged, exposures, index_date_matching, n_hours_compliance
         )
+        in_window &= compliance_mask
     # Group by patient and check if any outcome is within window
     has_outcome = merged[in_window].groupby(PID_COL).size() > 0
 
@@ -56,17 +57,17 @@ def get_binary_outcomes(
 
 
 def adjust_windows_for_compliance(
-    in_window: pd.Series,
     merged: pd.DataFrame,
     exposures: pd.DataFrame,
     index_date_matching: pd.DataFrame,
     n_hours_compliance: float,
 ) -> pd.Series:
     """
-    Adjust the windows for compliance by setting end of follow-up based on last exposure.
+    Adjust the follow-up windows for compliance.
+    Set based on last exposure + n_hours_compliance for exposed
+    For controls we use the linking that was used to create the control index dates.
 
     Args:
-        in_window: Boolean series indicating if outcomes are within initial window
         merged: DataFrame containing outcome and index date information
         exposures: DataFrame with exposure information
         index_date_matching: DataFrame containing exposed-control subject pairs
@@ -83,26 +84,42 @@ def adjust_windows_for_compliance(
         raise ValueError("exposures is required if n_hours_compliance is not None")
 
     # Get last exposure time for each exposed subject
-    last_exposures = exposures.groupby(PID_COL)[ABSPOS_COL].max()
+    last_exposures = exposures.groupby(PID_COL)[ABSPOS_COL].max().reset_index()
+    last_exposures.columns = ["exposed_subject_id", "last_exposure_time"]
 
-    # Create mapping of exposed subjects to their controls
-    exposed_to_controls = (
-        index_date_matching.groupby("exposed_subject_id")["control_subject_id"]
-        .apply(list)
-        .to_dict()
+    # Create mapping for control subjects
+    control_mapping = pd.merge(
+        index_date_matching[["exposed_subject_id", "control_subject_id"]],
+        last_exposures,
+        on="exposed_subject_id",
+        how="left",
     )
 
-    # Map last exposures to both exposed and control subjects
-    merged["last_exposure"] = merged[PID_COL].map(last_exposures)
-    for exposed_id, control_ids in exposed_to_controls.items():
-        if exposed_id in last_exposures:
-            merged.loc[merged[PID_COL].isin(control_ids), "last_exposure"] = (
-                last_exposures[exposed_id]
-            )
+    # Create combined mapping for all subjects
+    all_last_exposures = pd.concat(
+        [
+            # Map exposed subjects to their own last exposure
+            last_exposures.rename(columns={"exposed_subject_id": PID_COL}),
+            # Map control subjects to their exposed subject's last exposure
+            control_mapping[["control_subject_id", "last_exposure_time"]].rename(
+                columns={"control_subject_id": PID_COL}
+            ),
+        ]
+    ).drop_duplicates(subset=[PID_COL])
 
-    # Create compliance mask
-    compliance_mask = merged[ABSPOS_COL] <= (
-        merged["last_exposure"] + n_hours_compliance
+    # Create a mapping series that maintains the original index
+    last_exposure_map = pd.Series(
+        index=merged.index,
+        data=merged[PID_COL].map(
+            all_last_exposures.set_index(PID_COL)["last_exposure_time"]
+        ),
     )
 
-    return in_window & compliance_mask
+    # Create compliance mask using the original index
+    compliance_mask = merged[ABSPOS_COL] <= (last_exposure_map + n_hours_compliance)
+
+    # Handle cases where last_exposure_time is NaN (subjects with no exposures)
+    # For these, we keep the original window (no compliance restriction)
+    compliance_mask = compliance_mask.fillna(True)
+
+    return compliance_mask
