@@ -94,12 +94,15 @@ class CausalDatasetPreparer(DatasetPreparer):
         data = CausalPatientDataset(patients=patient_list)
 
         # Loading and processing outcomes
-        exposures = pd.read_csv(paths_cfg.exposure)
+        index_dates = pd.read_csv(join(paths_cfg.cohort, INDEX_DATES_FILE))
+        exposures = pd.read_csv(join(paths_cfg.cohort, EXPOSURES_FILE))
+
         outcomes = pd.read_csv(paths_cfg.outcome)
 
-        exposures[PID_COL] = exposures[PID_COL].astype(int)
+        index_dates[PID_COL] = index_dates[PID_COL].astype(int)
         outcomes[PID_COL] = outcomes[PID_COL].astype(int)
 
+        index_dates = filter_df_by_pids(index_dates, data.get_pids())
         exposures = filter_df_by_pids(exposures, data.get_pids())
         outcomes = filter_df_by_pids(outcomes, data.get_pids())
 
@@ -107,9 +110,11 @@ class CausalDatasetPreparer(DatasetPreparer):
         # Outcome Handler now only needs to do 1 thing: if outcome is in follow up window 1 else 0
         binary_exposure = get_binary_outcomes(
             index_dates,
-            exposures,
+            outcomes,
             exposure_cfg.get("n_hours_start_follow_up", 0),
-            exposure_cfg.get("n_hours_end_follow_up", None),
+            exposure_cfg.get("n_hours_end_follow_up"),
+            exposure_cfg.get("n_hours_compliance"),
+            exposures,
         )
 
         binary_outcome = get_binary_outcomes(
