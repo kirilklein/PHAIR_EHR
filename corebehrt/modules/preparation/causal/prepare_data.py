@@ -11,7 +11,6 @@ from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE, OUTCOMES_FILE
 from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
 from corebehrt.functional.features.normalize import normalize_segments_for_patient
-from corebehrt.functional.io_operations.load import load_vocabulary
 from corebehrt.functional.io_operations.save import save_vocabulary
 from corebehrt.functional.preparation.causal.convert import (
     dataframe_to_causal_patient_list,
@@ -93,7 +92,6 @@ class CausalDatasetPreparer(DatasetPreparer):
             patient_list.extend(batch_patient_list)
         logger.info(f"Number of patients: {len(patient_list)}")
         data = CausalPatientDataset(patients=patient_list)
-        vocab = load_vocabulary(paths_cfg.tokenized)
 
         # Loading and processing outcomes
         exposures = pd.read_csv(paths_cfg.exposure)
@@ -131,18 +129,21 @@ class CausalDatasetPreparer(DatasetPreparer):
         self._validate_censoring(data.patients, censor_dates, logger)
         if "concept_pattern_hours_delay" in self.cfg:
             concept_id_to_delay = get_concept_id_to_delay(
-                self.cfg.concept_pattern_hours_delay, vocab
+                self.cfg.concept_pattern_hours_delay, self.vocab
             )
             data.patients = data.process_in_parallel(
                 censor_patient_with_delays,
                 censor_dates=censor_dates,
+                predict_token_id=self.predict_token,
                 concept_id_to_delay=concept_id_to_delay,
             )
         else:
             data.patients = data.process_in_parallel(
-                censor_patient, censor_dates=censor_dates
+                censor_patient,
+                censor_dates=censor_dates,
+                predict_token_id=self.predict_token,
             )
-        background_length = get_background_length(data, vocab)
+        background_length = get_background_length(data, self.vocab)
         # Exclude short sequences
         logger.info("Excluding short sequences")
         data.patients = exclude_short_sequences(
@@ -154,13 +155,13 @@ class CausalDatasetPreparer(DatasetPreparer):
         non_priority_tokens = (
             None
             if data_cfg.get("low_priority_prefixes", None) is None
-            else get_non_priority_tokens(vocab, data_cfg.low_priority_prefixes)
+            else get_non_priority_tokens(self.vocab, data_cfg.low_priority_prefixes)
         )
         data.patients = data.process_in_parallel(
             truncate_patient,
             max_len=data_cfg.truncation_len,
             background_length=background_length,
-            sep_token=vocab["[SEP]"],
+            sep_token=self.vocab["[SEP]"],
             non_priority_tokens=non_priority_tokens,
         )
 
@@ -174,7 +175,7 @@ class CausalDatasetPreparer(DatasetPreparer):
         )
         # save
         os.makedirs(self.processed_dir, exist_ok=True)
-        save_vocabulary(vocab, self.processed_dir)
+        save_vocabulary(self.vocab, self.processed_dir)
         data.save(self.processed_dir)
         exposures.to_csv(join(self.processed_dir, EXPOSURES_FILE), index=False)
         outcomes.to_csv(join(self.processed_dir, OUTCOMES_FILE), index=False)

@@ -6,6 +6,9 @@ REM -------------------------------
 
 :: Run the pipeline with inline error checking
 :: Run Preprocessing and Pretraining
+echo Delete old features
+rmdir /s /q outputs\causal\data\features
+
 echo Running create_data...
 python -m corebehrt.main.create_data --config_path corebehrt\configs\causal\prepare_and_pretrain\create_data.yaml
 if errorlevel 1 goto :error
@@ -23,24 +26,34 @@ echo Running create_outcomes...
 python -m corebehrt.main.create_outcomes --config_path corebehrt\configs\causal\outcomes.yaml
 if errorlevel 1 goto :error
 
-echo Running select_cohort...
-python -m corebehrt.main.select_cohort --config_path corebehrt\configs\causal\finetune\select_cohort\exposure_simple_val.yaml
+echo Running select_cohort_full...
+python -m corebehrt.main_causal.select_cohort_full --config_path corebehrt\configs\causal\select_cohort_full\extract.yaml
+if errorlevel 1 goto :error
+
+:: Prepare Finetune Data
+echo Running prepare_finetune_data uncensored...
+python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp_uncensored.yaml
 if errorlevel 1 goto :error
 
 echo Running prepare_finetune_data...
 python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp.yaml
 if errorlevel 1 goto :error
 
-echo Running prepare_finetune_data uncensored...
-python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp_uncensored.yaml
+:: Finetune Exposure & Outcome
+echo Running finetune uncensored...
+python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\finetune\ft_exp_uncensored.yaml
+if errorlevel 1 goto :error
+
+echo Checking Performance uncensored...
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure_uncensored --min 0.95
 if errorlevel 1 goto :error
 
 echo Running finetune...
 python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\finetune\ft_exp.yaml
 if errorlevel 1 goto :error
 
-echo Running finetune uncensored...
-python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\finetune\ft_exp_uncensored.yaml
+echo Checking Performance...
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure --min 0.55 --max 0.9
 if errorlevel 1 goto :error
 
 echo Pipeline completed successfully.
