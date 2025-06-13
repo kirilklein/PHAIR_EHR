@@ -74,52 +74,48 @@ def adjust_windows_for_compliance(
         n_hours_compliance: Hours to add after last exposure for end of follow-up
 
     Returns:
-        Boolean series with adjusted windows
+        Boolean series with True for outcomes within compliance window, False otherwise
     """
     if index_date_matching is None:
-        raise ValueError(
-            "index_date_matching is required if n_hours_compliance is not None"
-        )
+        raise ValueError("index_date_matching is required if n_hours_compliance is not None")
     if exposures is None:
         raise ValueError("exposures is required if n_hours_compliance is not None")
 
     # Get last exposure time for each exposed subject
     last_exposures = exposures.groupby(PID_COL)[ABSPOS_COL].max().reset_index()
-    last_exposures.columns = ["exposed_subject_id", "last_exposure_time"]
-
+    last_exposures.columns = ['exposed_subject_id', 'last_exposure_time']
+    
     # Create mapping for control subjects
     control_mapping = pd.merge(
-        index_date_matching[["exposed_subject_id", "control_subject_id"]],
+        index_date_matching[['exposed_subject_id', 'control_subject_id']],
         last_exposures,
-        on="exposed_subject_id",
-        how="left",
+        on='exposed_subject_id',
+        how='left'
     )
-
+    
     # Create combined mapping for all subjects
-    all_last_exposures = pd.concat(
-        [
-            # Map exposed subjects to their own last exposure
-            last_exposures.rename(columns={"exposed_subject_id": PID_COL}),
-            # Map control subjects to their exposed subject's last exposure
-            control_mapping[["control_subject_id", "last_exposure_time"]].rename(
-                columns={"control_subject_id": PID_COL}
-            ),
-        ]
-    ).drop_duplicates(subset=[PID_COL])
-
+    all_last_exposures = pd.melt(
+        control_mapping,
+        id_vars=['last_exposure_time'],
+        value_vars=['exposed_subject_id', 'control_subject_id'],
+        var_name='subject_type',
+        value_name=PID_COL
+    )[[PID_COL, 'last_exposure_time']].drop_duplicates()
+    
     # Create a mapping series that maintains the original index
     last_exposure_map = pd.Series(
         index=merged.index,
         data=merged[PID_COL].map(
-            all_last_exposures.set_index(PID_COL)["last_exposure_time"]
-        ),
+            all_last_exposures.set_index(PID_COL)['last_exposure_time']
+        )
     )
-
+    
     # Create compliance mask using the original index
-    compliance_mask = merged[ABSPOS_COL] <= (last_exposure_map + n_hours_compliance)
-
-    # Handle cases where last_exposure_time is NaN (subjects with no exposures)
-    # For these, we keep the original window (no compliance restriction)
+    compliance_mask = (
+        merged[ABSPOS_COL] <= 
+        (last_exposure_map + n_hours_compliance)
+    )
+    # Handle cases where last_exposure_time is NaN
     compliance_mask = compliance_mask.fillna(True)
-
+    
     return compliance_mask
