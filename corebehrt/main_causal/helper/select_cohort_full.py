@@ -29,7 +29,7 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 
-from corebehrt.constants.causal.paths import STATS_PATH
+from corebehrt.constants.causal.paths import STATS_PATH, INDEX_DATE_MATCHING_FILE
 from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL, ABSPOS_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE
@@ -103,7 +103,7 @@ def select_cohort(
         Final patient IDs after all filtering steps
     """
     check_time_windows(time_windows)
-    patients_info, exposures, index_dates = _load_data(
+    patients_info, index_dates = _load_data(
         features_path, exposures_path, exposure, logger
     )
     control_patients_info = exclude_pids_from_df(
@@ -168,7 +168,10 @@ def _prepare_control(
         index_dates,
         control_patients_info,
     )
-    exposure_matching.to_csv(join(save_path, "index_date_matching.csv"), index=False)
+    exposure_matching[ABSPOS_COL] = get_hours_since_epoch(
+        exposure_matching[TIMESTAMP_COL]
+    )
+    exposure_matching.to_csv(join(save_path, INDEX_DATE_MATCHING_FILE), index=False)
     log_patient_num(logger, control_index_dates, "control_index_dates")
 
     criteria_control, control_stats = filter_by_criteria(
@@ -280,7 +283,7 @@ def _load_data(
     exposures = ConceptLoader.read_file(join(exposures_path, exposure))
     log_patient_num(logger, exposures, "exposures")
     index_dates = select_first_event(exposures, PID_COL, TIMESTAMP_COL)
-    return patients_info, exposures, index_dates
+    return patients_info, index_dates
 
 
 def _ensure_stats_format(stats: dict) -> dict:

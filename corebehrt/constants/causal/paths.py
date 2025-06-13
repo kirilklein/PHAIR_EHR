@@ -42,6 +42,7 @@ PS_SUMMARY_FILE = "ps_summary.csv"
 PS_SUMMARY_FILE_FILTERED = "ps_summary_filtered.csv"
 
 EXPOSURES_FILE = "exposures.csv"
+INDEX_DATE_MATCHING_FILE = "index_date_matching.csv"
 
 STATS_PATH = "stats"
 PATIENTS_FILE = "patients.pt"
