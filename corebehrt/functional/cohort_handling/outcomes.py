@@ -1,5 +1,7 @@
-from corebehrt.constants.data import PID_COL, ABSPOS_COL
 import pandas as pd
+
+from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL
+from corebehrt.constants.data import ABSPOS_COL, PID_COL
 
 
 def get_binary_outcomes(
@@ -24,7 +26,6 @@ def get_binary_outcomes(
     Returns:
         Series with PID index and int (0 or 1) values indicating if outcome occurred in window
     """
-
     # Create a mask for outcomes within the follow-up window
     merged = pd.merge(
         outcomes[[PID_COL, ABSPOS_COL]],
@@ -82,24 +83,24 @@ def adjust_windows_for_compliance(
         )
     if exposures is None:
         raise ValueError("exposures is required if n_hours_compliance is not None")
-
+    last_exposure_time_col = "last_exposure_time"
     # Get last exposure time for each exposed subject
     last_exposures = exposures.groupby(PID_COL)[ABSPOS_COL].max().reset_index()
-    last_exposures.columns = ["exposed_subject_id", "last_exposure_time"]
+    last_exposures.columns = [EXPOSED_PID_COL, last_exposure_time_col]
 
     # Create mapping for control subjects
     control_mapping = pd.merge(
-        index_date_matching[["exposed_subject_id", "control_subject_id"]],
+        index_date_matching[[EXPOSED_PID_COL, CONTROL_PID_COL]],
         last_exposures,
-        on="exposed_subject_id",
+        on=EXPOSED_PID_COL,
         how="left",
     )
 
     # Create combined mapping for all subjects (both exposed and controls)
-    exposed_mapping = last_exposures.rename(columns={"exposed_subject_id": PID_COL})
+    exposed_mapping = last_exposures.rename(columns={EXPOSED_PID_COL: PID_COL})
     control_mapping_clean = (
-        control_mapping[["control_subject_id", "last_exposure_time"]]
-        .rename(columns={"control_subject_id": PID_COL})
+        control_mapping[[CONTROL_PID_COL, last_exposure_time_col]]
+        .rename(columns={CONTROL_PID_COL: PID_COL})
         .dropna()
     )
 
@@ -112,7 +113,7 @@ def adjust_windows_for_compliance(
     last_exposure_map = pd.Series(
         index=merged.index,
         data=merged[PID_COL].map(
-            all_last_exposures.set_index(PID_COL)["last_exposure_time"]
+            all_last_exposures.set_index(PID_COL)[last_exposure_time_col]
         ),
     )
 
