@@ -35,8 +35,16 @@ echo Running prepare_finetune_data uncensored...
 python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp_uncensored.yaml
 if errorlevel 1 goto :error
 
+echo Running xgb baseline uncensored...
+python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure_uncensored --min_roc_auc 0.9 --expected_most_important_concept EXPOSURE
+if errorlevel 1 goto :error
+
 echo Running prepare_finetune_data...
 python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp.yaml
+if errorlevel 1 goto :error
+
+echo Running xgb baseline censored...
+python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure --min_roc_auc 0.55 --multihot
 if errorlevel 1 goto :error
 
 :: Finetune Exposure & Outcome
