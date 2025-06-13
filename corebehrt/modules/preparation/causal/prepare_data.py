@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
-from corebehrt.constants.causal.paths import EXPOSURES_FILE
+from corebehrt.constants.causal.paths import EXPOSURES_FILE, INDEX_DATE_MATCHING_FILE
 from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE, OUTCOMES_FILE
 from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
@@ -94,12 +94,17 @@ class CausalDatasetPreparer(DatasetPreparer):
         data = CausalPatientDataset(patients=patient_list)
 
         # Loading and processing outcomes
-        exposures = pd.read_csv(paths_cfg.exposure)
+        index_dates = pd.read_csv(join(paths_cfg.cohort, INDEX_DATES_FILE))
+        exposures = pd.read_csv(join(paths_cfg.cohort, EXPOSURES_FILE))
+        index_date_matching = pd.read_csv(
+            join(paths_cfg.cohort, INDEX_DATE_MATCHING_FILE)
+        )
         outcomes = pd.read_csv(paths_cfg.outcome)
 
-        exposures[PID_COL] = exposures[PID_COL].astype(int)
+        index_dates[PID_COL] = index_dates[PID_COL].astype(int)
         outcomes[PID_COL] = outcomes[PID_COL].astype(int)
 
+        index_dates = filter_df_by_pids(index_dates, data.get_pids())
         exposures = filter_df_by_pids(exposures, data.get_pids())
         outcomes = filter_df_by_pids(outcomes, data.get_pids())
 
@@ -109,7 +114,10 @@ class CausalDatasetPreparer(DatasetPreparer):
             index_dates,
             exposures,
             exposure_cfg.get("n_hours_start_follow_up", 0),
-            exposure_cfg.get("n_hours_end_follow_up", None),
+            exposure_cfg.get("n_hours_end_follow_up"),
+            exposure_cfg.get("n_hours_compliance"),
+            index_date_matching=index_date_matching,
+            exposures=exposures,
         )
 
         binary_outcome = get_binary_outcomes(
@@ -117,6 +125,9 @@ class CausalDatasetPreparer(DatasetPreparer):
             outcomes,
             outcome_cfg.get("n_hours_start_follow_up", 0),
             outcome_cfg.get("n_hours_end_follow_up", None),
+            outcome_cfg.get("n_hours_compliance"),
+            index_date_matching=index_date_matching,
+            exposures=exposures,
         )
 
         logger.info("Assigning exposures and outcomes")

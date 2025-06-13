@@ -336,7 +336,7 @@ if __name__ == "__main__":
         default=None,
         help="Expected name of the most important concept (optional)",
     )
-    parser.add_argument("--multihot", type=bool, required=False, default=False)
+    parser.add_argument("--multihot", action="store_true", required=False)
     args = parser.parse_args()
     main(
         args.data_path,
