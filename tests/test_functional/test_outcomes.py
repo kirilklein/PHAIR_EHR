@@ -225,81 +225,93 @@ class TestAdjustWindowsForCompliance(unittest.TestCase):
     def setUp(self):
         """Prepare test data for adjust_windows_for_compliance"""
         # Create merged DataFrame with outcomes and index dates
-        self.merged = pd.DataFrame({
-            PID_COL: [1, 1, 1, 2, 2, 2, 3, 3, 4, 4],
-            ABSPOS_COL: [110, 115, 120, 205, 210, 215, 310, 320, 410, 420],
-            'index_abspos': [100, 100, 100, 200, 200, 200, 300, 300, 400, 400],
-            'rel_pos': [10, 15, 20, 5, 10, 15, 10, 20, 10, 20]
-        })
-        
+        self.merged = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 1, 2, 2, 2, 3, 3, 4, 4],
+                ABSPOS_COL: [110, 115, 120, 205, 210, 215, 310, 320, 410, 420],
+                "index_abspos": [100, 100, 100, 200, 200, 200, 300, 300, 400, 400],
+                "rel_pos": [10, 15, 20, 5, 10, 15, 10, 20, 10, 20],
+            }
+        )
+
         # Create exposures DataFrame
-        self.exposures = pd.DataFrame({
-            PID_COL: [1, 1, 2],
-            ABSPOS_COL: [105, 115, 205]  # Last exposures at 115 and 205
-        })
-        
+        self.exposures = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 2],
+                ABSPOS_COL: [
+                    105,
+                    115,
+                    205,
+                ],  # Last exposures: subject 1 at 115, subject 2 at 205
+            }
+        )
+
         # Create index_date_matching DataFrame with multiple controls per exposed
-        self.index_date_matching = pd.DataFrame({
-            'exposed_subject_id': [1, 1, 2, 2],
-            'control_subject_id': [3, 4, 5, 6]  # Two controls per exposed subject
-        })
+        self.index_date_matching = pd.DataFrame(
+            {
+                "exposed_subject_id": [1, 1, 2, 2],
+                "control_subject_id": [
+                    3,
+                    4,
+                    5,
+                    6,
+                ],  # subjects 3,4 control for 1; subjects 5,6 control for 2
+            }
+        )
 
     def test_compliance_window_basic(self):
         """Test basic compliance window adjustment"""
         n_hours_compliance = 5
         result = adjust_windows_for_compliance(
-            self.merged, self.exposures, 
-            self.index_date_matching, n_hours_compliance
+            self.merged, self.exposures, self.index_date_matching, n_hours_compliance
         )
-        
+
+        # Expected logic:
         # Exposed subject 1: last exposure at 115, window ends at 120 (115+5)
-        #   - outcome at 110: True (before window end)
-        #   - outcome at 115: True (at window end)
-        #   - outcome at 120: True (at window end)
-        
+        #   - outcomes at 110, 115, 120: all <= 120, so True, True, True
         # Exposed subject 2: last exposure at 205, window ends at 210 (205+5)
-        #   - outcome at 205: True (at window end)
-        #   - outcome at 210: True (at window end)
-        #   - outcome at 215: False (after window end)
-        
-        # Control subjects 3 and 4: should match exposed subject 1's window
-        # Control subjects 5 and 6: should match exposed subject 2's window
-        
-        expected = pd.Series([True, True, True, True, True, False, False, False, False, False])
-        pd.testing.assert_series_equal(result, expected)
+        #   - outcomes at 205, 210, 215: 205<=210 (True), 210<=210 (True), 215>210 (False)
+        # Control subjects 3,4: inherit subject 1's window (end at 120)
+        #   - outcomes at 310, 320: both > 120, so False, False
+        #   - outcomes at 410, 420: both > 120, so False, False
+
+        expected = pd.Series(
+            [True, True, True, True, True, False, False, False, False, False]
+        )
+        pd.testing.assert_series_equal(result, expected, check_names=False)
 
     def test_missing_required_inputs(self):
         """Test that appropriate errors are raised for missing inputs"""
         with self.assertRaises(ValueError):
             adjust_windows_for_compliance(
-                self.merged, None, 
-                self.index_date_matching, 5
+                self.merged, None, self.index_date_matching, 5
             )
-        
+
         with self.assertRaises(ValueError):
-            adjust_windows_for_compliance(
-                self.merged, self.exposures, 
-                None, 5
-            )
+            adjust_windows_for_compliance(self.merged, self.exposures, None, 5)
 
     def test_subjects_without_exposures(self):
         """Test handling of subjects without exposures"""
-        # Add a subject with no exposures
-        self.merged = pd.concat([
-            self.merged,
-            pd.DataFrame({
-                PID_COL: [7],
-                ABSPOS_COL: [510],
-                'index_abspos': [500],
-                'rel_pos': [10]
-            })
-        ])
-        
-        result = adjust_windows_for_compliance(
-            self.merged, self.exposures, 
-            self.index_date_matching, 5
+        # Add a subject with no exposures (subject 7)
+        extended_merged = pd.concat(
+            [
+                self.merged,
+                pd.DataFrame(
+                    {
+                        PID_COL: [7],
+                        ABSPOS_COL: [510],
+                        "index_abspos": [500],
+                        "rel_pos": [10],
+                    }
+                ),
+            ],
+            ignore_index=True,
         )
-        
+
+        result = adjust_windows_for_compliance(
+            extended_merged, self.exposures, self.index_date_matching, 5
+        )
+
         # Subject 7 should be True as it has no exposures (no compliance restriction)
         self.assertTrue(result.iloc[-1])
 
@@ -307,23 +319,35 @@ class TestAdjustWindowsForCompliance(unittest.TestCase):
         """Test that multiple controls get the same window as their exposed subject"""
         n_hours_compliance = 5
         result = adjust_windows_for_compliance(
-            self.merged, self.exposures, 
-            self.index_date_matching, n_hours_compliance
+            self.merged, self.exposures, self.index_date_matching, n_hours_compliance
         )
-        
-        # Get the window end times for exposed subjects
-        exposed1_window_end = 115 + n_hours_compliance  # 120
-        exposed2_window_end = 205 + n_hours_compliance  # 210
-        
-        # Verify controls of exposed1 (subjects 3 and 4) have same window
-        control1_mask = self.merged[PID_COL].isin([3, 4])
-        self.assertTrue(all(result[control1_mask & (self.merged[ABSPOS_COL] <= exposed1_window_end)]))
-        self.assertTrue(all(~result[control1_mask & (self.merged[ABSPOS_COL] > exposed1_window_end)]))
-        
-        # Verify controls of exposed2 (subjects 5 and 6) have same window
-        control2_mask = self.merged[PID_COL].isin([5, 6])
-        self.assertTrue(all(result[control2_mask & (self.merged[ABSPOS_COL] <= exposed2_window_end)]))
-        self.assertTrue(all(~result[control2_mask & (self.merged[ABSPOS_COL] > exposed2_window_end)]))
+
+        # The test data has subjects 3,4 as controls in index_date_matching,
+        # but their actual outcome times in merged are much later than the compliance windows
+        # So they should all be False based on the time comparison
+
+        # Verify the pattern matches our expectation:
+        # Subjects 1,2 (exposed): based on their own exposures
+        # Subjects 3,4 (controls): should inherit from their exposed subjects but fail due to timing
+        expected_pattern = [
+            True,
+            True,
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+        ]
+
+        for i, expected_val in enumerate(expected_pattern):
+            self.assertEqual(
+                result.iloc[i],
+                expected_val,
+                f"Index {i} (subject {self.merged.iloc[i][PID_COL]}) should be {expected_val}",
+            )
 
 
 if __name__ == "__main__":
