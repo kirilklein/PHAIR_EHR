@@ -6,6 +6,9 @@ REM -------------------------------
 
 :: Run the pipeline with inline error checking
 :: Run Preprocessing and Pretraining
+echo Delete old features
+rmdir /s /q outputs\causal\data\features
+
 echo Running create_data...
 python -m corebehrt.main.create_data --config_path corebehrt\configs\causal\prepare_and_pretrain\create_data.yaml
 if errorlevel 1 goto :error
