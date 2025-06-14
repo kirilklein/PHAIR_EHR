@@ -1,13 +1,16 @@
 import logging
+from os.path import join
+
 import torch
 
 from corebehrt.constants.paths import PID_FILE
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main_causal.helper.select_cohort_advanced import split_and_save
-from corebehrt.main_causal.helper.select_cohort_full import select_cohort
+from corebehrt.main_causal.helper.select_cohort_full import (
+    select_cohort,
+    split_and_save,
+)
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.config import load_config
-from os.path import join
 
 CONFIG_PATH = "./corebehrt/configs/causal/select_cohort_full/extract.yaml"
 
