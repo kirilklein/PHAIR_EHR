@@ -17,7 +17,7 @@ from corebehrt.constants.data import TIMESTAMP_COL
 from corebehrt.constants.paths import INDEX_DATES_FILE, PID_FILE
 from corebehrt.functional.preparation.filter import filter_table_by_pids
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main_causal.helper.select_cohort_advanced import (
+from corebehrt.main_causal.helper.select_cohort_full import (
     extract_criteria_from_shards,
 )
 from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidator
