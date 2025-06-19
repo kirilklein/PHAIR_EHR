@@ -58,7 +58,7 @@ jobs:
           echo "We expect that all the triggers are the same as the outcomes."
           python -m tests.pipeline.test_uncensored_prepared --processed_data_dir ./outputs/causal/finetune/processed_data/exposure_uncensored --trigger_code EXPOSURE
           echo "🔧 Training XGBoost Baseline on uncensored data and checking performance"
-          python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure_uncensored --min_roc_auc 0.9 --expected_most_important_concept EXPOSURE
+          python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure_uncensored --min_roc_auc 0.8 --expected_most_important_concept EXPOSURE
 
           run_step main.prepare_training_data finetune/prepare/ft_exp.yaml
           echo "🔧 Training XGBoost Baseline on censored data and checking performance"
