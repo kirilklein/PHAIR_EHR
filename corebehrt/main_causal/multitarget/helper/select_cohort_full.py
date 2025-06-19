@@ -25,39 +25,31 @@ import json
 import logging
 import os
 from os.path import join
-import torch
 from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
+import torch
 
 from corebehrt.constants.causal.paths import (
-    STATS_PATH,
-    INDEX_DATE_MATCHING_FILE,
     EXPOSURES_FILE,
+    INDEX_DATE_MATCHING_FILE,
+    STATS_PATH,
 )
 from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
-from corebehrt.constants.data import PID_COL, TIMESTAMP_COL, ABSPOS_COL
-from corebehrt.constants.paths import INDEX_DATES_FILE
+from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
+from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE, TEST_PIDS_FILE
 from corebehrt.functional.causal.checks import check_time_windows
 from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
     select_time_eligible_exposed,
 )
-from corebehrt.functional.utils.time import get_hours_since_epoch
-from corebehrt.functional.preparation.filter import select_first_event
-
-from corebehrt.constants.data import CONCEPT_COL, PID_COL
-from corebehrt.constants.paths import (
-    FOLDS_FILE,
-    INDEX_DATES_FILE,
-    TEST_PIDS_FILE,
-)
-from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidator
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
-from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
+from corebehrt.functional.preparation.filter import select_first_event
+from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
+from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
 from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidator
 from corebehrt.modules.cohort_handling.patient_filter import (
     exclude_pids_from_df,
@@ -65,7 +57,6 @@ from corebehrt.modules.cohort_handling.patient_filter import (
 )
 from corebehrt.modules.features.loader import ConceptLoader
 from corebehrt.modules.setup.config import load_config
-from corebehrt.functional.features.split import create_folds, split_test
 
 logger = logging.getLogger(__name__)
 
