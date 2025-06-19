@@ -92,8 +92,11 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.setup_logging("estimate")
 
         # Validate and create directories
-        self.check_directory("exposure_predictions")
-        self.check_directory("outcome_predictions")
+        if self.cfg.paths.get("calibrated_predictions", False):
+            self.check_directory("calibrated_predictions")
+        else:
+            self.check_directory("exposure_predictions")
+            self.check_directory("outcome_predictions")
 
         # Optional counterfactual outcomes check
         if self.cfg.paths.get("counterfactual_outcomes", False):

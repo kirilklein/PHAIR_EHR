@@ -4,9 +4,7 @@ logging:
 
 paths:
   ## INPUTS
-  exposure_predictions: ./outputs/causal/finetune/models/exp_y/calibrated/predictions_exposure # containing predictions_and_targets_calibrated.csv
-  outcome_predictions: ./outputs/causal/finetune/models/exp_y/calibrated/predictions_outcome # containing predictions_and_targets_calibrated.csv
-
+  calibrated_predictions: ./outputs/causal/finetune/models/exp_y/calibrated/
   # counterfactual_outcomes: ./outputs/causal/counterfactual_outcomes # optional
 
   ## OUTPUTS
