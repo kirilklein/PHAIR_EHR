@@ -1,14 +1,13 @@
 from os.path import join
 from typing import Any, Dict
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import torch
 from CausalEstimate import MultiEstimator
 from CausalEstimate.estimators import AIPW, IPW, TMLE
 from CausalEstimate.filter.propensity import filter_common_support
 from CausalEstimate.stats.stats import compute_treatment_outcome_table
-from corebehrt.constants.causal.paths import PATIENTS_FILE
 
 from corebehrt.constants.causal.data import (
     CF_PROBAS,
@@ -28,6 +27,9 @@ from corebehrt.constants.causal.paths import (
     ESTIMATE_RESULTS_FILE,
     EXPERIMENT_DATA_FILE,
     EXPERIMENT_STATS_FILE,
+    PATIENTS_FILE,
+    PREDICTIONS_DIR_EXPOSURE,
+    PREDICTIONS_DIR_OUTCOME,
     SIMULATION_RESULTS_FILE,
 )
 from corebehrt.constants.data import PID_COL
@@ -52,8 +54,19 @@ class EffectEstimator:
 
     def _set_paths(self) -> None:
         self.exp_dir = self.cfg.paths.estimate
-        self.exposure_pred_dir = self.cfg.paths.exposure_predictions
-        self.outcome_pred_dir = self.cfg.paths.outcome_predictions
+
+        if self.cfg.paths.get("exposure_predictions") is not None:
+            self.exposure_pred_dir = self.cfg.paths.exposure_predictions
+        else:
+            self.exposure_pred_dir = join(
+                self.cfg.paths.calibrated_predictions, PREDICTIONS_DIR_EXPOSURE
+            )
+        if self.cfg.paths.get("outcome_predictions") is not None:
+            self.outcome_pred_dir = self.cfg.paths.outcome_predictions
+        else:
+            self.outcome_pred_dir = join(
+                self.cfg.paths.calibrated_predictions, PREDICTIONS_DIR_OUTCOME
+            )
         self.counterfactual_outcomes_dir = self.cfg.paths.get("counterfactual_outcomes")
 
     def _get_estimation_args(self) -> Dict:
