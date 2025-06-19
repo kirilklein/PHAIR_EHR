@@ -7,7 +7,7 @@ paths:
   criteria: ./outputs/causal/finetune/criteria_for_stats # should contain criteria_flags.csv
 
   #### Optional
-  cohort: ./outputs/causal/finetune/cohorts/exposure # should contain pids.pt
+  cohort: ./outputs/causal/finetune/cohorts/full # should contain pids.pt
   ps_calibrated_predictions: ./outputs/causal/finetune/models/exp_y/calibrated/predictions_exposure # should contain predictions_and_targets_calibrated.csv
   outcome_model: ./outputs/causal/finetune/models/exp_y/calibrated/predictions_outcome # should contain predictions_and_targets_calibrated.csv ! needs to be updated to use ft_exp
 
