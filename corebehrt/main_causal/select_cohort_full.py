@@ -15,7 +15,7 @@ from corebehrt.modules.setup.config import load_config
 CONFIG_PATH = "./corebehrt/configs/causal/select_cohort_full/extract.yaml"
 
 
-def main_select_cohort(config_path: str):
+def main(config_path: str):
     """Execute cohort selection and save results."""
     cfg = load_config(config_path)
     CausalDirectoryPreparer(cfg).setup_select_cohort_full()
@@ -50,4 +50,4 @@ def main_select_cohort(config_path: str):
 
 if __name__ == "__main__":
     args = get_args(CONFIG_PATH)
-    main_select_cohort(args.config_path)
+    main(args.config_path)
