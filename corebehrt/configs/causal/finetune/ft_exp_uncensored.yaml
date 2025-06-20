@@ -21,7 +21,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 128
   effective_batch_size: 128
-  epochs: 11
+  epochs: 10
   info: true
   gradient_clip:
     clip_value: 1.0
@@ -31,12 +31,12 @@ trainer_args:
   stopping_criterion: roc_auc
 
 optimizer:
-  lr: 7e-3
+  lr: 9e-3
   eps: 1e-6
 
 scheduler:
   _target_: transformers.get_constant_schedule_with_warmup
-  num_warmup_epochs: 3
+  num_warmup_epochs: 4
 
 metrics:
   roc_auc:
