@@ -1,4 +1,5 @@
 """
+!! This is a preliminary version.
 Cohort Selection for Causal Studies with Index Date Matching.
 
 This module implements a comprehensive pipeline for selecting matched cohorts in causal

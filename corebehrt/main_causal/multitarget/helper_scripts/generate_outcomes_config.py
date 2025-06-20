@@ -32,19 +32,20 @@ def parse_arguments() -> argparse.Namespace:
         "--prepend",
         type=str,
         default="",
-        help="Optional string to prepend to outcome names",
+        help="Optional string to prepend to outcome names. Default: empty string",
     )
     parser.add_argument(
         "--match_how",
         type=str,
         default="startswith",
         choices=["startswith", "contains", "exact"],
-        help="Match method to use for all outcomes",
+        help="Match method to use for all outcomes. Default: startswith",
     )
     parser.add_argument(
         "--case_sensitive",
         action="store_true",
-        help="Whether matching should be case sensitive",
+        default=False,
+        help="Whether matching should be case sensitive. Default: False",
     )
     return parser.parse_args()
 

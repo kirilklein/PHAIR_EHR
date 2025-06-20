@@ -1,21 +1,24 @@
-import logging
-from os.path import join
+"""
+!! This is a preliminary version.
+"""
 
+import logging
 import torch
 
 from corebehrt.constants.paths import PID_FILE
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main_causal.helper.select_cohort_full import (
+from corebehrt.main_causal.multitarget.helper.select_cohort_full import (
     select_cohort,
     split_and_save,
 )
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.config import load_config
+from os.path import join
 
-CONFIG_PATH = "./corebehrt/configs/causal/select_cohort_full/extract.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal_multitarget/select_cohort/extract.yaml"
 
 
-def main(config_path: str):
+def main_select_cohort(config_path: str):
     """Execute cohort selection and save results."""
     cfg = load_config(config_path)
     CausalDirectoryPreparer(cfg).setup_select_cohort_full()
@@ -50,4 +53,4 @@ def main(config_path: str):
 
 if __name__ == "__main__":
     args = get_args(CONFIG_PATH)
-    main(args.config_path)
+    main_select_cohort(args.config_path)

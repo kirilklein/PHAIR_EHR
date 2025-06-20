@@ -89,6 +89,6 @@ jobs:
           python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/MEDS_correlated_causal/tuning
 
           # ─── Criteria and stats ───────────────────────────────────────
-          run_step main.select_cohort                      finetune/select_cohort/exposure.yaml
+          run_step main_causal.select_cohort_full                      select_cohort_full/extract.yaml
           run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
           run_step main_causal.helper_scripts.get_stats helper/get_stats.yaml
