@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL
-from corebehrt.constants.data import DEATHDATE_COL, PID_COL, TIMESTAMP_COL
+from corebehrt.constants.data import BIRTHDATE_COL, DEATHDATE_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
     select_time_eligible_exposed,
@@ -35,6 +35,7 @@ class TestDrawIndexDatesForControl(unittest.TestCase):
             {
                 PID_COL: ["ctrl_1", "ctrl_2", "ctrl_3"],
                 DEATHDATE_COL: [pd.NaT, pd.NaT, pd.NaT],  # All alive
+                BIRTHDATE_COL: [datetime(1990, 1, 1), datetime(1990, 1, 1), datetime(1990, 1, 1)],
             }
         )
 
@@ -48,6 +49,10 @@ class TestDrawIndexDatesForControl(unittest.TestCase):
                     datetime(2015, 8, 1),  # Died after some exposed index dates
                     pd.NaT,  # Alive
                 ],
+                BIRTHDATE_COL: [datetime(1990, 1, 1), 
+                                datetime(1990, 1, 1), 
+                                datetime(1990, 1, 1), 
+                                datetime(2016, 1, 1)], # born after all exposed index dates
             }
         )
 
@@ -91,8 +96,9 @@ class TestDrawIndexDatesForControl(unittest.TestCase):
         )
 
         # ctrl_2 died on 2014-06-01, before all exposed dates, so should be excluded
+        # ctrl_4 born on 2016-01-01, after all exposed dates, so should be excluded
         # Other patients should potentially be included
-        self.assertLessEqual(len(control_index_dates), 4)
+        self.assertLessEqual(len(control_index_dates), 3)
         self.assertEqual(len(control_index_dates), len(exposure_matching))
 
         # Check that no assigned dates are after death dates
@@ -160,6 +166,7 @@ class TestDrawIndexDatesForControl(unittest.TestCase):
                     datetime(2014, 1, 1),  # Dies before all exposed dates
                     datetime(2014, 6, 1),  # Dies before all exposed dates
                 ],
+                BIRTHDATE_COL: [datetime(1990, 1, 1), datetime(1990, 1, 1)],
             }
         )
 
