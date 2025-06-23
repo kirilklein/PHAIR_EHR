@@ -92,9 +92,12 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.setup_logging("estimate")
 
         # Validate and create directories
-        if self.cfg.paths.get("calibrated_predictions", False):
+        try:
             self.check_directory("calibrated_predictions")
-        else:
+        except FileNotFoundError:
+            logger.warning(
+                "No calibrated predictions found, checking for exposure and outcome predictions"
+            )
             self.check_directory("exposure_predictions")
             self.check_directory("outcome_predictions")
 
