@@ -4,7 +4,12 @@ import numpy as np
 import pandas as pd
 
 from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL
-from corebehrt.constants.data import DEATHDATE_COL, PID_COL, TIMESTAMP_COL
+from corebehrt.constants.data import (
+    BIRTHDATE_COL,
+    DEATHDATE_COL,
+    PID_COL,
+    TIMESTAMP_COL,
+)
 
 
 def select_time_eligible_exposed(index_dates: pd.DataFrame, time_windows: dict) -> list:
@@ -87,9 +92,6 @@ def draw_index_dates_for_control_with_redraw(
     - The function prioritizes validity over maintaining exact sample size
     """
 
-    # Get death dates for unexposed patients
-    death_info = patients_info.set_index(PID_COL)[DEATHDATE_COL].reindex(control_pids)
-
     # Convert exposed info to arrays for faster sampling
     exposed_dates_array = exposed_index_dates[TIMESTAMP_COL].values
     exposed_pids_array = exposed_index_dates[PID_COL].values
@@ -100,11 +102,18 @@ def draw_index_dates_for_control_with_redraw(
     # Draw initial random indices
     sampled_indices = np.random.choice(n_exposed, size=n_unexposed, replace=True)
 
+    control_death_dates = (
+        patients_info.set_index(PID_COL)[DEATHDATE_COL].reindex(control_pids).values
+    )
+    control_birth_dates = (
+        patients_info.set_index(PID_COL)[BIRTHDATE_COL].reindex(control_pids).values
+    )
     # Create DataFrame with all necessary info
     temp_df = pd.DataFrame(
         {
             TIMESTAMP_COL: exposed_dates_array[sampled_indices],
-            DEATHDATE_COL: death_info.values,
+            DEATHDATE_COL: control_death_dates,
+            BIRTHDATE_COL: control_birth_dates,
             EXPOSED_PID_COL: exposed_pids_array[sampled_indices],
             CONTROL_PID_COL: control_pids,
         },
@@ -130,16 +139,14 @@ def _resample_invalid_dates(
     Resample invalid dates.
     Return temp_df with resampled dates and a boolean indicating if any invalid dates were resampled.
     """
-    invalid = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
-        temp_df[DEATHDATE_COL]
-    )
-    if not invalid.any():
+    invalid_mask = _get_invalid_mask(temp_df)
+    if not invalid_mask.any():
         return temp_df, False
     new_idx = np.random.choice(
-        len(exposed_dates_array), size=invalid.sum(), replace=True
+        len(exposed_dates_array), size=invalid_mask.sum(), replace=True
     )
-    temp_df.loc[invalid, TIMESTAMP_COL] = exposed_dates_array[new_idx]
-    temp_df.loc[invalid, EXPOSED_PID_COL] = exposed_pids_array[new_idx]
+    temp_df.loc[invalid_mask, TIMESTAMP_COL] = exposed_dates_array[new_idx]
+    temp_df.loc[invalid_mask, EXPOSED_PID_COL] = exposed_pids_array[new_idx]
     return temp_df, True
 
 
@@ -148,10 +155,8 @@ def _finalize_control(temp_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame
     Finalize control index dates and matching.
     Return index dates and matching.
     """
-    mask = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
-        temp_df[DEATHDATE_COL]
-    )
-    valid = temp_df.loc[~mask]
+    invalid_mask = _get_invalid_mask(temp_df)
+    valid = temp_df.loc[~invalid_mask]
     index_dates = pd.DataFrame(
         {PID_COL: valid.index, TIMESTAMP_COL: valid[TIMESTAMP_COL]}
     )
@@ -159,3 +164,17 @@ def _finalize_control(temp_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame
         drop=False, names=CONTROL_PID_COL
     )
     return index_dates, matching
+
+
+def _get_invalid_mask(temp_df: pd.DataFrame) -> pd.Series:
+    """
+    Get invalid mask.
+    Invalid dates are:
+    - After death date
+    - Before birth date
+    """
+    after_death = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
+        temp_df[DEATHDATE_COL]
+    )
+    before_birth = temp_df[TIMESTAMP_COL] < temp_df[BIRTHDATE_COL]
+    return after_death | before_birth
