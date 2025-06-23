@@ -5,7 +5,12 @@ import numpy as np
 import pandas as pd
 
 from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL
-from corebehrt.constants.data import BIRTHDATE_COL, DEATHDATE_COL, PID_COL, TIMESTAMP_COL
+from corebehrt.constants.data import (
+    BIRTHDATE_COL,
+    DEATHDATE_COL,
+    PID_COL,
+    TIMESTAMP_COL,
+)
 from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
     select_time_eligible_exposed,
@@ -35,7 +40,11 @@ class TestDrawIndexDatesForControl(unittest.TestCase):
             {
                 PID_COL: ["ctrl_1", "ctrl_2", "ctrl_3"],
                 DEATHDATE_COL: [pd.NaT, pd.NaT, pd.NaT],  # All alive
-                BIRTHDATE_COL: [datetime(1990, 1, 1), datetime(1990, 1, 1), datetime(1990, 1, 1)],
+                BIRTHDATE_COL: [
+                    datetime(1990, 1, 1),
+                    datetime(1990, 1, 1),
+                    datetime(1990, 1, 1),
+                ],
             }
         )
 
@@ -49,10 +58,12 @@ class TestDrawIndexDatesForControl(unittest.TestCase):
                     datetime(2015, 8, 1),  # Died after some exposed index dates
                     pd.NaT,  # Alive
                 ],
-                BIRTHDATE_COL: [datetime(1990, 1, 1), 
-                                datetime(1990, 1, 1), 
-                                datetime(1990, 1, 1), 
-                                datetime(2016, 1, 1)], # born after all exposed index dates
+                BIRTHDATE_COL: [
+                    datetime(1990, 1, 1),
+                    datetime(1990, 1, 1),
+                    datetime(1990, 1, 1),
+                    datetime(2016, 1, 1),
+                ],  # born after all exposed index dates
             }
         )
 
