@@ -27,7 +27,7 @@ SKS_DUMP_DIR = "corebehrt/main_causal/helper/data/sks_dumps"
 SKS_TREES_DIR = "corebehrt/main_causal/helper/data/sks_trees"
 
 CRITERIA_CONFIG_FILE = "criteria_config.yaml"
-CRITERIA_FLAGS_FILE = "criteria_flags.csv"
+CRITERIA_FLAGS_FILE = "criteria.csv"
 
 DATA_DIR = "data"
 

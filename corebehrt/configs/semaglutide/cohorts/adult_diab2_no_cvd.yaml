@@ -1,0 +1,41 @@
+inclusion: type2_diabetes & adult
+exclusion: type1_diabetes | cvd
+
+criteria_definitions:
+  adult:
+    min_age: 18
+
+  type2_diabetes:
+    codes:
+    - ^(?:D|RD)/DC11.*
+    - ^(?:M|RM)/A10B.*
+    end_days: 187
+
+  type1_diabetes:
+    codes:
+    - ^(?:D|RD|RPO)/DE10.*
+    end_days: 187
+
+  mi:
+    codes:
+    - ^(?:D|RD|RPO)/DI2[1-3].*
+    end_days: 187
+  stroke:
+    codes:
+    - ^(?:D|RD|RPO)/DI6[3-6].*
+    end_days: 90
+  heart_failure:
+    codes:
+    - ^(?:D|RD|RPO)/DI59.*
+    - ^(?:D|RD|RPO)/DI110.*
+    - ^(?:D|RD|RPO)/DI130.*
+    - ^(?:D|RD|RPO)/DI132.*
+    - ^(?:D|RD|RPO)/DI971.*
+    - ^(?:D|RD|RPO)/DI761.*
+    end_days: 90
+  acute_coronary_syndrome:
+    codes:
+    - ^(?:D|RD|RPO)/DI24.*
+    end_days: 90
+  cvd:
+    expression: mi | stroke | heart_failure | acute_coronary_syndrome 
