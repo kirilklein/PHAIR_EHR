@@ -4,7 +4,7 @@ logging:
 
 paths:
   ### Inputs
-  criteria: ./outputs/causal/finetune/criteria_for_stats # should contain criteria_flags.csv
+  criteria: ./outputs/causal/finetune/criteria_for_stats # should contain criteria.csv
 
   #### Optional
   cohort: ./outputs/causal/finetune/cohorts/full # should contain pids.pt

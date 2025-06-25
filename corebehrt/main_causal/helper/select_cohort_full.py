@@ -38,6 +38,7 @@ from corebehrt.constants.causal.paths import (
 from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
 from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE, TEST_PIDS_FILE
+from corebehrt.constants.causal.paths import CRITERIA_FLAGS_FILE
 from corebehrt.functional.causal.checks import check_time_windows
 from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
@@ -138,7 +139,7 @@ def select_cohort(
     )
 
     criteria = pd.concat([criteria_exposed, criteria_control])
-    criteria.to_csv(join(save_path, STATS_PATH, "criteria.csv"), index=False)
+    criteria.to_csv(join(save_path, STATS_PATH, CRITERIA_FLAGS_FILE), index=False)
 
     final_index_dates = pd.concat(
         [index_dates_filtered_exposed, index_dates_filtered_control]
