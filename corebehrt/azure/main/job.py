@@ -58,6 +58,8 @@ def add_parser(subparsers) -> None:
             "prepare_ft_exp_y",
             "finetune_exp_y",
             "calibrate_exp_y",
+            "xgboost_cv",
+            "evaluate_xgboost",
         },
         help="Job to run.",
     )
