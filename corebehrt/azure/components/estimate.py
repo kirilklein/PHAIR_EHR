@@ -1,8 +1,9 @@
 from corebehrt.azure.util import job
 
 INPUTS = {
-    "exposure_predictions": {"type": "uri_folder"},
-    "outcome_predictions": {"type": "uri_folder"},
+    "calibrated_predictions": {"type": "uri_folder", "optional": True},
+    "exposure_predictions": {"type": "uri_folder", "optional": True},
+    "outcome_predictions": {"type": "uri_folder", "optional": True},
     "counterfactual_outcomes": {"type": "uri_folder", "optional": True},
 }
 OUTPUTS = {
