@@ -29,6 +29,10 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 import torch
+from corebehrt.functional.cohort_handling.advanced.vis import (
+    plot_cohort_stats,
+    plot_multiple_cohort_stats,
+)
 
 from corebehrt.constants.causal.paths import (
     EXPOSURES_FILE,
@@ -119,7 +123,7 @@ def select_cohort(
     )
 
     criteria_config = load_config(criteria_definitions_path)
-    criteria_exposed, index_dates_filtered_exposed = _prepare_exposed(
+    criteria_exposed, index_dates_filtered_exposed, exposed_stats = _prepare_exposed(
         index_dates,
         time_windows,
         logger,
@@ -129,7 +133,7 @@ def select_cohort(
         save_path,
     )
 
-    criteria_control, index_dates_filtered_control = _prepare_control(
+    criteria_control, index_dates_filtered_control, control_stats = _prepare_control(
         control_patients_info,
         index_dates_filtered_exposed,
         logger,
@@ -137,6 +141,15 @@ def select_cohort(
         meds_path,
         splits,
         save_path,
+    )
+
+    # Create combined visualization
+    combined_stats = {"exposed": exposed_stats, "control": control_stats}
+    plot_multiple_cohort_stats(
+        stats_dict=combined_stats,
+        figsize=(20, 12),
+        save_path=join(save_path, STATS_PATH, "cohort_comparison.png"),
+        show_plot=False,
     )
 
     criteria = pd.concat([criteria_exposed, criteria_control])
@@ -165,7 +178,7 @@ def _prepare_control(
     meds_path: str,
     splits: List[str],
     save_path: str,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare control patients for cohort selection.
     Return criteria and index dates.
@@ -194,10 +207,16 @@ def _prepare_control(
         "control",
     )
     _save_stats(control_stats, save_path, "control", logger)
+    plot_cohort_stats(
+        stats=control_stats,
+        title="Control Patients Cohort Selection",
+        save_path=join(save_path, STATS_PATH, "control_flow.png"),
+        show_plot=False,
+    )
     control_index_date_filtered = filter_df_by_pids(
         control_index_dates, included_pids_control
     )
-    return criteria_control, control_index_date_filtered
+    return criteria_control, control_index_date_filtered, control_stats
 
 
 def _prepare_exposed(
@@ -208,7 +227,7 @@ def _prepare_exposed(
     meds_path: str,
     splits: List[str],
     save_path: str,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare exposed patients for cohort selection.
     Return criteria and index dates.
@@ -226,9 +245,14 @@ def _prepare_exposed(
         "exposed",
     )
     _save_stats(exposed_stats, save_path, "exposed", logger)
-
+    plot_cohort_stats(
+        stats=exposed_stats,
+        title="Exposed Patients Cohort Selection",
+        save_path=join(save_path, STATS_PATH, "exposed_flow.png"),
+        show_plot=False,
+    )
     index_dates_filtered_exposed = filter_df_by_pids(index_dates, included_pids_exposed)
-    return criteria_exposed, index_dates_filtered_exposed
+    return criteria_exposed, index_dates_filtered_exposed, exposed_stats
 
 
 def filter_by_criteria(
