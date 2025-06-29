@@ -21,7 +21,7 @@ df, stats = apply_criteria_with_stats(
 ```
 """
 
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import pandas as pd
 
@@ -31,19 +31,21 @@ from corebehrt.constants.cohort import (
     FINAL_INCLUDED,
     INITIAL_TOTAL,
     N_EXCLUDED_BY_EXPRESSION,
+    TOTAL_EXCLUDED,
 )
 from corebehrt.functional.cohort_handling.advanced.extract import (
     extract_criteria_names_from_expression,
 )
 from corebehrt.functional.cohort_handling.advanced.utills import print_stats
+from corebehrt.constants.data import PID_COL
 
 
 def apply_criteria_with_stats(
-    df: pd.DataFrame,
+    criteria_flags: pd.DataFrame,
     inclusion_expression: str,
     exclusion_expression: str,
     verbose: bool = True,
-) -> Tuple[pd.DataFrame, Dict]:
+) -> Tuple[List[str], Dict]:
     """
     Apply a composite inclusion/exclusion expression and optional unique code limits.
 
@@ -55,11 +57,11 @@ def apply_criteria_with_stats(
 
     Returns:
         Tuple containing:
-            - Filtered DataFrame of included patients
+            - List of included patient IDs
             - Dictionary with flow statistics.
     """
     stats = {
-        INITIAL_TOTAL: len(df),
+        INITIAL_TOTAL: len(criteria_flags),
         EXCLUDED_BY_INCLUSION_CRITERIA: {},
         EXCLUDED_BY_EXCLUSION_CRITERIA: {},
         N_EXCLUDED_BY_EXPRESSION: 0,
@@ -77,29 +79,37 @@ def apply_criteria_with_stats(
     # For inclusion: count how many patients DO NOT meet the criteria.
     for crit in inclusion_criteria_names:
         stats[EXCLUDED_BY_INCLUSION_CRITERIA][crit] = int(
-            (~df[crit].astype(bool)).sum()
+            (~criteria_flags[crit].astype(bool)).sum()
         )
     # For exclusion: count how many patients DO meet the criteria.
     for crit in exclusion_criteria_names:
-        stats[EXCLUDED_BY_EXCLUSION_CRITERIA][crit] = int((df[crit].astype(bool)).sum())
+        stats[EXCLUDED_BY_EXCLUSION_CRITERIA][crit] = int(
+            (criteria_flags[crit].astype(bool)).sum()
+        )
 
     # --- Build a local dictionary covering all criteria for eval ---
     all_criteria = set(inclusion_criteria_names) | set(exclusion_criteria_names)
-    local_dict = {crit: df[crit].astype(bool) for crit in all_criteria}
+    local_dict = {crit: criteria_flags[crit].astype(bool) for crit in all_criteria}
 
     # --- Evaluate the inclusion and exclusion expressions ---
     inclusion_mask = pd.eval(inclusion_expression, local_dict=local_dict)
     exclusion_mask = pd.eval(exclusion_expression, local_dict=local_dict)
 
+    # --- Calculate totals for inclusion and exclusion separately ---
+    # Total excluded by inclusion: patients who don't meet the inclusion expression
+    stats[EXCLUDED_BY_INCLUSION_CRITERIA][TOTAL_EXCLUDED] = int((~inclusion_mask).sum())
+    # Total excluded by exclusion: patients who meet the exclusion expression
+    stats[EXCLUDED_BY_EXCLUSION_CRITERIA][TOTAL_EXCLUDED] = int(exclusion_mask.sum())
+
     # --- Combine expressions: final mask includes patients who satisfy inclusion and do not satisfy exclusion ---
     final_mask = inclusion_mask & ~exclusion_mask
-    stats[N_EXCLUDED_BY_EXPRESSION] = len(df) - final_mask.sum()
+    stats[N_EXCLUDED_BY_EXPRESSION] = len(criteria_flags) - final_mask.sum()
 
     # --- Subset the DataFrame ---
-    included = df[final_mask].copy()
-    stats[FINAL_INCLUDED] = len(included)
+    included_pids = criteria_flags.loc[final_mask, PID_COL].unique().tolist()
+    stats[FINAL_INCLUDED] = len(included_pids)
 
     if verbose:
         print_stats(stats)
 
-    return included, stats
+    return included_pids, stats

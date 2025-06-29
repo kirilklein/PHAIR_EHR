@@ -29,6 +29,10 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 import torch
+from corebehrt.functional.cohort_handling.advanced.vis import (
+    plot_cohort_stats,
+    plot_multiple_cohort_stats,
+)
 
 from corebehrt.constants.causal.paths import (
     EXPOSURES_FILE,
@@ -118,7 +122,7 @@ def select_cohort(
     )
 
     criteria_config = load_config(criteria_definitions_path)
-    criteria_exposed, index_dates_filtered_exposed = _prepare_exposed(
+    criteria_exposed, index_dates_filtered_exposed, exposed_stats = _prepare_exposed(
         index_dates,
         time_windows,
         logger,
@@ -128,7 +132,7 @@ def select_cohort(
         save_path,
     )
 
-    criteria_control, index_dates_filtered_control = _prepare_control(
+    criteria_control, index_dates_filtered_control, control_stats = _prepare_control(
         control_patients_info,
         index_dates_filtered_exposed,
         logger,
@@ -136,6 +140,15 @@ def select_cohort(
         meds_path,
         splits,
         save_path,
+    )
+
+    # Create combined visualization
+    combined_stats = {"exposed": exposed_stats, "control": control_stats}
+    plot_multiple_cohort_stats(
+        stats_dict=combined_stats,
+        figsize=(20, 12),
+        save_path=join(save_path, STATS_PATH, "cohort_comparison.png"),
+        show_plot=False,
     )
 
     criteria = pd.concat([criteria_exposed, criteria_control])
@@ -164,7 +177,7 @@ def _prepare_control(
     meds_path: str,
     splits: List[str],
     save_path: str,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare control patients for cohort selection.
     Return criteria and index dates.
@@ -183,7 +196,7 @@ def _prepare_control(
     exposure_matching.to_csv(join(save_path, INDEX_DATE_MATCHING_FILE), index=False)
     log_patient_num(logger, control_index_dates, "control_index_dates")
 
-    criteria_control, control_stats = filter_by_criteria(
+    criteria_control, included_pids_control, control_stats = filter_by_criteria(
         criteria_config,
         meds_path,
         control_index_dates,
@@ -193,10 +206,16 @@ def _prepare_control(
         "control",
     )
     _save_stats(control_stats, save_path, "control", logger)
-    control_index_date_filtered = filter_df_by_pids(
-        control_index_dates, criteria_control[PID_COL]
+    plot_cohort_stats(
+        stats=control_stats,
+        title="Control Patients Cohort Selection",
+        save_path=join(save_path, STATS_PATH, "control_flow.png"),
+        show_plot=False,
     )
-    return criteria_control, control_index_date_filtered
+    control_index_date_filtered = filter_df_by_pids(
+        control_index_dates, included_pids_control
+    )
+    return criteria_control, control_index_date_filtered, control_stats
 
 
 def _prepare_exposed(
@@ -207,7 +226,7 @@ def _prepare_exposed(
     meds_path: str,
     splits: List[str],
     save_path: str,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare exposed patients for cohort selection.
     Return criteria and index dates.
@@ -215,7 +234,7 @@ def _prepare_exposed(
     Return exposed criteria and index dates.
     """
     time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
-    criteria_exposed, exposed_stats = filter_by_criteria(
+    criteria_exposed, included_pids_exposed, exposed_stats = filter_by_criteria(
         criteria_config,
         meds_path,
         index_dates,
@@ -225,11 +244,14 @@ def _prepare_exposed(
         "exposed",
     )
     _save_stats(exposed_stats, save_path, "exposed", logger)
-
-    index_dates_filtered_exposed = filter_df_by_pids(
-        index_dates, criteria_exposed[PID_COL]
+    plot_cohort_stats(
+        stats=exposed_stats,
+        title="Exposed Patients Cohort Selection",
+        save_path=join(save_path, STATS_PATH, "exposed_flow.png"),
+        show_plot=False,
     )
-    return criteria_exposed, index_dates_filtered_exposed
+    index_dates_filtered_exposed = filter_df_by_pids(index_dates, included_pids_exposed)
+    return criteria_exposed, index_dates_filtered_exposed, exposed_stats
 
 
 def filter_by_criteria(
@@ -240,12 +262,36 @@ def filter_by_criteria(
     pids: List[str],
     logger: logging.Logger,
     description: str,
-) -> Tuple[pd.DataFrame, dict]:
+) -> Tuple[pd.DataFrame, List[str], dict]:
     """
-    Filter patients by criteria.
-    Save stats.
-    Return filtered criteria.
-    Return stats.
+    Filter patients based on inclusion/exclusion criteria and extract relevant data.
+
+    This function validates criteria configuration, extracts criteria data from medication
+    shards, applies inclusion/exclusion filters, and logs statistics throughout the process.
+
+    Args:
+        criteria_config: Dictionary containing criteria definitions, inclusion, and exclusion rules
+        meds_path: Path to medication data shards
+        index_dates: DataFrame with patient index dates
+        splits: List of data splits to process
+        pids: List of patient IDs to filter
+        logger: Logger instance for recording statistics and progress
+        description: Description string for logging purposes
+
+    Returns:
+        tuple: (criteria_data, included_pids, stats)
+            - criteria_data: pd.DataFrame with extracted criteria data for all patients
+            - included_pids: List of patient IDs that passed the inclusion/exclusion criteria
+            - stats: Dictionary containing filtering statistics and counts
+
+    Notes
+    -----
+    The function performs the following steps:
+    1. Validates criteria configuration and checks inclusion/exclusion logic
+    2. Extracts criteria data from shards for specified patients
+    3. Logs patient counts at various stages
+    4. Applies inclusion/exclusion criteria to filter patients
+    5. Returns (unfiltered) criteria flags, included patient IDs, and statistics
     """
     validator = CriteriaValidator(criteria_config.get(CRITERIA_DEFINITIONS))
     validator.validate()
@@ -261,12 +307,12 @@ def filter_by_criteria(
     logger.info(f"N pids {description}: {len(pids)}")
     log_patient_num(logger, criteria, "criteria")
     logger.info(f"Applying criteria to {description} and saving stats")
-    criteria_filtered, stats = apply_criteria_with_stats(
+    included_pids, stats = apply_criteria_with_stats(
         criteria,
         criteria_config.get(INCLUSION),
         criteria_config.get(EXCLUSION),
     )
-    return criteria_filtered, stats
+    return criteria, included_pids, stats
 
 
 def _save_stats(stats: dict, save_path: str, description: str, logger: logging.Logger):
