@@ -266,7 +266,7 @@ def filter_by_criteria(
         criteria_config.get(INCLUSION),
         criteria_config.get(EXCLUSION),
     )
-    return criteria_filtered, stats
+    return criteria, criteria_filtered, stats
 
 
 def _save_stats(stats: dict, save_path: str, description: str, logger: logging.Logger):

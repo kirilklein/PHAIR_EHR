@@ -44,6 +44,7 @@ from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
     select_time_eligible_exposed,
 )
+from corebehrt.modules.cohort_handling.patient_filter import filter_by_prior_outcomes
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
 from corebehrt.functional.preparation.filter import select_first_event
@@ -183,7 +184,7 @@ def _prepare_control(
     exposure_matching.to_csv(join(save_path, INDEX_DATE_MATCHING_FILE), index=False)
     log_patient_num(logger, control_index_dates, "control_index_dates")
 
-    criteria_control, control_stats = filter_by_criteria(
+    criteria_control, included_pids_control, control_stats = filter_by_criteria(
         criteria_config,
         meds_path,
         control_index_dates,
@@ -194,7 +195,7 @@ def _prepare_control(
     )
     _save_stats(control_stats, save_path, "control", logger)
     control_index_date_filtered = filter_df_by_pids(
-        control_index_dates, criteria_control[PID_COL]
+        control_index_dates, included_pids_control
     )
     return criteria_control, control_index_date_filtered
 
@@ -215,7 +216,7 @@ def _prepare_exposed(
     Return exposed criteria and index dates.
     """
     time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
-    criteria_exposed, exposed_stats = filter_by_criteria(
+    criteria_exposed, included_pids_exposed, exposed_stats = filter_by_criteria(
         criteria_config,
         meds_path,
         index_dates,
@@ -226,9 +227,7 @@ def _prepare_exposed(
     )
     _save_stats(exposed_stats, save_path, "exposed", logger)
 
-    index_dates_filtered_exposed = filter_df_by_pids(
-        index_dates, criteria_exposed[PID_COL]
-    )
+    index_dates_filtered_exposed = filter_df_by_pids(index_dates, included_pids_exposed)
     return criteria_exposed, index_dates_filtered_exposed
 
 
@@ -240,12 +239,36 @@ def filter_by_criteria(
     pids: List[str],
     logger: logging.Logger,
     description: str,
-) -> Tuple[pd.DataFrame, dict]:
+) -> Tuple[pd.DataFrame, List[str], dict]:
     """
-    Filter patients by criteria.
-    Save stats.
-    Return filtered criteria.
-    Return stats.
+    Filter patients based on inclusion/exclusion criteria and extract relevant data.
+
+    This function validates criteria configuration, extracts criteria data from medication
+    shards, applies inclusion/exclusion filters, and logs statistics throughout the process.
+
+    Args:
+        criteria_config: Dictionary containing criteria definitions, inclusion, and exclusion rules
+        meds_path: Path to medication data shards
+        index_dates: DataFrame with patient index dates
+        splits: List of data splits to process
+        pids: List of patient IDs to filter
+        logger: Logger instance for recording statistics and progress
+        description: Description string for logging purposes
+
+    Returns:
+        tuple: (criteria_data, included_pids, stats)
+            - criteria_data: pd.DataFrame with extracted criteria data for all patients
+            - included_pids: List of patient IDs that passed the inclusion/exclusion criteria
+            - stats: Dictionary containing filtering statistics and counts
+
+    Notes
+    -----
+    The function performs the following steps:
+    1. Validates criteria configuration and checks inclusion/exclusion logic
+    2. Extracts criteria data from shards for specified patients
+    3. Logs patient counts at various stages
+    4. Applies inclusion/exclusion criteria to filter patients
+    5. Returns (unfiltered) criteria flags, included patient IDs, and statistics
     """
     validator = CriteriaValidator(criteria_config.get(CRITERIA_DEFINITIONS))
     validator.validate()
@@ -261,12 +284,12 @@ def filter_by_criteria(
     logger.info(f"N pids {description}: {len(pids)}")
     log_patient_num(logger, criteria, "criteria")
     logger.info(f"Applying criteria to {description} and saving stats")
-    criteria_filtered, stats = apply_criteria_with_stats(
+    included_pids, stats = apply_criteria_with_stats(
         criteria,
         criteria_config.get(INCLUSION),
         criteria_config.get(EXCLUSION),
     )
-    return criteria_filtered, stats
+    return criteria, included_pids, stats
 
 
 def _save_stats(stats: dict, save_path: str, description: str, logger: logging.Logger):
