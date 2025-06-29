@@ -417,6 +417,23 @@ class TestGetNonComplianceAbspos(unittest.TestCase):
         expected = {1: 210}
 
         # 4. Assertions
+        self.assertEqual(result, expected)  #
+
+    def test_get_non_compliance_abspos_none_compliance(self):
+        """Test with None compliance hours (should be treated as infinity)."""
+        # 1. Setup sample data
+        exposures = pd.DataFrame({PID_COL: [1, 2], ABSPOS_COL: [100, 200]})
+        n_hours_compliance = None
+
+        # 2. Execute function
+        result = get_non_compliance_abspos(exposures, n_hours_compliance)
+
+        # 3. Expected results:
+        # Patient 1: 100 + inf = inf
+        # Patient 2: 200 + inf = inf
+        expected = {1: float("inf"), 2: float("inf")}
+
+        # 4. Assertions
         self.assertEqual(result, expected)
 
 
