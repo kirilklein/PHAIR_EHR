@@ -48,7 +48,6 @@ from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
     select_time_eligible_exposed,
 )
-from corebehrt.modules.cohort_handling.patient_filter import filter_by_prior_outcomes
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
 from corebehrt.functional.preparation.filter import select_first_event
