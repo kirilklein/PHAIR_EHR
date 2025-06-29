@@ -22,6 +22,7 @@ def get_group_dict(index_date_matching: pd.DataFrame) -> dict:
         >>> get_group_dict(matching_df)
         {1: 0, 2: 0, 10: 0, 3: 1, 20: 1, 5: 2, 30: 2}
     """
+    index_date_matching = index_date_matching.copy()
     index_date_matching[GROUP_COL] = index_date_matching.groupby(
         EXPOSED_PID_COL
     ).ngroup()
