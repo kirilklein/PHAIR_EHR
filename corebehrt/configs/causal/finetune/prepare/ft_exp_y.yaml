@@ -25,8 +25,8 @@ exposure:
   # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
   n_hours_censoring: -10 # censor time after index date (negative means before)
   n_hours_start_follow_up: -1 # start follow up (considering outcomes) time after index date (negative means before)
-  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: 10 # end follow up (considering outcomes) time after index date (negative means before)
 outcome:
-  n_hours_censoring: -10 # censor time after index date (negative means before)
   n_hours_start_follow_up: 10 # start follow up (considering outcomes) time after index date (negative means before)
   n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+  n_hours_compliance: 1000 # exclude case and corresponding control as soon as there is no exposure for n_hours_compliance hours
