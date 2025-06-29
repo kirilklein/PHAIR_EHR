@@ -10,6 +10,9 @@ DATA = "data"
 CONTROL_PID_COL = "control_subject_id"
 EXPOSED_PID_COL = "exposed_subject_id"
 
+START_COL = "start"
+END_COL = "end"
+
 # Prepare causal finetune data
 EXPOSURE = "exposure"
 OUTCOME = "outcome"
@@ -51,6 +54,11 @@ FLOW_FINAL = "final"
 
 CALIBRATION_COLLAPSE_THRESHOLD = 0.01
 
+
+# Prepare finetune
+GROUP_COL = "group"
+DEATH_COL = "death"
+NON_COMPLIANCE_COL = "non_compliance"
 
 # Training
 EXPOSURE_TARGET = "exposure_target"
