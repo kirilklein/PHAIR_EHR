@@ -3,17 +3,27 @@ import os
 from os.path import join
 
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
 
 from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
 from corebehrt.constants.causal.paths import EXPOSURES_FILE, INDEX_DATE_MATCHING_FILE
-from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
-from corebehrt.constants.paths import INDEX_DATES_FILE, OUTCOMES_FILE
-from corebehrt.functional.cohort_handling.outcomes import get_binary_outcomes
+from corebehrt.constants.data import ABSPOS_COL, DEATH_CODE, PID_COL, TIMESTAMP_COL
+from corebehrt.constants.paths import FOLLOW_UPS_FILE, INDEX_DATES_FILE, OUTCOMES_FILE
+from corebehrt.functional.preparation.causal.utils import (
+    get_group_dict,
+    get_non_compliance_abspos,
+)
+from corebehrt.functional.preparation.causal.convert import abspos_to_binary_outcome
+from corebehrt.functional.preparation.causal.extract import extract_death
 from corebehrt.functional.features.normalize import normalize_segments_for_patient
 from corebehrt.functional.io_operations.save import save_vocabulary
 from corebehrt.functional.preparation.causal.convert import (
     dataframe_to_causal_patient_list,
+)
+from corebehrt.functional.preparation.causal.follow_up import (
+    prepare_follow_ups_simple,
+    prepare_follow_ups_adjusted,
 )
 from corebehrt.functional.preparation.filter import (
     censor_patient,
@@ -108,25 +118,28 @@ class CausalDatasetPreparer(DatasetPreparer):
         exposures = filter_df_by_pids(exposures, data.get_pids())
         outcomes = filter_df_by_pids(outcomes, data.get_pids())
 
+        deaths = data.process_in_parallel(
+            extract_death, death_token=self.vocab[DEATH_CODE]
+        )
+        deaths = {patient.pid: death for patient, death in zip(data.patients, deaths)}
+
         logger.info("Handling exposures and outcomes")
         # Outcome Handler now only needs to do 1 thing: if outcome is in follow up window 1 else 0
-        binary_exposure = get_binary_outcomes(
-            index_dates,
+        binary_exposure = self._get_binary_exposure(
             exposures,
-            exposure_cfg.get("n_hours_start_follow_up", 0),
-            exposure_cfg.get("n_hours_end_follow_up"),
-            exposure_cfg.get("n_hours_compliance"),
-            index_date_matching=index_date_matching,
-            exposures=exposures,
+            index_dates,
+            exposure_cfg.get("n_hours_start_follow_up", -1),
+            exposure_cfg.get("n_hours_end_follow_up", np.inf),
         )
 
-        binary_outcome = get_binary_outcomes(
+        binary_outcome, follow_ups = self._get_binary_outcome(
             index_dates,
             outcomes,
             outcome_cfg.get("n_hours_start_follow_up", 0),
-            outcome_cfg.get("n_hours_end_follow_up", None),
-            outcome_cfg.get("n_hours_compliance"),
+            outcome_cfg.get("n_hours_end_follow_up", np.inf),
+            outcome_cfg.get("n_hours_compliance", np.inf),
             index_date_matching=index_date_matching,
+            deaths=deaths,
             exposures=exposures,
         )
 
@@ -191,5 +204,79 @@ class CausalDatasetPreparer(DatasetPreparer):
         exposures.to_csv(join(self.processed_dir, EXPOSURES_FILE), index=False)
         outcomes.to_csv(join(self.processed_dir, OUTCOMES_FILE), index=False)
         index_dates.to_csv(join(self.processed_dir, INDEX_DATES_FILE), index=False)
-
+        follow_ups.to_csv(join(self.processed_dir, FOLLOW_UPS_FILE), index=False)
         return data
+
+    @staticmethod
+    def _get_binary_exposure(
+        exposures: pd.DataFrame,
+        index_dates: pd.DataFrame,
+        n_hours_start_follow_up: int,
+        n_hours_end_follow_up: int,
+    ) -> pd.Series:
+        """
+        Create binary exposure indicators for patients based on exposure events within follow-up periods.
+
+        Since index dates were determined using exposure criteria, this method uses simple
+        follow-up windows without additional adjustments for compliance or deaths.
+
+        Args:
+            exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
+            index_dates: DataFrame with columns 'subject_id', 'abspos' (index dates)
+            n_hours_start_follow_up: Hours after index date to start follow-up
+            n_hours_end_follow_up: Hours after index date to end follow-up
+
+        Returns:
+            pd.Series: Binary exposure indicator (1 if exposed during follow-up, 0 otherwise)
+        """
+        follow_ups = prepare_follow_ups_simple(
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+        )
+        return abspos_to_binary_outcome(follow_ups, exposures)
+
+    @staticmethod
+    def _get_binary_outcome(
+        index_dates: pd.DataFrame,
+        outcomes: pd.DataFrame,
+        n_hours_start_follow_up: int,
+        n_hours_end_follow_up: int,
+        n_hours_compliance: int,
+        index_date_matching: pd.DataFrame,
+        deaths: pd.Series,
+        exposures: pd.DataFrame,
+    ) -> tuple[pd.Series, pd.DataFrame]:
+        """
+        Create binary outcome indicators for patients using adjusted follow-up periods.
+
+        This method accounts for multiple censoring events:
+        1. Death events (from deaths parameter)
+        2. Non-compliance periods (last exposure + n_hours_compliance)
+        3. End of follow-up periods
+
+        The final follow-up period for each patient is the minimum of these three values.
+        Within matched groups, all patients receive the minimum follow-up period of the group.
+
+        Args:
+            index_dates: DataFrame with columns 'subject_id', 'abspos' (index dates)
+            outcomes: DataFrame with columns 'subject_id', 'abspos' (outcome events)
+            n_hours_start_follow_up: Hours after index date to start follow-up
+            n_hours_end_follow_up: Hours after index date to end follow-up
+            n_hours_compliance: Hours to add to last exposure for non-compliance cutoff
+            index_date_matching: DataFrame defining matched groups (control_subject_id, exposed_subject_id)
+            deaths: Series mapping patient IDs to death times (NaN if no death)
+            exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
+
+        Returns:
+            tuple: (binary_outcomes, adjusted_follow_ups)
+                - binary_outcomes: pd.Series with binary outcome indicators
+                - adjusted_follow_ups: pd.DataFrame with final follow-up periods
+        """
+        group_dict = get_group_dict(index_date_matching)
+        non_compliance_abspos = get_non_compliance_abspos(exposures, n_hours_compliance)
+        follow_ups = prepare_follow_ups_simple(
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+        )
+        follow_ups = prepare_follow_ups_adjusted(
+            follow_ups, non_compliance_abspos, deaths, group_dict
+        )
+        return abspos_to_binary_outcome(follow_ups, outcomes), follow_ups
