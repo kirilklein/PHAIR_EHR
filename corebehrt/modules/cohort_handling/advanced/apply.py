@@ -31,6 +31,7 @@ from corebehrt.constants.cohort import (
     FINAL_INCLUDED,
     INITIAL_TOTAL,
     N_EXCLUDED_BY_EXPRESSION,
+    TOTAL_EXCLUDED,
 )
 from corebehrt.functional.cohort_handling.advanced.extract import (
     extract_criteria_names_from_expression,
@@ -93,6 +94,12 @@ def apply_criteria_with_stats(
     # --- Evaluate the inclusion and exclusion expressions ---
     inclusion_mask = pd.eval(inclusion_expression, local_dict=local_dict)
     exclusion_mask = pd.eval(exclusion_expression, local_dict=local_dict)
+
+    # --- Calculate totals for inclusion and exclusion separately ---
+    # Total excluded by inclusion: patients who don't meet the inclusion expression
+    stats[EXCLUDED_BY_INCLUSION_CRITERIA][TOTAL_EXCLUDED] = int((~inclusion_mask).sum())
+    # Total excluded by exclusion: patients who meet the exclusion expression
+    stats[EXCLUDED_BY_EXCLUSION_CRITERIA][TOTAL_EXCLUDED] = int(exclusion_mask.sum())
 
     # --- Combine expressions: final mask includes patients who satisfy inclusion and do not satisfy exclusion ---
     final_mask = inclusion_mask & ~exclusion_mask

@@ -37,6 +37,7 @@ AGE_AT_INDEX_DATE = "age_at_index_date"
 INITIAL_TOTAL = "initial_total"
 EXCLUDED_BY_INCLUSION_CRITERIA = "excluded_by_inclusion_criteria"
 EXCLUDED_BY_EXCLUSION_CRITERIA = "excluded_by_exclusion_criteria"
+TOTAL_EXCLUDED = "total_excluded"
 N_EXCLUDED_BY_EXPRESSION = "n_excluded_by_expression"
 FINAL_INCLUDED = "final_included"
 
