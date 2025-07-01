@@ -140,11 +140,11 @@ criteria_definitions:
 
   chronic_hemodialysis:
     codes:
-      - BJFD20.* # add prepend
+      - ^(?:P|RD|RPO)/BJFD20.*
 
   peritoneal_dialysis:
     codes:
-      - BJFD2(?:1|3|4|5|7).* # add prepend
+      - ^(?:P|RD|RPO)/BJFD2(?:1|3|4|5|7).*
 
   #### End stage liver disease ####
   end_stage_liver_disease_uncertain:
