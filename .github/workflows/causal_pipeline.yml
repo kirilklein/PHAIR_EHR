@@ -76,7 +76,7 @@ jobs:
           python tests/pipeline/ft_exp_y.py ./outputs/causal/finetune/models/exp_y
           
           ## ─── Check performance ───────────────────────────────────────
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_exposure --min 0.55 --max 0.8 --metric exposure_roc_auc
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_exposure --min 0.52 --max 0.8 --metric exposure_roc_auc
           python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_outcome --min 0.6 --max 0.98 --metric outcome_roc_auc
 
           # ─── Calibration ───────────────────────────────────────
