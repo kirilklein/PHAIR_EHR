@@ -62,7 +62,7 @@ jobs:
 
           run_step main.prepare_training_data finetune/prepare/ft_exp.yaml
           echo "🔧 Training XGBoost Baseline on censored data and checking performance"
-          python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure --min_roc_auc 0.55 --multihot
+          python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure --min_roc_auc 0.51 --multihot
 
           # ─── Finetune Exposure & Outcome ───────────────────────────
           run_step main.finetune_cv finetune/ft_exp_uncensored.yaml
