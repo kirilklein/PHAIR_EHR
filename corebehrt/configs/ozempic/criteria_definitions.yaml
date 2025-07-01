@@ -13,36 +13,36 @@ criteria_definitions:
 
   type2_diabetes:
     codes:
-    - ^(?:D|RD)/DC11.*
-    - ^(?:M|RM)/A10B.*
+      - ^(?:D|RD)/DC11.*
+      - ^(?:M|RM)/A10B.*
 
   ### diabetic medication ###
   insulin_long:
     codes:
-    - ^(?:M|RM)/A10A[C-E].*
+      - ^(?:M|RM)/A10A[C-E].*
 
   #################################################################
   ### Clinical Evidence of CVD ###
   myocardial_infarction:
     codes:
-    - ^(?:D|RD)/DI2[1-3].*
+      - ^(?:D|RD)/DI2[1-3].*
 
   stroke:
     codes:
-    - ^(?:D|RD)/DI6[3-6].*
+      - ^(?:D|RD)/DI6[3-6].*
 
   transient_ischemic_attack:
     codes:
-    - ^(?:D|RD)/DG45.*
+      - ^(?:D|RD)/DG45.*
 
   arterial_revascularization:
     codes:
-    - ^(?:P|RPO|RPS)/KFN.*
+      - ^(?:P|RPO|RPS)/KFN.*
 
   glomerular_filtration_rate:
     codes:
-    - ^L/.*EGFR.*1[.,]73.*
-    threshold: 60
+      - ^L/.*EGFR.*1[.,]73.*
+    threshold: 60 # correct unit range (0-120)
     operator: "<="
 
   clinical_evidence_of_cvd:
@@ -53,16 +53,16 @@ criteria_definitions:
   #### Microalbuminuria ####
   microalbuminuria_min:
     codes:
-    - ^L/ALBUMIN;U
-    - ^L/ALBUMIN \(LOKAL\);U
-    threshold: 30
+      - ^L/ALBUMIN;U
+      - ^L/ALBUMIN \(LOKAL\);U
+    threshold: 30 # correct unit range (0-1000)
     operator: ">="
     start_days: -183
   microalbuminuria_max:
     codes:
-    - ^L/ALBUMIN;U
-    - ^L/ALBUMIN \(LOKAL\);U
-    threshold: 299
+      - ^L/ALBUMIN;U
+      - ^L/ALBUMIN \(LOKAL\);U
+    threshold: 299 # correct unit range (0-1000)
     operator: "<="
     start_days: -183
 
@@ -72,10 +72,10 @@ criteria_definitions:
   low_brachial_index:
     # ankle brachial index
     codes:
-    - ^(?:D|RD)/I739.*
-    - ^(?:D|RD)/I702.*
-    - ^(?:P|RD)/KPE[EFHNP].* # only present in Register diagnoses and procedures
-    - ^(?:P|RD)/KPF[EFHN].* # only present in Register diagnoses and procedures
+      - ^(?:D|RD)/I739.*
+      - ^(?:D|RD)/I702.*
+      - ^(?:P|RD)/KPE[EFHNP].* # only present in Register diagnoses and procedures
+      - ^(?:P|RD)/KPF[EFHN].* # only present in Register diagnoses and procedures
     start_days: -90
 
   subclinical_evidence_of_cvd:
@@ -83,7 +83,7 @@ criteria_definitions:
 
   hba1c_level:
     codes:
-    - ^L/.*HBA1C.*
+      - ^L/.*HBA1C.*
     threshold: 7.0
     operator: ">="
     start_days: -90
@@ -92,147 +92,147 @@ criteria_definitions:
   #### Exclusion Criteria ####
   type1_diabetes:
     codes:
-    - ^(?:D|RD|RPO)/DE10.*
+      - ^(?:D|RD|RPO)/DE10.*
 
   glp1_receptor_agonist:
     codes:
-    - ^(?:M|RM)/A10BJ0[2,5,6].* # Liraglutide, Dulaglutid, Semaglutide
-    - ^(?:M|RM)/A10AE56.* # Insulin/Liraglutid combination
+      - ^(?:M|RM)/A10BJ0[2,5,6].* # Liraglutide, Dulaglutid, Semaglutide
+      - ^(?:M|RM)/A10AE56.* # Insulin/Liraglutid combination
     start_days: -90
 
   dpp4_inhibitors:
     codes:
-    - ^(?:M|RM)/A10BH.*
-    - ^(?:M|RM)/A10BD0[7-9].*
-    - ^(?:M|RM)/A10BD1[0-3,8-9].*
-    - ^(?:M|RM)/A10BD2[0-2,4-5,7].* # summarize original codes
+      - ^(?:M|RM)/A10BH.*
+      - ^(?:M|RM)/A10BD0[7-9].*
+      - ^(?:M|RM)/A10BD1[0-3,8-9].*
+      - ^(?:M|RM)/A10BD2[0-2,4-5,7].* # summarize original codes
     start_days: -30
 
   insulin_except_basal:
     codes:
-    - ^(?:M|RM)/A10AB.*
+      - ^(?:M|RM)/A10AB.*
     start_days: -90
 
   acute_decompensation_of_glycemic_control:
     codes:
-    - ^(?:D|RD|RPO)/DE1[1-4]1.*
+      - ^(?:D|RD|RPO)/DE1[1-4]1.*
     start_days: -90
 
   chronic_pancreatitis:
     codes:
-    - ^(?:D|RD|RPO)/DK86.*
+      - ^(?:D|RD|RPO)/DK86.*
     start_days: -730 # 2 years
 
   idiopathic_acute_pancreatitis:
     codes:
-    - ^(?:D|RD|RPO)/DK850.*
+      - ^(?:D|RD|RPO)/DK850.*
     start_days: -730
 
   acute_coronary_or_cv_event:
     codes:
-    - ^(?:D|RD|RPO)/DI2[1-2,4].*
-    - ^(?:D|RD|RPO)/DI6[3-6].*
+      - ^(?:D|RD|RPO)/DI2[1-2,4].*
+      - ^(?:D|RD|RPO)/DI6[3-6].*
     start_days: -90
 
   renal_failure:
     codes:
-    - ^(?:D|RD|RPO)/DN185.*
+      - ^(?:D|RD|RPO)/DN185.*
 
   chronic_hemodialysis:
     codes:
-    - BJFD20.* # add prepend
+      - BJFD20.* # add prepend
 
   peritoneal_dialysis:
     codes:
-    - BJFD2[1,3-5,7].* # add prepend
+      - BJFD2[1,3-5,7].* # add prepend
 
   #### End stage liver disease ####
   end_stage_liver_disease_uncertain:
     codes:
-    - ^(?:D|RD|RPO)/DK72.*
+      - ^(?:D|RD|RPO)/DK72.*
 
   end_stage_liver_disease_certain:
     codes:
-    - ^(?:D|RD|RPO)/DK721.*
+      - ^(?:D|RD|RPO)/DK721.*
 
   ascites:
     codes:
-    - ^(?:D|RD|RPO)/DR18.*
+      - ^(?:D|RD|RPO)/DR18.*
 
   encephalopathy:
     codes:
-    - ^(?:D|RD|RPO)/DG92.*
-    - ^(?:D|RD|RPO)/DG934.*
-    - ^(?:D|RD|RPO)/DG943.*
+      - ^(?:D|RD|RPO)/DG92.*
+      - ^(?:D|RD|RPO)/DG934.*
+      - ^(?:D|RD|RPO)/DG943.*
 
   variceal_bleeding:
     codes:
-    - ^(?:D|RD|RPO)/DI850.*
-    - ^(?:D|RD|RPO)/DI983.*
+      - ^(?:D|RD|RPO)/DI850.*
+      - ^(?:D|RD|RPO)/DI983.*
 
   bilirubin:
     codes:
-    - ^L/BILIRUBINER;P # exact
-    threshold: 2.0 # ≥2.0 mg/dl, check value distribution,  µmol/L in DK, need to convert
+      - ^L/BILIRUBINER;P # exact
+    threshold: 34.2 # original ≥2.0 mg/dl-> 34.2 µmol/L https://labunitconvert.com/bilirubin-unit-conversion/
     operator: ">="
 
   albumin:
     codes:
-    - ^L/ALBUMIN;P # exact
-    - ^L/ALBUMIN;P*NPU01132 # L/ALBUMIN;P ÂµMOL/L NPU01132
-    threshold: 3.5 # ≤3.5 g/dl, check value distributions, need conversion here from µmol/L
+      - ^L/ALBUMIN;P # exact
+      - ^L/ALBUMIN;P*NPU01132 # L/ALBUMIN;P ÂµMOL/L NPU01132
+    threshold: 35 # original ≤3.5 g/dl-> 35g/L
     operator: "<="
 
   prothrombin_time:
     codes:
-    - ^L/PROTHROMBIN;P
-    threshold: 1.7 # international normalized ratio ≥1.7 
+      - ^L/PROTHROMBIN;P
+    threshold: 1.7 # international normalized ratio ≥1.7 # correct unit range (0-2)
     operator: ">="
 
   prior_liver_transplant:
     codes:
-    - ^(?:RD|P)/KJJC.*
+      - ^(?:RD|P)/KJJC.*
 
   ### end stage renal disease end ###
 
   prior_solid_organ_transplant:
     codes:
-    - ^(?:D|RD|RPO)/DZ944.*
-    - ^(?:D|RD|RPO)/DY830.*
-    - ^(?:P|RPO|RPS)/KFQ.*
-    - ^(?:P|RPO|RPS)/KGDG.*
-    - ^(?:P|RPO|RPS)/KJJC.*
-    - ^(?:P|RPO|RPS)/KJLE.*
-    - ^(?:P|RPO|RPS)/KKAS.*
+      - ^(?:D|RD|RPO)/DZ944.*
+      - ^(?:D|RD|RPO)/DY830.*
+      - ^(?:P|RPO|RPS)/KFQ.*
+      - ^(?:P|RPO|RPS)/KGDG.*
+      - ^(?:P|RPO|RPS)/KJJC.*
+      - ^(?:P|RPO|RPS)/KJLE.*
+      - ^(?:P|RPO|RPS)/KKAS.*
 
   cancer:
     codes:
-    - ^(?:D|RD|RPO)/DC[0-9][0-9].*
+      - ^(?:D|RD|RPO)/DC[0-9][0-9].*
     start_days: -1826 # 5 years
 
   skin_cancer:
     codes:
-    - ^(?:D|RD|RPO)/DC44.*
+      - ^(?:D|RD|RPO)/DC44.*
     start_days: -1826
 
   multiple_endocrine_neoplasia_type_2:
     codes:
-    - ^(?:D|RD|RPO)/DE312.*
+      - ^(?:D|RD|RPO)/DE312.*
     start_days: -1826
 
   medullary_thyroid_carcinoma:
     codes:
-    - ^(?:D|RD|RPO)/DD093.*
+      - ^(?:D|RD|RPO)/DD093.*
 
   calcitonin:
     codes:
-    - ^L/CALCITONIN;P
+      - ^L/CALCITONIN;P
     threshold: 50
     operator: ">="
 
   pregnancy_and_birth:
     codes:
-    - ^(?:D|RD|RPO)/DO[0-9][0-9].*
+      - ^(?:D|RD|RPO)/DO[0-9][0-9].*
     start_days: -365
 
   older_than_50_and_clinical_evidence_of_cvd:
@@ -260,27 +260,27 @@ criteria_definitions:
   #### Single Drugs ####
   biguanides:
     codes:
-    - ^(?:M|RM)/A10BA.*
+      - ^(?:M|RM)/A10BA.*
     start_days: -60
 
   sulfonylureas:
     codes:
-    - ^(?:M|RM)/A10BB.*
+      - ^(?:M|RM)/A10BB.*
     start_days: -60
 
   sulfonamides_heterocyclic:
     codes:
-    - ^(?:M|RM)/A10BC.*
+      - ^(?:M|RM)/A10BC.*
     start_days: -60
 
   alpha_glucosidase_inhibitors:
     codes:
-    - ^(?:M|RM)/A10BF.*
+      - ^(?:M|RM)/A10BF.*
     start_days: -60
 
   thiazolidinediones:
     codes:
-    - ^(?:M|RM)/A10BG.*
+      - ^(?:M|RM)/A10BG.*
     start_days: -60
 
   single_anti_diabetic_drugs:
@@ -290,146 +290,146 @@ criteria_definitions:
 
   glp1_analogues:
     codes:
-    - ^(?:M|RM)/A10BJ.*
+      - ^(?:M|RM)/A10BJ.*
     start_days: -60
 
   sglt2_inhibitors:
     codes:
-    - ^(?:M|RM)/A10BK.*
+      - ^(?:M|RM)/A10BK.*
     start_days: -60
 
   other_blood_glucose_lowering_drugs:
     codes:
-    - ^(?:M|RM)/A10BX.*
+      - ^(?:M|RM)/A10BX.*
     start_days: -60
 
   #### Combined Drugs ####
   combinations_oral_blood_glucose_lowering_drugs:
     codes:
-    - ^(?:M|RM)/A10BD.*
+      - ^(?:M|RM)/A10BD.*
     start_days: -60
 
   #### Combined Drugs - Detailed ####
   phenformin_sulfonylureas:
     codes:
-    - ^(?:M|RM)/A10BD01.*
+      - ^(?:M|RM)/A10BD01.*
     start_days: -60
   metformin_sulfonylureas:
     codes:
-    - ^(?:M|RM)/A10BD02.*
+      - ^(?:M|RM)/A10BD02.*
     start_days: -60
   metformin_rosiglitazone:
     codes:
-    - ^(?:M|RM)/A10BD03.*
+      - ^(?:M|RM)/A10BD03.*
     start_days: -60
   glimepiride_rosiglitazone:
     codes:
-    - ^(?:M|RM)/A10BD04.*
+      - ^(?:M|RM)/A10BD04.*
     start_days: -60
   metformin_pioglitazone:
     codes:
-    - ^(?:M|RM)/A10BD05.*
+      - ^(?:M|RM)/A10BD05.*
     start_days: -60
   glimepiride_pioglitazone:
     codes:
-    - ^(?:M|RM)/A10BD06.*
+      - ^(?:M|RM)/A10BD06.*
     start_days: -60
   metformin_sitagliptin:
     codes:
-    - ^(?:M|RM)/A10BD07.*
+      - ^(?:M|RM)/A10BD07.*
     start_days: -60
   metformin_vildagliptin:
     codes:
-    - ^(?:M|RM)/A10BD08.*
+      - ^(?:M|RM)/A10BD08.*
     start_days: -60
   pioglitazone_alogliptin:
     codes:
-    - ^(?:M|RM)/A10BD09.*
+      - ^(?:M|RM)/A10BD09.*
     start_days: -60
   metformin_saxagliptin:
     codes:
-    - ^(?:M|RM)/A10BD10.*
+      - ^(?:M|RM)/A10BD10.*
     start_days: -60
   metformin_linagliptin:
     codes:
-    - ^(?:M|RM)/A10BD11.*
+      - ^(?:M|RM)/A10BD11.*
     start_days: -60
   pioglitazone_sitagliptin:
     codes:
-    - ^(?:M|RM)/A10BD12.*
+      - ^(?:M|RM)/A10BD12.*
     start_days: -60
   metformin_alogliptin:
     codes:
-    - ^(?:M|RM)/A10BD13.*
+      - ^(?:M|RM)/A10BD13.*
     start_days: -60
   metformin_repaglinide:
     codes:
-    - ^(?:M|RM)/A10BD14.*
+      - ^(?:M|RM)/A10BD14.*
     start_days: -60
   metformin_dapagliflozin:
     codes:
-    - ^(?:M|RM)/A10BD15.*
+      - ^(?:M|RM)/A10BD15.*
     start_days: -60
   metformin_canagliflozin:
     codes:
-    - ^(?:M|RM)/A10BD16.*
+      - ^(?:M|RM)/A10BD16.*
     start_days: -60
   metformin_acarbose:
     codes:
-    - ^(?:M|RM)/A10BD17.*
+      - ^(?:M|RM)/A10BD17.*
     start_days: -60
   metformin_gemigliptin:
     codes:
-    - ^(?:M|RM)/A10BD18.*
+      - ^(?:M|RM)/A10BD18.*
     start_days: -60
   linagliptin_empagliflozin:
     codes:
-    - ^(?:M|RM)/A10BD19.*
+      - ^(?:M|RM)/A10BD19.*
     start_days: -60
   metformin_empagliflozin:
     codes:
-    - ^(?:M|RM)/A10BD20.*
+      - ^(?:M|RM)/A10BD20.*
     start_days: -60
   saxagliptin_dapagliflozin:
     codes:
-    - ^(?:M|RM)/A10BD21.*
+      - ^(?:M|RM)/A10BD21.*
     start_days: -60
   metformin_evogliptin:
     codes:
-    - ^(?:M|RM)/A10BD22.*
+      - ^(?:M|RM)/A10BD22.*
     start_days: -60
   metformin_ertugliflozin:
     codes:
-    - ^(?:M|RM)/A10BD23.*
+      - ^(?:M|RM)/A10BD23.*
     start_days: -60
   sitagliptin_ertugliflozin:
     codes:
-    - ^(?:M|RM)/A10BD24.*
+      - ^(?:M|RM)/A10BD24.*
     start_days: -60
   metformin_saxagliptin_dapagliflozin:
     codes:
-    - ^(?:M|RM)/A10BD25.*
+      - ^(?:M|RM)/A10BD25.*
     start_days: -60
   metformin_lobeglitazone:
     codes:
-    - ^(?:M|RM)/A10BD26.*
+      - ^(?:M|RM)/A10BD26.*
     start_days: -60
   metformin_linagliptin_empagliflozin:
     codes:
-    - ^(?:M|RM)/A10BD27.*
+      - ^(?:M|RM)/A10BD27.*
     start_days: -60
   metformin_teneligliptin:
     codes:
-    - ^(?:M|RM)/A10BD28.*
+      - ^(?:M|RM)/A10BD28.*
     start_days: -60
   sitagliptin_dapagliflozin:
     codes:
-    - ^(?:M|RM)/A10BD29.*
+      - ^(?:M|RM)/A10BD29.*
     start_days: -60
 
   gemigliptin_dapagliflozin:
     codes:
-    - ^(?:M|RM)/A10BD30.*
+      - ^(?:M|RM)/A10BD30.*
     start_days: -60
 
   triple_ad_drug_combinations:
@@ -440,49 +440,49 @@ criteria_definitions:
 
   max2_single_ad_drugs:
     unique_criteria_list:
-    # triggers count based exclusion
-    - biguanides
-    - sulfonylureas
-    - sulfonamides_heterocyclic
-    - alpha_glucosidase_inhibitors
-    - thiazolidinediones
-    - glp1_analogues
-    - sglt2_inhibitors
-    - other_blood_glucose_lowering_drugs
+      # triggers count based exclusion
+      - biguanides
+      - sulfonylureas
+      - sulfonamides_heterocyclic
+      - alpha_glucosidase_inhibitors
+      - thiazolidinediones
+      - glp1_analogues
+      - sglt2_inhibitors
+      - other_blood_glucose_lowering_drugs
     max_count: 2
 
   max1_ad_drug_combination:
     unique_criteria_list:
-    - phenformin_sulfonylureas
-    - metformin_sulfonylureas
-    - metformin_rosiglitazone
-    - glimepiride_rosiglitazone
-    - metformin_pioglitazone
-    - glimepiride_pioglitazone
-    - metformin_sitagliptin
-    - metformin_vildagliptin
-    - pioglitazone_alogliptin
-    - metformin_saxagliptin
-    - metformin_linagliptin
-    - pioglitazone_sitagliptin
-    - metformin_alogliptin
-    - metformin_repaglinide
-    - metformin_dapagliflozin
-    - metformin_canagliflozin
-    - metformin_acarbose
-    - metformin_gemigliptin
-    - linagliptin_empagliflozin
-    - metformin_empagliflozin
-    - saxagliptin_dapagliflozin
-    - metformin_evogliptin
-    - metformin_ertugliflozin
-    - sitagliptin_ertugliflozin
-    - metformin_saxagliptin_dapagliflozin
-    - metformin_lobeglitazone
-    - metformin_linagliptin_empagliflozin
-    - metformin_teneligliptin
-    - sitagliptin_dapagliflozin
-    - gemigliptin_dapagliflozin
+      - phenformin_sulfonylureas
+      - metformin_sulfonylureas
+      - metformin_rosiglitazone
+      - glimepiride_rosiglitazone
+      - metformin_pioglitazone
+      - glimepiride_pioglitazone
+      - metformin_sitagliptin
+      - metformin_vildagliptin
+      - pioglitazone_alogliptin
+      - metformin_saxagliptin
+      - metformin_linagliptin
+      - pioglitazone_sitagliptin
+      - metformin_alogliptin
+      - metformin_repaglinide
+      - metformin_dapagliflozin
+      - metformin_canagliflozin
+      - metformin_acarbose
+      - metformin_gemigliptin
+      - linagliptin_empagliflozin
+      - metformin_empagliflozin
+      - saxagliptin_dapagliflozin
+      - metformin_evogliptin
+      - metformin_ertugliflozin
+      - sitagliptin_ertugliflozin
+      - metformin_saxagliptin_dapagliflozin
+      - metformin_lobeglitazone
+      - metformin_linagliptin_empagliflozin
+      - metformin_teneligliptin
+      - sitagliptin_dapagliflozin
+      - gemigliptin_dapagliflozin
     max_count: 1
 
   not_combination_and_single_ad_drugs:
