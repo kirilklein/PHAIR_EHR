@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
-from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
+from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSURE, OUTCOME
 from corebehrt.constants.causal.paths import EXPOSURES_FILE, INDEX_DATE_MATCHING_FILE
 from corebehrt.constants.data import ABSPOS_COL, DEATH_CODE, PID_COL, TIMESTAMP_COL
 from corebehrt.constants.paths import FOLLOW_UPS_FILE, INDEX_DATES_FILE, OUTCOMES_FILE
@@ -271,6 +271,10 @@ class CausalDatasetPreparer(DatasetPreparer):
                 - binary_outcomes: pd.Series with binary outcome indicators
                 - adjusted_follow_ups: pd.DataFrame with final follow-up periods
         """
+
+        index_date_matching = CausalDatasetPreparer._filter_index_date_matching(
+            index_date_matching, index_dates
+        )
         group_dict = get_group_dict(index_date_matching)
         non_compliance_abspos = get_non_compliance_abspos(exposures, n_hours_compliance)
         follow_ups = prepare_follow_ups_simple(
@@ -280,3 +284,14 @@ class CausalDatasetPreparer(DatasetPreparer):
             follow_ups, non_compliance_abspos, deaths, group_dict
         )
         return abspos_to_binary_outcome(follow_ups, outcomes), follow_ups
+
+    @staticmethod
+    def _filter_index_date_matching(
+        index_date_matching: pd.DataFrame, index_dates: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        Filter index date matching to only include patients in index dates
+        """
+        return index_date_matching[
+            index_date_matching[CONTROL_PID_COL].isin(index_dates[PID_COL].unique())
+        ]
