@@ -11,6 +11,7 @@ The functions are designed to work with pandas DataFrames containing medical eve
 and support efficient processing of large datasets through vectorized operations.
 """
 
+import warnings
 import re
 from functools import lru_cache
 
@@ -74,6 +75,13 @@ def _compile_regex(patterns: tuple) -> re.Pattern:
     Cache compiled regex patterns.
     Wrap each pattern in a non-capturing group.
     """
+    if len(patterns) == 1:
+        return re.compile(patterns[0])
+    if "?i" in patterns:
+        warnings.warn(
+            "Case-insensitive matching only supported for single pattern. Split the pattern into single criterion."
+        )
+        patterns = [p.replace("?i", "") for p in patterns]
     pattern = "|".join(f"(?:{p})" for p in patterns)
     return re.compile(pattern)
 
