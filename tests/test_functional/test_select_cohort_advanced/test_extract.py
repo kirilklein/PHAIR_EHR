@@ -105,7 +105,6 @@ class TestExtractHelpers(unittest.TestCase):
         self.assertTrue(regex.search("xxbazquuxyy"))
         self.assertFalse(regex.search("xxfooxbaryy"))
 
-
     def test_compile_regex_with_whitespace_and_ands(self):
         patterns = ("rock and roll", "fish and chips")
         regex = _compile_regex(patterns)
