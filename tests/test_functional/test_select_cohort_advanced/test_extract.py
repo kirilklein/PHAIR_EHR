@@ -84,6 +84,46 @@ class TestExtractHelpers(unittest.TestCase):
         self.assertTrue(compiled_regex.search("XB"))
         self.assertFalse(compiled_regex.search("XYZ"))
 
+    def test_compile_regex_simple_alternation(self):
+        patterns = ("foo", "bar")
+        regex = _compile_regex(patterns)
+        # pattern should wrap each in a non-capturing group
+        self.assertEqual(regex.pattern, r"(?:foo)|(?:bar)")
+        # matching behaviour
+        self.assertTrue(regex.fullmatch("foo"))
+        self.assertTrue(regex.fullmatch("bar"))
+        self.assertFalse(regex.fullmatch("baz"))
+
+    def test_compile_regex_internal_pipes_and_groups(self):
+        patterns = (r"foo\|bar", r"baz(qux|quux)")
+        regex = _compile_regex(patterns)
+        self.assertEqual(regex.pattern, r"(?:foo\|bar)|(?:baz(qux|quux))")
+        # it should match the literal “foo|bar”
+        self.assertTrue(regex.search("xxfoo|baryy"))
+        # and both branches of the inner group in the second pattern
+        self.assertTrue(regex.search("xxbazquxyy"))
+        self.assertTrue(regex.search("xxbazquuxyy"))
+        self.assertFalse(regex.search("xxfooxbaryy"))
+
+
+    def test_compile_regex_with_whitespace_and_ands(self):
+        patterns = ("rock and roll", "fish and chips")
+        regex = _compile_regex(patterns)
+        self.assertEqual(regex.pattern, r"(?:rock and roll)|(?:fish and chips)")
+        # ensure each phrase matches even when surrounded by extra text
+        self.assertTrue(regex.search("I love rock and roll music"))
+        self.assertTrue(regex.search("Let’s grab some fish and chips tonight"))
+        self.assertFalse(regex.search("and in the beginning"))
+
+    def test_compile_regex_special_chars_are_preserved(self):
+        patterns = (r"\d+ apples", r"\w+ bananas?")
+        regex = _compile_regex(patterns)
+        self.assertEqual(regex.pattern, r"(?:\d+ apples)|(?:\w+ bananas?)")
+        self.assertTrue(regex.search("123 apples on the table"))
+        self.assertTrue(regex.search("yellow bananas"))
+        self.assertTrue(regex.search("green banana"))
+        self.assertFalse(regex.search("no fruit here"))
+
     def test_compute_code_masks(self):
         # Create a sample DataFrame with codes.
         df = pd.DataFrame({PID_COL: [1, 2, 3], CONCEPT_COL: ["A123", "B123", "A999"]})

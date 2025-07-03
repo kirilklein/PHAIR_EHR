@@ -70,8 +70,12 @@ def get_birth_date_for_each_patient(events: pd.DataFrame) -> pd.Series:
 
 @lru_cache(maxsize=128)
 def _compile_regex(patterns: tuple) -> re.Pattern:
-    """Cache compiled regex patterns."""
-    return re.compile("|".join(patterns))
+    """
+    Cache compiled regex patterns.
+    Wrap each pattern in a non-capturing group.
+    """
+    pattern = "|".join(f"(?:{p})" for p in patterns)
+    return re.compile(pattern)
 
 
 def compute_code_masks(df: pd.DataFrame, codes: list, exclude_codes: list) -> pd.Series:
