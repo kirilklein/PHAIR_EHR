@@ -77,11 +77,11 @@ def _compile_regex(patterns: tuple) -> re.Pattern:
     """
     if len(patterns) == 1:
         return re.compile(patterns[0])
-    if "?i" in patterns:
+    if any("?i" in p for p in patterns):
         warnings.warn(
             "Case-insensitive matching only supported for single pattern. Split the pattern into single criterion."
         )
-        patterns = [p.replace("?i", "") for p in patterns]
+        patterns = tuple(p.replace("?i", "") for p in patterns)
     pattern = "|".join(f"(?:{p})" for p in patterns)
     return re.compile(pattern)
 
