@@ -61,6 +61,7 @@ NOTES:
 import os
 import argparse
 import json
+import sys
 from datetime import datetime
 
 from tests.data_generation.helper.induce_causal_effect import (
@@ -245,6 +246,22 @@ def save_simulation_parameters(args: argparse.Namespace, output_dir: str) -> Non
         json.dump(params, f, indent=2)
 
     print(f"Simulation parameters saved to: {params_file}")
+
+    # Save command line for easy copy-pasting
+    command_file = os.path.join(output_dir, "reproduce_command.txt")
+    command_line = " ".join(sys.argv)
+
+    with open(command_file, "w") as f:
+        f.write("# Command used to generate this simulation:\n")
+        f.write(f"# Run on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"# Working directory: {os.getcwd()}\n\n")
+        f.write(f"{command_line}\n\n")
+        f.write("# To reproduce this simulation, copy and paste the command above.\n")
+        f.write(
+            "# Make sure you're in the correct working directory and have the same input data.\n"
+        )
+
+    print(f"Command line saved to: {command_file}")
 
 
 def main() -> None:
