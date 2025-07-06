@@ -137,7 +137,9 @@ def main() -> None:
     simulation_config = SimulationConfig(
         config=config,
     )
-    with open(os.path.join(simulation_config.paths.write_dir, "config.yaml"), "w") as f:
+    write_dir = simulation_config.paths.write_dir
+    os.makedirs(write_dir, exist_ok=True)
+    with open(os.path.join(write_dir, "config.yaml"), "w") as f:
         yaml.dump(config, f)
 
     # Initialize simulator with all parameters
@@ -145,24 +147,20 @@ def main() -> None:
 
     for split in simulation_config.paths.splits:
         # Load data
+        os.makedirs(os.path.join(write_dir, split), exist_ok=True)
         df, shards = DataManager.load_shards(
             os.path.join(simulation_config.paths.source_dir, split)
         )
-        # Print initial statistics - now using config object directly
         SimulationReporter.print_trigger_stats(df, simulation_config)
-        exit()
-        # Run simulation (now simplified - no parameters needed)
+
         simulated_df, ite_df = simulator.simulate_dataset(df)
 
-        # Print results
         SimulationReporter.print_simulation_results(
             simulated_df, simulator, simulation_config.outcomes
         )
-        split_write_dir = os.path.join(simulation_config.paths.write_dir, split)
-        # Save results
+        split_write_dir = os.path.join(write_dir, split)
         os.makedirs(split_write_dir, exist_ok=True)
 
-        # Save main simulation results
         simulated_df.reset_index(drop=True, inplace=True)
         DataManager.write_shards(simulated_df, split_write_dir, shards)
 
