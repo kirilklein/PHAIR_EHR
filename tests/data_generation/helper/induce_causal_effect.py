@@ -208,7 +208,7 @@ class CausalSimulator:
                     ite_record[f"ite_{outcome_code}"] = ite_value
             else:
                 # No exposure, so ITE is 0 for all outcomes
-                for outcome_key, outcome_cfg in self.config.outcomes.items():
+                for outcome_cfg in self.config.outcomes.values():
                     ite_record[f"ite_{outcome_cfg.code}"] = 0
 
             ite_records.append(ite_record)
