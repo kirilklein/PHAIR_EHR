@@ -8,30 +8,93 @@ from scipy.special import expit, logit
 
 
 class CausalSimulator:
-    """Handles causal effect simulation for EHR data."""
+    """
+    Handles causal effect simulation for EHR data with multiple trigger codes.
+
+    This class simulates binary exposure and outcome events based on causal relationships
+    between multiple medical codes. It supports:
+    - Confounder codes: Affect both exposure and outcome probabilities
+    - Instrument codes: Only affect exposure probability (like instrumental variables)
+    - Prognostic codes: Only affect outcome probability (prognostic factors)
+    """
 
     def __init__(
         self,
-        confounder_code: str,
-        exposure_only_code: str,
-        outcome_only_code: str,
+        confounder_codes: List[str],
+        instrument_codes: List[str],
+        prognostic_codes: List[str],
         exposure_name: str = "EXPOSURE",
         outcome_name: str = "OUTCOME",
     ):
-        self.confounder_code = confounder_code
-        self.exposure_only_code = exposure_only_code
-        self.outcome_only_code = outcome_only_code
+        """
+        Initialize the causal simulator with multiple trigger codes.
+
+        Args:
+            confounder_codes: List of codes that affect both exposure and outcome
+            instrument_codes: List of codes that only affect exposure
+            prognostic_codes: List of codes that only affect outcome
+            exposure_name: Name for simulated exposure events
+            outcome_name: Name for simulated outcome events
+        """
+        self.confounder_codes = confounder_codes
+        self.instrument_codes = instrument_codes
+        self.prognostic_codes = prognostic_codes
         self.exposure_name = exposure_name
         self.outcome_name = outcome_name
+        self.ite_records = []
 
     def _compute_probability(
         self, base_prob: float, effects: List[Tuple[float, bool]]
     ) -> float:
-        """Compute event probability using logistic function."""
+        """
+        Compute event probability using logistic function.
+
+        Args:
+            base_prob: Base probability without any triggers
+            effects: List of (effect_size, is_present) tuples
+
+        Returns:
+            Probability after applying all effects
+        """
         logit_p = logit(base_prob) + sum(
             effect * int(present) for effect, present in effects
         )
         return expit(logit_p)
+
+    def _check_codes_present(
+        self, subj_df: pd.DataFrame, codes: List[str]
+    ) -> List[bool]:
+        """
+        Check which codes from a list are present in subject data.
+
+        Args:
+            subj_df: Subject dataframe
+            codes: List of codes to check
+
+        Returns:
+            List of booleans indicating presence of each code
+        """
+        return [(subj_df["code"] == code).any() for code in codes]
+
+    def _get_trigger_codes_for_timing(
+        self, subj_df: pd.DataFrame, code_lists: List[List[str]]
+    ) -> List[str]:
+        """
+        Get all trigger codes that are present in the subject data.
+
+        Args:
+            subj_df: Subject dataframe
+            code_lists: List of code lists to check
+
+        Returns:
+            Flattened list of all present trigger codes
+        """
+        present_codes = []
+        for code_list in code_lists:
+            for code in code_list:
+                if (subj_df["code"] == code).any():
+                    present_codes.append(code)
+        return present_codes
 
     def _get_event_time(
         self,
@@ -41,11 +104,12 @@ class CausalSimulator:
         fallback_strategy: str = "random",
         outcome: bool = False,
     ) -> pd.Timestamp:
-        """Determine timing for new event based on triggers, ensuring it's before DOD.
+        """
+        Determine timing for new event based on triggers, ensuring it's before DOD.
 
         Args:
             subj_df: Subject dataframe
-            trigger_codes: List of codes that can trigger the event (e.g., confounder, exposure)
+            trigger_codes: List of codes that can trigger the event
             days_offset: Days to add after the latest trigger
             fallback_strategy: Strategy when no triggers present ("random" or "second_half")
             outcome: Whether this is for outcome simulation (allows closer to DOD)
@@ -150,7 +214,18 @@ class CausalSimulator:
         event_time: pd.Timestamp,
         **extra_cols,
     ) -> pd.DataFrame:
-        """Add new event to subject DataFrame."""
+        """
+        Add new event to subject DataFrame.
+
+        Args:
+            subj_df: Subject dataframe
+            event_code: Code for the new event
+            event_time: Timestamp for the new event
+            **extra_cols: Additional columns to add
+
+        Returns:
+            Updated dataframe with new event
+        """
         new_event = pd.DataFrame(
             {
                 "subject_id": [
@@ -170,57 +245,51 @@ class CausalSimulator:
         self,
         subj_df: pd.DataFrame,
         p_base: float,
-        confounder_effect: float,
-        exposure_only_effect: float,
+        confounder_weights: List[float],
+        instrument_weights: List[float],
     ) -> pd.DataFrame:
-        """Simulate exposure event for a single subject."""
+        """
+        Simulate exposure event for a single subject based on multiple trigger codes.
+
+        Args:
+            subj_df: Subject dataframe
+            p_base: Base probability for exposure
+            confounder_weights: List of weights for confounder codes (exposure effects)
+            instrument_weights: List of weights for instrument codes
+
+        Returns:
+            Updated dataframe with potential exposure event
+        """
         subj_df = subj_df.sort_values("time").reset_index(drop=True)
 
-        # CRITICAL: Check if patient has DOD and validate timeline
-        dod_events = subj_df[subj_df["code"] == "DOD"]
-        if not dod_events.empty:
-            dod_time = dod_events["time"].min()
+        # Check which codes are present
+        confounder_present = self._check_codes_present(subj_df, self.confounder_codes)
+        instrument_present = self._check_codes_present(subj_df, self.instrument_codes)
 
-            # Check if triggers occur before DOD
-            confounder_events = subj_df[subj_df["code"] == self.confounder_code]
-            exposure_only_events = subj_df[subj_df["code"] == self.exposure_only_code]
+        # Compute effects from all present codes
+        effects = []
 
-            # If triggers exist, ensure they're before DOD
-            valid_triggers = True
-            if not confounder_events.empty:
-                latest_confounder = confounder_events["time"].max()
-                if latest_confounder >= dod_time:
-                    valid_triggers = False
+        # Add confounder effects (exposure effects - first half of weights)
+        for i, (present, weight) in enumerate(
+            zip(confounder_present, confounder_weights[::2])
+        ):
+            if i < len(confounder_weights) // 2:  # Take every other weight for exposure
+                effects.append((weight, present))
 
-            if not exposure_only_events.empty:
-                latest_exposure_trigger = exposure_only_events["time"].max()
-                if latest_exposure_trigger >= dod_time:
-                    valid_triggers = False
-
-            # If triggers are invalid (after DOD), cannot simulate exposure
-            if not valid_triggers:
-                return subj_df
-
-        # Check trigger presence (only valid triggers)
-        confounder_present = (subj_df["code"] == self.confounder_code).any()
-        exposure_only_present = (subj_df["code"] == self.exposure_only_code).any()
+        # Add instrument effects
+        for present, weight in zip(instrument_present, instrument_weights):
+            effects.append((weight, present))
 
         # Compute probability and simulate
-        effects = [
-            (confounder_effect, confounder_present),
-            (exposure_only_effect, exposure_only_present),
-        ]
         prob = self._compute_probability(p_base, effects)
 
         if not np.random.binomial(1, prob):
             return subj_df
 
         # Determine trigger codes for timing
-        trigger_codes = []
-        if confounder_present:
-            trigger_codes.append(self.confounder_code)
-        if exposure_only_present:
-            trigger_codes.append(self.exposure_only_code)
+        trigger_codes = self._get_trigger_codes_for_timing(
+            subj_df, [self.confounder_codes, self.instrument_codes]
+        )
 
         event_time = self._get_event_time(
             subj_df,
@@ -234,7 +303,8 @@ class CausalSimulator:
         if event_time is None:
             return subj_df
 
-        # FINAL CHECK: Ensure proposed exposure time is before DOD
+        # Final check: Ensure proposed exposure time is before DOD
+        dod_events = subj_df[subj_df["code"] == "DOD"]
         if not dod_events.empty:
             dod_time = dod_events["time"].min()
             if event_time >= dod_time:
@@ -246,24 +316,45 @@ class CausalSimulator:
         self,
         subj_df: pd.DataFrame,
         p_base: float,
-        confounder_effect: float,
-        outcome_only_effect: float,
+        confounder_weights: List[float],
+        prognostic_weights: List[float],
         exposure_outcome_effect: float,
     ) -> pd.DataFrame:
-        """Simulate outcome event for a single subject."""
+        """
+        Simulate outcome event for a single subject based on multiple trigger codes.
+
+        Args:
+            subj_df: Subject dataframe
+            p_base: Base probability for outcome
+            confounder_weights: List of weights for confounder codes (outcome effects)
+            prognostic_weights: List of weights for prognostic codes
+            exposure_outcome_effect: Effect of exposure on outcome
+
+        Returns:
+            Updated dataframe with potential outcome event
+        """
         subj_df = subj_df.sort_values("time").reset_index(drop=True)
 
-        # Check trigger presence
-        confounder_present = (subj_df["code"] == self.confounder_code).any()
-        outcome_only_present = (subj_df["code"] == self.outcome_only_code).any()
+        # Check which codes are present
+        confounder_present = self._check_codes_present(subj_df, self.confounder_codes)
+        prognostic_present = self._check_codes_present(subj_df, self.prognostic_codes)
         exposure_present = (subj_df["code"] == self.exposure_name).any()
 
-        # Compute probabilities for treated/control
-        base_effects = [
-            (confounder_effect, confounder_present),
-            (outcome_only_effect, outcome_only_present),
-        ]
+        # Compute base effects (without exposure)
+        base_effects = []
 
+        # Add confounder effects (outcome effects - second half of weights)
+        for i, (present, weight) in enumerate(
+            zip(confounder_present, confounder_weights[1::2])
+        ):
+            if i < len(confounder_weights) // 2:  # Take every other weight for outcome
+                base_effects.append((weight, present))
+
+        # Add prognostic effects
+        for present, weight in zip(prognostic_present, prognostic_weights):
+            base_effects.append((weight, present))
+
+        # Compute probabilities for treated/control
         p_control = self._compute_probability(p_base, base_effects)
         p_treated = self._compute_probability(
             p_base, base_effects + [(exposure_outcome_effect, True)]
@@ -281,11 +372,9 @@ class CausalSimulator:
             return subj_df
 
         # Determine trigger codes for timing
-        trigger_codes = []
-        if confounder_present:
-            trigger_codes.append(self.confounder_code)
-        if outcome_only_present:
-            trigger_codes.append(self.outcome_only_code)
+        trigger_codes = self._get_trigger_codes_for_timing(
+            subj_df, [self.confounder_codes, self.prognostic_codes]
+        )
         if exposure_present:
             trigger_codes.append(self.exposure_name)
 
@@ -308,14 +397,28 @@ class CausalSimulator:
         df: pd.DataFrame,
         p_base_exposure: float,
         p_base_outcome: float,
-        confounder_exposure_effect: float,
-        confounder_outcome_effect: float,
-        exposure_only_effect: float,
-        outcome_only_effect: float,
+        confounder_weights: List[float],
+        instrument_weights: List[float],
+        prognostic_weights: List[float],
         exposure_outcome_effect: float,
         simulate_outcome: bool = True,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Apply causal simulation to entire dataset."""
+        """
+        Apply causal simulation to entire dataset with multiple trigger codes.
+
+        Args:
+            df: Input dataframe
+            p_base_exposure: Base probability for exposure
+            p_base_outcome: Base probability for outcome
+            confounder_weights: Alternating exposure/outcome weights for confounder codes
+            instrument_weights: Weights for instrument codes (exposure only)
+            prognostic_weights: Weights for prognostic codes (outcome only)
+            exposure_outcome_effect: Main causal effect of exposure on outcome
+            simulate_outcome: Whether to simulate outcome events
+
+        Returns:
+            Tuple of (simulated_dataframe, ite_dataframe)
+        """
         # Reset ITE records for new simulation
         self.ite_records = []
 
@@ -343,8 +446,8 @@ class CausalSimulator:
             result = self.simulate_exposure(
                 x,
                 p_base_exposure,
-                confounder_exposure_effect,
-                exposure_only_effect,
+                confounder_weights,
+                instrument_weights,
             )
 
             # Check if exposure was added
@@ -361,7 +464,7 @@ class CausalSimulator:
             simulate_exposure_with_tracking
         )
 
-        # CRITICAL: Validate no exposures occur after DOD
+        # Validate no exposures occur after DOD
         def validate_exposure_dod_order(subject_data):
             exposure_events = subject_data[subject_data["code"] == self.exposure_name]
             dod_events = subject_data[subject_data["code"] == "DOD"]
@@ -407,8 +510,8 @@ class CausalSimulator:
                 result = self.simulate_outcome(
                     x,
                     p_base_outcome,
-                    confounder_outcome_effect,
-                    outcome_only_effect,
+                    confounder_weights,
+                    prognostic_weights,
                     exposure_outcome_effect,
                 )
 
@@ -441,11 +544,19 @@ class CausalSimulator:
 
 
 class DataManager:
-    """Handles data loading and saving operations."""
+    """Handles data loading and saving operations for simulation."""
 
     @staticmethod
     def load_shards(shard_dir: str) -> Tuple[pd.DataFrame, Dict[int, List[str]]]:
-        """Load and concatenate parquet shards."""
+        """
+        Load and concatenate parquet shards from directory.
+
+        Args:
+            shard_dir: Directory containing .parquet files
+
+        Returns:
+            Tuple of (concatenated_dataframe, shard_mapping)
+        """
         if not os.path.exists(shard_dir):
             raise FileNotFoundError(f"Shard directory not found: {shard_dir}")
 
@@ -469,7 +580,14 @@ class DataManager:
     def write_shards(
         df: pd.DataFrame, write_dir: str, shards: Dict[int, List[str]]
     ) -> None:
-        """Write DataFrame as sharded parquet files."""
+        """
+        Write DataFrame as sharded parquet files.
+
+        Args:
+            df: DataFrame to write
+            write_dir: Output directory
+            shards: Dictionary mapping shard_id to list of subject_ids
+        """
         os.makedirs(write_dir, exist_ok=True)
 
         for shard_id, subject_ids in shards.items():
@@ -484,40 +602,54 @@ class SimulationReporter:
     def print_trigger_stats(
         df: pd.DataFrame, simulator: CausalSimulator, simulate_outcome: bool = True
     ) -> None:
-        """Print statistics about trigger code presence."""
+        """
+        Print statistics about trigger code presence before simulation.
+
+        Args:
+            df: Input dataframe
+            simulator: CausalSimulator instance
+            simulate_outcome: Whether outcome simulation is enabled
+        """
         total_subjects = df["subject_id"].nunique()
         subject_codes = df.groupby("subject_id")["code"].apply(set)
 
-        # Count subjects with each trigger
-        confounder_count = subject_codes.apply(
-            lambda codes: simulator.confounder_code in codes
-        ).sum()
-        exposure_count = subject_codes.apply(
-            lambda codes: simulator.exposure_only_code in codes
-        ).sum()
-
         print(f"\nTotal subjects: {total_subjects}")
         print("\nTrigger code presence before simulation:")
-        print(
-            f"  Confounder ({simulator.confounder_code}): {confounder_count} subjects ({100 * confounder_count / total_subjects:.1f}%)"
-        )
-        print(
-            f"  Exposure trigger ({simulator.exposure_only_code}): {exposure_count} subjects ({100 * exposure_count / total_subjects:.1f}%)"
-        )
 
-        if simulate_outcome:
-            outcome_count = subject_codes.apply(
-                lambda codes: simulator.outcome_only_code in codes
-            ).sum()
+        # Count subjects with confounder codes
+        for i, code in enumerate(simulator.confounder_codes):
+            count = subject_codes.apply(lambda codes: code in codes).sum()
             print(
-                f"  Outcome trigger ({simulator.outcome_only_code}): {outcome_count} subjects ({100 * outcome_count / total_subjects:.1f}%)"
+                f"  Confounder {i + 1} ({code}): {count} subjects ({100 * count / total_subjects:.1f}%)"
             )
+
+        # Count subjects with instrument codes
+        for i, code in enumerate(simulator.instrument_codes):
+            count = subject_codes.apply(lambda codes: code in codes).sum()
+            print(
+                f"  Instrument {i + 1} ({code}): {count} subjects ({100 * count / total_subjects:.1f}%)"
+            )
+
+        # Count subjects with prognostic codes
+        if simulate_outcome:
+            for i, code in enumerate(simulator.prognostic_codes):
+                count = subject_codes.apply(lambda codes: code in codes).sum()
+                print(
+                    f"  Prognostic {i + 1} ({code}): {count} subjects ({100 * count / total_subjects:.1f}%)"
+                )
 
     @staticmethod
     def print_simulation_results(
         df: pd.DataFrame, simulator: CausalSimulator, simulate_outcome: bool = True
     ) -> None:
-        """Print simulation results statistics."""
+        """
+        Print simulation results statistics.
+
+        Args:
+            df: Simulated dataframe
+            simulator: CausalSimulator instance
+            simulate_outcome: Whether outcome simulation was enabled
+        """
         total_subjects = df["subject_id"].nunique()
 
         # Count simulated events
