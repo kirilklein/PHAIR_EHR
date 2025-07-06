@@ -1,389 +1,240 @@
-import os
-import random
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
 from scipy.special import expit, logit
 
+from tests.data_generation.helper.config import SimulationConfig
+
 
 class CausalSimulator:
     """
-    Handles causal effect simulation for EHR data with multiple trigger codes.
-
-    This class simulates binary exposure and outcome events based on causal relationships
-    between multiple medical codes. All parameters are set during initialization.
+    Handles a multi-phase, time-to-event causal simulation for EHR data,
+    driven by a hierarchical configuration object.
     """
 
-    def __init__(
-        self,
-        confounder_codes: List[str],
-        confounder_exposure_weights: List[float],
-        confounder_outcome_weights: List[float],
-        instrument_codes: List[str],
-        instrument_weights: List[float],
-        prognostic_codes: List[str],
-        prognostic_weights: List[float],
-        p_base_exposure: float,
-        p_base_outcome: float,
-        p_daily_base_exposure: float,
-        p_daily_base_outcome: float,
-        exposure_outcome_effect: float,
-        exposure_name: str = "EXPOSURE",
-        outcome_name: str = "OUTCOME",
-        simulate_outcome: bool = True,
-    ):
+    def __init__(self, config: SimulationConfig):
         """
-        Initialize the causal simulator with all parameters.
+        Initializes the simulator with a single configuration object.
 
         Args:
-            confounder_codes: List of codes that affect both exposure and outcome
-            confounder_exposure_weights: Weights for confounder effects on exposure
-            confounder_outcome_weights: Weights for confounder effects on outcome
-            instrument_codes: List of codes that only affect exposure
-            instrument_weights: Weights for instrument effects on exposure
-            prognostic_codes: List of codes that only affect outcome
-            prognostic_weights: Weights for prognostic effects on outcome
-            p_base_exposure: Base probability for exposure events
-            p_base_outcome: Base probability for outcome events
-            p_daily_base_exposure: Base daily probability for exposure events
-            p_daily_base_outcome: Base daily probability for outcome events
-            exposure_outcome_effect: Causal effect of exposure on outcome
-            exposure_name: Name for simulated exposure events
-            outcome_name: Name for simulated outcome events
-            simulate_outcome: Whether to simulate outcome events
+            config: A SimulationConfig object containing all parameters.
         """
-        # Store all parameters
-        self.confounder_codes = confounder_codes
-        self.confounder_exposure_weights = confounder_exposure_weights
-        self.confounder_outcome_weights = confounder_outcome_weights
-        self.instrument_codes = instrument_codes
-        self.instrument_weights = instrument_weights
-        self.prognostic_codes = prognostic_codes
-        self.prognostic_weights = prognostic_weights
+        self.config = config
+        self.ite_records = []  # Individual Treatment Effect records
 
-        self.p_base_exposure = p_base_exposure
-        self.p_base_outcome = p_base_outcome
-        self.p_daily_base_exposure = p_daily_base_exposure
-        self.p_daily_base_outcome = p_daily_base_outcome
+    def _compute_daily_prob(self, total_prob: float, num_days: int) -> float:
+        """Converts a total probability over a period into a daily probability."""
+        if num_days <= 0 or total_prob >= 1.0:
+            return total_prob
+        return 1 - (1 - total_prob) ** (1 / num_days)
 
-        self.exposure_outcome_effect = exposure_outcome_effect
-        self.exposure_name = exposure_name
-        self.outcome_name = outcome_name
-        self.simulate_outcome = simulate_outcome
-
-        # Validate parameter lengths
-        if len(confounder_codes) != len(confounder_exposure_weights):
-            raise ValueError(
-                "Number of confounder codes must match number of exposure weights"
-            )
-        if len(confounder_codes) != len(confounder_outcome_weights):
-            raise ValueError(
-                "Number of confounder codes must match number of outcome weights"
-            )
-        if len(instrument_codes) != len(instrument_weights):
-            raise ValueError("Number of instrument codes must match number of weights")
-        if len(prognostic_codes) != len(prognostic_weights):
-            raise ValueError("Number of prognostic codes must match number of weights")
-
-        # Initialize ITE tracking
-        self.ite_records = []
-
-    def _calculate_and_store_ite(
+    def _simulate_time_to_first_event(
         self,
         subj_df: pd.DataFrame,
-        p_base_outcome: float,
-        confounder_weights: list[float],
-        prognostic_weights: list[float],
-        exposure_outcome_effect: float,
-    ):
-        """
-        Calculates the ground-truth Individual Treatment Effect (ITE) for a subject
-        and stores it. This represents P(Outcome|Treated) - P(Outcome|Control).
-        """
-        subject_id = subj_df.iloc[0]["subject_id"]
-
-        # Check for presence of baseline trigger codes
-        confounder_present = [
-            (subj_df["code"] == code).any() for code in self.confounder_codes
-        ]
-        prognostic_present = [
-            (subj_df["code"] == code).any() for code in self.prognostic_codes
-        ]
-
-        # Effects without treatment
-        base_effects = list(zip(confounder_weights, confounder_present)) + list(
-            zip(prognostic_weights, prognostic_present)
-        )
-
-        # Logistic function to compute probabilities
-        def compute_prob(base_prob, effects):
-            logit_p = logit(base_prob) + sum(
-                effect * int(present) for effect, present in effects
-            )
-            return expit(logit_p)
-
-        # Calculate probability with and without treatment
-        p_control = compute_prob(p_base_outcome, base_effects)
-        p_treated = compute_prob(
-            p_base_outcome, base_effects + [(exposure_outcome_effect, True)]
-        )
-
-        self.ite_records.append(
-            {"subject_id": subject_id, "ite": p_treated - p_control}
-        )
-
-    def _run_daily_simulation(
-        self,
-        subj_df: pd.DataFrame,
-        p_daily_base: float,
-        trigger_codes: list[str],
-        trigger_weights: list[float],
+        p_total_base: float,
+        trigger_codes: List[str],
+        trigger_weights: List[float],
         event_name: str,
-        start_after_event: str | None = None,
+        run_in_days: int,
     ) -> pd.DataFrame:
         """
-        Performs a vectorized, daily simulation and adds ALL successful event draws.
+        Generic, vectorized simulation to find the first occurrence of a single event.
         """
-        subj_df["time"] = pd.to_datetime(subj_df["time"])
-
         start_date = subj_df["time"].min().normalize()
         end_date = subj_df["time"].max().normalize()
 
-        # If specified, start simulation the day after the FIRST occurrence of a prior event
-        if start_after_event and (subj_df["code"] == start_after_event).any():
-            first_occurrence = subj_df[subj_df["code"] == start_after_event][
-                "time"
-            ].min()
-            start_date = first_occurrence.normalize() + pd.Timedelta(days=1)
-
-        if start_date >= end_date:
+        sim_window_start = start_date + pd.Timedelta(days=run_in_days)
+        if sim_window_start >= end_date:
             return subj_df
 
-        # Create a daily timeline for the simulation period
-        daily_timeline = pd.date_range(start=start_date, end=end_date, freq="D")
-        if daily_timeline.empty:
-            return subj_df
+        k_days = (end_date - sim_window_start).days
+        daily_timeline = pd.date_range(start=sim_window_start, end=end_date, freq="D")
 
-        # Create a feature matrix: rows are days, columns are codes.
-        # A cell is True if the code has appeared on or before that day.
+        p_daily_base = self._compute_daily_prob(p_total_base, k_days)
+        daily_weights = [w / k_days for w in trigger_weights]
+
+        # Create feature matrix, ensuring all trigger codes are columns
         events_pivot = subj_df.pivot_table(
             index="time", columns="code", aggfunc="size", fill_value=0
         ).astype(bool)
         feature_matrix = events_pivot.reindex(daily_timeline, method="ffill").fillna(
             False
         )
-
-        # Ensure all trigger codes exist as columns in the matrix
         for code in trigger_codes:
             if code not in feature_matrix.columns:
                 feature_matrix[code] = False
-        feature_matrix = feature_matrix[trigger_codes]
 
-        weights_s = pd.Series(trigger_weights, index=trigger_codes)
-
-        # === Vectorized Simulation ===
-        # 1. Calculate daily probabilities for all days at once
-        logit_p_days = logit(p_daily_base) + feature_matrix.dot(weights_s)
+        # Run vectorized simulation
+        weights_s = pd.Series(daily_weights, index=trigger_codes)
+        logit_p_days = logit(p_daily_base) + feature_matrix[trigger_codes].dot(
+            weights_s
+        )
         p_days = expit(logit_p_days)
-
-        # 2. Perform all random draws simultaneously
         event_draws = np.random.binomial(1, p_days)
 
-        # 3. Add all successful draws to the dataframe
         if event_draws.any():
-            event_times = p_days.index[event_draws == 1]
+            event_idx = np.argmax(event_draws)
+            event_time = p_days.index[event_idx]
 
-            new_events_df = pd.DataFrame(
+            new_event_df = pd.DataFrame(
                 {
-                    "subject_id": subj_df.iloc[0]["subject_id"],
-                    "time": event_times,
-                    "code": event_name,
+                    "subject_id": [subj_df.iloc[0]["subject_id"]],
+                    "time": [event_time],
+                    "code": [event_name],
                 }
             )
-
-            # Combine original data with new events and sort chronologically
             return (
-                pd.concat([subj_df, new_events_df], ignore_index=True)
+                pd.concat([subj_df, new_event_df], ignore_index=True)
                 .sort_values("time")
                 .reset_index(drop=True)
             )
 
         return subj_df
 
-    def simulate_dataset(
-        self,
-        df: pd.DataFrame,
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Applies the full daily causal simulation to the entire dataset.
-        """
-        self.ite_records = []
+    def _simulate_exposure_process(self, subj_df: pd.DataFrame) -> pd.DataFrame:
+        """Orchestrates the full, multi-phase exposure simulation for a subject."""
+        cfg = self.config.exposure  # Use the exposure config
 
-        # === Define Trigger and Weight Sets ===
-        # For EXPOSURE: Confounders + Instruments
-        exposure_triggers = self.confounder_codes + self.instrument_codes
-        exposure_weights = self.confounder_exposure_weights + self.instrument_weights
-
-        # For OUTCOME: Confounders + Prognostic Factors + The Exposure itself
-        outcome_triggers = (
-            self.confounder_codes + self.prognostic_codes + [self.exposure_name]
-        )
-        outcome_weights = (
-            self.confounder_outcome_weights
-            + self.prognostic_weights
-            + [self.exposure_outcome_effect]
+        # 1. Find the first exposure event using the simplified trigger structure
+        df_with_first_exposure = self._simulate_time_to_first_event(
+            subj_df,
+            cfg.p_base,
+            cfg.trigger_codes,
+            cfg.trigger_weights,
+            f"TEMP_{cfg.code}",
+            cfg.run_in_days,
         )
 
-        all_subject_dfs = []
-        for subject_id, subj_df in df.groupby("subject_id"):
-            subj_df = subj_df.sort_values("time").reset_index(drop=True)
+        first_exposure_events = df_with_first_exposure[
+            df_with_first_exposure["code"] == f"TEMP_{cfg.code}"
+        ]
+        if first_exposure_events.empty:
+            return subj_df
 
-            # 1. Calculate and store ground-truth ITE for this subject
-            if self.simulate_outcome:
-                self._calculate_and_store_ite(
-                    subj_df,
-                    self.p_base_outcome,
-                    self.confounder_outcome_weights,
-                    self.prognostic_weights,
-                    self.exposure_outcome_effect,
-                )
+        first_exposure_date = first_exposure_events["time"].min()
 
-            # 2. Simulate EXPOSURE events
-            df_with_exposure = self._run_daily_simulation(
-                subj_df,
-                self.p_daily_base_exposure,
-                exposure_triggers,
-                exposure_weights,
-                self.exposure_name,
+        # 2. Generate compliant exposures
+        compliance_end_date = first_exposure_date + pd.Timedelta(
+            days=30
+        )  # Default compliance period
+        exposure_dates = pd.date_range(
+            start=first_exposure_date,
+            end=compliance_end_date,
+            freq=f"{cfg.compliance_interval_days}D",
+        )
+
+        # 3. Simulate discontinuation
+        stop_window_start = compliance_end_date + pd.Timedelta(days=1)
+        if stop_window_start < subj_df["time"].max():
+            stop_duration = (subj_df["time"].max() - stop_window_start).days
+            stop_draws = np.random.binomial(1, cfg.daily_stop_prob, size=stop_duration)
+            if stop_draws.any():
+                stop_date = stop_window_start + pd.Timedelta(days=np.argmax(stop_draws))
+                exposure_dates = exposure_dates[exposure_dates < stop_date]
+
+        # 4. Add all final exposure events to the dataframe
+        df_without_temp = df_with_first_exposure[
+            df_with_first_exposure["code"] != f"TEMP_{cfg.code}"
+        ]
+        if not exposure_dates.empty:
+            new_events_df = pd.DataFrame(
+                {
+                    "subject_id": subj_df.iloc[0]["subject_id"],
+                    "time": exposure_dates,
+                    "code": cfg.code,
+                }
+            )
+            return (
+                pd.concat([df_without_temp, new_events_df], ignore_index=True)
+                .sort_values("time")
+                .reset_index(drop=True)
             )
 
-            # 3. Simulate OUTCOME events (if enabled)
-            final_df = df_with_exposure
-            if self.simulate_outcome:
-                final_df = self._run_daily_simulation(
-                    df_with_exposure,
-                    self.p_daily_base_outcome,
-                    outcome_triggers,
-                    outcome_weights,
-                    self.outcome_name,
-                    start_after_event=self.exposure_name,
-                )
+        return df_without_temp
+
+    def _simulate_all_outcomes(self, subj_df: pd.DataFrame) -> pd.DataFrame:
+        """Iterates through and simulates all configured outcomes."""
+        df_with_outcomes = subj_df.copy()
+
+        # Loop through each outcome's config (it's a dictionary)
+        for outcome_key, outcome_cfg in self.config.outcomes.items():
+            # For each outcome, use its trigger_codes and trigger_weights, plus add exposure effect
+            outcome_triggers = outcome_cfg.trigger_codes + [self.config.exposure.code]
+            outcome_weights = outcome_cfg.trigger_weights + [
+                outcome_cfg.exposure_effect
+            ]
+
+            df_with_outcomes = self._simulate_time_to_first_event(
+                df_with_outcomes,
+                outcome_cfg.p_base,
+                outcome_triggers,
+                outcome_weights,
+                outcome_cfg.code,
+                outcome_cfg.run_in_days,
+            )
+        return df_with_outcomes
+
+    def _calculate_ite(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate Individual Treatment Effects for each outcome."""
+        ite_records = []
+
+        for subject_id, subj_df in df.groupby("subject_id"):
+            ite_record = {"subject_id": subject_id}
+
+            # Check if subject received exposure
+            exposure_events = subj_df[subj_df["code"] == self.config.exposure.code]
+            has_exposure = len(exposure_events) > 0
+
+            if has_exposure:
+                exposure_date = exposure_events["time"].min()
+
+                # Calculate ITE for each outcome
+                for outcome_key, outcome_cfg in self.config.outcomes.items():
+                    outcome_code = outcome_cfg.code
+
+                    # Check if outcome occurred after exposure
+                    outcome_events = subj_df[subj_df["code"] == outcome_code]
+                    if len(outcome_events) > 0:
+                        outcome_date = outcome_events["time"].min()
+                        outcome_after_exposure = outcome_date > exposure_date
+                    else:
+                        outcome_after_exposure = False
+
+                    # Simple ITE calculation - this would be more sophisticated in practice
+                    # For now, using the exposure effect as a proxy
+                    ite_value = (
+                        outcome_cfg.exposure_effect if outcome_after_exposure else 0
+                    )
+                    ite_record[f"ite_{outcome_code}"] = ite_value
+            else:
+                # No exposure, so ITE is 0 for all outcomes
+                for outcome_key, outcome_cfg in self.config.outcomes.items():
+                    ite_record[f"ite_{outcome_cfg.code}"] = 0
+
+            ite_records.append(ite_record)
+
+        return pd.DataFrame(ite_records)
+
+    def simulate_dataset(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Applies the full causal simulation to the entire dataset."""
+        all_subject_dfs = []
+
+        for _, subj_df in df.groupby("subject_id"):
+            subj_df_sorted = subj_df.sort_values("time").reset_index(drop=True)
+
+            # Stage 1: Simulate the full exposure process
+            df_with_exposure = self._simulate_exposure_process(subj_df_sorted)
+
+            # Stage 2: Simulate all configured outcomes
+            final_df = self._simulate_all_outcomes(df_with_exposure)
 
             all_subject_dfs.append(final_df)
 
-        # === Finalize Results ===
-        result_df = pd.concat(all_subject_dfs, ignore_index=True)
-        ite_df = pd.DataFrame(self.ite_records)
+        # Combine all subject data
+        simulated_df = pd.concat(all_subject_dfs, ignore_index=True)
 
-        return result_df, ite_df
+        # Calculate ITE for each outcome
+        ite_df = self._calculate_ite(simulated_df)
 
-
-class DataManager:
-    """Handles data loading and saving operations for simulation."""
-
-    @staticmethod
-    def load_shards(shard_dir: str) -> Tuple[pd.DataFrame, Dict[int, List[str]]]:
-        """Load and concatenate parquet shards from directory."""
-        if not os.path.exists(shard_dir):
-            raise FileNotFoundError(f"Shard directory not found: {shard_dir}")
-
-        parquet_files = [f for f in os.listdir(shard_dir) if f.endswith(".parquet")]
-        if not parquet_files:
-            raise ValueError(f"No parquet files found in {shard_dir}")
-
-        dfs, shards = [], {}
-        for i, filename in enumerate(parquet_files):
-            file_path = os.path.join(shard_dir, filename)
-            try:
-                shard = pd.read_parquet(file_path)
-                shards[i] = shard.subject_id.unique().tolist()
-                dfs.append(shard)
-            except Exception as e:
-                raise ValueError(f"Error reading {file_path}: {e}")
-
-        return pd.concat(dfs), shards
-
-    @staticmethod
-    def write_shards(
-        df: pd.DataFrame, write_dir: str, shards: Dict[int, List[str]]
-    ) -> None:
-        """Write DataFrame as sharded parquet files."""
-        os.makedirs(write_dir, exist_ok=True)
-
-        for shard_id, subject_ids in shards.items():
-            shard_df = df[df.subject_id.isin(subject_ids)]
-            shard_df.to_parquet(os.path.join(write_dir, f"{shard_id}.parquet"))
-
-
-class SimulationReporter:
-    """Generates simulation statistics and reports."""
-
-    @staticmethod
-    def print_trigger_stats(
-        df: pd.DataFrame, simulator: CausalSimulator, simulate_outcome: bool = True
-    ) -> None:
-        """Print statistics about trigger code presence before simulation."""
-        total_subjects = df["subject_id"].nunique()
-        subject_codes = df.groupby("subject_id")["code"].apply(set)
-
-        print(f"\nTotal subjects: {total_subjects}")
-        print("\nTrigger code presence before simulation:")
-
-        # Count subjects with confounder codes
-        for i, code in enumerate(simulator.confounder_codes):
-            count = subject_codes.apply(lambda codes: code in codes).sum()
-            print(
-                f"  Confounder {i + 1} ({code}): {count} subjects ({100 * count / total_subjects:.1f}%)"
-            )
-
-        # Count subjects with instrument codes
-        for i, code in enumerate(simulator.instrument_codes):
-            count = subject_codes.apply(lambda codes: code in codes).sum()
-            print(
-                f"  Instrument {i + 1} ({code}): {count} subjects ({100 * count / total_subjects:.1f}%)"
-            )
-
-        # Count subjects with prognostic codes
-        if simulate_outcome:
-            for i, code in enumerate(simulator.prognostic_codes):
-                count = subject_codes.apply(lambda codes: code in codes).sum()
-                print(
-                    f"  Prognostic {i + 1} ({code}): {count} subjects ({100 * count / total_subjects:.1f}%)"
-                )
-
-    @staticmethod
-    def print_simulation_results(
-        df: pd.DataFrame, simulator: CausalSimulator, simulate_outcome: bool = True
-    ) -> None:
-        """Print simulation results statistics."""
-        total_subjects = df["subject_id"].nunique()
-
-        # Count simulated events
-        exposure_subjects = df.groupby("subject_id")["code"].apply(
-            lambda codes: (codes == simulator.exposure_name).any()
-        )
-        exposure_count = exposure_subjects.sum()
-
-        print("\nSimulation results:")
-        print(
-            f"  EXPOSURE events: {exposure_count} subjects ({100 * exposure_count / total_subjects:.1f}%)"
-        )
-
-        if simulate_outcome:
-            outcome_subjects = df.groupby("subject_id")["code"].apply(
-                lambda codes: (codes == simulator.outcome_name).any()
-            )
-            outcome_count = outcome_subjects.sum()
-
-            # Conditional probabilities
-            outcomes_given_exposure = outcome_subjects[exposure_subjects].mean() * 100
-            outcomes_given_no_exposure = (
-                outcome_subjects[~exposure_subjects].mean() * 100
-            )
-
-            print(
-                f"  OUTCOME events: {outcome_count} subjects ({100 * outcome_count / total_subjects:.1f}%)"
-            )
-            print(f"  P(Outcome | Exposure): {outcomes_given_exposure:.1f}%")
-            print(f"  P(Outcome | No Exposure): {outcomes_given_no_exposure:.1f}%")
+        return simulated_df, ite_df
