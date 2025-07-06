@@ -3,7 +3,7 @@
 
 # Required paths
 paths:
-  source_dir: "./example_data/synthe_meds" # Directory containing source data shards (.parquet files)
+  source_dir: "./example_data/synthea_meds" # Directory containing source data shards (.parquet files)
   write_dir: "./example_data/synthea_meds_causal" # Directory to write output shards (will be created if needed)
   splits: ["held_out"]
 
@@ -40,14 +40,14 @@ outcomes:
         D/384709000,
         D/431856006,
       ]
-    trigger_weights: [0.5, 0.1, -0.1, 0.3, 0.2, 0.4] # logits - now 6 weights to match 6 codes
+    trigger_weights: [0.3, 0.1, -0.1, 0.3, 0.2, 0.4] # logits - now 6 weights to match 6 codes
     exposure_effect: 1.0
   outcome_2:
     code: "OUTCOME_2"
     run_in_days: 30
     p_base: 0.01
     trigger_codes: [D/105531004, D/65363002, D/157141000119108, D/1121000119107]
-    trigger_weights: [0.5, 0.1, -0.1, 0.3]
+    trigger_weights: [0.2, 0.1, -0.1, 0.3]
     exposure_effect: 2.0
   outcome_3:
     code: "OUTCOME_3"

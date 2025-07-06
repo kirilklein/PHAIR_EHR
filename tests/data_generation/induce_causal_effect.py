@@ -148,12 +148,9 @@ def main() -> None:
         df, shards = DataManager.load_shards(
             os.path.join(simulation_config.paths.source_dir, split)
         )
+        # Print initial statistics - now using config object directly
+        SimulationReporter.print_trigger_stats(df, simulation_config)
         exit()
-        # Print initial statistics
-        SimulationReporter.print_trigger_stats(
-            df, simulator, simulation_config.outcomes
-        )
-
         # Run simulation (now simplified - no parameters needed)
         simulated_df, ite_df = simulator.simulate_dataset(df)
 

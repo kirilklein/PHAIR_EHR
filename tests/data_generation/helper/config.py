@@ -87,3 +87,29 @@ class SimulationConfig:
                 raise ValueError(
                     f"Outcome '{outcome_key}' p_base must be between 0 and 1, got {outcome.p_base}"
                 )
+
+    def get_all_trigger_codes(self) -> List[str]:
+        """Get all trigger codes from exposure and outcomes."""
+        all_codes = set(self.exposure.trigger_codes)
+        for outcome in self.outcomes.values():
+            all_codes.update(outcome.trigger_codes)
+        return list(all_codes)
+
+    def get_confounder_codes(self) -> Dict[str, List[str]]:
+        """Get confounder codes for each outcome (codes that appear in both exposure and that outcome)."""
+        confounders_by_outcome = {}
+        exposure_codes = set(self.exposure.trigger_codes)
+
+        for outcome_key, outcome_cfg in self.outcomes.items():
+            outcome_codes = set(outcome_cfg.trigger_codes)
+            confounders = exposure_codes.intersection(outcome_codes)
+            confounders_by_outcome[outcome_key] = list(confounders)
+
+        return confounders_by_outcome
+
+    def get_all_confounder_codes(self) -> List[str]:
+        """Get all unique confounder codes across all outcomes."""
+        all_confounders = set()
+        for confounders in self.get_confounder_codes().values():
+            all_confounders.update(confounders)
+        return list(all_confounders)
