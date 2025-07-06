@@ -16,8 +16,8 @@ DESCRIPTION:
 
 CAUSAL STRUCTURE:
     - Confounder codes: Affect both exposure and outcome (creates confounding bias)
-    - Exposure-only codes: Only affect exposure probability
-    - Outcome-only codes: Only affect outcome probability
+    - Instrument codes: Only affect exposure probability (like instrumental variables)
+    - Prognostic codes: Only affect outcome probability (prognostic factors)
     - Exposure events: Directly affect outcome probability (the causal effect of interest)
 
 EXAMPLE USAGE:
@@ -26,31 +26,26 @@ EXAMPLE USAGE:
         --source_dir ./data/input_shards \
         --write_dir ./data/simulated_shards
 
-    # Custom causal effects
+    # Custom causal effects with multiple codes
     python induce_causal_effect.py \
         --source_dir ./data/input_shards \
         --write_dir ./data/simulated_shards \
-        --confounder_exposure_effect 0.5 \
-        --exposure_outcome_effect 1.5 \
-        --p_base_exposure 0.25 \
-        --p_base_outcome 0.15
-
-    # Using custom trigger codes
-    python induce_causal_effect.py \
-        --source_dir ./data/input_shards \
-        --write_dir ./data/simulated_shards \
-        --confounder_code "LAB_GLUCOSE" \
-        --exposure_only_code "DRUG_STATINS" \
-        --outcome_only_code "DIAG_DIABETES"
+        --confounder_codes "DDZ32,LAB8" \
+        --confounder_exposure_weights "1.2,0.8" \
+        --confounder_outcome_weights "-0.3,0.5" \
+        --instrument_codes "MME01,DRUG_A" \
+        --instrument_weights "0.8,1.1"
 
 PARAMETER GUIDANCE:
     - Effect sizes: Typical range [-2.0, 2.0]. Positive = increases probability, negative = decreases
     - Base probabilities: Should reflect realistic event rates (0.1-0.4 often reasonable)
-    - Days offset: Time delay between trigger and simulated event (30-90 days typical)
+    - Daily probabilities: Should be much smaller (0.001-0.01) as they represent daily risk
     
 OUTPUT:
     - Parquet files with original data + simulated EXPOSURE and OUTCOME events
     - .ate.txt file containing the Average Treatment Effect for validation
+    - simulation_parameters.json file with all parameters for reproducibility
+    - reproduce_command.txt file with exact command line for easy copy-pasting
 
 NOTES:
     - Input directory must contain .parquet shard files
@@ -88,7 +83,9 @@ Examples:
   
   # Custom parameters with multiple codes 
   python %(prog)s --source_dir ./input --write_dir ./output \\
-    --confounder_codes "DDZ32,LAB8" --confounder_weights "1.2,-0.3" \\
+    --confounder_codes "DDZ32,LAB8" \\
+    --confounder_exposure_weights "1.2,0.8" \\
+    --confounder_outcome_weights "-0.3,0.5" \\
     --instrument_codes "MME01,DRUG_A" --instrument_weights "0.8,1.1"
         """,
     )
@@ -115,9 +112,14 @@ Examples:
         help="Comma-separated codes that affect both exposure and outcome. Default: DDZ32",
     )
     trigger_group.add_argument(
-        "--confounder_weights",
-        default="1.2,-0.3",
-        help="Comma-separated weights for confounder codes (exposure,outcome effects). Default: 1.2,-0.3",
+        "--confounder_exposure_weights",
+        default="1.2",
+        help="Comma-separated weights for confounder effects on exposure. Default: 1.2",
+    )
+    trigger_group.add_argument(
+        "--confounder_outcome_weights",
+        default="-0.3",
+        help="Comma-separated weights for confounder effects on outcome. Default: -0.3",
     )
     trigger_group.add_argument(
         "--instrument_codes",
@@ -156,6 +158,18 @@ Examples:
         default=0.2,
         help="Base probability for outcome events (0-1). Default: 0.2",
     )
+    prob_group.add_argument(
+        "--p_daily_base_exposure",
+        type=float,
+        default=0.005,
+        help="Base daily probability for exposure events (0-1). Default: 0.005",
+    )
+    prob_group.add_argument(
+        "--p_daily_base_outcome",
+        type=float,
+        default=0.003,
+        help="Base daily probability for outcome events (0-1). Default: 0.003",
+    )
 
     # Effect sizes
     effects_group = parser.add_argument_group(
@@ -172,9 +186,15 @@ Examples:
     other_group = parser.add_argument_group("Other Parameters")
     other_group.add_argument(
         "--simulate_outcome",
-        type=bool,
+        action="store_true",
         default=True,
-        help="Whether to simulate outcome events (set False for exposure-only). Default: True",
+        help="Whether to simulate outcome events. Default: True",
+    )
+    other_group.add_argument(
+        "--no_simulate_outcome",
+        action="store_false",
+        dest="simulate_outcome",
+        help="Disable outcome simulation (exposure-only mode).",
     )
     other_group.add_argument(
         "--exposure_name",
@@ -193,17 +213,44 @@ Examples:
 def parse_codes_and_weights(
     codes_str: str, weights_str: str
 ) -> tuple[list[str], list[float]]:
-    """Parse comma-separated codes and weights strings."""
+    """
+    Parse comma-separated codes and weights strings.
+
+    Args:
+        codes_str: Comma-separated string of codes
+        weights_str: Comma-separated string of weights
+
+    Returns:
+        Tuple of (codes_list, weights_list)
+
+    Raises:
+        ValueError: If codes and weights have different lengths
+    """
     codes = [code.strip() for code in codes_str.split(",")]
     weights = [float(w.strip()) for w in weights_str.split(",")]
+
+    if len(codes) != len(weights):
+        raise ValueError(
+            f"Number of codes ({len(codes)}) must match number of weights ({len(weights)})"
+        )
+
     return codes, weights
 
 
 def save_simulation_parameters(args: argparse.Namespace, output_dir: str) -> None:
-    """Save simulation parameters to a JSON file for reproducibility."""
+    """
+    Save simulation parameters to JSON and command line to text file for reproducibility.
+
+    Args:
+        args: Parsed command line arguments
+        output_dir: Directory to save parameter files
+    """
     # Parse codes and weights
-    confounder_codes, confounder_weights = parse_codes_and_weights(
-        args.confounder_codes, args.confounder_weights
+    confounder_codes, confounder_exposure_weights = parse_codes_and_weights(
+        args.confounder_codes, args.confounder_exposure_weights
+    )
+    _, confounder_outcome_weights = parse_codes_and_weights(
+        args.confounder_codes, args.confounder_outcome_weights
     )
     instrument_codes, instrument_weights = parse_codes_and_weights(
         args.instrument_codes, args.instrument_weights
@@ -212,7 +259,7 @@ def save_simulation_parameters(args: argparse.Namespace, output_dir: str) -> Non
         args.prognostic_codes, args.prognostic_weights
     )
 
-    # Convert args to dictionary, handling any non-serializable types
+    # Convert args to dictionary
     params = {
         "description": "Simulation of a causal effect on the outcome using the script tests/data_generation/induce_causal_effect.py",
         "simulation_timestamp": datetime.now().isoformat(),
@@ -220,7 +267,8 @@ def save_simulation_parameters(args: argparse.Namespace, output_dir: str) -> Non
         "write_dir": args.write_dir,
         "trigger_codes": {
             "confounder_codes": confounder_codes,
-            "confounder_weights": confounder_weights,
+            "confounder_exposure_weights": confounder_exposure_weights,
+            "confounder_outcome_weights": confounder_outcome_weights,
             "instrument_codes": instrument_codes,
             "instrument_weights": instrument_weights,
             "prognostic_codes": prognostic_codes,
@@ -229,6 +277,8 @@ def save_simulation_parameters(args: argparse.Namespace, output_dir: str) -> Non
         "base_probabilities": {
             "p_base_exposure": args.p_base_exposure,
             "p_base_outcome": args.p_base_outcome,
+            "p_daily_base_exposure": args.p_daily_base_exposure,
+            "p_daily_base_outcome": args.p_daily_base_outcome,
         },
         "effect_sizes": {
             "exposure_outcome_effect": args.exposure_outcome_effect,
@@ -268,9 +318,12 @@ def main() -> None:
     """Main function to run the enhanced causal simulation."""
     args = create_parser().parse_args()
 
-    # Parse codes and weights
-    confounder_codes, confounder_weights = parse_codes_and_weights(
-        args.confounder_codes, args.confounder_weights
+    # Parse all codes and weights
+    confounder_codes, confounder_exposure_weights = parse_codes_and_weights(
+        args.confounder_codes, args.confounder_exposure_weights
+    )
+    _, confounder_outcome_weights = parse_codes_and_weights(
+        args.confounder_codes, args.confounder_outcome_weights
     )
     instrument_codes, instrument_weights = parse_codes_and_weights(
         args.instrument_codes, args.instrument_weights
@@ -279,13 +332,23 @@ def main() -> None:
         args.prognostic_codes, args.prognostic_weights
     )
 
-    # Initialize components
+    # Initialize simulator with all parameters
     simulator = CausalSimulator(
-        confounder_codes,
-        instrument_codes,
-        prognostic_codes,
-        args.exposure_name,
-        args.outcome_name,
+        confounder_codes=confounder_codes,
+        confounder_exposure_weights=confounder_exposure_weights,
+        confounder_outcome_weights=confounder_outcome_weights,
+        instrument_codes=instrument_codes,
+        instrument_weights=instrument_weights,
+        prognostic_codes=prognostic_codes,
+        prognostic_weights=prognostic_weights,
+        p_base_exposure=args.p_base_exposure,
+        p_base_outcome=args.p_base_outcome,
+        p_daily_base_exposure=args.p_daily_base_exposure,
+        p_daily_base_outcome=args.p_daily_base_outcome,
+        exposure_outcome_effect=args.exposure_outcome_effect,
+        exposure_name=args.exposure_name,
+        outcome_name=args.outcome_name,
+        simulate_outcome=args.simulate_outcome,
     )
 
     # Load data
@@ -294,17 +357,8 @@ def main() -> None:
     # Print initial statistics
     SimulationReporter.print_trigger_stats(df, simulator, args.simulate_outcome)
 
-    # Run simulation
-    simulated_df, ite_df = simulator.simulate_dataset(
-        df,
-        args.p_base_exposure,
-        args.p_base_outcome,
-        confounder_weights,
-        instrument_weights,
-        prognostic_weights,
-        args.exposure_outcome_effect,
-        args.simulate_outcome,
-    )
+    # Run simulation (now simplified - no parameters needed)
+    simulated_df, ite_df = simulator.simulate_dataset(df)
 
     # Print results
     SimulationReporter.print_simulation_results(
