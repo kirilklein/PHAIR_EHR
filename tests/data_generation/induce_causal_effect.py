@@ -143,27 +143,31 @@ def main() -> None:
     # Initialize simulator with all parameters
     simulator = CausalSimulator(simulation_config)
 
-    exit()
-    # Load data
-    df, shards = DataManager.load_shards(config.paths.source_dir)
+    for split in simulation_config.paths.splits:
+        # Load data
+        df, shards = DataManager.load_shards(
+            os.path.join(simulation_config.paths.source_dir, split)
+        )
+        exit()
+        # Print initial statistics
+        SimulationReporter.print_trigger_stats(
+            df, simulator, simulation_config.outcomes
+        )
 
-    # Print initial statistics
-    SimulationReporter.print_trigger_stats(df, simulator, simulation_config.outcomes)
+        # Run simulation (now simplified - no parameters needed)
+        simulated_df, ite_df = simulator.simulate_dataset(df)
 
-    # Run simulation (now simplified - no parameters needed)
-    simulated_df, ite_df = simulator.simulate_dataset(df)
+        # Print results
+        SimulationReporter.print_simulation_results(
+            simulated_df, simulator, simulation_config.outcomes
+        )
+        split_write_dir = os.path.join(simulation_config.paths.write_dir, split)
+        # Save results
+        os.makedirs(split_write_dir, exist_ok=True)
 
-    # Print results
-    SimulationReporter.print_simulation_results(
-        simulated_df, simulator, simulation_config.outcomes
-    )
-
-    # Save results
-    os.makedirs(config.paths.write_dir, exist_ok=True)
-
-    # Save main simulation results
-    simulated_df.reset_index(drop=True, inplace=True)
-    DataManager.write_shards(simulated_df, config.paths.write_dir, shards)
+        # Save main simulation results
+        simulated_df.reset_index(drop=True, inplace=True)
+        DataManager.write_shards(simulated_df, split_write_dir, shards)
 
 
 if __name__ == "__main__":
