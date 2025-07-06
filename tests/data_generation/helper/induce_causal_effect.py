@@ -3,9 +3,9 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 from scipy.special import expit, logit
-
-from tests.data_generation.helper.config import SimulationConfig
 from tqdm import tqdm
+from tests.data_generation.helper.config import SimulationConfig
+
 
 class CausalSimulator:
     """
@@ -26,8 +26,10 @@ class CausalSimulator:
     def simulate_dataset(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Applies the full causal simulation to the entire dataset."""
         all_subject_dfs = []
+        all_ite_records = []
 
-        for _, subj_df in tqdm(df.groupby("subject_id")):
+        for _, subj_df in tqdm(df.groupby("subject_id"), desc="Simulating dataset"):
+            # Sort with NaT values first (background variables)
             subj_df_sorted = subj_df.sort_values(
                 "time", na_position="first"
             ).reset_index(drop=True)
@@ -35,16 +37,18 @@ class CausalSimulator:
             # Stage 1: Simulate the full exposure process
             df_with_exposure = self._simulate_exposure_process(subj_df_sorted)
 
-            # Stage 2: Simulate all configured outcomes
-            final_df = self._simulate_all_outcomes(df_with_exposure)
+            # Stage 2: Simulate outcomes and calculate ITE in one step
+            final_df, ite_record = self._simulate_outcomes_and_get_ite(df_with_exposure)
 
             all_subject_dfs.append(final_df)
+            if ite_record:  # Only add if not empty
+                all_ite_records.append(ite_record)
 
         # Combine all subject data
         simulated_df = pd.concat(all_subject_dfs, ignore_index=True)
 
-        # Calculate ITE for each outcome
-        ite_df = self._calculate_ite(simulated_df)
+        # Combine all ITE records
+        ite_df = pd.DataFrame(all_ite_records) if all_ite_records else pd.DataFrame()
 
         return simulated_df, ite_df
 
@@ -182,65 +186,118 @@ class CausalSimulator:
 
         return df_without_temp
 
-    def _simulate_all_outcomes(self, subj_df: pd.DataFrame) -> pd.DataFrame:
-        """Iterates through and simulates all configured outcomes."""
+    def _simulate_outcomes_and_get_ite(
+        self, subj_df: pd.DataFrame
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Simulates outcomes using a simplified single-point-in-time model and
+        calculates the Individual Treatment Effect (ITE) for each outcome.
+        """
+        if subj_df.empty:
+            return subj_df, {}
+
+        # Handle NaT values for background variables - assign them to the very beginning
+        subj_df_processed = subj_df.copy()
+        valid_times = subj_df_processed["time"].dropna()
+
+        if len(valid_times) == 0:
+            return subj_df, {}
+
+        earliest_time = valid_times.min()
+        # Assign background variables (NaT) to a time before the earliest event
+        background_time = earliest_time - pd.Timedelta(days=1)
+        subj_df_processed.loc[subj_df_processed["time"].isna(), "time"] = (
+            background_time
+        )
+
+        start_date = subj_df_processed["time"].min().normalize()
+        end_date = subj_df_processed["time"].max().normalize()
+        subject_id = subj_df_processed.iloc[0]["subject_id"]
+
+        # If there's no time window, no simulation can occur
+        if start_date >= end_date:
+            return subj_df, {}
+
         df_with_outcomes = subj_df.copy()
+        ite_record = {"subject_id": subject_id}
 
-        # Loop through each outcome's config (it's a dictionary)
+        # Select a single random day for assessment for this patient
+        # Only consider the period after run_in_days for the first outcome (or use a default)
+        first_outcome = list(self.config.outcomes.values())[0]
+        assessment_start = start_date + pd.Timedelta(days=first_outcome.run_in_days)
+
+        if assessment_start >= end_date:
+            # If no valid assessment window, set ITE to 0 for all outcomes
+            for outcome_cfg in self.config.outcomes.values():
+                ite_record[f"ite_{outcome_cfg.code}"] = 0.0
+            return subj_df, ite_record
+
+        total_days = (end_date - assessment_start).days
+        if total_days <= 0:
+            assessment_time = assessment_start
+        else:
+            random_offset = np.random.randint(0, total_days + 1)
+            assessment_time = assessment_start + pd.Timedelta(days=random_offset)
+
+        # Check if assessment time is after DOD (end_date represents last recorded event/DOD)
+        if assessment_time > end_date:
+            # Assessment time is after DOD, skip this patient
+            for outcome_cfg in self.config.outcomes.values():
+                ite_record[f"ite_{outcome_cfg.code}"] = 0.0
+            return subj_df, ite_record
+
+        # Get all codes that appeared on or before the assessment time
+        history_df = subj_df_processed[subj_df_processed["time"] <= assessment_time]
+        history_codes = set(history_df["code"])
+
+        # Loop through each outcome defined in the config
         for outcome_cfg in self.config.outcomes.values():
-            # For each outcome, use its trigger_codes and trigger_weights, plus add exposure effect
-            outcome_triggers = outcome_cfg.trigger_codes + [self.config.exposure.code]
-            outcome_weights = outcome_cfg.trigger_weights + [
-                outcome_cfg.exposure_effect
-            ]
+            # Check for presence of triggers at the assessment time
+            trigger_effects = []
+            for i, trigger_code in enumerate(outcome_cfg.trigger_codes):
+                is_present = trigger_code in history_codes
+                weight = outcome_cfg.trigger_weights[i]
+                trigger_effects.append(weight if is_present else 0.0)
 
-            df_with_outcomes = self._simulate_time_to_first_event(
-                df_with_outcomes,
-                outcome_cfg.p_base,
-                outcome_triggers,
-                outcome_weights,
-                outcome_cfg.code,
-                outcome_cfg.run_in_days,
-            )
-        return df_with_outcomes
+            # Factual scenario: was the patient actually exposed at assessment time?
+            factual_exposure_present = self.config.exposure.code in history_codes
 
-    def _calculate_ite(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate Individual Treatment Effects for each outcome."""
-        ite_records = []
+            # Helper to compute probability based on exposure status
+            def _compute_prob(is_exposed: bool) -> float:
+                logit_p = logit(outcome_cfg.p_base)
 
-        for subject_id, subj_df in df.groupby("subject_id"):
-            ite_record = {"subject_id": subject_id}
+                # Add effects from trigger codes
+                logit_p += sum(trigger_effects)
 
-            # Check if subject received exposure
-            exposure_events = subj_df[subj_df["code"] == self.config.exposure.code]
-            has_exposure = len(exposure_events) > 0
+                # Add exposure effect if exposed
+                if is_exposed:
+                    logit_p += outcome_cfg.exposure_effect
 
-            if has_exposure:
-                exposure_date = exposure_events["time"].min()
+                return expit(logit_p)
 
-                # Calculate ITE for each outcome
-                for outcome_cfg in self.config.outcomes.values():
-                    outcome_code = outcome_cfg.code
+            # Calculate probabilities for both scenarios
+            p_factual = _compute_prob(is_exposed=factual_exposure_present)
+            p_counterfactual = _compute_prob(
+                is_exposed=False
+            )  # Always no exposure for counterfactual
 
-                    # Check if outcome occurred after exposure
-                    outcome_events = subj_df[subj_df["code"] == outcome_code]
-                    if len(outcome_events) > 0:
-                        outcome_date = outcome_events["time"].min()
-                        outcome_after_exposure = outcome_date > exposure_date
-                    else:
-                        outcome_after_exposure = False
+            # Store the ITE (difference in probabilities)
+            ite_record[f"ite_{outcome_cfg.code}"] = p_factual - p_counterfactual
 
-                    # Simple ITE calculation - this would be more sophisticated in practice
-                    # For now, using the exposure effect as a proxy
-                    ite_value = (
-                        outcome_cfg.exposure_effect if outcome_after_exposure else 0
-                    )
-                    ite_record[f"ite_{outcome_code}"] = ite_value
-            else:
-                # No exposure, so ITE is 0 for all outcomes
-                for outcome_cfg in self.config.outcomes.values():
-                    ite_record[f"ite_{outcome_cfg.code}"] = 0
+            # --- Factual Simulation ---
+            # Use the factual probability to simulate if the outcome occurs
+            if np.random.binomial(1, p_factual):
+                new_event = pd.DataFrame(
+                    {
+                        "subject_id": [subject_id],
+                        "time": [assessment_time],
+                        "code": [outcome_cfg.code],
+                    }
+                )
+                df_with_outcomes = (
+                    pd.concat([df_with_outcomes, new_event], ignore_index=True)
+                    .sort_values("time", na_position="first")
+                    .reset_index(drop=True)
+                )
 
-            ite_records.append(ite_record)
-
-        return pd.DataFrame(ite_records)
+        return df_with_outcomes, ite_record
