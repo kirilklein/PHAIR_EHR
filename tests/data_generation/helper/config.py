@@ -16,12 +16,12 @@ class ExposureConfig:
     """Configuration for exposure simulation."""
 
     code: str
-    run_in_days: int
-    compliance_interval_days: int
-    daily_stop_prob: float
     p_base: float
     trigger_codes: List[str]
     trigger_weights: List[float]
+    daily_stop_prob: float
+    run_in_days: int = 30
+    compliance_interval_days: int = 10
 
 
 @dataclass

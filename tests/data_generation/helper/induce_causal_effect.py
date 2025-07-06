@@ -5,7 +5,7 @@ import pandas as pd
 from scipy.special import expit, logit
 
 from tests.data_generation.helper.config import SimulationConfig
-
+from tqdm import tqdm
 
 class CausalSimulator:
     """
@@ -22,6 +22,31 @@ class CausalSimulator:
         """
         self.config = config
         self.ite_records = []  # Individual Treatment Effect records
+
+    def simulate_dataset(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Applies the full causal simulation to the entire dataset."""
+        all_subject_dfs = []
+
+        for _, subj_df in tqdm(df.groupby("subject_id")):
+            subj_df_sorted = subj_df.sort_values(
+                "time", na_position="first"
+            ).reset_index(drop=True)
+
+            # Stage 1: Simulate the full exposure process
+            df_with_exposure = self._simulate_exposure_process(subj_df_sorted)
+
+            # Stage 2: Simulate all configured outcomes
+            final_df = self._simulate_all_outcomes(df_with_exposure)
+
+            all_subject_dfs.append(final_df)
+
+        # Combine all subject data
+        simulated_df = pd.concat(all_subject_dfs, ignore_index=True)
+
+        # Calculate ITE for each outcome
+        ite_df = self._calculate_ite(simulated_df)
+
+        return simulated_df, ite_df
 
     def _compute_daily_prob(self, total_prob: float, num_days: int) -> float:
         """Converts a total probability over a period into a daily probability."""
@@ -88,7 +113,7 @@ class CausalSimulator:
             )
             return (
                 pd.concat([subj_df, new_event_df], ignore_index=True)
-                .sort_values("time")
+                .sort_values("time", na_position="first")
                 .reset_index(drop=True)
             )
 
@@ -118,7 +143,7 @@ class CausalSimulator:
 
         # 2. Generate compliant exposures
         compliance_end_date = first_exposure_date + pd.Timedelta(
-            days=30
+            days=cfg.run_in_days
         )  # Default compliance period
         exposure_dates = pd.date_range(
             start=first_exposure_date,
@@ -127,7 +152,9 @@ class CausalSimulator:
         )
 
         # 3. Simulate discontinuation
-        stop_window_start = compliance_end_date + pd.Timedelta(days=1)
+        stop_window_start = compliance_end_date + pd.Timedelta(
+            days=cfg.compliance_interval_days
+        )
         if stop_window_start < subj_df["time"].max():
             stop_duration = (subj_df["time"].max() - stop_window_start).days
             stop_draws = np.random.binomial(1, cfg.daily_stop_prob, size=stop_duration)
@@ -149,7 +176,7 @@ class CausalSimulator:
             )
             return (
                 pd.concat([df_without_temp, new_events_df], ignore_index=True)
-                .sort_values("time")
+                .sort_values("time", na_position="first")
                 .reset_index(drop=True)
             )
 
@@ -160,7 +187,7 @@ class CausalSimulator:
         df_with_outcomes = subj_df.copy()
 
         # Loop through each outcome's config (it's a dictionary)
-        for outcome_key, outcome_cfg in self.config.outcomes.items():
+        for outcome_cfg in self.config.outcomes.values():
             # For each outcome, use its trigger_codes and trigger_weights, plus add exposure effect
             outcome_triggers = outcome_cfg.trigger_codes + [self.config.exposure.code]
             outcome_weights = outcome_cfg.trigger_weights + [
@@ -192,7 +219,7 @@ class CausalSimulator:
                 exposure_date = exposure_events["time"].min()
 
                 # Calculate ITE for each outcome
-                for outcome_key, outcome_cfg in self.config.outcomes.items():
+                for outcome_cfg in self.config.outcomes.values():
                     outcome_code = outcome_cfg.code
 
                     # Check if outcome occurred after exposure
@@ -217,26 +244,3 @@ class CausalSimulator:
             ite_records.append(ite_record)
 
         return pd.DataFrame(ite_records)
-
-    def simulate_dataset(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Applies the full causal simulation to the entire dataset."""
-        all_subject_dfs = []
-
-        for _, subj_df in df.groupby("subject_id"):
-            subj_df_sorted = subj_df.sort_values("time").reset_index(drop=True)
-
-            # Stage 1: Simulate the full exposure process
-            df_with_exposure = self._simulate_exposure_process(subj_df_sorted)
-
-            # Stage 2: Simulate all configured outcomes
-            final_df = self._simulate_all_outcomes(df_with_exposure)
-
-            all_subject_dfs.append(final_df)
-
-        # Combine all subject data
-        simulated_df = pd.concat(all_subject_dfs, ignore_index=True)
-
-        # Calculate ITE for each outcome
-        ite_df = self._calculate_ite(simulated_df)
-
-        return simulated_df, ite_df
