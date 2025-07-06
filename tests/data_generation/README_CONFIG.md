@@ -166,4 +166,4 @@ In this example:
 
 - `DIABETES` is a confounder (affects both exposure and outcome)
 - `HYPERTENSION` and `PROVIDER_PREF` are instruments (only affect exposure)
-- `KIDNEY_DISEASE` is prognostic (only affects outcome) 
+- `KIDNEY_DISEASE` is prognostic (only affects outcome)
