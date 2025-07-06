@@ -55,7 +55,7 @@ import yaml
 from tests.data_generation.helper.analytics import SimulationReporter
 from tests.data_generation.helper.config import SimulationConfig
 from tests.data_generation.helper.induce_causal_effect import CausalSimulator
-from tests.data_generation.helper.io import DataManager
+from tests.data_generation.helper.io import DataManager, save_ite_data
 
 
 def load_config(config_path: str) -> dict:
@@ -163,6 +163,8 @@ def main() -> None:
 
         simulated_df.reset_index(drop=True, inplace=True)
         DataManager.write_shards(simulated_df, split_write_dir, shards)
+
+        save_ite_data(ite_df, simulation_config)
 
 
 if __name__ == "__main__":
