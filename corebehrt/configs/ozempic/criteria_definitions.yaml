@@ -96,7 +96,7 @@ criteria_definitions:
 
   glp1_receptor_agonist:
     codes:
-      - ^(?:M|RM)/A10BJ0[2,5,6].* # Liraglutide, Dulaglutid, Semaglutide
+      - ^(?:M|RM)/A10BJ0[256].* # Liraglutide, Dulaglutid, Semaglutide
       - ^(?:M|RM)/A10AE56.* # Insulin/Liraglutid combination
     start_days: -90
 
@@ -104,8 +104,8 @@ criteria_definitions:
     codes:
       - ^(?:M|RM)/A10BH.*
       - ^(?:M|RM)/A10BD0[7-9].*
-      - ^(?:M|RM)/A10BD1[0-3,8-9].*
-      - ^(?:M|RM)/A10BD2[0-2,4-5,7].* # summarize original codes
+      - ^(?:M|RM)/A10BD1[012389].*
+      - ^(?:M|RM)/A10BD2[012457].*
     start_days: -30
 
   insulin_except_basal:
@@ -130,7 +130,7 @@ criteria_definitions:
 
   acute_coronary_or_cv_event:
     codes:
-      - ^(?:D|RD|RPO)/DI2[1-2,4].*
+      - ^(?:D|RD|RPO)/DI2[124].*
       - ^(?:D|RD|RPO)/DI6[3-6].*
     start_days: -90
 
@@ -140,11 +140,11 @@ criteria_definitions:
 
   chronic_hemodialysis:
     codes:
-      - BJFD20.* # add prepend
+      - ^(?:P|RD|RPO)/BJFD20.*
 
   peritoneal_dialysis:
     codes:
-      - BJFD2[1,3-5,7].* # add prepend
+      - ^(?:P|RD|RPO)/BJFD2[13457].*
 
   #### End stage liver disease ####
   end_stage_liver_disease_uncertain:
@@ -161,14 +161,11 @@ criteria_definitions:
 
   encephalopathy:
     codes:
-      - ^(?:D|RD|RPO)/DG92.*
-      - ^(?:D|RD|RPO)/DG934.*
-      - ^(?:D|RD|RPO)/DG943.*
+      - ^(?:D|RD|RPO)/DG9(?:2|34|43).*
 
   variceal_bleeding:
     codes:
-      - ^(?:D|RD|RPO)/DI850.*
-      - ^(?:D|RD|RPO)/DI983.*
+      - ^(?:D|RD|RPO)/DI(?:850|983).*
 
   bilirubin:
     codes:
@@ -179,7 +176,7 @@ criteria_definitions:
   albumin:
     codes:
       - ^L/ALBUMIN;P # exact
-      - ^L/ALBUMIN;P*NPU01132 # L/ALBUMIN;P ÂµMOL/L NPU01132
+      - ^L/ALBUMIN;P.*NPU01132 # L/ALBUMIN;P ÂµMOL/L NPU01132
     threshold: 35 # original ≤3.5 g/dl-> 35g/L
     operator: "<="
 
