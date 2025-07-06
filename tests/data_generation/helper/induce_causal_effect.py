@@ -53,24 +53,27 @@ class CausalSimulator:
 
         p_daily_base = self._compute_daily_prob(p_total_base, k_days)
 
-        # Create feature matrix, ensuring all trigger codes are columns
+        # Create feature matrix where a trigger, once True, stays True
         events_pivot = subj_df.pivot_table(
             index="time", columns="code", aggfunc="size", fill_value=0
         ).astype(bool)
-        feature_matrix = events_pivot.reindex(daily_timeline, method="ffill").fillna(
-            False
-        )
+        # Reindex to the full daily timeline
+        feature_matrix = events_pivot.reindex(daily_timeline, fill_value=False)
+        # Apply cumulative max to ensure codes stay True after appearing
+        feature_matrix = feature_matrix.cummax(axis=0)
+
         for code in trigger_codes:
             if code not in feature_matrix.columns:
                 feature_matrix[code] = False
 
-        # Run vectorized simulation
         weights_s = pd.Series(trigger_weights, index=trigger_codes)
         logit_p_days = logit(p_daily_base) + feature_matrix[trigger_codes].dot(
             weights_s
         )
-        p_days = expit(logit_p_days)
-        event_draws = np.random.binomial(1, p_days)
+        # Convert to numpy array before applying expit
+        p_days = expit(logit_p_days.astype(float))
+
+        event_draws = np.random.binomial(1, p_days.values)
 
         if event_draws.any():
             event_idx = np.argmax(event_draws)

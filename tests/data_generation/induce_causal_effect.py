@@ -146,7 +146,7 @@ def main() -> None:
     simulator = CausalSimulator(simulation_config)
 
     for split in simulation_config.paths.splits:
-        # Load data
+        print(f"Processing split: {split}")
         os.makedirs(os.path.join(write_dir, split), exist_ok=True)
         df, shards = DataManager.load_shards(
             os.path.join(simulation_config.paths.source_dir, split)
@@ -155,9 +155,7 @@ def main() -> None:
 
         simulated_df, ite_df = simulator.simulate_dataset(df)
 
-        SimulationReporter.print_simulation_results(
-            simulated_df, simulator, simulation_config.outcomes
-        )
+        SimulationReporter.print_simulation_results(simulated_df, simulation_config)
         split_write_dir = os.path.join(write_dir, split)
         os.makedirs(split_write_dir, exist_ok=True)
 

@@ -1,5 +1,5 @@
 import pandas as pd
-from tests.data_generation.helper.induce_causal_effect import CausalSimulator
+
 from tests.data_generation.helper.config import SimulationConfig
 
 
@@ -86,44 +86,98 @@ class SimulationReporter:
         print(f"  Unique confounders (across all outcomes): {len(all_confounders)}")
         print(f"  Outcomes to simulate: {len(config.outcomes)}")
 
-        # Show confounder breakdown by outcome
-        print(f"\nCONFOUNDER BREAKDOWN BY OUTCOME:")
-        for outcome_key, outcome_cfg in config.outcomes.items():
-            outcome_confounders = confounders_by_outcome.get(outcome_key, [])
-            print(f"  {outcome_cfg.code}: {len(outcome_confounders)} confounders")
-
     @staticmethod
     def print_simulation_results(
-        df: pd.DataFrame, simulator: CausalSimulator, simulate_outcome: bool = True
+        df: pd.DataFrame, simulation_config: SimulationConfig
     ) -> None:
         """Print simulation results statistics."""
         total_subjects = df["subject_id"].nunique()
 
-        # Count simulated events
+        # Count simulated exposure events
         exposure_subjects = df.groupby("subject_id")["code"].apply(
-            lambda codes: (codes == simulator.exposure_name).any()
+            lambda codes: (codes == simulation_config.exposure.code).any()
         )
         exposure_count = exposure_subjects.sum()
 
         print("\nSimulation results:")
         print(
-            f"  EXPOSURE events: {exposure_count} subjects ({100 * exposure_count / total_subjects:.1f}%)"
+            f"  EXPOSURE ({simulation_config.exposure.code}): {exposure_count} subjects ({100 * exposure_count / total_subjects:.1f}%)"
         )
 
-        if simulate_outcome:
-            outcome_subjects = df.groupby("subject_id")["code"].apply(
-                lambda codes: (codes == simulator.outcome_name).any()
-            )
-            outcome_count = outcome_subjects.sum()
+        # Process each outcome separately
+        if simulation_config.outcomes:
+            print("\nOUTCOME RESULTS:")
 
-            # Conditional probabilities
-            outcomes_given_exposure = outcome_subjects[exposure_subjects].mean() * 100
-            outcomes_given_no_exposure = (
-                outcome_subjects[~exposure_subjects].mean() * 100
-            )
+            for outcome_cfg in simulation_config.outcomes.values():
+                outcome_code = outcome_cfg.code
 
-            print(
-                f"  OUTCOME events: {outcome_count} subjects ({100 * outcome_count / total_subjects:.1f}%)"
-            )
-            print(f"  P(Outcome | Exposure): {outcomes_given_exposure:.1f}%")
-            print(f"  P(Outcome | No Exposure): {outcomes_given_no_exposure:.1f}%")
+                # Count subjects with this outcome
+                outcome_subjects = df.groupby("subject_id")["code"].apply(
+                    lambda codes: (codes == outcome_code).any()
+                )
+                outcome_count = outcome_subjects.sum()
+
+                print(f"\n  {outcome_code}:")
+                print(
+                    f"    Total subjects with outcome: {outcome_count} ({100 * outcome_count / total_subjects:.1f}%)"
+                )
+
+                # Calculate conditional probabilities
+                if exposure_count > 0:
+                    # P(Outcome | Exposure)
+                    outcomes_given_exposure = (
+                        outcome_subjects[exposure_subjects].mean() * 100
+                    )
+
+                    print(
+                        f"    P({outcome_code} | Exposure): {outcomes_given_exposure:.1f}%"
+                    )
+                else:
+                    print(
+                        f"    P({outcome_code} | Exposure): N/A (no exposed subjects)"
+                    )
+
+                # Calculate for non-exposed subjects
+                no_exposure_count = total_subjects - exposure_count
+                if no_exposure_count > 0:
+                    # P(Outcome | No Exposure)
+                    outcomes_given_no_exposure = (
+                        outcome_subjects[~exposure_subjects].mean() * 100
+                    )
+
+                    print(
+                        f"    P({outcome_code} | No Exposure): {outcomes_given_no_exposure:.1f}%"
+                    )
+                else:
+                    print(
+                        f"    P({outcome_code} | No Exposure): N/A (all subjects exposed)"
+                    )
+
+                # Calculate risk difference and relative risk if both groups exist
+                if exposure_count > 0 and no_exposure_count > 0:
+                    risk_exposed = outcome_subjects[exposure_subjects].mean()
+                    risk_unexposed = outcome_subjects[~exposure_subjects].mean()
+
+                    risk_difference = (risk_exposed - risk_unexposed) * 100
+                    if risk_unexposed > 0:
+                        relative_risk = risk_exposed / risk_unexposed
+                        print(
+                            f"    Risk Difference: {risk_difference:+.1f} percentage points"
+                        )
+                        print(f"    Relative Risk: {relative_risk:.2f}")
+                    else:
+                        print(
+                            f"    Risk Difference: {risk_difference:+.1f} percentage points"
+                        )
+                        print(f"    Relative Risk: undefined (no events in unexposed)")
+
+        # Summary statistics
+        print(f"\nSUMMARY:")
+        print(f"  Total subjects: {total_subjects}")
+        print(
+            f"  Exposed subjects: {exposure_count} ({100 * exposure_count / total_subjects:.1f}%)"
+        )
+        print(
+            f"  Unexposed subjects: {total_subjects - exposure_count} ({100 * (total_subjects - exposure_count) / total_subjects:.1f}%)"
+        )
+        print(f"  Outcomes simulated: {len(simulation_config.outcomes)}")
