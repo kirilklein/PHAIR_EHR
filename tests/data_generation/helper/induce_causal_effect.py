@@ -52,7 +52,6 @@ class CausalSimulator:
         daily_timeline = pd.date_range(start=sim_window_start, end=end_date, freq="D")
 
         p_daily_base = self._compute_daily_prob(p_total_base, k_days)
-        daily_weights = [w / k_days for w in trigger_weights]
 
         # Create feature matrix, ensuring all trigger codes are columns
         events_pivot = subj_df.pivot_table(
@@ -66,7 +65,7 @@ class CausalSimulator:
                 feature_matrix[code] = False
 
         # Run vectorized simulation
-        weights_s = pd.Series(daily_weights, index=trigger_codes)
+        weights_s = pd.Series(trigger_weights, index=trigger_codes)
         logit_p_days = logit(p_daily_base) + feature_matrix[trigger_codes].dot(
             weights_s
         )
