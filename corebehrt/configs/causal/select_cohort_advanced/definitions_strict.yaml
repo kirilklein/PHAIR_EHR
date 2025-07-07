@@ -14,9 +14,9 @@ criteria_definitions:
   criteria_1:
     codes:
       # Diagnosis codes
-      - ^LAB2.*
+      - ^D/25675004.*
     start_days: -365
     end_days: 0
   criteria_2:
     codes:
-      - ^DE10.*
+      - ^D/431855005.*

@@ -3,7 +3,7 @@ logging:
   path: ./outputs/logs/causal
 
 paths:
-  data: ./example_data/MEDS_correlated_causal
+  data: "./example_data/synthea_meds_causal"
   tokenized: ./outputs/causal/data/tokenized
   features: ./outputs/causal/data/features
   # optional

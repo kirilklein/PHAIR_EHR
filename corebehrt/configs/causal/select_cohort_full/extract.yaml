@@ -5,7 +5,7 @@ logging:
 paths:
   ### Inputs
   features: ./outputs/causal/data/features/
-  meds: ./example_data/MEDS_correlated_causal
+  meds: ./example_data/synthea_meds_causal
   splits: [tuning]
   exposures: ./outputs/causal/finetune/outcomes/
   exposure: EXPOSURE.csv # Exposure, optional, set to outcome if not provided. For multiple exposures, create a joint exposure file.

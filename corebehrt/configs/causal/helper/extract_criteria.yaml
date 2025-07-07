@@ -5,7 +5,7 @@ logging:
 paths:
   ### Inputs
   cohort: ./outputs/causal/finetune/cohorts/full # Data directory
-  meds: ./example_data/MEDS_correlated_causal
+  meds: ./example_data/synthea_meds_causal
   splits: [tuning]
   criteria_definitions_config: ./corebehrt/configs/causal/helper/criteria_definitions.yaml
   ### Outputs

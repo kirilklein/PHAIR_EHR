@@ -14,14 +14,12 @@ criteria_definitions:
   criteria_1:
     codes:
       # Diagnosis codes
-      - ^LAB2.*
-    exclude_codes:
-      - ^D84.1
+      - ^D/25675004.*
     start_days: -365
     end_days: 0
   criteria_2:
     codes:
-      - ^M658.*
+      - ^D/431855005.*
 
   count_criteria_1:
     unique_criteria_list:
