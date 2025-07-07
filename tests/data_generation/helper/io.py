@@ -10,11 +10,12 @@ from tests.data_generation.helper.config import SimulationConfig
 def save_ite_data(
     ite_df: pd.DataFrame,
     config: SimulationConfig,
+    split_write_dir: str,
 ) -> None:
     """Save ITE data for each outcome."""
     # Save ITE data separately if outcomes were simulated
     if config.outcomes and not ite_df.empty:
-        ite_df.to_csv(os.path.join(config.paths.write_dir, ".ite.csv"), index=False)
+        ite_df.to_csv(os.path.join(split_write_dir, ".ite.csv"), index=False)
 
         # Calculate and save ATE for each outcome
         ate_results = {}
@@ -30,11 +31,11 @@ def save_ite_data(
                 ate_file_content.append(f"ATE_{outcome_code}: {ate}")
 
         # Save ATE results
-        with open(os.path.join(config.paths.write_dir, ".ate.txt"), "w") as f:
+        with open(os.path.join(split_write_dir, ".ate.txt"), "w") as f:
             f.write("\n".join(ate_file_content))
 
         # Also save as JSON for programmatic access
-        with open(os.path.join(config.paths.write_dir, ".ate.json"), "w") as f:
+        with open(os.path.join(split_write_dir, ".ate.json"), "w") as f:
             json.dump(ate_results, f, indent=2)
 
         print(f"Saved ITE data for {len(ate_results)} outcomes")

@@ -162,8 +162,8 @@ def main() -> None:
 
         simulated_df.reset_index(drop=True, inplace=True)
         DataManager.write_shards(simulated_df, split_write_dir, shards)
-        reporter.save_report(os.path.join(split_write_dir, "report.txt"))
-        save_ite_data(ite_df, simulation_config)
+        reporter.save_report(os.path.join(split_write_dir, ".report.txt"))
+        save_ite_data(ite_df, simulation_config, split_write_dir)
 
 
 if __name__ == "__main__":
