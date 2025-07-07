@@ -15,11 +15,11 @@ paths:
 
 data:
   type: "finetune"
-  truncation_len: 64
+  truncation_len: 128
   min_len: 1 # 0 by default
 
-outcome: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
+outcome:
+  # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
   n_hours_censoring: 10 # censor time after index date (negative means before)
-  n_hours_start_follow_up: -10 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_start_follow_up: -1 # start follow up (considering outcomes) time after index date (negative means before)
   n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
-  n_hours_compliance: 100_000 # compliance time after last exposure (negative means before)
