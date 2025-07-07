@@ -31,7 +31,7 @@ trainer_args:
   stopping_criterion: roc_auc
 
 optimizer:
-  lr: 9e-3
+  lr: 1e-2
   eps: 1e-6
 
 scheduler:
