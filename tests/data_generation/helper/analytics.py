@@ -24,7 +24,7 @@ class SimulationReporter:
         all_codes = config.get_all_trigger_codes()
         code_stats = {}
         for code in all_codes:
-            count = subject_codes.apply(lambda codes: code in codes).sum()
+            count = subject_codes.apply(lambda codes, c=code: c in codes).sum()
             percentage = 100 * count / total_subjects
             code_stats[code] = {"count": count, "percentage": percentage}
 
@@ -131,7 +131,7 @@ class SimulationReporter:
 
                 # Count subjects with this outcome
                 outcome_subjects = df.groupby("subject_id")["code"].apply(
-                    lambda codes: (codes == outcome_code).any()
+                    lambda codes, oc=outcome_code: (codes == oc).any()
                 )
                 outcome_count = outcome_subjects.sum()
 
