@@ -24,23 +24,30 @@ class CausalSimulator:
         self.ite_records = []  # Individual Treatment Effect records
         self.first_exposure_dates = []
 
-    def simulate_dataset(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def simulate_dataset(
+        self, df: pd.DataFrame, seed: int = 42
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Applies the full causal simulation to the entire dataset."""
-        all_subject_dfs = []
-        all_ite_records = []
+        np.random.seed(seed)
 
-        for _, subj_df in tqdm(df.groupby("subject_id"), desc="Simulating dataset"):
-            # Sort with NaT values first (background variables)
+        # Pass 1: Simulate exposures for all subjects and collect exposure dates
+        all_subjects_with_exposure = []
+
+        for _, subj_df in tqdm(df.groupby("subject_id"), desc="Simulating exposures"):
             subj_df_sorted = subj_df.sort_values(
                 "time", na_position="first"
             ).reset_index(drop=True)
-
-            # Stage 1: Simulate the full exposure process
             df_with_exposure = self._simulate_exposure_process(subj_df_sorted)
+            all_subjects_with_exposure.append(df_with_exposure)
 
-            # Stage 2: Simulate outcomes and calculate ITE in one step
+        # Pass 2: Simulate outcomes for all subjects using complete exposure distribution
+        all_subject_dfs = []
+        all_ite_records = []
+
+        for df_with_exposure in tqdm(
+            all_subjects_with_exposure, desc="Simulating outcomes"
+        ):
             final_df, ite_record = self._simulate_all_outcomes(df_with_exposure)
-
             all_subject_dfs.append(final_df)
             if ite_record:  # Only add if not empty
                 all_ite_records.append(ite_record)
@@ -55,9 +62,9 @@ class CausalSimulator:
 
     def _simulate_exposure_process(self, subj_df: pd.DataFrame) -> pd.DataFrame:
         """Orchestrates the full, multi-phase exposure simulation for a subject."""
-        cfg = self.config.exposure  # Use the exposure config
+        cfg = self.config.exposure
 
-        # 1. Find the first exposure event using the simplified trigger structure
+        # 1. Find the first exposure event
         df_with_first_exposure = self._simulate_time_to_first_event(
             subj_df,
             cfg.p_base,
@@ -75,46 +82,91 @@ class CausalSimulator:
 
         first_exposure_date = first_exposure_events["time"].min()
         self.first_exposure_dates.append(first_exposure_date)
-        # 2. Generate compliant exposures
-        compliance_end_date = first_exposure_date + pd.Timedelta(
-            days=cfg.run_in_days
-        )  # Default compliance period
-        exposure_dates = pd.date_range(
+
+        # 2. Randomly determine when compliance ends
+        end_date = subj_df["time"].max()
+        compliance_end_date = self._get_random_compliance_end_date(
+            first_exposure_date, end_date
+        )
+
+        # 3. Generate regular exposures between first exposure and compliance end
+        exposure_dates = self._generate_regular_exposures(
+            first_exposure_date, compliance_end_date, cfg.compliance_interval_days
+        )
+
+        # 4. Add all exposure events to the dataframe
+        return self._add_exposure_events_to_dataframe(
+            df_with_first_exposure, exposure_dates, cfg.code
+        )
+
+    def _get_random_compliance_end_date(
+        self, first_exposure_date: pd.Timestamp, end_date: pd.Timestamp
+    ) -> pd.Timestamp:
+        """
+        Randomly selects a compliance end date between first exposure and end of timeline.
+        """
+        # Ensure there's at least some minimum compliance period
+        min_compliance_days = 1
+        latest_possible_end = end_date
+        earliest_possible_end = first_exposure_date + pd.Timedelta(
+            days=min_compliance_days
+        )
+
+        if earliest_possible_end >= latest_possible_end:
+            return latest_possible_end
+
+        # Random uniform selection between earliest and latest possible end dates
+        total_days = (latest_possible_end - earliest_possible_end).days
+        random_days = np.random.randint(0, total_days + 1)
+
+        return earliest_possible_end + pd.Timedelta(days=random_days)
+
+    def _generate_regular_exposures(
+        self,
+        first_exposure_date: pd.Timestamp,
+        compliance_end_date: pd.Timestamp,
+        interval_days: int,
+    ) -> pd.DatetimeIndex:
+        """
+        Generates exposure dates at regular intervals between first exposure and compliance end.
+        """
+        return pd.date_range(
             start=first_exposure_date,
             end=compliance_end_date,
-            freq=f"{cfg.compliance_interval_days}D",
+            freq=f"{interval_days}D",
         )
 
-        # 3. Simulate discontinuation
-        stop_window_start = compliance_end_date + pd.Timedelta(
-            days=cfg.compliance_interval_days
-        )
-        if stop_window_start < subj_df["time"].max():
-            stop_duration = (subj_df["time"].max() - stop_window_start).days
-            stop_draws = np.random.binomial(1, cfg.daily_stop_prob, size=stop_duration)
-            if stop_draws.any():
-                stop_date = stop_window_start + pd.Timedelta(days=np.argmax(stop_draws))
-                exposure_dates = exposure_dates[exposure_dates < stop_date]
-
-        # 4. Add all final exposure events to the dataframe
+    def _add_exposure_events_to_dataframe(
+        self,
+        df_with_first_exposure: pd.DataFrame,
+        exposure_dates: pd.DatetimeIndex,
+        exposure_code: str,
+    ) -> pd.DataFrame:
+        """
+        Adds the final exposure events to the dataframe, removing temporary events.
+        """
+        # Remove the temporary first exposure event
         df_without_temp = df_with_first_exposure[
-            df_with_first_exposure["code"] != f"TEMP_{cfg.code}"
+            df_with_first_exposure["code"] != f"TEMP_{exposure_code}"
         ]
-        if not exposure_dates.empty:
-            new_events_df = pd.DataFrame(
-                {
-                    "subject_id": subj_df.iloc[0]["subject_id"],
-                    "time": exposure_dates,
-                    "code": cfg.code,
-                }
-            )
-            return (
-                pd.concat([df_without_temp, new_events_df], ignore_index=True)
-                .sort_values("time", na_position="first")
-                .reset_index(drop=True)
-            )
 
-        return df_without_temp
+        if exposure_dates.empty:
+            return df_without_temp
+
+        # Add all final exposure events
+        new_events_df = pd.DataFrame(
+            {
+                "subject_id": df_with_first_exposure.iloc[0]["subject_id"],
+                "time": exposure_dates,
+                "code": exposure_code,
+            }
+        )
+
+        return (
+            pd.concat([df_without_temp, new_events_df], ignore_index=True)
+            .sort_values("time", na_position="first")
+            .reset_index(drop=True)
+        )
 
     def _simulate_all_outcomes(
         self, subj_df: pd.DataFrame
@@ -182,6 +234,15 @@ class CausalSimulator:
             else:
                 return fallback_date
         else:
+            # For unexposed subjects, use the complete exposure distribution
+            if not self.first_exposure_dates:
+                # Fallback if no subjects were exposed in the entire dataset
+                return (
+                    start_date + pd.Timedelta(days=run_in_days)
+                    if start_date + pd.Timedelta(days=run_in_days) < end_date
+                    else fallback_date
+                )
+
             # Try to find a suitable date from exposure distribution
             for _ in range(100):  # Max attempts
                 pseudo_exposure_date = np.random.choice(self.first_exposure_dates)
@@ -191,8 +252,6 @@ class CausalSimulator:
                     return pseudo_exposure_date.normalize() + pd.Timedelta(
                         days=run_in_days
                     )
-                else:
-                    continue
         return fallback_date
 
     def _simulate_single_outcome_complete(
@@ -256,29 +315,67 @@ class CausalSimulator:
         """
         Generic, vectorized simulation to find the first occurrence of a single event.
         """
+        timeline_info = self._setup_simulation_timeline(subj_df, run_in_days)
+        if timeline_info is None:
+            return subj_df
+
+        daily_timeline, k_days = timeline_info
+        n_possible_days = k_days - run_in_days
+        p_daily_base = self._compute_daily_prob(p_total_base, n_possible_days)
+
+        # Build feature matrix and compute probabilities
+        feature_matrix = self._build_feature_matrix(
+            subj_df, daily_timeline, trigger_codes
+        )
+        event_probabilities = self._compute_event_probabilities(
+            feature_matrix, trigger_codes, trigger_weights, p_daily_base
+        )
+        # Simulate event occurrence
+        return self._simulate_and_add_event(
+            subj_df, daily_timeline, event_probabilities, event_name
+        )
+
+    def _setup_simulation_timeline(
+        self, subj_df: pd.DataFrame, run_in_days: int
+    ) -> Tuple[pd.DatetimeIndex, int]:
+        """
+        Sets up the simulation timeline and validates the window.
+
+        Returns:
+            Tuple of (daily_timeline, k_days) or None if no valid window
+        """
         start_date = subj_df["time"].min().normalize()
         end_date = subj_df["time"].max().normalize()
 
         sim_window_start = start_date + pd.Timedelta(days=run_in_days)
         if sim_window_start >= end_date:
-            return subj_df
+            return None
 
         k_days = (end_date - sim_window_start).days
         daily_timeline = pd.date_range(start=sim_window_start, end=end_date, freq="D")
 
-        p_daily_base = self._compute_daily_prob(p_total_base, k_days)
+        return daily_timeline, k_days
 
-        # Create feature matrix where a trigger, once True, stays True
+    def _build_feature_matrix(
+        self,
+        subj_df: pd.DataFrame,
+        daily_timeline: pd.DatetimeIndex,
+        trigger_codes: List[str],
+    ) -> pd.DataFrame:
+        """
+        Creates a feature matrix where triggers, once True, stay True.
+        """
+        # Create pivot table of existing events
         events_pivot = subj_df.pivot_table(
             index="time", columns="code", aggfunc="size", fill_value=0
         ).astype(bool)
 
-        # Vectorized reindex operation to include all trigger codes at once
+        # Identify missing trigger codes and add them
         all_trigger_codes = set(trigger_codes)
         existing_codes = set(events_pivot.columns)
         missing_codes = all_trigger_codes - existing_codes
 
-        # Reindex to the full daily timeline and add missing codes in one operation
+        # Reindex to full timeline and include missing codes
         feature_matrix = events_pivot.reindex(
             index=daily_timeline,
             columns=list(existing_codes) + list(missing_codes),
@@ -286,16 +383,35 @@ class CausalSimulator:
         )
 
         # Apply cumulative max to ensure codes stay True after appearing
-        feature_matrix = feature_matrix.cummax(axis=0)
+        return feature_matrix.cummax(axis=0)
 
-        # Vectorized computation using numpy arrays
+    def _compute_event_probabilities(
+        self,
+        feature_matrix: pd.DataFrame,
+        trigger_codes: List[str],
+        trigger_weights: List[float],
+        p_daily_base: float,
+    ) -> np.ndarray:
+        """
+        Computes daily event probabilities using vectorized operations.
+        """
         weights_array = np.array(trigger_weights)
         trigger_matrix = feature_matrix[trigger_codes].values
 
         logit_p_days = logit(p_daily_base) + np.dot(trigger_matrix, weights_array)
-        p_days = expit(logit_p_days)
+        return expit(logit_p_days)
 
-        event_draws = np.random.binomial(1, p_days)
+    def _simulate_and_add_event(
+        self,
+        subj_df: pd.DataFrame,
+        daily_timeline: pd.DatetimeIndex,
+        event_probabilities: np.ndarray,
+        event_name: str,
+    ) -> pd.DataFrame:
+        """
+        Simulates event occurrence and adds it to the dataframe if it occurs.
+        """
+        event_draws = np.random.binomial(1, event_probabilities)
 
         if event_draws.any():
             event_idx = np.argmax(event_draws)
@@ -308,6 +424,7 @@ class CausalSimulator:
                     "code": [event_name],
                 }
             )
+
             return (
                 pd.concat([subj_df, new_event_df], ignore_index=True)
                 .sort_values("time", na_position="first")
