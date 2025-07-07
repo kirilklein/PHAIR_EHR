@@ -11,6 +11,7 @@ The functions are designed to work with pandas DataFrames containing medical eve
 and support efficient processing of large datasets through vectorized operations.
 """
 
+import warnings
 import re
 from functools import lru_cache
 
@@ -70,8 +71,19 @@ def get_birth_date_for_each_patient(events: pd.DataFrame) -> pd.Series:
 
 @lru_cache(maxsize=128)
 def _compile_regex(patterns: tuple) -> re.Pattern:
-    """Cache compiled regex patterns."""
-    return re.compile("|".join(patterns))
+    """
+    Cache compiled regex patterns.
+    Wrap each pattern in a non-capturing group.
+    """
+    if len(patterns) == 1:
+        return re.compile(patterns[0])
+    if any("?i" in p for p in patterns):
+        warnings.warn(
+            "Case-insensitive matching only supported for single pattern. Split the pattern into single criterion."
+        )
+        patterns = tuple(p.replace("?i", "") for p in patterns)
+    pattern = "|".join(f"(?:{p})" for p in patterns)
+    return re.compile(pattern)
 
 
 def compute_code_masks(df: pd.DataFrame, codes: list, exclude_codes: list) -> pd.Series:

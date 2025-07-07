@@ -37,26 +37,26 @@ class TestApplyCriteria(unittest.TestCase):
 
     def test_inclusion_expression(self):
         """Test that inclusion expression works correctly."""
-        included, stats = apply_criteria_with_stats(
+        included_pids, stats = apply_criteria_with_stats(
             self.df, self.config[INCLUSION], self.config[EXCLUSION]
         )
         # Patient 1 has type2_diabetes AND myocardial_infarction
-        self.assertIn(1, included[PID_COL].values)
+        self.assertIn(1, included_pids)
         # Patient 4 doesn't have type2_diabetes
-        self.assertNotIn(4, included[PID_COL].values)
+        self.assertNotIn(4, included_pids)
 
         # Check stats
         self.assertGreater(stats[N_EXCLUDED_BY_EXPRESSION], 0)
 
     def test_exclusion_expression(self):
         """Test that exclusion expression works correctly."""
-        included, stats = apply_criteria_with_stats(
+        included_pids, stats = apply_criteria_with_stats(
             self.df, self.config[INCLUSION], self.config[EXCLUSION]
         )
         # Patient 3 has cancer
-        self.assertNotIn(3, included[PID_COL].values)
+        self.assertNotIn(3, included_pids)
         # Patient 5 has pregnancy
-        self.assertNotIn(5, included[PID_COL].values)
+        self.assertNotIn(5, included_pids)
 
         self.assertGreater(stats[N_EXCLUDED_BY_EXPRESSION], 0)
 
@@ -72,29 +72,29 @@ class TestApplyCriteria(unittest.TestCase):
         )
 
         expression = "condition_a & ~condition_b | condition_c"
-        included, stats = apply_criteria_with_stats(
+        included_pids, stats = apply_criteria_with_stats(
             test_data,
             expression,
             "condition_a & ~condition_a",  # Always False using existing column
         )
 
         # Patient 2 should be included (has condition_a and NOT condition_b)
-        self.assertIn(2, included[PID_COL].values)
+        self.assertIn(2, included_pids)
         # Patient 1 should be excluded (has both condition_a and condition_b)
-        self.assertNotIn(1, included[PID_COL].values)
+        self.assertNotIn(1, included_pids)
 
     def test_empty_expressions(self):
         """Test handling of empty or trivial expressions."""
         test_data = pd.DataFrame({PID_COL: [1, 2], "condition": [True, False]})
 
         # Test with trivial inclusion and exclusion using existing column
-        included, stats = apply_criteria_with_stats(
+        included_pids, stats = apply_criteria_with_stats(
             test_data,
             "condition | ~condition",  # Always True
             "condition & ~condition",  # Always False
         )
 
-        self.assertEqual(len(included), 2)  # All patients should be included
+        self.assertEqual(len(included_pids), 2)  # All patients should be included
         self.assertEqual(stats[N_EXCLUDED_BY_EXPRESSION], 0)
 
 

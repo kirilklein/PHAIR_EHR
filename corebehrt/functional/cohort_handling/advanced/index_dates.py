@@ -60,6 +60,7 @@ def draw_index_dates_for_control_with_redraw(
     exposed_index_dates: pd.DataFrame,
     patients_info: pd.DataFrame,
     redraw_attempts: int = 2,
+    seed: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Draw index dates for unexposed patients by randomly sampling from exposed patients' index dates.
@@ -77,6 +78,10 @@ def draw_index_dates_for_control_with_redraw(
         DataFrame with exposed patient data, must include PID_COL and TIMESTAMP_COL columns.
     patients_info : pd.DataFrame
         DataFrame containing patient information, must include PID_COL and DEATHDATE_COL columns.
+    redraw_attempts : int, default=2
+        Number of redraw attempts for invalid dates before excluding a patient.
+    seed : int, default=42
+        Random seed for reproducible sampling.
 
     Returns
     -------
@@ -87,10 +92,14 @@ def draw_index_dates_for_control_with_redraw(
 
     Notes
     -----
-    - Patients who die before their assigned index date are excluded after 2 failed attempts
+    - Patients who seeddie before their assigned index date are excluded after redraw_attempts failed attempts
     - The matching process uses random sampling with replacement from exposed patients
     - The function prioritizes validity over maintaining exact sample size
+    - Results are reproducible when using the same seed value
     """
+
+    # Set random seed for reproducibility
+    np.random.seed(seed)
 
     # Convert exposed info to arrays for faster sampling
     exposed_dates_array = exposed_index_dates[TIMESTAMP_COL].values
@@ -99,6 +108,7 @@ def draw_index_dates_for_control_with_redraw(
     n_unexposed = len(control_pids)
     if n_exposed == 0:
         raise ValueError("Cannot draw index dates: no exposed patients available")
+
     # Draw initial random indices
     sampled_indices = np.random.choice(n_exposed, size=n_unexposed, replace=True)
 
@@ -108,6 +118,7 @@ def draw_index_dates_for_control_with_redraw(
     control_birth_dates = (
         patients_info.set_index(PID_COL)[BIRTHDATE_COL].reindex(control_pids).values
     )
+
     # Create DataFrame with all necessary info
     temp_df = pd.DataFrame(
         {
