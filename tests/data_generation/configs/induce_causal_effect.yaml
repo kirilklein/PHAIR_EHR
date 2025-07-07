@@ -4,8 +4,8 @@
 # Required paths
 paths:
   source_dir: "./example_data/synthea_meds" # Directory containing source data shards (.parquet files)
-  write_dir: "./corebehrt/sandbox/synthea_meds_causal" # Directory to write output shards (will be created if needed)
-  splits: ["held_out"]
+  write_dir: "./example_data/synthea_meds_causal" # Directory to write output shards (will be created if needed)
+  splits: ["train", "tuning", "held_out"]
 
 exposure:
   code: "EXPOSURE"
@@ -32,7 +32,7 @@ outcomes:
     # Confounders have a different effect on the outcome than on the exposure.
     trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
     # STRONG positive effect from exposure.
-    exposure_effect: 4 # logits
+    exposure_effect: 6 # logits
 
   outcome_2:
     code: "OUTCOME_2"
@@ -47,7 +47,7 @@ outcomes:
       ]
     trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
     # WEAKER positive effect from exposure.
-    exposure_effect: 1 # logits
+    exposure_effect: 2 # logits
 
   outcome_3:
     code: "OUTCOME_3"
