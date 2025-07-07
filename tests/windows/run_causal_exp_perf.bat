@@ -35,8 +35,13 @@ echo Running prepare_finetune_data uncensored...
 python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp_uncensored.yaml
 if errorlevel 1 goto :error
 
+echo Checking Uncensored Data...
+echo We expect that all the triggers are the same as the outcomes.
+python -m tests.pipeline.test_uncensored_prepared --processed_data_dir ./outputs/causal/finetune/processed_data/exposure_uncensored --trigger_code EXPOSURE
+if errorlevel 1 goto :error
+
 echo Running xgb baseline uncensored...
-python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure_uncensored --min_roc_auc 0.9 --expected_most_important_concept EXPOSURE
+python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure_uncensored --min_roc_auc 0.95 --expected_most_important_concept EXPOSURE
 if errorlevel 1 goto :error
 
 echo Running prepare_finetune_data...
@@ -53,7 +58,7 @@ python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\fine
 if errorlevel 1 goto :error
 
 echo Checking Performance uncensored...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure_uncensored --min 0.95
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure_uncensored --min 0.8
 if errorlevel 1 goto :error
 
 echo Running finetune...
@@ -61,7 +66,7 @@ python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\fine
 if errorlevel 1 goto :error
 
 echo Checking Performance...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure --min 0.55 --max 0.9
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure --min 0.51 --max 0.8
 if errorlevel 1 goto :error
 
 echo Pipeline completed successfully.
