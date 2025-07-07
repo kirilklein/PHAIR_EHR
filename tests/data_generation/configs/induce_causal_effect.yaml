@@ -13,21 +13,9 @@ exposure:
   compliance_interval_days: 10
   daily_stop_prob: 0.01
   p_base: 0.15 # Base 15% chance of exposure over the patient's timeline
-  trigger_codes: [
-      D/25675004,
-      D/431855005,
-      D/80583007, # confounders outcome 1
-      D/105531004,
-      D/65363002, # confounders outcome 2
-      D/55822004,
-      D/267020005, # confounders outcome 3
-      D/90781000119102,
-      D/43878008,
-      D/312608009, # instruments
-    ]
+  trigger_codes: [D/25675004, D/431855005, D/80583007, D/105531004, D/65363002]
   # Small, non-zero daily logit effects.
-  trigger_weights:
-    [0.02, 0.01, -0.015, 0.025, 0.01, 0.01, 0.01, 0.05, 0.04, 0.06]
+  trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
 
 outcomes:
   outcome_1:
@@ -35,43 +23,44 @@ outcomes:
     run_in_days: 30
     p_base: 0.1
     trigger_codes: [
-        D/25675004,
-        D/431855005,
-        D/80583007, # confounders
-        D/125605004,
-        D/384709000,
-        D/431856006, # prognostic
+        D/25675004, # confounder
+        D/431855005, # confounder
+        D/80583007, # confounder
+        D/125605004, # prognostic
+        D/384709000, # prognostic
       ]
     # Confounders have a different effect on the outcome than on the exposure.
-    trigger_weights: [0.03, 0.015, -0.02, 0.02, 0.01, 0.02]
+    trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
     # STRONG positive effect from exposure.
-    exposure_effect: 0.15
+    exposure_effect: 4 # logits
 
   outcome_2:
     code: "OUTCOME_2"
     run_in_days: 30
     p_base: 0.08
     trigger_codes: [
-        D/105531004,
-        D/65363002, # confounders
-        D/157141000119108,
-        D/1121000119107, # prognostic
+        D/431855005, # confounder
+        D/80583007, # confounder
+        D/105531004, # confounder
+        D/65363002, # prognostic
+        D/384709000, # prognostic
       ]
-    trigger_weights: [0.025, 0.015, -0.01, 0.03]
+    trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
     # WEAKER positive effect from exposure.
-    exposure_effect: 0.05
+    exposure_effect: 1 # logits
 
   outcome_3:
     code: "OUTCOME_3"
     run_in_days: 30
     p_base: 0.12
     trigger_codes: [
-        D/55822004,
-        D/267020005, # confounders
-        D/713458007,
-        D/44465007, # prognostic
+        D/80583007,
+        D/105531004,
+        D/65363002,
+        D/65363002,
+        D/384709000, # confounders
       ]
     # The confounders still have an effect on this outcome.
-    trigger_weights: [0.04, 0.02, -0.01, 0.03]
+    trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
     # ZERO direct causal effect from exposure.
-    exposure_effect: 0.0
+    exposure_effect: 0
