@@ -27,10 +27,10 @@ OUTCOMES:
     Base probability: 0.080
     Exposure effect: 2.00
     Confounders for this outcome (4):
-      D/431855005: 247 subjects (14.3%) [exp: 1.00, out: 0.50]
-      D/65363002: 200 subjects (11.6%) [exp: 1.50, out: 0.50]
       D/105531004: 206 subjects (11.9%) [exp: 0.50, out: -1.00]
+      D/65363002: 200 subjects (11.6%) [exp: 1.50, out: 0.50]
       D/80583007: 241 subjects (14.0%) [exp: -1.00, out: 1.00]
+      D/431855005: 247 subjects (14.3%) [exp: 1.00, out: 0.50]
     Prognostic codes for this outcome (1):
       D/384709000: 223 subjects (12.9%) [weight: 1.50]
 
@@ -38,8 +38,8 @@ OUTCOMES:
     Base probability: 0.120
     Exposure effect: 0.00
     Confounders for this outcome (3):
-      D/65363002: 200 subjects (11.6%) [exp: 1.50, out: -1.00]
       D/105531004: 206 subjects (11.9%) [exp: 0.50, out: 1.00]
+      D/65363002: 200 subjects (11.6%) [exp: 1.50, out: -1.00]
       D/80583007: 241 subjects (14.0%) [exp: -1.00, out: 0.50]
     Prognostic codes for this outcome (1):
       D/384709000: 223 subjects (12.9%) [weight: 1.50]
@@ -50,33 +50,33 @@ SUMMARY:
   Outcomes to simulate: 3
 
 Simulation results:
-  EXPOSURE (EXPOSURE): 320 subjects (18.6%)
+  EXPOSURE (EXPOSURE): 286 subjects (16.6%)
 
 OUTCOME RESULTS:
 
   OUTCOME:
-    Total subjects with outcome: 481 (27.9%)
-    P(OUTCOME | Exposure): 98.4%
-    P(OUTCOME | No Exposure): 11.8%
-    Risk Difference: +86.6 percentage points
-    Relative Risk: 8.33
+    Total subjects with outcome: 478 (27.7%)
+    P(OUTCOME | Exposure): 97.2%
+    P(OUTCOME | No Exposure): 13.9%
+    Risk Difference: +83.3 percentage points
+    Relative Risk: 6.99
 
   OUTCOME_2:
-    Total subjects with outcome: 288 (16.7%)
-    P(OUTCOME_2 | Exposure): 44.4%
-    P(OUTCOME_2 | No Exposure): 10.4%
-    Risk Difference: +34.0 percentage points
-    Relative Risk: 4.27
+    Total subjects with outcome: 277 (16.1%)
+    P(OUTCOME_2 | Exposure): 45.5%
+    P(OUTCOME_2 | No Exposure): 10.2%
+    Risk Difference: +35.2 percentage points
+    Relative Risk: 4.45
 
   OUTCOME_3:
-    Total subjects with outcome: 245 (14.2%)
-    P(OUTCOME_3 | Exposure): 15.3%
-    P(OUTCOME_3 | No Exposure): 14.0%
-    Risk Difference: +1.4 percentage points
-    Relative Risk: 1.10
+    Total subjects with outcome: 254 (14.7%)
+    P(OUTCOME_3 | Exposure): 15.4%
+    P(OUTCOME_3 | No Exposure): 14.6%
+    Risk Difference: +0.8 percentage points
+    Relative Risk: 1.05
 
 SUMMARY:
   Total subjects: 1724
-  Exposed subjects: 320 (18.6%)
-  Unexposed subjects: 1404 (81.4%)
+  Exposed subjects: 286 (16.6%)
+  Unexposed subjects: 1438 (83.4%)
   Outcomes simulated: 3
