@@ -61,7 +61,6 @@ class CausalSimulator:
 
     # Constants
     MAX_RETRY_ATTEMPTS = 100
-    MIN_COMPLIANCE_DAYS = 1
 
     def __init__(self, config: SimulationConfig):
         """
@@ -88,7 +87,7 @@ class CausalSimulator:
     def _simulate_all_exposures(self, df: pd.DataFrame) -> List[pd.DataFrame]:
         """Simulates exposure processes for all subjects."""
         subjects_with_exposure = []
-        first_exposure_dates = []
+        self.first_exposure_dates = []
         for _, subj_df in tqdm(df.groupby("subject_id"), desc="Simulating exposures"):
             subj_df_sorted = subj_df.sort_values(
                 "time", na_position="first"
@@ -161,16 +160,35 @@ class CausalSimulator:
         self, first_exposure_date: pd.Timestamp, end_date: pd.Timestamp
     ) -> pd.Timestamp:
         """
-        Randomly selects a compliance end date between first exposure and end of timeline.
+        Selects a compliance end date with an evenly spaced probability
         """
-        earliest_end = first_exposure_date + pd.Timedelta(days=self.MIN_COMPLIANCE_DAYS)
+        earliest_end = first_exposure_date + pd.Timedelta(
+            days=self.config.exposure.min_compliance_days
+        )
 
         if earliest_end >= end_date:
             return end_date
 
         total_days = (end_date - earliest_end).days
-        random_days = np.random.randint(0, total_days + 1)
-        return earliest_end + pd.Timedelta(days=random_days)
+
+        # Handle edge case where there are very few days available
+        if total_days < 1:
+            return end_date
+
+        # Work in days for better precision
+        days = np.arange(total_days)
+
+        # Calculate decay rate (lambda = 1 / (decay_years * 365.25))
+        weights = np.arange(total_days, dtype="float64") ** 2
+        weights /= weights.sum()
+
+        # Choose a day offset according to exponential distribution
+        chosen_offset = np.random.choice(days, p=weights)
+        compliance_end = earliest_end + pd.Timedelta(days=int(chosen_offset))
+        if compliance_end > end_date:
+            return end_date
+
+        return compliance_end
 
     def _generate_regular_exposures(
         self,

@@ -19,9 +19,9 @@ class ExposureConfig:
     p_base: float
     trigger_codes: List[str]
     trigger_weights: List[float]
-    daily_stop_prob: float
-    run_in_days: int = 30
-    compliance_interval_days: int = 10
+    run_in_days: int = 365
+    compliance_interval_days: int = 30
+    min_compliance_days: int = 365
 
 
 @dataclass

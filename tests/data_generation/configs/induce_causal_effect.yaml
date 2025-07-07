@@ -5,13 +5,13 @@
 paths:
   source_dir: "./example_data/synthea_meds" # Directory containing source data shards (.parquet files)
   write_dir: "./example_data/synthea_meds_causal" # Directory to write output shards (will be created if needed)
-  splits: ["train", "tuning", "held_out"]
+  splits: ["held_out"]
 
 exposure:
   code: "EXPOSURE"
-  run_in_days: 30
-  compliance_interval_days: 10
-  daily_stop_prob: 0.01
+  run_in_days: 365 # when do we start drawing probabilities from the exposure
+  compliance_interval_days: 90 # how frequently the exposure is repeated
+  min_compliance_days: 365 # minimum number of days the exposure must be repeated
   p_base: 0.15 # Base 15% chance of exposure over the patient's timeline
   trigger_codes: [D/25675004, D/431855005, D/80583007, D/105531004, D/65363002]
   # Small, non-zero daily logit effects.
@@ -20,7 +20,7 @@ exposure:
 outcomes:
   outcome_1:
     code: "OUTCOME"
-    run_in_days: 30
+    run_in_days: 30 # after exposure/non-exposure
     p_base: 0.1
     trigger_codes: [
         D/25675004, # confounder
@@ -32,11 +32,11 @@ outcomes:
     # Confounders have a different effect on the outcome than on the exposure.
     trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
     # STRONG positive effect from exposure.
-    exposure_effect: 6 # logits
+    exposure_effect: 2 # logits
 
   outcome_2:
     code: "OUTCOME_2"
-    run_in_days: 30
+    run_in_days: 30 # after exposure/non-exposure
     p_base: 0.08
     trigger_codes: [
         D/431855005, # confounder
@@ -47,11 +47,11 @@ outcomes:
       ]
     trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
     # WEAKER positive effect from exposure.
-    exposure_effect: 2 # logits
+    exposure_effect: 1 # logits
 
   outcome_3:
     code: "OUTCOME_3"
-    run_in_days: 30
+    run_in_days: 30 # after exposure/non-exposure
     p_base: 0.12
     trigger_codes: [
         D/80583007,
