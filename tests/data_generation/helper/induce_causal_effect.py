@@ -121,13 +121,17 @@ class CausalSimulator:
         """
         Orchestrates the simulation of all outcomes for a subject.
         """
-        if subj_df.empty or "time" not in subj_df.columns or subj_df["time"].dropna().empty:
+        if (
+            subj_df.empty
+            or "time" not in subj_df.columns
+            or subj_df["time"].dropna().empty
+        ):
             return subj_df, {}
 
         # --- Initial Setup ---
         start_date = subj_df["time"].dropna().min().normalize()
         end_date = subj_df["time"].dropna().max().normalize()
-        
+
         exposure_events = subj_df[subj_df["code"] == self.config.exposure.code]
         has_exposure = not exposure_events.empty
         first_exposure_date = exposure_events["time"].min() if has_exposure else None
@@ -141,24 +145,23 @@ class CausalSimulator:
             if has_exposure:
                 assessment_window_start = first_exposure_date.normalize()
             else:
-                assessment_window_start = start_date + pd.Timedelta(days=outcome_cfg.run_in_days)
-            
+                assessment_window_start = start_date + pd.Timedelta(
+                    days=outcome_cfg.run_in_days
+                )
+
             # Skip if there's no valid window for assessment
             if assessment_window_start >= end_date:
                 ite_record[f"ite_{outcome_cfg.code}"] = 0.0
                 continue
-            
+
             # Simulate this single outcome and get the ITE
             df_with_outcomes, ite_value = self._simulate_single_outcome(
-                df_with_outcomes,
-                outcome_cfg,
-                assessment_window_start,
-                end_date
+                df_with_outcomes, outcome_cfg, assessment_window_start, end_date
             )
             ite_record[f"ite_{outcome_cfg.code}"] = ite_value
 
         return df_with_outcomes, ite_record
-    
+
     def _compute_daily_prob(self, total_prob: float, num_days: int) -> float:
         """Converts a total probability over a period into a daily probability."""
         if num_days <= 0 or total_prob >= 1.0:
@@ -193,27 +196,34 @@ class CausalSimulator:
         events_pivot = subj_df.pivot_table(
             index="time", columns="code", aggfunc="size", fill_value=0
         ).astype(bool)
-        # Reindex to the full daily timeline
-        feature_matrix = events_pivot.reindex(daily_timeline, fill_value=False)
+
+        # Vectorized reindex operation to include all trigger codes at once
+        all_trigger_codes = set(trigger_codes)
+        existing_codes = set(events_pivot.columns)
+        missing_codes = all_trigger_codes - existing_codes
+
+        # Reindex to the full daily timeline and add missing codes in one operation
+        feature_matrix = events_pivot.reindex(
+            index=daily_timeline,
+            columns=list(existing_codes) + list(missing_codes),
+            fill_value=False,
+        )
+
         # Apply cumulative max to ensure codes stay True after appearing
         feature_matrix = feature_matrix.cummax(axis=0)
 
-        for code in trigger_codes:
-            if code not in feature_matrix.columns:
-                feature_matrix[code] = False
+        # Vectorized computation using numpy arrays
+        weights_array = np.array(trigger_weights)
+        trigger_matrix = feature_matrix[trigger_codes].values
 
-        weights_s = pd.Series(trigger_weights, index=trigger_codes)
-        logit_p_days = logit(p_daily_base) + feature_matrix[trigger_codes].dot(
-            weights_s
-        )
-        # Convert to numpy array before applying expit
-        p_days = expit(logit_p_days.astype(float))
+        logit_p_days = logit(p_daily_base) + np.dot(trigger_matrix, weights_array)
+        p_days = expit(logit_p_days)
 
-        event_draws = np.random.binomial(1, p_days.values)
+        event_draws = np.random.binomial(1, p_days)
 
         if event_draws.any():
             event_idx = np.argmax(event_draws)
-            event_time = p_days.index[event_idx]
+            event_time = daily_timeline[event_idx]
 
             new_event_df = pd.DataFrame(
                 {
@@ -231,22 +241,25 @@ class CausalSimulator:
         return subj_df
 
     def _calculate_outcome_probability(
-        self,
-        outcome_cfg,
-        history_codes: set,
-        is_exposed: bool
+        self, outcome_cfg, history_codes: set, is_exposed: bool
     ) -> float:
         """
         Calculates the absolute probability of a single outcome given a patient's history.
         """
-        # Check for presence of confounder and prognostic triggers
-        trigger_effects = []
-        for i, code in enumerate(outcome_cfg.trigger_codes):
-            if code in history_codes:
-                trigger_effects.append(outcome_cfg.trigger_weights[i])
+        # Vectorized computation of trigger effects
+        trigger_codes_array = np.array(outcome_cfg.trigger_codes)
+        trigger_weights_array = np.array(outcome_cfg.trigger_weights)
+
+        # Create boolean mask for codes present in history
+        codes_present_mask = np.array(
+            [code in history_codes for code in trigger_codes_array]
+        )
+
+        # Sum trigger effects using vectorized operations
+        trigger_effect_sum = np.sum(trigger_weights_array[codes_present_mask])
 
         # Start with the base probability and add all effects on the logit scale
-        logit_p = logit(outcome_cfg.p_base) + sum(trigger_effects)
+        logit_p = logit(outcome_cfg.p_base) + trigger_effect_sum
         if is_exposed:
             logit_p += outcome_cfg.exposure_effect
 
@@ -257,11 +270,11 @@ class CausalSimulator:
         subj_df: pd.DataFrame,
         outcome_cfg,
         assessment_window_start: pd.Timestamp,
-        end_date: pd.Timestamp
+        end_date: pd.Timestamp,
     ) -> Tuple[pd.DataFrame, float]:
         """
         Simulates one outcome for a subject and calculates its ITE.
-        
+
         Returns:
             A tuple containing the updated dataframe and the ITE value.
         """
@@ -269,26 +282,36 @@ class CausalSimulator:
         total_assessment_days = (end_date - assessment_window_start).days
         random_offset = np.random.randint(0, total_assessment_days + 1)
         assessment_time = assessment_window_start + pd.Timedelta(days=random_offset)
-        
-        # 2. Check history at the assessment time
-        history_codes = set(subj_df[subj_df['time'] <= assessment_time]['code'])
+
+        # 2. Check history at the assessment time - optimized using vectorized comparison
+        history_mask = subj_df["time"] <= assessment_time
+        history_codes = set(subj_df.loc[history_mask, "code"])
         factual_exposure_present = self.config.exposure.code in history_codes
-        
+
         # 3. Calculate factual and counterfactual probabilities
-        p_factual = self._calculate_outcome_probability(outcome_cfg, history_codes, is_exposed=factual_exposure_present)
-        p_counterfactual = self._calculate_outcome_probability(outcome_cfg, history_codes, is_exposed=False)
-        
+        p_factual = self._calculate_outcome_probability(
+            outcome_cfg, history_codes, is_exposed=factual_exposure_present
+        )
+        p_counterfactual = self._calculate_outcome_probability(
+            outcome_cfg, history_codes, is_exposed=False
+        )
+
         # 4. Calculate ITE
         ite = p_factual - p_counterfactual
-        
+
         # 5. Simulate the factual outcome
         if np.random.binomial(1, p_factual):
-            new_event = pd.DataFrame({
-                "subject_id": [subj_df.iloc[0]["subject_id"]],
-                "time": [assessment_time],
-                "code": [outcome_cfg.code]
-            })
-            subj_df = pd.concat([subj_df, new_event], ignore_index=True).sort_values("time").reset_index(drop=True)
-            
-        return subj_df, ite
+            new_event = pd.DataFrame(
+                {
+                    "subject_id": [subj_df.iloc[0]["subject_id"]],
+                    "time": [assessment_time],
+                    "code": [outcome_cfg.code],
+                }
+            )
+            subj_df = (
+                pd.concat([subj_df, new_event], ignore_index=True)
+                .sort_values("time")
+                .reset_index(drop=True)
+            )
 
+        return subj_df, ite
