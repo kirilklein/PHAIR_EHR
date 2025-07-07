@@ -35,14 +35,38 @@ echo Running prepare_finetune_data...
 python -m corebehrt.main_causal.prepare_ft_exp_y --config_path corebehrt\configs\causal\finetune\prepare\ft_exp_y.yaml
 if errorlevel 1 goto :error
 
+echo Testing prepare_data_ft_exp_y...
+python tests\pipeline\prepare_data_ft_exp_y.py .\outputs\causal\finetune\processed_data\exp_y
+if errorlevel 1 goto :error
+
 echo Running finetune...
 python -m corebehrt.main_causal.finetune_exp_y --config_path corebehrt\configs\causal\finetune\ft_exp_y.yaml
+if errorlevel 1 goto :error
+
+echo Testing ft_exp_y...
+python tests\pipeline\ft_exp_y.py .\outputs\causal\finetune\models\exp_y
+if errorlevel 1 goto :error
+
+echo Checking performance (exposure)...
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_exposure --min 0.52 --max 0.8 --metric exposure_roc_auc
+if errorlevel 1 goto :error
+
+echo Checking performance (outcome)...
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_outcome --min 0.6 --max 0.98 --metric outcome_roc_auc
 if errorlevel 1 goto :error
 
 
 :: Run Causal Steps
 echo Running calibrate...
 python -m corebehrt.main_causal.calibrate_exp_y --config_path corebehrt\configs\causal\finetune\calibrate_exp_y.yaml
+if errorlevel 1 goto :error
+
+echo Testing calibrate (exposure)...
+python tests\pipeline\calibrate_exp_y.py --calibrated_dir .\outputs\causal\finetune\models\exp_y\calibrated\predictions_exposure
+if errorlevel 1 goto :error
+
+echo Testing calibrate (outcome)...
+python tests\pipeline\calibrate_exp_y.py --calibrated_dir .\outputs\causal\finetune\models\exp_y\calibrated\predictions_outcome
 if errorlevel 1 goto :error
 
 :: Run Estimation
@@ -52,6 +76,15 @@ if errorlevel 1 goto :error
 
 echo Checking estimate...
 python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/MEDS_correlated_causal/tuning
+
+:: Run Criteria and Stats
+echo Running extract_criteria...
+python -m corebehrt.main_causal.helper_scripts.extract_criteria --config_path corebehrt\configs\causal\helper\extract_criteria.yaml
+if errorlevel 1 goto :error
+
+echo Running get_stats...
+python -m corebehrt.main_causal.helper_scripts.get_stats --config_path corebehrt\configs\causal\helper\get_stats.yaml
+if errorlevel 1 goto :error
 
 echo Pipeline completed successfully.
 pause
