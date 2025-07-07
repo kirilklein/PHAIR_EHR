@@ -1,0 +1,82 @@
+
+Total subjects: 4162
+
+Trigger code presence before simulation (no censoring):
+
+EXPOSURE (EXPOSURE) trigger codes:
+  D/25675004: 563 subjects (13.5%) [weight: 0.50]
+  D/431855005: 634 subjects (15.2%) [weight: 1.00]
+  D/80583007: 575 subjects (13.8%) [weight: -1.00]
+  D/105531004: 527 subjects (12.7%) [weight: 0.50]
+  D/65363002: 444 subjects (10.7%) [weight: 1.50]
+
+OUTCOMES:
+
+  OUTCOME:
+    Base probability: 0.100
+    Exposure effect: 6.00
+    Confounders for this outcome (3):
+      D/431855005: 634 subjects (15.2%) [exp: 1.00, out: 1.00]
+      D/80583007: 575 subjects (13.8%) [exp: -1.00, out: -1.00]
+      D/25675004: 563 subjects (13.5%) [exp: 0.50, out: 0.50]
+    Prognostic codes for this outcome (2):
+      D/125605004: 556 subjects (13.4%) [weight: 0.50]
+      D/384709000: 550 subjects (13.2%) [weight: 1.50]
+
+  OUTCOME_2:
+    Base probability: 0.080
+    Exposure effect: 2.00
+    Confounders for this outcome (4):
+      D/431855005: 634 subjects (15.2%) [exp: 1.00, out: 0.50]
+      D/65363002: 444 subjects (10.7%) [exp: 1.50, out: 0.50]
+      D/105531004: 527 subjects (12.7%) [exp: 0.50, out: -1.00]
+      D/80583007: 575 subjects (13.8%) [exp: -1.00, out: 1.00]
+    Prognostic codes for this outcome (1):
+      D/384709000: 550 subjects (13.2%) [weight: 1.50]
+
+  OUTCOME_3:
+    Base probability: 0.120
+    Exposure effect: 0.00
+    Confounders for this outcome (3):
+      D/65363002: 444 subjects (10.7%) [exp: 1.50, out: -1.00]
+      D/105531004: 527 subjects (12.7%) [exp: 0.50, out: 1.00]
+      D/80583007: 575 subjects (13.8%) [exp: -1.00, out: 0.50]
+    Prognostic codes for this outcome (1):
+      D/384709000: 550 subjects (13.2%) [weight: 1.50]
+
+SUMMARY:
+  Total unique trigger codes: 7
+  Unique confounders (across all outcomes): 5
+  Outcomes to simulate: 3
+
+Simulation results:
+  EXPOSURE (EXPOSURE): 785 subjects (18.9%)
+
+OUTCOME RESULTS:
+
+  OUTCOME:
+    Total subjects with outcome: 1191 (28.6%)
+    P(OUTCOME | Exposure): 98.1%
+    P(OUTCOME | No Exposure): 12.5%
+    Risk Difference: +85.6 percentage points
+    Relative Risk: 7.87
+
+  OUTCOME_2:
+    Total subjects with outcome: 725 (17.4%)
+    P(OUTCOME_2 | Exposure): 44.5%
+    P(OUTCOME_2 | No Exposure): 11.1%
+    Risk Difference: +33.3 percentage points
+    Relative Risk: 3.99
+
+  OUTCOME_3:
+    Total subjects with outcome: 646 (15.5%)
+    P(OUTCOME_3 | Exposure): 15.7%
+    P(OUTCOME_3 | No Exposure): 15.5%
+    Risk Difference: +0.2 percentage points
+    Relative Risk: 1.01
+
+SUMMARY:
+  Total subjects: 4162
+  Exposed subjects: 785 (18.9%)
+  Unexposed subjects: 3377 (81.1%)
+  Outcomes simulated: 3
