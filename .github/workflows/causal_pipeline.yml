@@ -76,8 +76,8 @@ jobs:
           python tests/pipeline/ft_exp_y.py ./outputs/causal/finetune/models/exp_y
           
           ## ─── Check performance ───────────────────────────────────────
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_exposure --min 0.52 --max 0.8 --metric exposure_roc_auc
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_outcome --min 0.6 --max 0.98 --metric outcome_roc_auc
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_exposure --min 0.6 --max 0.8 --metric exposure_roc_auc
+          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_outcome --min 0.75 --max 0.98 --metric outcome_roc_auc
 
           # ─── Calibration ───────────────────────────────────────
           run_step main_causal.calibrate_exp_y        finetune/calibrate_exp_y.yaml
@@ -86,7 +86,7 @@ jobs:
 
           # ─── Estimate ───────────────────────────────────────
           run_step main_causal.estimate        estimate/estimate.yaml
-          python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/MEDS_correlated_causal/tuning
+          python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
 
           # ─── Criteria and stats ───────────────────────────────────────
           run_step main_causal.select_cohort_full                      select_cohort_full/extract.yaml

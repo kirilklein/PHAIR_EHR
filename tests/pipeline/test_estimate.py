@@ -12,7 +12,11 @@ import torch
 from corebehrt.constants.data import PID_COL
 
 
-def test_ate_estimate(estimate_dir: str, data_dir: Optional[str] = None) -> bool:
+def test_ate_estimate(
+    estimate_dir: str,
+    data_dir: Optional[str] = None,
+    outcome_name: Optional[str] = None,
+) -> bool:
     """
     Test whether ATE estimates contain true ATE within confidence interval.
 
@@ -41,7 +45,7 @@ def test_ate_estimate(estimate_dir: str, data_dir: Optional[str] = None) -> bool
             return False
 
         # Load true ATE from filtered patients
-        true_ate = load_true_ate_from_ite(estimate_dir, data_dir)
+        true_ate = load_true_ate_from_ite(estimate_dir, data_dir, outcome_name)
         if true_ate is None:
             return False
 
@@ -143,7 +147,9 @@ def load_true_ate(data_dir: str) -> Optional[float]:
         return None
 
 
-def load_true_ate_from_ite(estimate_dir: str, data_dir: str) -> Optional[float]:
+def load_true_ate_from_ite(
+    estimate_dir: str, data_dir: str, outcome_name: Optional[str] = None
+) -> Optional[float]:
     """
     Load true ATE from .ite.csv file filtered by common support patients.
 
@@ -195,8 +201,8 @@ def load_true_ate_from_ite(estimate_dir: str, data_dir: str) -> Optional[float]:
         # Assuming the effect column is named 'effect' or 'ite' (adjust as needed)
         if "effect" in filtered_ite_df.columns:
             effect_col = "effect"
-        elif "ite" in filtered_ite_df.columns:
-            effect_col = "ite"
+        elif f"ite_{outcome_name}" in filtered_ite_df.columns:
+            effect_col = f"ite_{outcome_name}"
         elif "treatment_effect" in filtered_ite_df.columns:
             effect_col = "treatment_effect"
         else:
@@ -231,10 +237,17 @@ def main():
         help="Path to directory containing .ite.csv file",
     )
 
+    parser.add_argument(
+        "--outcome_name",
+        type=str,
+        help="Name of the outcome to test",
+        default="OUTCOME",
+    )
+
     args = parser.parse_args()
 
     # Run the test
-    success = test_ate_estimate(args.estimate_dir, args.data_dir)
+    success = test_ate_estimate(args.estimate_dir, args.data_dir, args.outcome_name)
 
     # Exit with appropriate code
     sys.exit(0 if success else 1)

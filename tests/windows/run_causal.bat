@@ -48,11 +48,11 @@ python tests\pipeline\ft_exp_y.py .\outputs\causal\finetune\models\exp_y
 if errorlevel 1 goto :error
 
 echo Checking performance (exposure)...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_exposure --min 0.52 --max 0.8 --metric exposure_roc_auc
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_exposure --min 0.6 --max 0.8 --metric exposure_roc_auc
 if errorlevel 1 goto :error
 
 echo Checking performance (outcome)...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_outcome --min 0.6 --max 0.98 --metric outcome_roc_auc
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_outcome --min 0.75 --max 0.98 --metric outcome_roc_auc
 if errorlevel 1 goto :error
 
 
@@ -75,7 +75,7 @@ python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\
 if errorlevel 1 goto :error
 
 echo Checking estimate...
-python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/MEDS_correlated_causal/tuning
+python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
 
 :: Run Criteria and Stats
 echo Running extract_criteria...
