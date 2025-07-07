@@ -4,7 +4,7 @@
 # Required paths
 paths:
   source_dir: "./example_data/synthea_meds" # Directory containing source data shards (.parquet files)
-  write_dir: "./example_data/synthea_meds_causal" # Directory to write output shards (will be created if needed)
+  write_dir: "./corebehrt/sandbox/synthea_meds_causal" # Directory to write output shards (will be created if needed)
   splits: ["held_out"]
 
 exposure:
@@ -12,20 +12,22 @@ exposure:
   run_in_days: 30
   compliance_interval_days: 10
   daily_stop_prob: 0.01
-  p_base: 0.1
+  p_base: 0.15 # Base 15% chance of exposure over the patient's timeline
   trigger_codes: [
-      D/25675004, # confounders outcome 1
+      D/25675004,
       D/431855005,
-      D/80583007,
-      D/105531004, # confounders outcome 2
-      D/65363002,
-      D/55822004, # confounders outcome 3
-      D/267020005,
-      D/90781000119102, # here the instruments start
+      D/80583007, # confounders outcome 1
+      D/105531004,
+      D/65363002, # confounders outcome 2
+      D/55822004,
+      D/267020005, # confounders outcome 3
+      D/90781000119102,
       D/43878008,
-      D/312608009,
+      D/312608009, # instruments
     ]
-  trigger_weights: [0.5, 0.1, -0.1, 0.3, 0.2, 0.3, 0.4, 0.8, 0.6, 0.7] # logits - now 10 weights to match 10 codes
+  # Small, non-zero daily logit effects.
+  trigger_weights:
+    [0.02, 0.01, -0.015, 0.025, 0.01, 0.01, 0.01, 0.05, 0.04, 0.06]
 
 outcomes:
   outcome_1:
@@ -33,26 +35,43 @@ outcomes:
     run_in_days: 30
     p_base: 0.1
     trigger_codes: [
-        D/25675004, # confounders
+        D/25675004,
         D/431855005,
-        D/80583007,
-        D/125605004, # prognostic
+        D/80583007, # confounders
+        D/125605004,
         D/384709000,
-        D/431856006,
+        D/431856006, # prognostic
       ]
-    trigger_weights: [0.3, 0.1, -0.1, 0.3, 0.2, 0.4] # logits - now 6 weights to match 6 codes
-    exposure_effect: 1.0
+    # Confounders have a different effect on the outcome than on the exposure.
+    trigger_weights: [0.03, 0.015, -0.02, 0.02, 0.01, 0.02]
+    # STRONG positive effect from exposure.
+    exposure_effect: 0.15
+
   outcome_2:
     code: "OUTCOME_2"
     run_in_days: 30
-    p_base: 0.01
-    trigger_codes: [D/105531004, D/65363002, D/157141000119108, D/1121000119107]
-    trigger_weights: [0.2, 0.1, -0.1, 0.3]
-    exposure_effect: 2.0
+    p_base: 0.08
+    trigger_codes: [
+        D/105531004,
+        D/65363002, # confounders
+        D/157141000119108,
+        D/1121000119107, # prognostic
+      ]
+    trigger_weights: [0.025, 0.015, -0.01, 0.03]
+    # WEAKER positive effect from exposure.
+    exposure_effect: 0.05
+
   outcome_3:
     code: "OUTCOME_3"
     run_in_days: 30
-    p_base: 0.01
-    trigger_codes: [D/55822004, D/267020005, D/713458007, D/44465007]
-    trigger_weights: [0.5, 0.1, -0.1, 0.3]
+    p_base: 0.12
+    trigger_codes: [
+        D/55822004,
+        D/267020005, # confounders
+        D/713458007,
+        D/44465007, # prognostic
+      ]
+    # The confounders still have an effect on this outcome.
+    trigger_weights: [0.04, 0.02, -0.01, 0.03]
+    # ZERO direct causal effect from exposure.
     exposure_effect: 0.0
