@@ -151,17 +151,18 @@ def main() -> None:
         df, shards = DataManager.load_shards(
             os.path.join(simulation_config.paths.source_dir, split)
         )
-        SimulationReporter.print_trigger_stats(df, simulation_config)
+        reporter = SimulationReporter()
+        reporter.print_trigger_stats(df, simulation_config)
 
         simulated_df, ite_df = simulator.simulate_dataset(df)
 
-        SimulationReporter.print_simulation_results(simulated_df, simulation_config)
+        reporter.print_simulation_results(simulated_df, simulation_config)
         split_write_dir = os.path.join(write_dir, split)
         os.makedirs(split_write_dir, exist_ok=True)
 
         simulated_df.reset_index(drop=True, inplace=True)
         DataManager.write_shards(simulated_df, split_write_dir, shards)
-
+        reporter.save_report(os.path.join(split_write_dir, "report.txt"))
         save_ite_data(ite_df, simulation_config)
 
 

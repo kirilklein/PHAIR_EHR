@@ -6,14 +6,19 @@ from tests.data_generation.helper.config import SimulationConfig
 class SimulationReporter:
     """Generates simulation statistics and reports."""
 
-    @staticmethod
-    def print_trigger_stats(df: pd.DataFrame, config: SimulationConfig) -> None:
+    def __init__(self):
+        self.simulation_text = ""
+        self.trigger_text = ""
+
+    def print_trigger_stats(self, df: pd.DataFrame, config: SimulationConfig) -> str:
         """Print statistics about trigger code presence before simulation."""
+        output_lines = []
+
         total_subjects = df["subject_id"].nunique()
         subject_codes = df.groupby("subject_id")["code"].apply(set)
 
-        print(f"\nTotal subjects: {total_subjects}")
-        print("\nTrigger code presence before simulation:")
+        output_lines.append(f"\nTotal subjects: {total_subjects}")
+        output_lines.append("\nTrigger code presence before simulation (no censoring):")
 
         # Get all unique codes and compute their presence once
         all_codes = config.get_all_trigger_codes()
@@ -24,11 +29,11 @@ class SimulationReporter:
             code_stats[code] = {"count": count, "percentage": percentage}
 
         # Display exposure trigger codes
-        print(f"\nEXPOSURE ({config.exposure.code}) trigger codes:")
+        output_lines.append(f"\nEXPOSURE ({config.exposure.code}) trigger codes:")
         for i, code in enumerate(config.exposure.trigger_codes):
             stats = code_stats[code]
             weight = config.exposure.trigger_weights[i]
-            print(
+            output_lines.append(
                 f"  {code}: {stats['count']} subjects ({stats['percentage']:.1f}%) [weight: {weight:.2f}]"
             )
 
@@ -36,16 +41,20 @@ class SimulationReporter:
         confounders_by_outcome = config.get_confounder_codes()
 
         # Display each outcome and its specific trigger codes
-        print(f"\nOUTCOMES:")
+        output_lines.append(f"\nOUTCOMES:")
         for outcome_key, outcome_cfg in config.outcomes.items():
-            print(f"\n  {outcome_cfg.code}:")
-            print(f"    Base probability: {outcome_cfg.p_base:.3f}")
-            print(f"    Exposure effect: {outcome_cfg.exposure_effect:.2f}")
+            output_lines.append(f"\n  {outcome_cfg.code}:")
+            output_lines.append(f"    Base probability: {outcome_cfg.p_base:.3f}")
+            output_lines.append(
+                f"    Exposure effect: {outcome_cfg.exposure_effect:.2f}"
+            )
 
             # Show confounders for this outcome
             outcome_confounders = confounders_by_outcome.get(outcome_key, [])
             if outcome_confounders:
-                print(f"    Confounders for this outcome ({len(outcome_confounders)}):")
+                output_lines.append(
+                    f"    Confounders for this outcome ({len(outcome_confounders)}):"
+                )
                 for code in outcome_confounders:
                     stats = code_stats[code]
                     # Find weights in both exposure and outcome
@@ -55,7 +64,7 @@ class SimulationReporter:
                     out_weight = outcome_cfg.trigger_weights[
                         outcome_cfg.trigger_codes.index(code)
                     ]
-                    print(
+                    output_lines.append(
                         f"      {code}: {stats['count']} subjects ({stats['percentage']:.1f}%) [exp: {exp_weight:.2f}, out: {out_weight:.2f}]"
                     )
 
@@ -66,7 +75,7 @@ class SimulationReporter:
                 if code not in config.exposure.trigger_codes
             ]
             if prognostic_codes:
-                print(
+                output_lines.append(
                     f"    Prognostic codes for this outcome ({len(prognostic_codes)}):"
                 )
                 for code in prognostic_codes:
@@ -74,23 +83,32 @@ class SimulationReporter:
                     weight = outcome_cfg.trigger_weights[
                         outcome_cfg.trigger_codes.index(code)
                     ]
-                    print(
+                    output_lines.append(
                         f"      {code}: {stats['count']} subjects ({stats['percentage']:.1f}%) [weight: {weight:.2f}]"
                     )
 
         # Summary statistics
         all_confounders = config.get_all_confounder_codes()
 
-        print(f"\nSUMMARY:")
-        print(f"  Total unique trigger codes: {len(all_codes)}")
-        print(f"  Unique confounders (across all outcomes): {len(all_confounders)}")
-        print(f"  Outcomes to simulate: {len(config.outcomes)}")
+        output_lines.append(f"\nSUMMARY:")
+        output_lines.append(f"  Total unique trigger codes: {len(all_codes)}")
+        output_lines.append(
+            f"  Unique confounders (across all outcomes): {len(all_confounders)}"
+        )
+        output_lines.append(f"  Outcomes to simulate: {len(config.outcomes)}")
 
-    @staticmethod
+        # Join all lines and print
+        report_text = "\n".join(output_lines)
+        print(report_text)
+
+        self.trigger_text = report_text
+
     def print_simulation_results(
-        df: pd.DataFrame, simulation_config: SimulationConfig
-    ) -> None:
+        self, df: pd.DataFrame, simulation_config: SimulationConfig
+    ) -> str:
         """Print simulation results statistics."""
+        output_lines = []
+
         total_subjects = df["subject_id"].nunique()
 
         # Count simulated exposure events
@@ -99,14 +117,14 @@ class SimulationReporter:
         )
         exposure_count = exposure_subjects.sum()
 
-        print("\nSimulation results:")
-        print(
+        output_lines.append("\nSimulation results:")
+        output_lines.append(
             f"  EXPOSURE ({simulation_config.exposure.code}): {exposure_count} subjects ({100 * exposure_count / total_subjects:.1f}%)"
         )
 
         # Process each outcome separately
         if simulation_config.outcomes:
-            print("\nOUTCOME RESULTS:")
+            output_lines.append("\nOUTCOME RESULTS:")
 
             for outcome_cfg in simulation_config.outcomes.values():
                 outcome_code = outcome_cfg.code
@@ -117,8 +135,8 @@ class SimulationReporter:
                 )
                 outcome_count = outcome_subjects.sum()
 
-                print(f"\n  {outcome_code}:")
-                print(
+                output_lines.append(f"\n  {outcome_code}:")
+                output_lines.append(
                     f"    Total subjects with outcome: {outcome_count} ({100 * outcome_count / total_subjects:.1f}%)"
                 )
 
@@ -129,11 +147,11 @@ class SimulationReporter:
                         outcome_subjects[exposure_subjects].mean() * 100
                     )
 
-                    print(
+                    output_lines.append(
                         f"    P({outcome_code} | Exposure): {outcomes_given_exposure:.1f}%"
                     )
                 else:
-                    print(
+                    output_lines.append(
                         f"    P({outcome_code} | Exposure): N/A (no exposed subjects)"
                     )
 
@@ -145,11 +163,11 @@ class SimulationReporter:
                         outcome_subjects[~exposure_subjects].mean() * 100
                     )
 
-                    print(
+                    output_lines.append(
                         f"    P({outcome_code} | No Exposure): {outcomes_given_no_exposure:.1f}%"
                     )
                 else:
-                    print(
+                    output_lines.append(
                         f"    P({outcome_code} | No Exposure): N/A (all subjects exposed)"
                     )
 
@@ -161,23 +179,46 @@ class SimulationReporter:
                     risk_difference = (risk_exposed - risk_unexposed) * 100
                     if risk_unexposed > 0:
                         relative_risk = risk_exposed / risk_unexposed
-                        print(
+                        output_lines.append(
                             f"    Risk Difference: {risk_difference:+.1f} percentage points"
                         )
-                        print(f"    Relative Risk: {relative_risk:.2f}")
+                        output_lines.append(f"    Relative Risk: {relative_risk:.2f}")
                     else:
-                        print(
+                        output_lines.append(
                             f"    Risk Difference: {risk_difference:+.1f} percentage points"
                         )
-                        print(f"    Relative Risk: undefined (no events in unexposed)")
+                        output_lines.append(
+                            f"    Relative Risk: undefined (no events in unexposed)"
+                        )
 
         # Summary statistics
-        print(f"\nSUMMARY:")
-        print(f"  Total subjects: {total_subjects}")
-        print(
+        output_lines.append(f"\nSUMMARY:")
+        output_lines.append(f"  Total subjects: {total_subjects}")
+        output_lines.append(
             f"  Exposed subjects: {exposure_count} ({100 * exposure_count / total_subjects:.1f}%)"
         )
-        print(
+        output_lines.append(
             f"  Unexposed subjects: {total_subjects - exposure_count} ({100 * (total_subjects - exposure_count) / total_subjects:.1f}%)"
         )
-        print(f"  Outcomes simulated: {len(simulation_config.outcomes)}")
+        output_lines.append(f"  Outcomes simulated: {len(simulation_config.outcomes)}")
+
+        # Join all lines and print
+        report_text = "\n".join(output_lines)
+        print(report_text)
+
+        self.simulation_text = report_text
+
+    @staticmethod
+    def save_report_to_file(report_text: str, filepath: str) -> None:
+        """Save a report text to a file."""
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(report_text)
+        print(f"Report saved to: {filepath}")
+
+    def save_report(self, save_path: str = None) -> str:
+        """Generate a combined report with both trigger stats and simulation results."""
+        if self.trigger_text != "" and self.simulation_text != "":
+            combined_report = self.trigger_text + "\n" + self.simulation_text
+            self.save_report_to_file(combined_report, save_path)
+        else:
+            print("No report to save")
