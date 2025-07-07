@@ -119,113 +119,124 @@ class CausalSimulator:
     def _simulate_all_outcomes(
         self, subj_df: pd.DataFrame
     ) -> Tuple[pd.DataFrame, dict]:
-        """
-        Orchestrates the simulation of all outcomes for a subject.
-        """
-        start_date, end_date, has_exposure = self._get_subject_timeline(subj_df)
-        first_exposure_date = self._determine_exposure_date(
-            subj_df, has_exposure, start_date, end_date
-        )
-
-        df_with_outcomes = subj_df.copy()
-        ite_record = {"subject_id": subj_df.iloc[0]["subject_id"]}
-
-        # Simulate each outcome
-        for outcome_cfg in self.config.outcomes.values():
-            df_with_outcomes, ite_value = self._simulate_outcome_for_subject(
-                df_with_outcomes,
-                outcome_cfg,
-                first_exposure_date,
-                end_date,
-                has_exposure,
-            )
-            ite_record[f"ite_{outcome_cfg.code}"] = ite_value
-
-        return df_with_outcomes, ite_record
-
-    def _simulate_outcome_for_subject(
-        self,
-        df_with_outcomes: pd.DataFrame,
-        outcome_cfg,
-        first_exposure_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        has_exposure: bool,
-    ) -> Tuple[pd.DataFrame, float]:
-        """
-        Simulates a single outcome for a subject.
-
-        Returns:
-            Tuple of (updated_dataframe, ite_value)
-        """
-        # Calculate assessment window start
-        if has_exposure:
-            assessment_window_start = first_exposure_date.normalize() + pd.Timedelta(
-                days=outcome_cfg.run_in_days
-            )
-        else:
-            assessment_window_start = first_exposure_date + pd.Timedelta(
-                days=outcome_cfg.run_in_days
-            )
-
-        # Skip if there's no valid window for assessment
-        if assessment_window_start >= end_date:
-            return df_with_outcomes, 0.0
-
-        # Simulate this single outcome and get the ITE
-        return self._simulate_single_outcome(
-            df_with_outcomes, outcome_cfg, assessment_window_start, end_date
-        )
-
-    def _get_subject_timeline(
-        self, subj_df: pd.DataFrame
-    ) -> Tuple[pd.Timestamp, pd.Timestamp, bool]:
-        """
-        Extracts the timeline information for a subject.
-
-        Returns:
-            Tuple of (start_date, end_date, has_exposure)
-        """
+        """Orchestrates outcome simulation and ITE calculation."""
         start_date = subj_df["time"].dropna().min().normalize()
         end_date = subj_df["time"].dropna().max().normalize()
 
         exposure_events = subj_df[subj_df["code"] == self.config.exposure.code]
         has_exposure = not exposure_events.empty
+        first_exposure_date = exposure_events["time"].min() if has_exposure else None
 
-        return start_date, end_date, has_exposure
+        df_with_outcomes = subj_df.copy()
+        ite_record = {
+            "subject_id": subj_df.iloc[0]["subject_id"],
+            "has_exposure": int(has_exposure),
+        }
 
-    def _determine_exposure_date(
+        # Simulate each outcome
+        for outcome_cfg in self.config.outcomes.values():
+            assessment_time = self._get_assessment_time(
+                has_exposure,
+                first_exposure_date,
+                start_date,
+                end_date,
+                outcome_cfg.run_in_days,
+            )
+
+            df_with_outcomes, ite_value = self._simulate_single_outcome_complete(
+                df_with_outcomes, outcome_cfg, assessment_time
+            )
+            ite_record[f"ite_{outcome_cfg.code}"] = ite_value
+
+        return df_with_outcomes, ite_record
+
+    def _get_assessment_time(
         self,
-        subj_df: pd.DataFrame,
         has_exposure: bool,
+        first_exposure_date: pd.Timestamp,
         start_date: pd.Timestamp,
         end_date: pd.Timestamp,
+        run_in_days: int,
     ) -> pd.Timestamp:
         """
-        Determines the exposure date for timing calculations.
+        Determines the assessment start date ensuring enough room for run-in period.
 
-        For exposed subjects: uses actual exposure date
-        For unexposed subjects: draws random date ensuring enough time for run-in
+        Returns None if no valid assessment window can be found.
         """
+
+        def _within_timeline(
+            date: pd.Timestamp,
+            start_date: pd.Timestamp,
+            end_date: pd.Timestamp,
+            run_in_days: int,
+        ) -> bool:
+            return (date + pd.Timedelta(days=run_in_days) <= end_date) and (
+                date + pd.Timedelta(days=run_in_days) >= start_date
+            )
+
+        fallback_date = end_date - pd.Timedelta(days=1)
         if has_exposure:
-            exposure_events = subj_df[subj_df["code"] == self.config.exposure.code]
-            return exposure_events["time"].min()
+            assessment_start = first_exposure_date.normalize()
+            if _within_timeline(assessment_start, start_date, end_date, run_in_days):
+                return assessment_start + pd.Timedelta(days=run_in_days)
+            else:
+                return fallback_date
+        else:
+            # Try to find a suitable date from exposure distribution
+            for _ in range(100):  # Max attempts
+                pseudo_exposure_date = np.random.choice(self.first_exposure_dates)
+                if _within_timeline(
+                    pseudo_exposure_date, start_date, end_date, run_in_days
+                ):
+                    return pseudo_exposure_date.normalize() + pd.Timedelta(
+                        days=run_in_days
+                    )
+                else:
+                    continue
+        return fallback_date
 
-        # For unexposed subjects
-        if not self.first_exposure_dates:
-            return start_date
+    def _simulate_single_outcome_complete(
+        self, subj_df: pd.DataFrame, outcome_cfg, assessment_time: pd.Timestamp
+    ) -> Tuple[pd.DataFrame, float]:
+        """
+        Simulates a single outcome: calculates ITE and simulates factual outcome.
+        """
+        # Get history up to assessment time
+        history_mask = subj_df["time"] <= assessment_time
+        history_codes = set(subj_df.loc[history_mask, "code"])
+        is_exposed_at_assessment = self.config.exposure.code in history_codes
 
-        max_run_in = max(
-            outcome_cfg.run_in_days for outcome_cfg in self.config.outcomes.values()
+        # Calculate probabilities for ITE
+        p_if_treated = self._calculate_outcome_probability(
+            outcome_cfg, history_codes, is_exposed=True
+        )
+        p_if_control = self._calculate_outcome_probability(
+            outcome_cfg, history_codes, is_exposed=False
+        )
+        ite = p_if_treated - p_if_control
+
+        # Calculate factual probability
+        p_factual = self._calculate_outcome_probability(
+            outcome_cfg, history_codes, is_exposed_at_assessment
         )
 
-        for _ in range(100):  # Maximum attempts to find suitable date
-            random_exposure_date = np.random.choice(self.first_exposure_dates)
+        # Simulate factual outcome
+        if np.random.binomial(1, p_factual):
+            # Add outcome event at assessment time
+            new_event = pd.DataFrame(
+                {
+                    "subject_id": [subj_df.iloc[0]["subject_id"]],
+                    "time": [assessment_time],
+                    "code": [outcome_cfg.code],
+                }
+            )
+            subj_df = (
+                pd.concat([subj_df, new_event], ignore_index=True)
+                .sort_values("time")
+                .reset_index(drop=True)
+            )
 
-            if random_exposure_date + pd.Timedelta(days=max_run_in) < end_date:
-                return random_exposure_date
-
-        # Fallback if no suitable date found
-        return start_date
+        return subj_df, ite
 
     def _compute_daily_prob(self, total_prob: float, num_days: int) -> float:
         """Converts a total probability over a period into a daily probability."""
