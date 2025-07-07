@@ -1,9 +1,9 @@
 exposure:
   code: EXPOSURE
-  compliance_interval_days: 10
-  daily_stop_prob: 0.01
+  compliance_interval_days: 90
+  min_compliance_days: 365
   p_base: 0.15
-  run_in_days: 30
+  run_in_days: 365
   trigger_codes:
   - D/25675004
   - D/431855005
@@ -19,7 +19,7 @@ exposure:
 outcomes:
   outcome_1:
     code: OUTCOME
-    exposure_effect: 6
+    exposure_effect: 2
     p_base: 0.1
     run_in_days: 30
     trigger_codes:
@@ -36,7 +36,7 @@ outcomes:
     - 1.5
   outcome_2:
     code: OUTCOME_2
-    exposure_effect: 2
+    exposure_effect: 1
     p_base: 0.08
     run_in_days: 30
     trigger_codes:

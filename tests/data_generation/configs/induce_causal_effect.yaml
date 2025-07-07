@@ -5,7 +5,7 @@
 paths:
   source_dir: "./example_data/synthea_meds" # Directory containing source data shards (.parquet files)
   write_dir: "./example_data/synthea_meds_causal" # Directory to write output shards (will be created if needed)
-  splits: ["held_out"]
+  splits: ["train", "tuning", "held_out"]
 
 exposure:
   code: "EXPOSURE"
