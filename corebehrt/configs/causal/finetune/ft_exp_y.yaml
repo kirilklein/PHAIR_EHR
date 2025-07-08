@@ -20,9 +20,9 @@ model:
 trainer_args:
   loss_weight_function:
     _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt # function to calculate positive weights. Possible options: sqrt and effective_n_samples
-  batch_size: 256
+  batch_size: 128
   val_batch_size: 256
-  effective_batch_size: 256
+  effective_batch_size: 128
   epochs: 8
   info: true
   gradient_clip:
@@ -40,7 +40,8 @@ optimizer:
   eps: 1e-6
 
 scheduler:
-  _target_: transformers.get_constant_schedule_with_warmup
+  _target_: transformers.get_linear_schedule_with_warmup
+  num_training_epochs: 15
   num_warmup_epochs: 2
 
 metrics:

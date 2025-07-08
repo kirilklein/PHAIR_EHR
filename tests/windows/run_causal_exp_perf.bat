@@ -49,7 +49,7 @@ python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\c
 if errorlevel 1 goto :error
 
 echo Running xgb baseline censored...
-python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure --min_roc_auc 0.55 --multihot
+python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure --min_roc_auc 0.6 --multihot
 if errorlevel 1 goto :error
 
 :: Finetune Exposure & Outcome
@@ -58,7 +58,7 @@ python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\fine
 if errorlevel 1 goto :error
 
 echo Checking Performance uncensored...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure_uncensored --min 0.8
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure_uncensored --min 0.85
 if errorlevel 1 goto :error
 
 echo Running finetune...
@@ -66,7 +66,7 @@ python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\fine
 if errorlevel 1 goto :error
 
 echo Checking Performance...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure --min 0.51 --max 0.8
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure --min 0.6 --max 0.8
 if errorlevel 1 goto :error
 
 echo Pipeline completed successfully.
