@@ -22,17 +22,17 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 10
+  epochs: 6
   info: true
   gradient_clip:
     clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
-  early_stopping: 4
+  early_stopping: 3
   stopping_criterion: roc_auc
 
 optimizer:
-  lr: 7e-3
+  lr: 8e-3
   eps: 1e-6
 
 scheduler:
