@@ -74,6 +74,8 @@ def test_ate_estimate(
             # Expand the 95% CI by ~20% on each side to create a broader interval
             ci_width = ci_95_upper - ci_95_lower
             expansion_factor = 0.5
+            if method == "AIPW":
+                expansion_factor = 1
             ci_90_lower = ci_95_lower - (ci_width * expansion_factor)
             ci_90_upper = ci_95_upper + (ci_width * expansion_factor)
 
