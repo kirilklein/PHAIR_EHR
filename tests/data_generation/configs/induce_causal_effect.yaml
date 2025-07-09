@@ -12,10 +12,10 @@ exposure:
   run_in_days: 365 # when do we start drawing probabilities from the exposure
   compliance_interval_days: 90 # how frequently the exposure is repeated
   min_compliance_days: 365 # minimum number of days the exposure must be repeated
-  p_base: 0.15 # Base 15% chance of exposure over the patient's timeline
+  p_base: 0.25 # Base 15% chance of exposure over the patient's timeline
   trigger_codes: [D/25675004, D/431855005, D/80583007, D/105531004, D/65363002]
   # Even stronger effects for higher AUROC
-  trigger_weights: [1.5, 2.0, -1.5, 1.0, 0.5] # logits
+  trigger_weights: [2, 2, 2, 2, 2] # [1.5, 2.0, -1.5, 1.0, 0.5] # logits
 
 outcomes:
   outcome_1:
