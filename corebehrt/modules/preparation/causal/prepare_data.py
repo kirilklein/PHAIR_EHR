@@ -149,7 +149,7 @@ class CausalDatasetPreparer(DatasetPreparer):
             exposures,
             index_dates,
             exposure_cfg.get("n_hours_start_follow_up", -1),
-            exposure_cfg.get("n_hours_end_follow_up", np.inf),
+            exposure_cfg.get("n_hours_end_follow_up"),
             data_end,
         )
 
