@@ -4,11 +4,11 @@ Total subjects: 4162
 Trigger code presence before simulation (no censoring):
 
 EXPOSURE (EXPOSURE) trigger codes:
-  D/25675004: 563 subjects (13.5%) [weight: 0.50]
-  D/431855005: 634 subjects (15.2%) [weight: 1.00]
-  D/80583007: 575 subjects (13.8%) [weight: -1.00]
-  D/105531004: 527 subjects (12.7%) [weight: 0.50]
-  D/65363002: 444 subjects (10.7%) [weight: 1.50]
+  D/25675004: 563 subjects (13.5%) [weight: 1.50]
+  D/431855005: 634 subjects (15.2%) [weight: 2.00]
+  D/80583007: 575 subjects (13.8%) [weight: -1.50]
+  D/105531004: 527 subjects (12.7%) [weight: 1.00]
+  D/65363002: 444 subjects (10.7%) [weight: 0.50]
 
 OUTCOMES:
 
@@ -16,9 +16,9 @@ OUTCOMES:
     Base probability: 0.100
     Exposure effect: 2.00
     Confounders for this outcome (3):
-      D/80583007: 575 subjects (13.8%) [exp: -1.00, out: -1.00]
-      D/431855005: 634 subjects (15.2%) [exp: 1.00, out: 1.00]
-      D/25675004: 563 subjects (13.5%) [exp: 0.50, out: 0.50]
+      D/25675004: 563 subjects (13.5%) [exp: 1.50, out: 2.00]
+      D/80583007: 575 subjects (13.8%) [exp: -1.50, out: -1.00]
+      D/431855005: 634 subjects (15.2%) [exp: 2.00, out: 1.00]
     Prognostic codes for this outcome (2):
       D/125605004: 556 subjects (13.4%) [weight: 0.50]
       D/384709000: 550 subjects (13.2%) [weight: 1.50]
@@ -27,10 +27,10 @@ OUTCOMES:
     Base probability: 0.080
     Exposure effect: 1.00
     Confounders for this outcome (4):
-      D/80583007: 575 subjects (13.8%) [exp: -1.00, out: 1.00]
-      D/105531004: 527 subjects (12.7%) [exp: 0.50, out: -1.00]
-      D/431855005: 634 subjects (15.2%) [exp: 1.00, out: 0.50]
-      D/65363002: 444 subjects (10.7%) [exp: 1.50, out: 0.50]
+      D/65363002: 444 subjects (10.7%) [exp: 0.50, out: 0.50]
+      D/80583007: 575 subjects (13.8%) [exp: -1.50, out: 1.00]
+      D/105531004: 527 subjects (12.7%) [exp: 1.00, out: -1.00]
+      D/431855005: 634 subjects (15.2%) [exp: 2.00, out: 0.50]
     Prognostic codes for this outcome (1):
       D/384709000: 550 subjects (13.2%) [weight: 1.50]
 
@@ -38,9 +38,9 @@ OUTCOMES:
     Base probability: 0.120
     Exposure effect: 0.00
     Confounders for this outcome (3):
-      D/105531004: 527 subjects (12.7%) [exp: 0.50, out: 1.00]
-      D/80583007: 575 subjects (13.8%) [exp: -1.00, out: 0.50]
-      D/65363002: 444 subjects (10.7%) [exp: 1.50, out: -1.00]
+      D/65363002: 444 subjects (10.7%) [exp: 0.50, out: -1.00]
+      D/80583007: 575 subjects (13.8%) [exp: -1.50, out: 2.00]
+      D/105531004: 527 subjects (12.7%) [exp: 1.00, out: 1.00]
     Prognostic codes for this outcome (1):
       D/384709000: 550 subjects (13.2%) [weight: 1.50]
 
@@ -50,33 +50,33 @@ SUMMARY:
   Outcomes to simulate: 3
 
 Simulation results:
-  EXPOSURE (EXPOSURE): 869 subjects (20.9%)
+  EXPOSURE (EXPOSURE): 899 subjects (21.6%)
 
 OUTCOME RESULTS:
 
   OUTCOME:
-    Total subjects with outcome: 806 (19.4%)
-    P(OUTCOME | Exposure): 48.1%
-    P(OUTCOME | No Exposure): 11.8%
-    Risk Difference: +36.3 percentage points
-    Relative Risk: 4.08
+    Total subjects with outcome: 861 (20.7%)
+    P(OUTCOME | Exposure): 52.6%
+    P(OUTCOME | No Exposure): 11.9%
+    Risk Difference: +40.7 percentage points
+    Relative Risk: 4.42
 
   OUTCOME_2:
-    Total subjects with outcome: 467 (11.2%)
-    P(OUTCOME_2 | Exposure): 19.3%
-    P(OUTCOME_2 | No Exposure): 9.1%
-    Risk Difference: +10.3 percentage points
-    Relative Risk: 2.13
+    Total subjects with outcome: 491 (11.8%)
+    P(OUTCOME_2 | Exposure): 20.0%
+    P(OUTCOME_2 | No Exposure): 9.5%
+    Risk Difference: +10.5 percentage points
+    Relative Risk: 2.10
 
   OUTCOME_3:
-    Total subjects with outcome: 606 (14.6%)
-    P(OUTCOME_3 | Exposure): 14.5%
-    P(OUTCOME_3 | No Exposure): 14.6%
-    Risk Difference: -0.1 percentage points
-    Relative Risk: 0.99
+    Total subjects with outcome: 583 (14.0%)
+    P(OUTCOME_3 | Exposure): 13.6%
+    P(OUTCOME_3 | No Exposure): 14.1%
+    Risk Difference: -0.6 percentage points
+    Relative Risk: 0.96
 
 SUMMARY:
   Total subjects: 4162
-  Exposed subjects: 869 (20.9%)
-  Unexposed subjects: 3293 (79.1%)
+  Exposed subjects: 899 (21.6%)
+  Unexposed subjects: 3263 (78.4%)
   Outcomes simulated: 3

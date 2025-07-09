@@ -11,11 +11,11 @@ exposure:
   - D/105531004
   - D/65363002
   trigger_weights:
-  - 0.5
-  - 1
-  - -1
-  - 0.5
   - 1.5
+  - 2.0
+  - -1.5
+  - 1.0
+  - 0.5
 outcomes:
   outcome_1:
     code: OUTCOME
@@ -29,9 +29,9 @@ outcomes:
     - D/125605004
     - D/384709000
     trigger_weights:
-    - 0.5
-    - 1
-    - -1
+    - 2.0
+    - 1.0
+    - -1.0
     - 0.5
     - 1.5
   outcome_2:
@@ -63,9 +63,9 @@ outcomes:
     - D/65363002
     - D/384709000
     trigger_weights:
-    - 0.5
-    - 1
-    - -1
+    - 2.0
+    - 1.0
+    - -1.0
     - 0.5
     - 1.5
 paths:
