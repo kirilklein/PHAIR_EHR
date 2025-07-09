@@ -60,25 +60,26 @@ def end_run():
         mlflow.end_run()
 
 
-def get_run_and_prefix() -> tuple:
-    """
-    Get the run used for logging and a prefix.
-    Depending on MLFLOW_CHILD_RUNS:
-    - "prefix": returns the top-level job and a non-empty prefix
-    - "job": returns the nested job and an empty prefix
-    """
-    if MLFLOW_CHILD_RUNS == "prefix":
-        run = mlflow.active_run()
-        prefix = ""
-        while (parent := mlflow.get_parent_run(run.info.run_id)) is not None:
-            prefix += run.info.run_name + "/"
-            run = parent
-        return run, prefix
+def get_run_and_prefix():
+    """Get the current MLflow run and compute prefix"""
+    run = mlflow.active_run()
 
-    elif MLFLOW_CHILD_RUNS == "run":
-        return mlflow.active_run(), ""
-    else:
-        raise ValueError("MLFLOW_CHILD_RUNS must be set to 'prefix' or 'job'")
+    # Handle case where no run is active
+    if run is None:
+        # Either start a new run or return early
+        import warnings
+
+        warnings.warn("No active MLflow run found. Skipping logging.")
+        return None, ""
+
+    prefix = ""
+    # Check if run has valid info before accessing it
+    if run and hasattr(run, "info") and run.info:
+        while (parent := mlflow.get_parent_run(run.info.run_id)) is not None:
+            prefix = parent.info.run_name + "/" + prefix
+            run = parent
+
+    return run, prefix
 
 
 def setup_metrics_dir(name: str):
@@ -110,6 +111,9 @@ def log_metric(key: str, *args, **kwargs):
     """
     if is_mlflow_available():
         run, prefix = get_run_and_prefix()
+        if run is None:
+            # Skip logging if no run is active
+            return
         mlflow.log_metric(prefix + key, *args, run_id=run.info.run_id, **kwargs)
 
 
@@ -122,6 +126,9 @@ def log_metrics(key: str, *args, **kwargs):
     """
     if is_mlflow_available():
         run, prefix = get_run_and_prefix()
+        if run is None:
+            # Skip logging if no run is active
+            return
         mlflow.log_metrics(prefix + key, *args, run_id=run.info.run_id, **kwargs)
 
 
@@ -129,6 +136,9 @@ def log_param(key: str, value: Any) -> None:
     """Log a parameter to the job (if mlflow is available)."""
     if is_mlflow_available():
         run, prefix = get_run_and_prefix()
+        if run is None:
+            # Skip logging if no run is active
+            return
         mlflow.log_param(prefix + key, value)  # Remove run_id parameter
 
 
@@ -140,6 +150,9 @@ def log_params(key: str, *args, **kwargs):
     """
     if is_mlflow_available():
         run, prefix = get_run_and_prefix()
+        if run is None:
+            # Skip logging if no run is active
+            return
         mlflow.log_params(prefix + key, *args, run_id=run.info.run_id, **kwargs)
 
 
@@ -152,6 +165,9 @@ def log_image(key: str, *args, **kwargs):
     """
     if is_mlflow_available():
         run, prefix = get_run_and_prefix()
+        if run is None:
+            # Skip logging if no run is active
+            return
         mlflow.log_image(prefix + key, *args, run_id=run.info.run_id, **kwargs)
 
 
@@ -164,6 +180,9 @@ def log_figure(key: str, *args, **kwargs):
     """
     if is_mlflow_available():
         run, prefix = get_run_and_prefix()
+        if run is None:
+            # Skip logging if no run is active
+            return
         mlflow.log_figure(prefix + key, *args, run_id=run.info.run_id, **kwargs)
 
 
@@ -175,6 +194,9 @@ def log_batch(*args, **kwargs):
     """
     if is_mlflow_available():
         run, _ = get_run_and_prefix()
+        if run is None:
+            # Skip logging if no run is active
+            return
         MLFLOW_CLIENT.log_batch(*args, run_id=run.info.run_id, **kwargs)
 
 
@@ -182,6 +204,9 @@ def metric(name, value, step):
     if is_mlflow_available():
         timestamp = int(time.time() * 1000)
         _, prefix = get_run_and_prefix()
+        if prefix is None:
+            # Skip logging if no run is active
+            return (name, value)
         return Metric(prefix + name, value, timestamp, step)
     else:
         return (name, value)
