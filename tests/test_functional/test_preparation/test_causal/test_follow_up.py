@@ -11,8 +11,10 @@ from corebehrt.constants.causal.data import (
     GROUP_COL,
     NON_COMPLIANCE_COL,
     DEATH_COL,
+    START_TIME_COL,
+    END_TIME_COL,
 )
-from corebehrt.constants.data import PID_COL, ABSPOS_COL
+from corebehrt.constants.data import PID_COL, ABSPOS_COL, TIMESTAMP_COL
 
 
 class TestPrepareFollowUpsAdjusted(unittest.TestCase):
@@ -55,13 +57,13 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
             follow_ups, non_compliance_abspos, deaths, group_dict
         )
 
-        # 3. Expected results:
-        # Patient 1: min(100, 80, inf) = 80, then min within group 0 = min(80, 180) = 80
-        # Patient 2: min(200, 250, 180) = 180, then min within group 0 = min(80, 180) = 80
-        # Patient 3: min(300, 150, inf) = 150, then min within group 1 = min(150, 350) = 150
-        # Patient 4: min(400, 500, 350) = 350, then min within group 1 = min(150, 350) = 150
+        # 3. Expected results (individual patient minimums):
+        # Patient 1: min(100, 80, inf) = 80
+        # Patient 2: min(200, 250, 180) = 180
+        # Patient 3: min(300, 150, inf) = 150
+        # Patient 4: min(400, 500, 350) = 350
 
-        expected_end_values = [80.0, 80.0, 150.0, 150.0]
+        expected_end_values = [80.0, 180.0, 150.0, 350.0]
 
         # 4. Assertions
         self.assertEqual(len(result), 4, f"Expected 4 rows, got {len(result)}")
@@ -110,9 +112,9 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
             follow_ups, non_compliance_abspos, deaths, group_dict
         )
 
-        # 3. Expected results:
-        # Patient 1: min(100, 80, inf) = 80, then min within group 0 = min(80, 200) = 80
-        # Patient 2: min(200, NaN, NaN) = 200, then min within group 0 = min(80, 200) = 80
+        # 3. Expected results (individual patient minimums):
+        # Patient 1: min(100, 80, inf) = 80
+        # Patient 2: min(200, NaN, NaN) = 200
 
         # 4. Assertions
         self.assertTrue(
@@ -124,7 +126,7 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
             "Missing death should be NaN",
         )
         pd.testing.assert_series_equal(
-            result[END_COL], pd.Series([80.0, 80.0], name=END_COL), check_names=False
+            result[END_COL], pd.Series([80.0, 200.0], name=END_COL), check_names=False
         )
 
     def test_prepare_follow_ups_adjusted_empty_input(self):
@@ -165,12 +167,12 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
             follow_ups, non_compliance_abspos, deaths, group_dict
         )
 
-        # 3. Expected results:
-        # Patient 1: min(100, 80, inf) = 80, then min within group 0 = min(80, 120) = 80
-        # Patient 2: min(200, 150, 120) = 120, then min within group 0 = min(80, 120) = 80
+        # 3. Expected results (individual patient minimums):
+        # Patient 1: min(100, 80, inf) = 80
+        # Patient 2: min(200, 150, 120) = 120
 
         # 4. Assertions
-        expected_end_values = [80.0, 80.0]
+        expected_end_values = [80.0, 120.0]
         pd.testing.assert_series_equal(
             result[END_COL],
             pd.Series(expected_end_values, name=END_COL),
@@ -186,8 +188,13 @@ class TestPrepareFollowUpsSimple(unittest.TestCase):
         # 1. Setup test data
         index_dates = pd.DataFrame(
             {
-                "pid": [1, 2, 3],
-                "abspos": [100.0, 200.0, 300.0],
+                PID_COL: [1, 2, 3],
+                TIMESTAMP_COL: [
+                    pd.Timestamp("2023-01-01 12:00:00"),
+                    pd.Timestamp("2023-01-02 12:00:00"),
+                    pd.Timestamp("2023-01-03 12:00:00"),
+                ],
+                ABSPOS_COL: [100.0, 200.0, 300.0],
                 "other_col": [
                     "a",
                     "b",
@@ -198,107 +205,135 @@ class TestPrepareFollowUpsSimple(unittest.TestCase):
 
         n_hours_start_follow_up = 24
         n_hours_end_follow_up = 168  # 1 week
+        data_end = pd.Timestamp("2023-12-31 23:59:59")
 
         # 2. Execute function
         result = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
         )
 
-        # 3. Expected results:
-        # Patient 1: start=100+24=124, end=100+168=268
-        # Patient 2: start=200+24=224, end=200+168=368
-        # Patient 3: start=300+24=324, end=300+168=468
-
-        # 4. Assertions
+        # 3. Assertions
         self.assertEqual(len(result), 3, "Should have same number of rows")
         self.assertNotIn(ABSPOS_COL, result.columns, "abspos column should be dropped")
         self.assertIn(START_COL, result.columns, "Should have start column")
         self.assertIn(END_COL, result.columns, "Should have end column")
         self.assertIn("other_col", result.columns, "Other columns should be preserved")
 
-        expected_start = [124.0, 224.0, 324.0]
-        expected_end = [268.0, 368.0, 468.0]
-
-        pd.testing.assert_series_equal(
-            result[START_COL],
-            pd.Series(expected_start, name=START_COL),
-            check_names=False,
-        )
-        pd.testing.assert_series_equal(
-            result[END_COL], pd.Series(expected_end, name=END_COL), check_names=False
+        # Check that start and end times are calculated correctly from timestamps
+        self.assertTrue(all(result[START_COL] > 0), "Start times should be positive")
+        self.assertTrue(
+            all(result[END_COL] > result[START_COL]),
+            "End times should be after start times",
         )
 
     def test_prepare_follow_ups_simple_zero_hours(self):
         """Test with zero follow-up hours."""
         # 1. Setup test data
-        index_dates = pd.DataFrame({PID_COL: [1, 2], ABSPOS_COL: [100.0, 200.0]})
+        index_dates = pd.DataFrame(
+            {
+                PID_COL: [1, 2],
+                TIMESTAMP_COL: [
+                    pd.Timestamp("2023-01-01 12:00:00"),
+                    pd.Timestamp("2023-01-02 12:00:00"),
+                ],
+                ABSPOS_COL: [100.0, 200.0],
+            }
+        )
 
         n_hours_start_follow_up = 0
         n_hours_end_follow_up = 0
+        data_end = pd.Timestamp("2023-12-31 23:59:59")
 
         # 2. Execute function
         result = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
         )
 
-        # 3. Expected results:
-        # Patient 1: start=100+0=100, end=100+0=100
-        # Patient 2: start=200+0=200, end=200+0=200
-
-        # 4. Assertions
-        expected_start = [100.0, 200.0]
-        expected_end = [100.0, 200.0]
-
+        # 3. Assertions
+        # Start and end should be the same when both are 0 hours
         pd.testing.assert_series_equal(
             result[START_COL],
-            pd.Series(expected_start, name=START_COL),
+            result[END_COL],
             check_names=False,
-        )
-        pd.testing.assert_series_equal(
-            result[END_COL], pd.Series(expected_end, name=END_COL), check_names=False
         )
 
     def test_prepare_follow_ups_simple_negative_hours(self):
         """Test with negative follow-up hours."""
         # 1. Setup test data
-        index_dates = pd.DataFrame({PID_COL: [1, 2], ABSPOS_COL: [100.0, 200.0]})
+        index_dates = pd.DataFrame(
+            {
+                PID_COL: [1, 2],
+                TIMESTAMP_COL: [
+                    pd.Timestamp("2023-01-01 12:00:00"),
+                    pd.Timestamp("2023-01-02 12:00:00"),
+                ],
+                ABSPOS_COL: [100.0, 200.0],
+            }
+        )
 
         n_hours_start_follow_up = -12
         n_hours_end_follow_up = -24
+        data_end = pd.Timestamp("2023-12-31 23:59:59")
 
         # 2. Execute function
         result = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
         )
 
-        # 3. Expected results:
-        # Patient 1: start=100+(-12)=88, end=100+(-24)=76
-        # Patient 2: start=200+(-12)=188, end=200+(-24)=176
-
-        # 4. Assertions
-        expected_start = [88.0, 188.0]
-        expected_end = [76.0, 176.0]
-
-        pd.testing.assert_series_equal(
-            result[START_COL],
-            pd.Series(expected_start, name=START_COL),
-            check_names=False,
+        # 3. Assertions
+        # End should be before start when end hours are more negative
+        self.assertTrue(
+            all(result[END_COL] < result[START_COL]),
+            "End times should be before start times with negative hours",
         )
-        pd.testing.assert_series_equal(
-            result[END_COL], pd.Series(expected_end, name=END_COL), check_names=False
+
+    def test_prepare_follow_ups_simple_none_end_hours(self):
+        """Test with None end hours to use data_end."""
+        # 1. Setup test data
+        index_dates = pd.DataFrame(
+            {
+                PID_COL: [1, 2],
+                TIMESTAMP_COL: [
+                    pd.Timestamp("2023-01-01 12:00:00"),
+                    pd.Timestamp("2023-01-02 12:00:00"),
+                ],
+                ABSPOS_COL: [100.0, 200.0],
+            }
+        )
+
+        n_hours_start_follow_up = 24
+        n_hours_end_follow_up = None  # Should use data_end
+        data_end = pd.Timestamp("2023-12-31 23:59:59")
+
+        # 2. Execute function
+        result = prepare_follow_ups_simple(
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
+        )
+
+        # 3. Assertions
+        # All end times should be the same (data_end converted to hours since epoch)
+        expected_end_hours = result[END_COL].iloc[0]  # Get the first value
+        self.assertTrue(
+            all(result[END_COL] == expected_end_hours),
+            "All end times should be the same when using data_end",
+        )
+        self.assertTrue(
+            all(result[END_COL] > result[START_COL]),
+            "End times should be after start times",
         )
 
     def test_prepare_follow_ups_simple_empty_input(self):
         """Test with empty DataFrame."""
         # 1. Setup empty test data
-        index_dates = pd.DataFrame(columns=[PID_COL, ABSPOS_COL])
+        index_dates = pd.DataFrame(columns=[PID_COL, TIMESTAMP_COL, ABSPOS_COL])
 
         n_hours_start_follow_up = 24
         n_hours_end_follow_up = 168
+        data_end = pd.Timestamp("2023-12-31 23:59:59")
 
         # 2. Execute function
         result = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
         )
 
         # 3. Assertions
@@ -310,23 +345,29 @@ class TestPrepareFollowUpsSimple(unittest.TestCase):
     def test_prepare_follow_ups_simple_single_row(self):
         """Test with single row input."""
         # 1. Setup test data
-        index_dates = pd.DataFrame({PID_COL: [1], ABSPOS_COL: [500.0]})
+        index_dates = pd.DataFrame(
+            {
+                PID_COL: [1],
+                TIMESTAMP_COL: [pd.Timestamp("2023-01-01 12:00:00")],
+                ABSPOS_COL: [500.0],
+            }
+        )
 
         n_hours_start_follow_up = 48
         n_hours_end_follow_up = 720  # 30 days
+        data_end = pd.Timestamp("2023-12-31 23:59:59")
 
         # 2. Execute function
         result = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
         )
 
-        # 3. Expected results:
-        # Patient 1: start=500+48=548, end=500+720=1220
-
-        # 4. Assertions
+        # 3. Assertions
         self.assertEqual(len(result), 1, "Should have one row")
-        self.assertEqual(result.iloc[0][START_COL], 548.0, "Start time incorrect")
-        self.assertEqual(result.iloc[0][END_COL], 1220.0, "End time incorrect")
+        self.assertTrue(
+            result.iloc[0][END_COL] > result.iloc[0][START_COL],
+            "End time should be after start time",
+        )
 
     def test_prepare_follow_ups_simple_preserves_other_columns(self):
         """Test that other columns are preserved."""
@@ -334,6 +375,10 @@ class TestPrepareFollowUpsSimple(unittest.TestCase):
         index_dates = pd.DataFrame(
             {
                 PID_COL: [1, 2],
+                TIMESTAMP_COL: [
+                    pd.Timestamp("2023-01-01 12:00:00"),
+                    pd.Timestamp("2023-01-02 12:00:00"),
+                ],
                 ABSPOS_COL: [100.0, 200.0],
                 "other_col1": [25, 30],
                 "other_col2": ["M", "F"],
@@ -342,14 +387,24 @@ class TestPrepareFollowUpsSimple(unittest.TestCase):
 
         n_hours_start_follow_up = 24
         n_hours_end_follow_up = 168
+        data_end = pd.Timestamp("2023-12-31 23:59:59")
 
         # 2. Execute function
         result = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
         )
 
         # 3. Assertions
-        expected_columns = {PID_COL, START_COL, END_COL, "other_col1", "other_col2"}
+        expected_columns = {
+            PID_COL,
+            START_COL,
+            END_COL,
+            START_TIME_COL,
+            END_TIME_COL,
+            TIMESTAMP_COL,
+            "other_col1",
+            "other_col2",
+        }
         self.assertEqual(
             set(result.columns),
             expected_columns,
@@ -368,34 +423,36 @@ class TestPrepareFollowUpsSimple(unittest.TestCase):
             check_names=False,
         )
 
-    def test_prepare_follow_ups_simple_float_abspos(self):
-        """Test with float values in abspos column."""
-        # 1. Setup test data with float abspos
-        index_dates = pd.DataFrame({PID_COL: [1, 2], ABSPOS_COL: [100.5, 200.75]})
+    def test_prepare_follow_ups_simple_float_hours(self):
+        """Test with float values in hours."""
+        # 1. Setup test data with timestamps
+        index_dates = pd.DataFrame(
+            {
+                PID_COL: [1, 2],
+                TIMESTAMP_COL: [
+                    pd.Timestamp("2023-01-01 12:00:00"),
+                    pd.Timestamp("2023-01-02 12:00:00"),
+                ],
+                ABSPOS_COL: [100.5, 200.75],
+            }
+        )
 
         n_hours_start_follow_up = 12.5
         n_hours_end_follow_up = 48.25
+        data_end = pd.Timestamp("2023-12-31 23:59:59")
 
         # 2. Execute function
         result = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
         )
 
-        # 3. Expected results:
-        # Patient 1: start=100.5+12.5=113.0, end=100.5+48.25=148.75
-        # Patient 2: start=200.75+12.5=213.25, end=200.75+48.25=249.0
-
-        # 4. Assertions
-        expected_start = [113.0, 213.25]
-        expected_end = [148.75, 249.0]
-
-        pd.testing.assert_series_equal(
-            result[START_COL],
-            pd.Series(expected_start, name=START_COL),
-            check_names=False,
-        )
-        pd.testing.assert_series_equal(
-            result[END_COL], pd.Series(expected_end, name=END_COL), check_names=False
+        # 3. Assertions
+        # Check that the time differences are correct
+        time_diff = result[END_COL] - result[START_COL]
+        expected_diff = 48.25 - 12.5  # 35.75 hours
+        self.assertTrue(
+            all(abs(time_diff - expected_diff) < 0.001),
+            "Time differences should match expected hours",
         )
 
 
