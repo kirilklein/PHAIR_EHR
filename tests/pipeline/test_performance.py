@@ -107,12 +107,12 @@ def find_roc_auc_file(ft_dir: str, file_start: str) -> str:
     latest_datetime = None
 
     for file in matching_files:
-        # Extract datetime pattern from filename (assuming format like YYYY-MM-DD_HH-MM-SS)
-        datetime_match = re.search(r"(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})", file)
+        # Extract datetime pattern from filename (assuming format like YYYYmmdd-HHMM)
+        datetime_match = re.search(r"(\d{8}-\d{4})", file)
         if datetime_match:
             datetime_str = datetime_match.group(1)
             try:
-                file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d_%H-%M-%S")
+                file_datetime = datetime.strptime(datetime_str, "%Y%m%d-%H%M")
                 if latest_datetime is None or file_datetime > latest_datetime:
                     latest_datetime = file_datetime
                     latest_file = file
@@ -120,8 +120,8 @@ def find_roc_auc_file(ft_dir: str, file_start: str) -> str:
                 continue
 
     if latest_file is None:
-        # Fallback to first file if datetime parsing fails
-        latest_file = matching_files[0]
+        # Fallback to last file if datetime parsing fails
+        latest_file = matching_files[-1]
 
     return os.path.join(ft_dir, latest_file)
 
