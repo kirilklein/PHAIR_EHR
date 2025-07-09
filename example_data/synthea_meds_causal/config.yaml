@@ -2,7 +2,7 @@ exposure:
   code: EXPOSURE
   compliance_interval_days: 90
   min_compliance_days: 365
-  p_base: 0.15
+  p_base: 0.25
   run_in_days: 365
   trigger_codes:
   - D/25675004
@@ -11,11 +11,11 @@ exposure:
   - D/105531004
   - D/65363002
   trigger_weights:
-  - 1.5
-  - 2.0
-  - -1.5
-  - 1.0
-  - 0.5
+  - 2
+  - 2
+  - 2
+  - 2
+  - 2
 outcomes:
   outcome_1:
     code: OUTCOME
