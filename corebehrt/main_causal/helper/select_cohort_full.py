@@ -33,7 +33,7 @@ from corebehrt.functional.cohort_handling.advanced.vis import (
     plot_cohort_stats,
     plot_multiple_cohort_stats,
 )
-
+import shutil
 from corebehrt.constants.causal.paths import (
     EXPOSURES_FILE,
     INDEX_DATE_MATCHING_FILE,
@@ -42,7 +42,10 @@ from corebehrt.constants.causal.paths import (
 from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
 from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE, TEST_PIDS_FILE
-from corebehrt.constants.causal.paths import CRITERIA_FLAGS_FILE
+from corebehrt.constants.causal.paths import (
+    CRITERIA_FLAGS_FILE,
+    CRITERIA_DEFINITIONS_FILE,
+)
 from corebehrt.functional.causal.checks import check_time_windows
 from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
@@ -122,6 +125,7 @@ def select_cohort(
     )
 
     criteria_config = load_config(criteria_definitions_path)
+    shutil.copy(criteria_definitions_path, join(save_path, CRITERIA_DEFINITIONS_FILE))
     criteria_exposed, index_dates_filtered_exposed, exposed_stats = _prepare_exposed(
         index_dates,
         time_windows,
