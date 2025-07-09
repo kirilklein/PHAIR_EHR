@@ -16,17 +16,17 @@ paths:
 
 time_windows: # if not provided we can use exposures to get the index dates
   data_end:
-    year: 2022
-    month: 12
-    day: 31
+    year: 2020
+    month: 01
+    day: 01
   data_start:
-    year: 1990
+    year: 1950
     month: 1
     day: 1
   min_follow_up: # minimum interval between index date and end of data
-    days: 365
+    days: 1000
   min_lookback: # minimum interval between start of data and index date
-    days: 1095
+    days: 365
 
 cv_folds: 2 # can be set to 1 if only a simple train/val split is needed
 val_ratio: 0.1 # only used if cv_folds is set to 1

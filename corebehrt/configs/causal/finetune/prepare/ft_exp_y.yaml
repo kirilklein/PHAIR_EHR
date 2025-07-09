@@ -27,6 +27,6 @@ exposure:
   n_hours_start_follow_up: -1 # start follow up (considering outcomes) time after index date (negative means before)
   n_hours_end_follow_up: 10 # end follow up (considering outcomes) time after index date (negative means before)
 outcome:
-  n_hours_start_follow_up: 10 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)
   n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
   n_hours_compliance: 100_000 # follow up time is adjusted based on compliance
