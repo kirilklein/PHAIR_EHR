@@ -14,8 +14,8 @@ exposure:
   min_compliance_days: 365 # minimum number of days the exposure must be repeated
   p_base: 0.15 # Base 15% chance of exposure over the patient's timeline
   trigger_codes: [D/25675004, D/431855005, D/80583007, D/105531004, D/65363002]
-  # Small, non-zero daily logit effects.
-  trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
+  # Even stronger effects for higher AUROC
+  trigger_weights: [1.5, 2.0, -1.5, 1.0, 0.5] # logits
 
 outcomes:
   outcome_1:
@@ -30,7 +30,7 @@ outcomes:
         D/384709000, # prognostic
       ]
     # Confounders have a different effect on the outcome than on the exposure.
-    trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
+    trigger_weights: [2.0, 1.0, -1.0, 0.5, 1.5] # logits
     # STRONG positive effect from exposure.
     exposure_effect: 2 # logits
 
@@ -61,6 +61,6 @@ outcomes:
         D/384709000, # confounders
       ]
     # The confounders still have an effect on this outcome.
-    trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
+    trigger_weights: [2.0, 1.0, -1.0, 0.5, 1.5] # logits
     # ZERO direct causal effect from exposure.
     exposure_effect: 0
