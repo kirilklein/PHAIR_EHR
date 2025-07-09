@@ -135,7 +135,6 @@ class CausalDatasetPreparer(DatasetPreparer):
 
         logger.info("Handling exposures and outcomes")
         # Get data end time from cohort configuration
-        data_end_abspos = None
         if hasattr(cohort_cfg, "time_windows") and hasattr(
             cohort_cfg.time_windows, "data_end"
         ):
