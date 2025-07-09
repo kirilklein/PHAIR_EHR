@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from scipy.special import expit, logit
 from tqdm import tqdm
-# from tests.data_generation.helper.config import SimulationConfig
+from tests.data_generation.helper.config import SimulationConfig
 
 
 class CausalSimulator:
@@ -13,7 +13,7 @@ class CausalSimulator:
     age-based index date matching for controls.
     """
 
-    def __init__(self, config: "SimulationConfig"):
+    def __init__(self, config: SimulationConfig):
         self.config = config
         self.first_exposure_dates = {}
 
