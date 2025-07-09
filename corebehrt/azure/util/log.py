@@ -34,19 +34,23 @@ def start_run(name: str = None, nested: bool = False, log_system_metrics: bool =
     :param name: Name of run
     :param nested: If the run should be nested.
     :param log_system_metrics: If enabled, log system metrics (CPU/GPU/mem).
-    """
-    if is_mlflow_available():
-        run = mlflow.start_run(
-            run_name=name, nested=nested, log_system_metrics=log_system_metrics
-        )
-    else:
-        # Return a dummpy context manager so as to not raise an
-        # error if mlflow is not available
-        @contextmanager
-        def dummy_cm():
-            yield None
 
-        run = dummy_cm()
+    """
+
+    # Return a dummpy context manager so as to not raise an
+    # error if mlflow is not available
+    @contextmanager
+    def dummy_cm():
+        yield None
+
+    run = dummy_cm()
+    if is_mlflow_available():
+        try:
+            run = mlflow.start_run(
+                run_name=name, nested=nested, log_system_metrics=log_system_metrics
+            )
+        except Exception as e:
+            print(f"Error starting mlflow run: {e}")
 
     return run
 
