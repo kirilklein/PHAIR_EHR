@@ -6,10 +6,16 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
+from corebehrt.azure.util.config import load_config
 from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSURE, OUTCOME
 from corebehrt.constants.causal.paths import EXPOSURES_FILE, INDEX_DATE_MATCHING_FILE
 from corebehrt.constants.data import ABSPOS_COL, DEATH_CODE, PID_COL, TIMESTAMP_COL
-from corebehrt.constants.paths import FOLLOW_UPS_FILE, INDEX_DATES_FILE, OUTCOMES_FILE
+from corebehrt.constants.paths import (
+    FOLLOW_UPS_FILE,
+    INDEX_DATES_FILE,
+    OUTCOMES_FILE,
+    COHORT_CFG,
+)
 from corebehrt.functional.preparation.causal.utils import (
     get_group_dict,
     get_non_compliance_abspos,
@@ -38,7 +44,6 @@ from corebehrt.functional.preparation.utils import (
 )
 from corebehrt.functional.utils.time import (
     get_hours_since_epoch,
-    get_datetime_from_hours_since_epoch,
 )
 from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
 from corebehrt.modules.features.loader import ShardLoader
@@ -77,7 +82,7 @@ class CausalDatasetPreparer(DatasetPreparer):
         data_cfg = self.cfg.data
 
         pids = self.load_cohort(paths_cfg)
-
+        cohort_cfg = load_config(join(paths_cfg.cohort, COHORT_CFG))
         # Load index dates and convert to abspos
         index_dates = pd.read_csv(
             join(paths_cfg.cohort, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
@@ -107,7 +112,9 @@ class CausalDatasetPreparer(DatasetPreparer):
         data = CausalPatientDataset(patients=patient_list)
 
         # Loading and processing outcomes
-        index_dates = pd.read_csv(join(paths_cfg.cohort, INDEX_DATES_FILE))
+        index_dates = pd.read_csv(
+            join(paths_cfg.cohort, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
+        )
         exposures = pd.read_csv(join(paths_cfg.cohort, EXPOSURES_FILE))
         index_date_matching = pd.read_csv(
             join(paths_cfg.cohort, INDEX_DATE_MATCHING_FILE)
@@ -127,12 +134,24 @@ class CausalDatasetPreparer(DatasetPreparer):
         deaths = {patient.pid: death for patient, death in zip(data.patients, deaths)}
 
         logger.info("Handling exposures and outcomes")
+        # Get data end time from cohort configuration
+        data_end_abspos = None
+        if hasattr(cohort_cfg, "time_windows") and hasattr(
+            cohort_cfg.time_windows, "data_end"
+        ):
+            data_end = pd.to_datetime(cohort_cfg.time_windows.data_end)
+        else:
+            logger.warning(
+                "No data end time found in cohort configuration. Setting to today."
+            )
+            data_end = pd.to_datetime("today")
         # Outcome Handler now only needs to do 1 thing: if outcome is in follow up window 1 else 0
         binary_exposure = self._get_binary_exposure(
             exposures,
             index_dates,
             exposure_cfg.get("n_hours_start_follow_up", -1),
             exposure_cfg.get("n_hours_end_follow_up", np.inf),
+            data_end,
         )
 
         binary_outcome, follow_ups = self._get_binary_outcome(
@@ -144,6 +163,7 @@ class CausalDatasetPreparer(DatasetPreparer):
             index_date_matching=index_date_matching,
             deaths=deaths,
             exposures=exposures,
+            data_end=data_end,  # Pass the actual data end time
         )
 
         logger.info("Assigning exposures and outcomes")
@@ -207,10 +227,7 @@ class CausalDatasetPreparer(DatasetPreparer):
         exposures.to_csv(join(self.processed_dir, EXPOSURES_FILE), index=False)
         outcomes.to_csv(join(self.processed_dir, OUTCOMES_FILE), index=False)
         index_dates.to_csv(join(self.processed_dir, INDEX_DATES_FILE), index=False)
-        follow_ups["start_time"] = get_datetime_from_hours_since_epoch(
-            follow_ups["start"]
-        )
-        follow_ups["end_time"] = get_datetime_from_hours_since_epoch(follow_ups["end"])
+
         follow_ups.to_csv(join(self.processed_dir, FOLLOW_UPS_FILE), index=False)
         return data
 
@@ -220,6 +237,7 @@ class CausalDatasetPreparer(DatasetPreparer):
         index_dates: pd.DataFrame,
         n_hours_start_follow_up: int,
         n_hours_end_follow_up: int,
+        data_end: pd.Timestamp,
     ) -> pd.Series:
         """
         Create binary exposure indicators for patients based on exposure events within follow-up periods.
@@ -237,7 +255,7 @@ class CausalDatasetPreparer(DatasetPreparer):
             pd.Series: Binary exposure indicator (1 if exposed during follow-up, 0 otherwise)
         """
         follow_ups = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
         )
         return abspos_to_binary_outcome(follow_ups, exposures)
 
@@ -251,6 +269,7 @@ class CausalDatasetPreparer(DatasetPreparer):
         index_date_matching: pd.DataFrame,
         deaths: pd.Series,
         exposures: pd.DataFrame,
+        data_end: pd.Timestamp,
     ) -> tuple[pd.Series, pd.DataFrame]:
         """
         Create binary outcome indicators for patients using adjusted follow-up periods.
@@ -285,10 +304,13 @@ class CausalDatasetPreparer(DatasetPreparer):
         group_dict = get_group_dict(index_date_matching)
         non_compliance_abspos = get_non_compliance_abspos(exposures, n_hours_compliance)
         follow_ups = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up
+            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
         )
         follow_ups = prepare_follow_ups_adjusted(
-            follow_ups, non_compliance_abspos, deaths, group_dict
+            follow_ups,
+            non_compliance_abspos,
+            deaths,
+            group_dict,
         )
         return abspos_to_binary_outcome(follow_ups, outcomes), follow_ups
 

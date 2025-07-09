@@ -12,6 +12,8 @@ EXPOSED_PID_COL = "exposed_subject_id"
 
 START_COL = "start"
 END_COL = "end"
+START_TIME_COL = "start_time"
+END_TIME_COL = "end_time"
 
 # Prepare causal finetune data
 EXPOSURE = "exposure"
