@@ -36,7 +36,10 @@ from corebehrt.functional.preparation.utils import (
     get_concept_id_to_delay,
     get_non_priority_tokens,
 )
-from corebehrt.functional.utils.time import get_hours_since_epoch
+from corebehrt.functional.utils.time import (
+    get_hours_since_epoch,
+    get_datetime_from_hours_since_epoch,
+)
 from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
 from corebehrt.modules.features.loader import ShardLoader
 from corebehrt.modules.monitoring.logger import TqdmToLogger
@@ -204,6 +207,10 @@ class CausalDatasetPreparer(DatasetPreparer):
         exposures.to_csv(join(self.processed_dir, EXPOSURES_FILE), index=False)
         outcomes.to_csv(join(self.processed_dir, OUTCOMES_FILE), index=False)
         index_dates.to_csv(join(self.processed_dir, INDEX_DATES_FILE), index=False)
+        follow_ups["start_time"] = get_datetime_from_hours_since_epoch(
+            follow_ups["start"]
+        )
+        follow_ups["end_time"] = get_datetime_from_hours_since_epoch(follow_ups["end"])
         follow_ups.to_csv(join(self.processed_dir, FOLLOW_UPS_FILE), index=False)
         return data
 
