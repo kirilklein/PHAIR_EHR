@@ -61,6 +61,7 @@ class CausalSimulator:
 
     # Constants
     MAX_RETRY_ATTEMPTS = 100
+    MIN_PROBA = 1e-6
 
     def __init__(self, config: SimulationConfig):
         """
@@ -160,33 +161,34 @@ class CausalSimulator:
         self, first_exposure_date: pd.Timestamp, end_date: pd.Timestamp
     ) -> pd.Timestamp:
         """
-        Selects a compliance end date with an evenly spaced probability
+        Selects a compliance end date using a stable linear weighting,
+        making later dates more probable.
         """
+        # Determine the earliest possible end date
         earliest_end = first_exposure_date + pd.Timedelta(
             days=self.config.exposure.min_compliance_days
         )
 
+        # Handle edge case where no choice is possible
         if earliest_end >= end_date:
             return end_date
 
+        # --- Stable Linear Weighting ---
+
         total_days = (end_date - earliest_end).days
+        days_array = np.arange(total_days)
 
-        # Handle edge case where there are very few days available
-        if total_days < 1:
-            return end_date
+        # 1. Create linearly increasing weights. The range starts at 1 to avoid a sum of zero.
+        # The last day will be `total_days` times more likely to be chosen than the first.
+        weights = np.arange(1, total_days + 1, dtype=np.float64)
 
-        # Work in days for better precision
-        days = np.arange(total_days)
+        # 2. Normalize robustly to get probabilities that are guaranteed to sum to 1.
+        probabilities = weights / np.sum(weights)
 
-        # Calculate decay rate (lambda = 1 / (decay_years * 365.25))
-        weights = np.arange(total_days, dtype="float64") ** 2
-        weights /= weights.sum()
+        # 3. Choose a day offset using the calculated probabilities.
+        chosen_offset = np.random.choice(days_array, p=probabilities)
 
-        # Choose a day offset according to exponential distribution
-        chosen_offset = np.random.choice(days, p=weights)
         compliance_end = earliest_end + pd.Timedelta(days=int(chosen_offset))
-        if compliance_end > end_date:
-            return end_date
 
         return compliance_end
 
@@ -236,15 +238,20 @@ class CausalSimulator:
         df_with_outcomes = subj_df.copy()
         ite_record = {"subject_id": subject_id, "has_exposure": int(has_exposure)}
 
+        # FIXED: Use index date logic to ensure outcomes fall within follow-up windows
+        # This aligns with how data preparation will define follow-up periods
+        index_date = self._determine_index_date(
+            has_exposure, first_exposure_date, start_date, end_date
+        )
+
         # Simulate each outcome
         for outcome_cfg in self.config.outcomes.values():
-            assessment_time = self._determine_assessment_time(
-                has_exposure,
-                first_exposure_date,
-                start_date,
-                end_date,
-                outcome_cfg.run_in_days,
-            )
+            # FIXED: Assessment time now based on index date + run_in, not arbitrary timing
+            assessment_time = index_date + pd.Timedelta(days=outcome_cfg.run_in_days)
+            
+            # Ensure assessment time is valid
+            if assessment_time > end_date:
+                assessment_time = end_date - pd.Timedelta(days=1)
 
             df_with_outcomes, ite_value = self._simulate_single_outcome_complete(
                 df_with_outcomes, outcome_cfg, assessment_time
@@ -252,6 +259,46 @@ class CausalSimulator:
             ite_record[f"ite_{outcome_cfg.code}"] = ite_value
 
         return df_with_outcomes, ite_record
+
+    def _determine_index_date(
+        self,
+        has_exposure: bool,
+        first_exposure_date: Optional[pd.Timestamp],
+        start_date: pd.Timestamp,
+        end_date: pd.Timestamp,
+    ) -> pd.Timestamp:
+        """
+        Determine index date that will be consistent with data preparation.
+        
+        This ensures that outcomes simulated relative to this index date
+        will fall within the follow-up windows used in data preparation.
+        """
+        if has_exposure:
+            # For exposed subjects, index date = first exposure date
+            return first_exposure_date.normalize()
+        else:
+            # For unexposed subjects, sample a pseudo-index date that mimics
+            # the index date matching process used in data preparation
+            if not self.first_exposure_dates:
+                # Fallback: use start of exposure window
+                return start_date + pd.Timedelta(days=self.config.exposure.run_in_days)
+            
+            # Sample from exposure distribution but ensure it's valid for this subject
+            exposure_window_start = start_date + pd.Timedelta(days=self.config.exposure.run_in_days)
+            exposure_window_end = end_date - pd.Timedelta(days=max(
+                outcome_cfg.run_in_days for outcome_cfg in self.config.outcomes.values()
+            ))
+            
+            if exposure_window_start >= exposure_window_end:
+                return exposure_window_start
+            
+            # Sample uniformly within this subject's valid window
+            days_in_window = (exposure_window_end - exposure_window_start).days
+            if days_in_window <= 0:
+                return exposure_window_start
+                
+            random_days = np.random.randint(0, days_in_window)
+            return exposure_window_start + pd.Timedelta(days=random_days)
 
     def _extract_subject_info(self, subj_df: pd.DataFrame) -> Optional[Tuple]:
         """Extracts key information about a subject."""
@@ -271,63 +318,6 @@ class CausalSimulator:
         subject_id = subj_df.iloc[0]["subject_id"]
 
         return start_date, end_date, has_exposure, first_exposure_date, subject_id
-
-    def _determine_assessment_time(
-        self,
-        has_exposure: bool,
-        first_exposure_date: Optional[pd.Timestamp],
-        start_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        run_in_days: int,
-    ) -> pd.Timestamp:
-        """Determines when to assess outcomes, ensuring valid timeline."""
-        fallback_date = end_date - pd.Timedelta(days=1)
-
-        if has_exposure:
-            return self._get_exposed_assessment_time(
-                first_exposure_date, end_date, run_in_days, fallback_date
-            )
-        else:
-            return self._get_unexposed_assessment_time(
-                start_date, end_date, run_in_days, fallback_date
-            )
-
-    def _get_exposed_assessment_time(
-        self,
-        first_exposure_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        run_in_days: int,
-        fallback_date: pd.Timestamp,
-    ) -> pd.Timestamp:
-        """Gets assessment time for exposed subjects."""
-        assessment_start = first_exposure_date.normalize()
-        assessment_time = assessment_start + pd.Timedelta(days=run_in_days)
-
-        return assessment_time if assessment_time <= end_date else fallback_date
-
-    def _get_unexposed_assessment_time(
-        self,
-        start_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        run_in_days: int,
-        fallback_date: pd.Timestamp,
-    ) -> pd.Timestamp:
-        """Gets assessment time for unexposed subjects using exposure distribution."""
-        if not self.first_exposure_dates:
-            candidate_time = start_date + pd.Timedelta(days=run_in_days)
-            return candidate_time if candidate_time < end_date else fallback_date
-
-        # Try to find suitable pseudo-exposure date
-        for _ in range(self.MAX_RETRY_ATTEMPTS):
-            pseudo_exposure_date = np.random.choice(
-                self.first_exposure_dates
-            ).normalize()
-            assessment_time = pseudo_exposure_date + pd.Timedelta(days=run_in_days)
-
-            if start_date <= assessment_time <= end_date:
-                return assessment_time
-
-        return fallback_date
 
     def _simulate_single_outcome_complete(
         self, subj_df: pd.DataFrame, outcome_cfg, assessment_time: pd.Timestamp
