@@ -34,6 +34,8 @@ def prepare_follow_ups_adjusted(
 ) -> pd.DataFrame:
     """
     Prepare the follow-ups for the patients.
+    The follow-up time for each patient is the minimum of the follow-up time, non-compliance time, and death time.
+    You can set non-compliance to a large value to ensure that the follow-up time is the follow-up time.
     """
     follow_ups = follow_ups.copy()
 
@@ -44,5 +46,4 @@ def prepare_follow_ups_adjusted(
     follow_ups[END_COL] = follow_ups[[END_COL, NON_COMPLIANCE_COL, DEATH_COL]].min(
         axis=1
     )
-    follow_ups[END_COL] = follow_ups.groupby(GROUP_COL)[END_COL].transform("min")
     return follow_ups
