@@ -111,10 +111,6 @@ class CausalDatasetPreparer(DatasetPreparer):
         logger.info(f"Number of patients: {len(patient_list)}")
         data = CausalPatientDataset(patients=patient_list)
 
-        # Loading and processing outcomes
-        index_dates = pd.read_csv(
-            join(paths_cfg.cohort, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
-        )
         exposures = pd.read_csv(join(paths_cfg.cohort, EXPOSURES_FILE))
         index_date_matching = pd.read_csv(
             join(paths_cfg.cohort, INDEX_DATE_MATCHING_FILE)
