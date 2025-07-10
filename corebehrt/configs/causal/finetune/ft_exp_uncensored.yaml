@@ -23,7 +23,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 7
+  epochs: 4
   info: true
   gradient_clip:
     clip_value: 1.0
@@ -40,7 +40,7 @@ trainer_args:
   reset_patience_after_unfreeze: true # reset early stopping counter after unfreezing
 
 optimizer:
-  lr: 1e-2
+  lr: 9e-3
   eps: 1e-6
 
 scheduler:
