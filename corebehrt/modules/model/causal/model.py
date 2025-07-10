@@ -56,8 +56,9 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_outcomes)
 
         # Get pooling type and bidirectional setting from config
-        pooling_type = getattr(config, "pooling_type", "bigru")
-        bidirectional = getattr(config, "bidirectional", True)
+        cls_config = getattr(config, "cls", {})
+        pooling_type = cls_config.get("pooling_type", "bigru")
+        bidirectional = cls_config.get("bidirectional", True)
 
         # Two separate classification heads
         self.exposure_cls = CausalFineTuneHead(
