@@ -30,10 +30,10 @@ trainer_args:
   early_stopping: null # num_epochs or null/false
 
 model:
-  hidden_size: 64
-  num_hidden_layers: 2
-  num_attention_heads: 2
-  intermediate_size: 32
+  hidden_size: 96
+  num_hidden_layers: 3
+  num_attention_heads: 3
+  intermediate_size: 64
 
   type_vocab_size: 1024 # !!! type_vocab_size should be > truncation_len//2 if sep token else >truncation len
   embedding_dropout: 0.1

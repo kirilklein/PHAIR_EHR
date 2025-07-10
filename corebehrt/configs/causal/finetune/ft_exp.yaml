@@ -16,41 +16,29 @@ model:
     _target_: ehr2vec.model.heads.ClassifierGRU
     bidirectional: true
 
-data:
-  predefined_folds: true # using predefined folds, ignore cv_folds if true
-  truncation_len: 256
-  save_processed: true
-  test_split: 0
-  min_len: 1
-
-outcome:
-  # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
-  n_hours_censoring: -10 # censor time after index date (negative means before)
-  n_hours_start_follow_up: -1 # start follow up (considering outcomes) time after index date (negative means before)
-  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
-
 trainer_args:
   sampler_function:
     _target_: corebehrt.modules.trainer.utils.Sampling.inverse_sqrt
   batch_size: 128
-  val_batch_size: 128
+  val_batch_size: 256
   effective_batch_size: 128
-  epochs: 10
+  epochs: 6
   info: true
   gradient_clip:
     clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
-  early_stopping: 4
+  early_stopping: 3
   stopping_criterion: roc_auc
 
 optimizer:
-  lr: 1e-2
+  lr: 8e-3
   eps: 1e-6
 
 scheduler:
-  _target_: transformers.get_constant_schedule_with_warmup
-  num_warmup_epochs: 3
+  _target_: transformers.get_linear_schedule_with_warmup
+  num_training_epochs: 15
+  num_warmup_epochs: 2
 
 metrics:
   roc_auc:

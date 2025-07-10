@@ -21,15 +21,15 @@ trainer_args:
   loss_weight_function:
     _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt # function to calculate positive weights. Possible options: sqrt and effective_n_samples
   batch_size: 128
-  val_batch_size: 128
+  val_batch_size: 256
   effective_batch_size: 128
-  epochs: 10
+  epochs: 8
   info: true
   gradient_clip:
     clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
-  early_stopping: 4
+  early_stopping: 3
   stopping_criterion: roc_auc
   n_layers_to_freeze: 2
   unfreeze_on_plateau: false # unfreeze all layers if the performance is less than plateau_threshold
@@ -40,8 +40,9 @@ optimizer:
   eps: 1e-6
 
 scheduler:
-  _target_: transformers.get_constant_schedule_with_warmup
-  num_warmup_epochs: 4
+  _target_: transformers.get_linear_schedule_with_warmup
+  num_training_epochs: 15
+  num_warmup_epochs: 2
 
 metrics:
   roc_auc:

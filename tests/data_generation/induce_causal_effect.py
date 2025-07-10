@@ -2,70 +2,84 @@
 Enhanced causal effect simulation module for EHR data.
 
 USAGE:
-    python induce_causal_effect.py --source_dir /path/to/input --write_dir /path/to/output [OPTIONS]
+    python induce_causal_effect.py --config /path/to/config.yaml
 
 DESCRIPTION:
-    This script simulates binary exposure and outcome events in EHR data based on causal relationships.
-    It creates a realistic causal structure where:
-    
-    1. Trigger codes in the original data influence exposure probability
-    2. Exposure events influence outcome probability  
-    3. Some trigger codes act as confounders (affecting both exposure and outcome)
-    
+    This script simulates binary exposure and multiple outcome events in EHR data based on causal relationships.
+    It uses a simplified configuration structure where:
+
+    1. Exposure section defines trigger codes that influence exposure probability
+    2. Multiple outcomes sections define trigger codes that influence outcome probabilities
+    3. Causal relationships are implicit based on code placement:
+       - Codes in both exposure and outcome sections act as confounders
+       - Codes only in exposure section act as instruments
+       - Codes only in outcome sections act as prognostic factors
+
     The simulation uses a logistic model: P(event) = expit(logit(p_base) + Σ(effect_i * trigger_i))
 
-CAUSAL STRUCTURE:
-    - Confounder codes: Affect both exposure and outcome (creates confounding bias)
-    - Exposure-only codes: Only affect exposure probability
-    - Outcome-only codes: Only affect outcome probability
-    - Exposure events: Directly affect outcome probability (the causal effect of interest)
+CONFIGURATION STRUCTURE:
+    The YAML config file should contain:
+    - paths: source_dir and write_dir for input/output data
+    - exposure: code, probabilities, and trigger_codes with trigger_weights
+    - outcomes: multiple outcomes, each with code, probabilities, trigger_codes, trigger_weights, and exposure_effect
 
 EXAMPLE USAGE:
-    # Basic usage with default parameters
-    python induce_causal_effect.py \
-        --source_dir ./data/input_shards \
-        --write_dir ./data/simulated_shards
-
-    # Custom causal effects
-    python induce_causal_effect.py \
-        --source_dir ./data/input_shards \
-        --write_dir ./data/simulated_shards \
-        --confounder_exposure_effect 0.5 \
-        --exposure_outcome_effect 1.5 \
-        --p_base_exposure 0.25 \
-        --p_base_outcome 0.15
-
-    # Using custom trigger codes
-    python induce_causal_effect.py \
-        --source_dir ./data/input_shards \
-        --write_dir ./data/simulated_shards \
-        --confounder_code "LAB_GLUCOSE" \
-        --exposure_only_code "DRUG_STATINS" \
-        --outcome_only_code "DIAG_DIABETES"
+    # Using a configuration file (recommended)
+    python induce_causal_effect.py --config ./configs/induce_causal_effect.yaml
 
 PARAMETER GUIDANCE:
-    - Effect sizes: Typical range [-2.0, 2.0]. Positive = increases probability, negative = decreases
-    - Base probabilities: Should reflect realistic event rates (0.1-0.4 often reasonable)
-    - Days offset: Time delay between trigger and simulated event (30-90 days typical)
-    
+    - Effect sizes (trigger_weights): Typical range [-3.0, 3.0]. Positive = increases probability, negative = decreases
+    - Base probabilities (p_base): Should reflect realistic event rates (0.01-0.4 often reasonable)
+    - Exposure effects: Direct causal effect of exposure on each outcome (0.0 = no effect, 2.0 = strong effect)
+
 OUTPUT:
     - Parquet files with original data + simulated EXPOSURE and OUTCOME events
-    - .ate.txt file containing the Average Treatment Effect for validation
+    - .ite.csv file containing Individual Treatment Effects for each outcome (columns: ite_{outcome_code})
+    - .ate.txt file containing Average Treatment Effects for each outcome
+    - .ate.json file with ATE results in JSON format
+    - config.yaml file with the exact configuration used
+    - simulation_parameters.json file with all parameters for reproducibility
 
 NOTES:
     - Input directory must contain .parquet shard files
     - Each shard should have columns: subject_id, time, code, numeric_value
     - Simulated events are added with temporal ordering preserved
+    - Multiple outcomes are supported, each with their own ITE column
 """
 
-import os
 import argparse
+import os
 
-from tests.data_generation.helper.induce_causal_effect import (
-    CausalSimulator,
-    DataManager,
-    SimulationReporter,
-)
+import yaml
+
+from tests.data_generation.helper.analytics import SimulationReporter
+from tests.data_generation.helper.config import SimulationConfig
+from tests.data_generation.helper.induce_causal_effect import CausalSimulator
+from tests.data_generation.helper.io import DataManager, save_ite_data
+
+
+def load_config(config_path: str) -> dict:
+    """
+    Load configuration from YAML file.
+
+    Args:
+        config_path: Path to the YAML configuration file
+
+    Returns:
+        Dictionary containing configuration parameters
+
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+        yaml.YAMLError: If config file has invalid YAML syntax
+    """
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        return config
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+    except yaml.YAMLError as e:
+        raise yaml.YAMLError(f"Invalid YAML syntax in {config_path}: {e}")
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -74,177 +88,82 @@ def create_parser() -> argparse.ArgumentParser:
         description="""
         Generate enhanced simulated causal data for EHR analysis.
         
-        This script adds simulated EXPOSURE and OUTCOME events to existing EHR data
+        This script adds simulated EXPOSURE and OUTCOME(s) events to existing EHR data
         based on a realistic causal structure with confounding relationships.
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Basic simulation
-  python %(prog)s --source_dir ./input --write_dir ./output
-  
-  # Custom parameters  
-  python %(prog)s --source_dir ./input --write_dir ./output \\
-    --p_base_exposure 0.25 --exposure_outcome_effect 1.5
-        """,
     )
 
-    # Required arguments
+    # Configuration file option
     parser.add_argument(
-        "--source_dir",
-        required=True,
-        help="Directory containing source data shards (.parquet files)",
+        "--config",
+        help="Path to YAML configuration file.",
     )
-    parser.add_argument(
-        "--write_dir",
-        required=True,
-        help="Directory to write output shards (will be created if needed)",
-    )
-
-    # Trigger codes
-    trigger_group = parser.add_argument_group(
-        "Trigger Codes", "Medical codes that influence event probabilities"
-    )
-    trigger_group.add_argument(
-        "--confounder_code",
-        default="DDZ32",
-        help="Code that affects both exposure and outcome (creates confounding). Default: LAB8",
-    )
-    trigger_group.add_argument(
-        "--exposure_only_code",
-        default="MME01",
-        help="Code that only affects exposure probability. Default: DDZ32",
-    )
-    trigger_group.add_argument(
-        "--outcome_only_code",
-        default="DE11",
-        help="Code that only affects outcome probability. Default: DE11",
-    )
-
-    # Base probabilities
-    prob_group = parser.add_argument_group(
-        "Base Probabilities", "Baseline event rates without any triggers"
-    )
-    prob_group.add_argument(
-        "--p_base_exposure",
-        type=float,
-        default=0.2,
-        help="Base probability for exposure events (0-1). Default: 0.3",
-    )
-    prob_group.add_argument(
-        "--p_base_outcome",
-        type=float,
-        default=0.2,
-        help="Base probability for outcome events (0-1). Default: 0.2",
-    )
-
-    # Effect sizes
-    effects_group = parser.add_argument_group(
-        "Effect Sizes", "Logistic regression coefficients for causal relationships"
-    )
-    effects_group.add_argument(
-        "--confounder_exposure_effect",
-        type=float,
-        default=1.2,
-        help="Effect of confounder on exposure (positive increases probability). Default: 0.3",
-    )
-    effects_group.add_argument(
-        "--confounder_outcome_effect",
-        type=float,
-        default=-0.3,
-        help="Effect of confounder on outcome (negative decreases probability). Default: -0.3",
-    )
-    effects_group.add_argument(
-        "--exposure_only_effect",
-        type=float,
-        default=0.8,
-        help="Effect of exposure-only trigger on exposure. Default: 1.5",
-    )
-    effects_group.add_argument(
-        "--outcome_only_effect",
-        type=float,
-        default=0.5,
-        help="Effect of outcome-only trigger on outcome. Default: 0.5",
-    )
-    effects_group.add_argument(
-        "--exposure_outcome_effect",
-        type=float,
-        default=2.0,
-        help="Causal effect of exposure on outcome (main effect of interest). Default: 2.0",
-    )
-
-    # Other parameters
-    other_group = parser.add_argument_group("Other Parameters")
-    other_group.add_argument(
-        "--simulate_outcome",
-        type=bool,
-        default=True,
-        help="Whether to simulate outcome events (set False for exposure-only). Default: True",
-    )
-    other_group.add_argument(
-        "--exposure_name",
-        default="EXPOSURE",
-        help="Code name for simulated exposure events. Default: EXPOSURE",
-    )
-    other_group.add_argument(
-        "--outcome_name",
-        default="OUTCOME",
-        help="Code name for simulated outcome events. Default: OUTCOME",
-    )
-
     return parser
+
+
+def parse_codes_and_weights(
+    codes_str: str, weights_str: str
+) -> tuple[list[str], list[float]]:
+    """
+    Parse comma-separated codes and weights strings.
+
+    Args:
+        codes_str: Comma-separated string of codes
+        weights_str: Comma-separated string of weights
+
+    Returns:
+        Tuple of (codes_list, weights_list)
+
+    Raises:
+        ValueError: If codes and weights have different lengths
+    """
+    codes = [code.strip() for code in codes_str.split(",")]
+    weights = [float(w.strip()) for w in weights_str.split(",")]
+
+    if len(codes) != len(weights):
+        raise ValueError(
+            f"Number of codes ({len(codes)}) must match number of weights ({len(weights)})"
+        )
+
+    return codes, weights
 
 
 def main() -> None:
     """Main function to run the enhanced causal simulation."""
     args = create_parser().parse_args()
 
-    # Initialize components
-    simulator = CausalSimulator(
-        args.confounder_code,
-        args.exposure_only_code,
-        args.outcome_only_code,
-        args.exposure_name,
-        args.outcome_name,
+    config = load_config(args.config)
+    simulation_config = SimulationConfig(
+        config=config,
     )
+    write_dir = simulation_config.paths.write_dir
+    os.makedirs(write_dir, exist_ok=True)
+    with open(os.path.join(write_dir, "config.yaml"), "w") as f:
+        yaml.dump(config, f)
 
-    # Load data
-    df, shards = DataManager.load_shards(args.source_dir)
+    # Initialize simulator with all parameters
+    simulator = CausalSimulator(simulation_config)
 
-    # Print initial statistics
-    SimulationReporter.print_trigger_stats(df, simulator, args.simulate_outcome)
+    for split in simulation_config.paths.splits:
+        print(f"Processing split: {split}")
+        os.makedirs(os.path.join(write_dir, split), exist_ok=True)
+        df, shards = DataManager.load_shards(
+            os.path.join(simulation_config.paths.source_dir, split)
+        )
+        reporter = SimulationReporter()
+        reporter.print_trigger_stats(df, simulation_config)
 
-    # Run simulation
-    simulated_df, ite_df = simulator.simulate_dataset(
-        df,
-        args.p_base_exposure,
-        args.p_base_outcome,
-        args.confounder_exposure_effect,
-        args.confounder_outcome_effect,
-        args.exposure_only_effect,
-        args.outcome_only_effect,
-        args.exposure_outcome_effect,
-        args.simulate_outcome,
-    )
+        simulated_df, ite_df = simulator.simulate_dataset(df)
 
-    # Print results
-    SimulationReporter.print_simulation_results(
-        simulated_df, simulator, args.simulate_outcome
-    )
+        reporter.print_simulation_results(simulated_df, simulation_config)
+        split_write_dir = os.path.join(write_dir, split)
+        os.makedirs(split_write_dir, exist_ok=True)
 
-    # Save results
-    os.makedirs(args.write_dir, exist_ok=True)
-
-    # Save ITE data separately if outcomes were simulated
-    if args.simulate_outcome and not ite_df.empty:
-        ite_df.to_csv(os.path.join(args.write_dir, ".ite.csv"), index=False)
-        ate = ite_df["ite"].mean()
-        with open(os.path.join(args.write_dir, ".ate.txt"), "w") as f:
-            f.write(f"ATE: {ate}")
-
-    # Save main simulation results
-    simulated_df.reset_index(drop=True, inplace=True)
-    DataManager.write_shards(simulated_df, args.write_dir, shards)
+        simulated_df.reset_index(drop=True, inplace=True)
+        DataManager.write_shards(simulated_df, split_write_dir, shards)
+        reporter.save_report(os.path.join(split_write_dir, ".report.txt"))
+        save_ite_data(ite_df, simulation_config, split_write_dir)
 
 
 if __name__ == "__main__":

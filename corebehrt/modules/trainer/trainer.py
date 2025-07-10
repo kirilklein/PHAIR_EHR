@@ -1,8 +1,9 @@
 import os
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 import torch
 import yaml
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, Dataset
 
 from corebehrt import azure
@@ -64,6 +65,10 @@ class EHRTrainer:
             {k: instantiate_class(v) for k, v in metrics.items()} if metrics else {}
         )
         self.scaler = torch.GradScaler(device=self.device.type)
+
+        # Initialize metric tracking for plotting
+        self.metric_history = defaultdict(list)
+        self.epoch_history = []
 
         self._initialize_early_stopping()
         self._initialize_freezing()
@@ -244,6 +249,11 @@ class EHRTrainer:
     ) -> None:
         val_loss, val_metrics = self._evaluate(epoch, mode="val")
         _, test_metrics = self._evaluate(epoch, mode="test")
+
+        self._update_and_plot_metrics(
+            epoch, epoch_loss, train_loop, val_loss, val_metrics, test_metrics
+        )
+
         if epoch == 1:  # for testing purposes/if first epoch is best
             self._save_checkpoint(
                 epoch,
@@ -549,3 +559,116 @@ class EHRTrainer:
         if self.args.get("reset_patience_after_unfreeze", True):
             self.early_stopping_counter = 0
             self.log("Reset early stopping counter after unfreezing")
+
+    def _update_and_plot_metrics(
+        self, epoch, epoch_loss, train_loop, val_loss, val_metrics, test_metrics
+    ):
+        # Calculate average train loss for this epoch
+        avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)
+
+        # Store metrics for plotting
+        self._update_metric_history(
+            epoch, avg_train_loss, val_loss, val_metrics, test_metrics
+        )
+
+        # Plot metrics
+        self._plot_metrics()
+
+    def _update_metric_history(
+        self, epoch, train_loss, val_loss, val_metrics, test_metrics
+    ):
+        """Update the metric history for plotting"""
+        self.epoch_history.append(epoch)
+
+        # Store losses - use val_loss as default for first epoch if train_loss is 0
+        if train_loss == 0 and val_loss is not None:
+            self.metric_history["train_loss"].append(val_loss)
+        else:
+            self.metric_history["train_loss"].append(train_loss)
+
+        if val_loss is not None:
+            self.metric_history["val_loss"].append(val_loss)
+
+        # Store validation metrics
+        if val_metrics:
+            for metric_name, value in val_metrics.items():
+                self.metric_history[f"val_{metric_name}"].append(float(value))
+
+        # Store test metrics
+        if test_metrics:
+            for metric_name, value in test_metrics.items():
+                self.metric_history[f"test_{metric_name}"].append(float(value))
+
+    def _plot_metrics(self):
+        """Plot all metrics and save to output_dir/figs"""
+        if len(self.epoch_history) < 2:  # Need at least 2 points to plot
+            return
+
+        figs_dir = os.path.join(self.run_folder, "figs")
+        os.makedirs(figs_dir, exist_ok=True)
+
+        # Group metrics by base name for better visualization
+        metric_groups = self._group_metrics()
+
+        for group_name, metrics in metric_groups.items():
+            self._plot_metric_group(group_name, metrics, figs_dir)
+
+    def _group_metrics(self):
+        """Group metrics by their base name (e.g., roc_auc, pr_auc, loss)"""
+        groups = defaultdict(dict)
+
+        for metric_name, values in self.metric_history.items():
+            if len(values) != len(self.epoch_history):
+                continue  # Skip if lengths don't match
+
+            # Determine base metric name and prefix
+            if metric_name in ["train_loss", "val_loss"]:
+                base_name = "loss"
+                prefix = metric_name.replace("_loss", "")
+            elif metric_name.startswith("val_"):
+                base_name = metric_name[4:]  # Remove 'val_' prefix
+                prefix = "val"
+            elif metric_name.startswith("test_"):
+                base_name = metric_name[5:]  # Remove 'test_' prefix
+                prefix = "test"
+            else:
+                base_name = metric_name
+                prefix = "train"
+
+            groups[base_name][prefix] = values
+
+        return groups
+
+    def _plot_metric_group(self, metric_name, metric_data, figs_dir):
+        """Plot a group of related metrics (e.g., train/val/test for same metric)"""
+        plt.figure(figsize=(10, 6))
+
+        # Define colors for different metric types
+        colors = {
+            "train": "blue",
+            "val": "orange",
+            "test": "green",
+        }
+
+        for prefix, values in metric_data.items():
+            color = colors.get(prefix, "black")
+            plt.plot(
+                self.epoch_history,
+                values,
+                label=f"{prefix}_{metric_name}",
+                color=color,
+                marker="o",
+                markersize=3,
+            )
+
+        plt.xlabel("Epoch")
+        plt.ylabel(metric_name.replace("_", " ").title())
+        plt.title(f"{metric_name.replace('_', ' ').title()} Over Training")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+
+        # Save the plot
+        plt.savefig(
+            os.path.join(figs_dir, f"{metric_name}.png"), dpi=150, bbox_inches="tight"
+        )
+        plt.close()  # Close to prevent memory issues

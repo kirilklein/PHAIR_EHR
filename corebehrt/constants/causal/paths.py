@@ -28,6 +28,7 @@ SKS_TREES_DIR = "corebehrt/main_causal/helper/data/sks_trees"
 
 CRITERIA_CONFIG_FILE = "criteria_config.yaml"
 CRITERIA_FLAGS_FILE = "criteria.csv"
+CRITERIA_DEFINITIONS_FILE = "criteria_definitions.yaml"
 
 DATA_DIR = "data"
 

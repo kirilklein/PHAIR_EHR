@@ -11,12 +11,12 @@ criteria_definitions:
   criteria_1:
     codes:
       # Diagnosis codes
-      - ^LAB2.*
-    start_days: -365
+      - ^D/25675004.*
+    start_days: -730
     end_days: 0
   criteria_2:
     codes:
-      - ^LAB6.*
+      - ^D/431855005.*
 
   criteria_3:
     expression: criteria_1 | criteria_2
