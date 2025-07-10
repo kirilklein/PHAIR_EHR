@@ -13,6 +13,7 @@ def visualize_meds_timeline(
     follow_up_times: dict = None,
     index_dates: dict = None,
     index_date_marker: str = "I",
+    save_path: str = None,
 ):
     """
     Creates an interactive timeline visualization for event data.
@@ -56,7 +57,10 @@ def visualize_meds_timeline(
     )
     fig.update_traces(marker=dict(size=12, line=dict(width=1, color="DarkSlateGrey")))
 
-    fig.show()
+    if save_path:
+        fig.write_image(save_path)
+    else:
+        fig.show()
 
 
 def _prepare_plot_data(
