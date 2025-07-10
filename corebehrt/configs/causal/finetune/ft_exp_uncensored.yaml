@@ -11,7 +11,9 @@ paths:
   model: ./outputs/causal/finetune/models/exposure_uncensored # Save model/outputs to this folder
 
 model:
-  cls: default
+  cls:
+    pooling_type: last_token # or "bigru"
+    # bidirectional: true # only applicable for bigru
 
 trainer_args:
   sampler_function:

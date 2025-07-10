@@ -13,8 +13,8 @@ paths:
 
 model:
   cls:
-    _target_: ehr2vec.model.heads.ClassifierGRU
-    bidirectional: true
+    pooling_type: last_token # or "bigru"
+    # bidirectional: true # only applicable for bigru
 
 trainer_args:
   sampler_function:
