@@ -127,6 +127,9 @@ class CausalLastTokenPool(nn.Module):
         # Get sequence lengths
         lengths = attention_mask.sum(dim=1)
 
+        # Ensure we have at least length 1 to avoid -1 indexing
+        lengths = torch.clamp(lengths, min=1)
+
         # Get indices of last valid token for each sequence
         last_sequence_idx = lengths - 1
         batch_indices = torch.arange(
@@ -136,8 +139,13 @@ class CausalLastTokenPool(nn.Module):
         # Extract last token representation for each sequence
         x = hidden_states[batch_indices, last_sequence_idx]
 
-        # Add exposure status if requested and provided
-        if exposure_status is not None and self.with_exposure:
+        # Add exposure status if with_exposure=True
+        if self.with_exposure:
+            if exposure_status is None:
+                raise ValueError(
+                    "exposure_status cannot be None when with_exposure=True"
+                )
+
             # Handle exposure_status shape - it could be [batch_size, 1] or [batch_size, seq_len]
             if exposure_status.dim() == 2 and exposure_status.size(1) > 1:
                 # If exposure status is sequence-level, get the status at the last token
@@ -229,6 +237,9 @@ class CausalBiGRU(nn.Module):
         Returns:
             torch.Tensor: Either classifier logits [batch_size, 1] or pooled embeddings
         """
+        if exposure_status is None and self.with_exposure:
+            raise ValueError("exposure_status cannot be None when with_exposure=True")
+
         # Get sequence lengths for pack_padded_sequence
         lengths = attention_mask.sum(dim=1).cpu()
 
