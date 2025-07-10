@@ -196,7 +196,7 @@ class TestCausalLastTokenPool(unittest.TestCase):
         # Verify each sequence uses its actual last token
         lengths = attention_mask.sum(dim=1)
         for i in range(self.batch_size):
-            expected_last_idx = min(lengths[i] - 1, self.seq_len - 1)
+            min(lengths[i] - 1, self.seq_len - 1)
             # This is an indirect test - we can't easily verify the exact token used
             # but we can check that the forward pass completes successfully
 
