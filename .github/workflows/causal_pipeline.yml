@@ -34,43 +34,76 @@ jobs:
           echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
 
       # ─── Pipeline & Tests ────────────────────────────────────
-      - name: Run causal pipeline
+      - name: Data prep & pretrain
         shell: bash
         run: |
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
-
-          # ─── Data prep & pretrain ───────────────────────────
+          
           run_step main.create_data                         prepare_and_pretrain/create_data.yaml
           run_step main.prepare_training_data               prepare_and_pretrain/prepare_pretrain.yaml
           run_step main.pretrain                            prepare_and_pretrain/pretrain.yaml
 
-          # ─── Outcomes & cohort selection ──────────────────
+      - name: Outcomes & cohort selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
           run_step main.create_outcomes                     outcomes.yaml
-          run_step main_causal.select_cohort_full                      select_cohort_full/extract.yaml
+          run_step main_causal.select_cohort_full           select_cohort_full/extract.yaml
 
-          ## ─── Prepare Finetune Data ───────────────────────────
+      - name: Prepare Finetune Data
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
           run_step main_causal.prepare_ft_exp_y      finetune/prepare/ft_exp_y.yaml
           python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetune/processed_data/exp_y
           
-          # ─── Finetune Exposure & Outcome ───────────────────────────
+      - name: Finetune Exposure & Outcome
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
           run_step main_causal.finetune_exp_y         finetune/ft_exp_y.yaml
           python tests/pipeline/ft_exp_y.py ./outputs/causal/finetune/models/exp_y
           
-          ## ─── Check performance ───────────────────────────────────────
+      - name: Check performance
+        shell: bash
+        run: |
+          set -euo pipefail
+          
           python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_exposure --min 0.58 --max 0.8 --metric exposure_roc_auc
           python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_outcome --min 0.7 --max 0.98 --metric outcome_roc_auc
 
-          # ─── Calibration ───────────────────────────────────────
+      - name: Calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
           run_step main_causal.calibrate_exp_y        finetune/calibrate_exp_y.yaml
           python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetune/models/exp_y/calibrated/predictions_exposure
           python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetune/models/exp_y/calibrated/predictions_outcome
 
-          # ─── Estimate ───────────────────────────────────────
+      - name: Estimate
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
           run_step main_causal.estimate        estimate/estimate.yaml
           python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
 
-          # ─── Criteria and stats ───────────────────────────────────────
+      - name: Criteria and stats
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
           run_step main_causal.select_cohort_full                      select_cohort_full/extract.yaml
           run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
           run_step main_causal.helper_scripts.get_stats helper/get_stats.yaml
