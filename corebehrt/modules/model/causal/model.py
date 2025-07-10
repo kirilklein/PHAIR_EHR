@@ -55,13 +55,23 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_exposures)
         self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_outcomes)
 
+        # Get pooling type and bidirectional setting from config
+        pooling_type = getattr(config, "pooling_type", "bigru")
+        bidirectional = getattr(config, "bidirectional", True)
+
         # Two separate classification heads
         self.exposure_cls = CausalFineTuneHead(
-            hidden_size=config.hidden_size, with_exposure=False
+            hidden_size=config.hidden_size,
+            with_exposure=False,
+            pooling_type=pooling_type,
+            bidirectional=bidirectional,
         )
         # Outcome head needs extra dimension for exposure
         self.outcome_cls = CausalFineTuneHead(
-            hidden_size=config.hidden_size, with_exposure=True
+            hidden_size=config.hidden_size,
+            with_exposure=True,
+            pooling_type=pooling_type,
+            bidirectional=bidirectional,
         )
 
     def forward(self, batch: dict, cf: bool = False):
