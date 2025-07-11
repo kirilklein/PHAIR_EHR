@@ -10,15 +10,15 @@ paths:
 
   outcomes: ./outputs/causal/finetune/outcomes
   outcome_names: # should correspond to the file names in the outcomes directory
-    outcome_1: OUTCOME_1
-    outcome_2: OUTCOME_2
-    outcome_3: OUTCOME_3
+    outcome_1: OUTCOME.csv
+    outcome_2: OUTCOME_2.csv
+    outcome_3: OUTCOME_3.csv
 
-  exposures: ./outputs/causal/finetune/exposures
+  exposures: ./outputs/causal/finetune/outcomes
   exposure: EXPOSURE.csv
 
   ## OUTPUTS
-  prepared_data: ./outputs/causal/finetune/processed_data/exp_y # Save model/outputs to this folder
+  prepared_data: ./outputs/causal_multitarget/finetune/prepared_data # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 data:

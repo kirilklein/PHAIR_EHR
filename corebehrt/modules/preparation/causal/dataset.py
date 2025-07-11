@@ -15,6 +15,7 @@ from corebehrt.modules.preparation.dataset import (
 @dataclass
 class CausalPatientData(PatientData):
     exposure: int = None
+    outcomes: dict[str, int] = None
 
 
 class CausalPatientDataset(PatientDataset):
@@ -57,6 +58,11 @@ class CausalPatientDataset(PatientDataset):
 
     def get_exposures(self):
         return [p.exposure for p in self.patients]
+
+    def assign_outcomes(self, outcomes: dict[str, pd.Series]):
+        for p in self.patients:
+            for outcome_name, outcome_value in outcomes.items():
+                setattr(p, outcome_name, outcome_value[p.pid])
 
 
 class ExposureOutcomeDataset(BinaryOutcomeDataset):

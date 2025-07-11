@@ -10,22 +10,24 @@ import torch
 from corebehrt.constants.paths import FOLDS_FILE
 from corebehrt.functional.setup.args import get_args
 from corebehrt.functional.features.split import create_folds
-from corebehrt.modules.preparation.causal.prepare_data import CausalDatasetPreparer
+from corebehrt.modules.preparation.causal.multitarget.prepare_data import (
+    CausalDatasetPreparerMultitarget,
+)
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.config import load_config
 
-CONFIG_PATH = "./corebehrt/configs/causal/finetune/prepare/ft_exp_y.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal_multitarget/prepare/simple.yaml"
 
 
 def main(config_path):
     cfg = load_config(config_path)
 
     # Setup directories
-    CausalDirectoryPreparer(cfg).setup_prepare_finetune_exposure_outcome()
+    CausalDirectoryPreparer(cfg).setup_prepare_finetune_exposure_multitarget()
     logger = logging.getLogger("prepare finetune data")
     logger.info("Preparing finetune data")
     # Prepare data
-    data = CausalDatasetPreparer(cfg).prepare_finetune_data(mode="tuning")
+    data = CausalDatasetPreparerMultitarget(cfg).prepare_finetune_data(mode="tuning")
     # Save splits from cohort selection
     pids = data.get_pids()
     folds = create_folds(

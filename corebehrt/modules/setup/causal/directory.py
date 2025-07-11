@@ -183,7 +183,7 @@ class CausalDirectoryPreparer(DirectoryPreparer):
 
             self.check_file("outcome")
 
-    def setup_prepare_finetune_exposure_multi_outcomes(self, name=None) -> None:
+    def setup_prepare_finetune_exposure_multitarget(self, name=None) -> None:
         """
         Validates path config and sets up directories for preparing finetune data with multiple outcomes.
         """
@@ -231,51 +231,42 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         Returns:
             Dictionary mapping outcome names to full file paths
         """
-        outcome = self.cfg.paths.get("outcome", None)
         outcome_names = self.cfg.paths.get("outcome_names", None)
 
-        if outcome is None:
+        if outcome_names is None:
+            logger.warning(
+                "No outcome names found, discovering all CSV files in outcomes directory"
+            )
             return self._discover_csv_files_dict(outcomes_dir)
-        elif isinstance(outcome, list):
-            outcome_paths = self._create_outcome_paths(outcomes_dir, outcome)
-            self._validate_files_exist(outcome_paths)
-            return self._create_outcome_dict(outcome, outcome_paths, outcome_names)
+        elif isinstance(outcome_names, dict):
+            logger.info(f"Creating outcome dictionary for {outcome_names}")
+            outcome_paths = self._create_outcome_dict(outcomes_dir, outcome_names)
+            for file_path in outcome_paths.values():
+                if not os.path.exists(file_path):
+                    raise FileNotFoundError(f"Outcome file not found: {file_path}")
+            return outcome_paths
         else:
-            outcome_paths = self._create_outcome_paths(outcomes_dir, [outcome])
-            self._validate_files_exist(outcome_paths)
-            return self._create_outcome_dict([outcome], outcome_paths, outcome_names)
+            raise ValueError(
+                f"Invalid outcome configuration: {outcome_names}. Should be dict or None"
+            )
 
     @staticmethod
     def _create_outcome_dict(
-        outcome_files: list[str],
-        outcome_paths: list[str],
-        outcome_names: list[str] = None,
+        outcomes_dir: str,
+        outcome_names: dict[str, str],
     ) -> dict[str, str]:
         """
-        Create dictionary mapping outcome names to file paths.
-
+        Create dictionary mapping outcome names to full file paths.
         Args:
-            outcome_files: List of outcome file names
-            outcome_paths: List of full file paths
-            outcome_names: Optional list of custom names
-
-        Returns:
-            Dictionary mapping names to file paths
+            outcomes_dir: Directory containing outcome files
+            outcome_names: Dictionary mapping outcome names to file paths
         """
-        if outcome_names and len(outcome_names) == len(outcome_files):
-            return dict(zip(outcome_names, outcome_paths))
-        else:
-            # Use first part of CSV filename as key
-            names = [os.path.splitext(filename)[0] for filename in outcome_files]
-            return dict(zip(names, outcome_paths))
+        return {key: join(outcomes_dir, value) for key, value in outcome_names.items()}
 
     @staticmethod
     def _discover_csv_files_dict(outcomes_dir: str) -> dict[str, str]:
         """
         Auto-discover all CSV files in outcomes directory and return as dictionary.
-
-        Returns:
-            Dictionary mapping CSV filenames (without extension) to full paths
         """
         try:
             all_files = os.listdir(outcomes_dir)
