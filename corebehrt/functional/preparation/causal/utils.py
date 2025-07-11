@@ -73,3 +73,12 @@ def get_non_compliance_abspos(
         .to_dict()
         .items()
     }
+
+
+def filter_df_by_unique_values(
+    df1: pd.DataFrame, df2: pd.DataFrame, col1: str, col2: str
+) -> pd.DataFrame:
+    """
+    Filter df1 to only include rows where the values in col1 are in the unique values of col2 in df2.
+    """
+    return df1[df1[col1].isin(df2[col2].unique())]

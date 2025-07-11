@@ -22,6 +22,10 @@ from corebehrt.constants.paths import (
 from corebehrt.functional.preparation.causal.extract import extract_death
 from corebehrt.functional.features.normalize import normalize_segments_for_patient
 from corebehrt.functional.io_operations.save import save_vocabulary
+from corebehrt.functional.preparation.causal.outcomes import (
+    get_binary_exposure,
+    get_binary_outcome,
+)
 from corebehrt.functional.preparation.causal.convert import (
     dataframe_to_causal_patient_list,
 )
@@ -43,17 +47,21 @@ from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
 from corebehrt.modules.features.loader import ShardLoader
 from corebehrt.modules.monitoring.logger import TqdmToLogger
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
-from corebehrt.modules.preparation.causal.prepare_data import CausalDatasetPreparer
+from corebehrt.modules.preparation.causal.prepare_data import DatasetPreparer
+from corebehrt.modules.setup.config import Config
 
 logger = logging.getLogger(__name__)  # Get the logger for this module
 
 
 # TODO: Add option to load test set only!
-class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
+class CausalDatasetPreparerMultitarget:
     """
     Prepares and processes patient data for causal inference with multiple outcomes.
     The major difference to the CausalDatasetPreparer is that it also assigns exposures to the patients.
     """
+
+    def __init__(self, cfg: Config):
+        self.ds_preparer = DatasetPreparer(cfg)
 
     def prepare_finetune_data(self, mode="tuning") -> CausalPatientDataset:
         """
@@ -70,11 +78,11 @@ class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
         Returns:
             A PatientDataset object containing the processed and labeled patient data ready for fine-tuning.
         """
-        exposure_cfg = self.cfg.exposure
-        outcome_cfg = self.cfg.outcome
-        paths_cfg = self.cfg.paths
-        data_cfg = self.cfg.data
-        pids = self.load_cohort(paths_cfg)
+        exposure_cfg = self.ds_preparer.cfg.exposure
+        outcome_cfg = self.ds_preparer.cfg.outcome
+        paths_cfg = self.ds_preparer.cfg.paths
+        data_cfg = self.ds_preparer.cfg.data
+        pids = self.ds_preparer.load_cohort(paths_cfg)
         cohort_cfg = load_config(join(paths_cfg.cohort, COHORT_CFG))
         # Load index dates and convert to abspos
         index_dates = pd.read_csv(
@@ -96,9 +104,9 @@ class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
             if pids is not None:
                 df = filter_df_by_pids(df, pids)
             if data_cfg.get("cutoff_date"):
-                df = self._cutoff_data(df, data_cfg.cutoff_date)
+                df = self.ds_preparer._cutoff_data(df, data_cfg.cutoff_date)
             # !TODO: if index date is the same for all patients, then we can censor here.
-            self._check_sorted(df)
+            self.ds_preparer._check_sorted(df)
             batch_patient_list = dataframe_to_causal_patient_list(df)
             patient_list.extend(batch_patient_list)
         logger.info(f"Number of patients: {len(patient_list)}")
@@ -122,7 +130,7 @@ class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
             outcome_df = filter_df_by_pids(outcome_df, data.get_pids())
 
         deaths = data.process_in_parallel(
-            extract_death, death_token=self.vocab[DEATH_CODE]
+            extract_death, death_token=self.ds_preparer.vocab[DEATH_CODE]
         )
         deaths = {patient.pid: death for patient, death in zip(data.patients, deaths)}
 
@@ -138,7 +146,7 @@ class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
             )
             data_end = pd.to_datetime("today")
         # Outcome Handler now only needs to do 1 thing: if outcome is in follow up window 1 else 0
-        binary_exposure = self._get_binary_exposure(
+        binary_exposure = get_binary_exposure(
             exposures,
             index_dates,
             exposure_cfg.get("n_hours_start_follow_up", -1),
@@ -148,7 +156,7 @@ class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
 
         binary_outcomes = {}
         for outcome_name, outcome_df in outcome_dfs.items():
-            binary_outcomes[outcome_name], follow_ups = self._get_binary_outcome(
+            binary_outcomes[outcome_name], follow_ups = get_binary_outcome(
                 index_dates,
                 outcome_df,
                 outcome_cfg.get("n_hours_start_follow_up", 0),
@@ -168,24 +176,24 @@ class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
         censor_dates = (
             index_dates.set_index(PID_COL)[ABSPOS_COL] + exposure_cfg.n_hours_censoring
         )
-        self._validate_censoring(data.patients, censor_dates, logger)
-        if "concept_pattern_hours_delay" in self.cfg:
+        self.ds_preparer._validate_censoring(data.patients, censor_dates, logger)
+        if "concept_pattern_hours_delay" in self.ds_preparer.cfg:
             concept_id_to_delay = get_concept_id_to_delay(
-                self.cfg.concept_pattern_hours_delay, self.vocab
+                self.ds_preparer.cfg.concept_pattern_hours_delay, self.ds_preparer.vocab
             )
             data.patients = data.process_in_parallel(
                 censor_patient_with_delays,
                 censor_dates=censor_dates,
-                predict_token_id=self.predict_token,
+                predict_token_id=self.ds_preparer.predict_token,
                 concept_id_to_delay=concept_id_to_delay,
             )
         else:
             data.patients = data.process_in_parallel(
                 censor_patient,
                 censor_dates=censor_dates,
-                predict_token_id=self.predict_token,
+                predict_token_id=self.ds_preparer.predict_token,
             )
-        background_length = get_background_length(data, self.vocab)
+        background_length = get_background_length(data, self.ds_preparer.vocab)
         # Exclude short sequences
         logger.info("Excluding short sequences")
         data.patients = exclude_short_sequences(
@@ -197,13 +205,15 @@ class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
         non_priority_tokens = (
             None
             if data_cfg.get("low_priority_prefixes", None) is None
-            else get_non_priority_tokens(self.vocab, data_cfg.low_priority_prefixes)
+            else get_non_priority_tokens(
+                self.ds_preparer.vocab, data_cfg.low_priority_prefixes
+            )
         )
         data.patients = data.process_in_parallel(
             truncate_patient,
             max_len=data_cfg.truncation_len,
             background_length=background_length,
-            sep_token=self.vocab["[SEP]"],
+            sep_token=self.ds_preparer.vocab["[SEP]"],
             non_priority_tokens=non_priority_tokens,
         )
 
@@ -216,12 +226,13 @@ class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
             f"Max segment length: {max(max(patient.segments) for patient in data.patients)}"
         )
         # save
-        os.makedirs(self.processed_dir, exist_ok=True)
-        save_vocabulary(self.vocab, self.processed_dir)
-        data.save(self.processed_dir)
-        exposures.to_csv(join(self.processed_dir, EXPOSURES_FILE), index=False)
+        out_dir = join(self.ds_preparer.processed_dir, "causal_multitarget")
+        os.makedirs(out_dir, exist_ok=True)
+        save_vocabulary(self.ds_preparer.vocab, out_dir)
+        data.save(out_dir)
+        exposures.to_csv(join(out_dir, EXPOSURES_FILE), index=False)
 
-        index_dates.to_csv(join(self.processed_dir, INDEX_DATES_FILE), index=False)
-        binary_outcomes_df.to_csv(join(self.processed_dir, BINARY_OUTCOMES_FILE))
-        follow_ups.to_csv(join(self.processed_dir, FOLLOW_UPS_FILE), index=False)
+        index_dates.to_csv(join(out_dir, INDEX_DATES_FILE), index=False)
+        binary_outcomes_df.to_csv(join(out_dir, BINARY_OUTCOMES_FILE))
+        follow_ups.to_csv(join(out_dir, FOLLOW_UPS_FILE), index=False)
         return data
