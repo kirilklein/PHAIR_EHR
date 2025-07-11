@@ -1,4 +1,4 @@
-name: 'Causal Pipeline Performance Test'
+name: 'Causal Pipeline Performance Test Uncensored'
 
 on:
   workflow_dispatch:
@@ -59,7 +59,7 @@ jobs:
           echo "🔧 Training XGBoost Baseline on uncensored data and checking performance"
           python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure_uncensored --min_roc_auc 0.95 --expected_most_important_concept EXPOSURE
 
-      - name: Finetune Exposure & Outcome
+      - name: Finetune Exposure Uncensored
         shell: bash
         run: |
           set -euo pipefail
