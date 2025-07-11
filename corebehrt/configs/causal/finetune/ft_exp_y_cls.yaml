@@ -13,9 +13,9 @@ paths:
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 model:
-  cls:
-    pooling_type: "last_token"
-    # bidirectional: true # only applicable for bigru
+  head:
+    shared_representation: false # whether to share the bigru representation for exposure and outcome
+    bidirectional: true
 
 trainer_args:
   loss_weight_function:
