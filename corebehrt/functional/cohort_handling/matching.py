@@ -1,12 +1,13 @@
 import pandas as pd
 from typing import List
+from typing import Literal
 
 
 def get_col_booleans(
     concepts_plus: pd.DataFrame,
     columns: List,
     patterns: List[List[str]],
-    match_how: str = "startswith",
+    match_how: Literal["startswith", "contains", "exact"] = "startswith",
     case_sensitive: bool = True,
 ) -> list:
     """
@@ -18,9 +19,11 @@ def get_col_booleans(
             col_bool = startswith_match(concepts_plus, col, pattern, case_sensitive)
         elif match_how == "contains":
             col_bool = contains_match(concepts_plus, col, pattern, case_sensitive)
+        elif match_how == "exact":
+            col_bool = exact_match(concepts_plus, col, pattern, case_sensitive)
         else:
             raise ValueError(
-                f"match_how must be startswith or contains, not {match_how}"
+                f"match_how must be 'startswith', 'contains', or 'exact', not '{match_how}'"
             )
         col_booleans.append(col_bool)
     return col_booleans
@@ -51,3 +54,13 @@ def contains_match(
                 df[column].astype(str).str.lower().str.contains(pattern, na=False)
             )
     return col_bool
+
+
+def exact_match(
+    df: pd.DataFrame, column: str, patterns: List[str], case_sensitive: bool
+) -> pd.Series:
+    """Match strings using exact match"""
+    if not case_sensitive:
+        patterns = [x.lower() for x in patterns]
+        return df[column].astype(str).str.lower().isin(patterns)
+    return df[column].astype(str).isin(patterns)
