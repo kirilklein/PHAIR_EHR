@@ -94,7 +94,7 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
 
     def test_initialization_separate_representation(self):
         """Test initialization with separate representations."""
-        self.config.shared_representation = False
+        self.config.update({"head": {"shared_representation": False}})
         model = CorebehrtForCausalFineTuning(self.config)
         self.assertIsInstance(model.exposure_loss_fct, nn.BCEWithLogitsLoss)
         self.assertIsInstance(model.outcome_loss_fct, nn.BCEWithLogitsLoss)
@@ -144,7 +144,7 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
 
     def test_separate_representations_forward(self):
         """Test forward pass with separate representations."""
-        self.config.shared_representation = False
+        self.config.update({"head": {"shared_representation": False}})
         model = CorebehrtForCausalFineTuning(self.config).to(self.device)
         outputs = model(self.batch)
         self.assertTrue(hasattr(outputs, "exposure_logits"))
