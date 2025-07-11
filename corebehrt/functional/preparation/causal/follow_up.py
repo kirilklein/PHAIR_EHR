@@ -4,7 +4,6 @@ from corebehrt.constants.causal.data import (
     DEATH_COL,
     END_COL,
     END_TIME_COL,
-    GROUP_COL,
     NON_COMPLIANCE_COL,
     START_COL,
     START_TIME_COL,
@@ -44,7 +43,6 @@ def prepare_follow_ups_adjusted(
     follow_ups: pd.DataFrame,
     non_compliance_abspos: pd.Series,
     deaths: dict,
-    group_dict: dict,
 ) -> pd.DataFrame:
     """
     Prepare the follow-ups for the patients.
@@ -61,7 +59,6 @@ def prepare_follow_ups_adjusted(
 
     follow_ups[NON_COMPLIANCE_COL] = follow_ups[PID_COL].map(non_compliance_abspos)
     follow_ups[DEATH_COL] = follow_ups[PID_COL].map(deaths)
-    follow_ups[GROUP_COL] = follow_ups[PID_COL].map(group_dict)
 
     follow_ups[END_COL] = follow_ups[[END_COL, NON_COMPLIANCE_COL, DEATH_COL]].min(
         axis=1

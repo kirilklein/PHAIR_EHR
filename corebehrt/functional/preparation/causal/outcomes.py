@@ -9,7 +9,6 @@ from corebehrt.functional.preparation.causal.follow_up import (
 )
 from corebehrt.functional.preparation.causal.utils import (
     filter_df_by_unique_values,
-    get_group_dict,
     get_non_compliance_abspos,
 )
 
@@ -82,7 +81,6 @@ def get_binary_outcome(
     index_date_matching = filter_df_by_unique_values(
         index_date_matching, index_dates, CONTROL_PID_COL, PID_COL
     )
-    group_dict = get_group_dict(index_date_matching)
     non_compliance_abspos = get_non_compliance_abspos(exposures, n_hours_compliance)
     follow_ups = prepare_follow_ups_simple(
         index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
@@ -91,6 +89,5 @@ def get_binary_outcome(
         follow_ups,
         non_compliance_abspos,
         deaths,
-        group_dict,
     )
     return abspos_to_binary_outcome(follow_ups, outcomes), follow_ups
