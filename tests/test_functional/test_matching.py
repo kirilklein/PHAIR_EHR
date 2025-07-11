@@ -84,9 +84,14 @@ class TestMatchingFunctions(unittest.TestCase):
     def test_exact_match_no_partial_matches(self):
         # Test that exact_match doesn't match partial strings
         result = exact_match(
-            self.df, CONCEPT_COL, ["OVID"], case_sensitive=True  # Should not match "COVID"
+            self.df,
+            CONCEPT_COL,
+            ["OVID"],
+            case_sensitive=True,  # Should not match "COVID"
         )
-        expected = pd.Series([False, False, False, False, False, False], name=CONCEPT_COL)
+        expected = pd.Series(
+            [False, False, False, False, False, False], name=CONCEPT_COL
+        )
         pd.testing.assert_series_equal(result, expected)
 
     def test_get_col_booleans_startswith(self):
@@ -139,7 +144,7 @@ class TestMatchingFunctions(unittest.TestCase):
         # Test get_col_booleans with an invalid match_how argument
         with self.assertRaises(ValueError) as context:
             get_col_booleans(self.df, [CONCEPT_COL], [["COVID"]], match_how="invalid")
-        
+
         # Check that the error message mentions all valid options
         error_msg = str(context.exception)
         self.assertIn("invalid", error_msg)
