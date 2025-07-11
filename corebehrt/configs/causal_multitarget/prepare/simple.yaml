@@ -18,7 +18,7 @@ paths:
   exposure: EXPOSURE.csv
 
   ## OUTPUTS
-  prepared_data: ./outputs/causal_multitarget/finetune/prepared_data # Save model/outputs to this folder
+  prepared_data: ./outputs/causal/multitarget/prepared_data # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 data:
