@@ -222,8 +222,6 @@ class CausalDatasetPreparerMultitarget(CausalDatasetPreparer):
         exposures.to_csv(join(self.processed_dir, EXPOSURES_FILE), index=False)
 
         index_dates.to_csv(join(self.processed_dir, INDEX_DATES_FILE), index=False)
-        binary_outcomes_df.to_csv(
-            join(self.processed_dir, BINARY_OUTCOMES_FILE), index=False
-        )
+        binary_outcomes_df.to_csv(join(self.processed_dir, BINARY_OUTCOMES_FILE))
         follow_ups.to_csv(join(self.processed_dir, FOLLOW_UPS_FILE), index=False)
         return data
