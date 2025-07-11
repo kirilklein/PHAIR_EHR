@@ -28,7 +28,7 @@ class CausalPatientDataset(PatientDataset):
         super().__init__(patients)
         self.patients: List[CausalPatientData] = patients
 
-    def assign_attributes(self, attribute_name: str, values: pd.Series):
+    def assign_attributes(self, attribute_name: str, values: pd.Series) -> None:
         """Assigns binary attributes (outcomes or exposures) to each patient in the dataset.
 
         Takes a pandas Series mapping patient IDs to attributes and assigns them to each patient in the dataset.
@@ -49,8 +49,6 @@ class CausalPatientDataset(PatientDataset):
 
         for p in self.patients:
             setattr(p, attribute_name, values[p.pid])
-
-        return self
 
     def filter_by_pids(self, pids: List[str]) -> "CausalPatientDataset":
         pids_set = set(pids)

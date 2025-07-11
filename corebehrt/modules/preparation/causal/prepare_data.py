@@ -2,27 +2,26 @@ import logging
 import os
 from os.path import join
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 from corebehrt.azure.util.config import load_config
 from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
-from corebehrt.constants.causal.paths import EXPOSURES_FILE, INDEX_DATE_MATCHING_FILE
-from corebehrt.constants.data import ABSPOS_COL, DEATH_CODE, PID_COL, TIMESTAMP_COL
-from corebehrt.constants.paths import (
-    FOLLOW_UPS_FILE,
-    INDEX_DATES_FILE,
-    OUTCOMES_FILE,
-    COHORT_CFG,
+from corebehrt.constants.causal.paths import (
+    BINARY_EXPOSURE_FILE,
+    BINARY_OUTCOMES_FILE,
+    EXPOSURES_FILE,
+    INDEX_DATE_MATCHING_FILE,
 )
-
-from corebehrt.functional.preparation.causal.extract import extract_death
+from corebehrt.constants.data import ABSPOS_COL, DEATH_CODE, PID_COL, TIMESTAMP_COL
+from corebehrt.constants.paths import COHORT_CFG, FOLLOW_UPS_FILE, INDEX_DATES_FILE
 from corebehrt.functional.features.normalize import normalize_segments_for_patient
 from corebehrt.functional.io_operations.save import save_vocabulary
 from corebehrt.functional.preparation.causal.convert import (
     dataframe_to_causal_patient_list,
 )
+from corebehrt.functional.preparation.causal.extract import extract_death
 from corebehrt.functional.preparation.causal.outcomes import (
     get_binary_exposure,
     get_binary_outcome,
@@ -38,9 +37,7 @@ from corebehrt.functional.preparation.utils import (
     get_concept_id_to_delay,
     get_non_priority_tokens,
 )
-from corebehrt.functional.utils.time import (
-    get_hours_since_epoch,
-)
+from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
 from corebehrt.modules.features.loader import ShardLoader
 from corebehrt.modules.monitoring.logger import TqdmToLogger
@@ -56,13 +53,15 @@ class Artifacts:
         self,
         data: CausalPatientDataset,
         exposures: pd.DataFrame,
-        outcomes: pd.DataFrame,
+        binary_outcomes: pd.DataFrame,
+        binary_exposure: pd.Series,
         index_dates: pd.DataFrame,
         follow_ups: pd.DataFrame,
     ):
         self.data = data
         self.exposures = exposures
-        self.outcomes = outcomes
+        self.binary_exposure = binary_exposure
+        self.binary_outcomes = binary_outcomes
         self.index_dates = index_dates
         self.follow_ups = follow_ups
 
@@ -97,19 +96,30 @@ class CausalDatasetPreparer:
         cohort_cfg = load_config(join(paths_cfg.cohort, COHORT_CFG))
         data = self.load_shards_into_patient_data(paths_cfg, data_cfg, pids, mode)
 
+        # Load data and do some basic filtering
         exposures, index_date_matching, index_dates = self.load_cohort_data(
             paths_cfg.cohort
         )
-
-        outcomes = pd.read_csv(paths_cfg.outcome)
-
         index_dates[PID_COL] = index_dates[PID_COL].astype(int)
         index_dates[ABSPOS_COL] = get_hours_since_epoch(index_dates[TIMESTAMP_COL])
-        outcomes[PID_COL] = outcomes[PID_COL].astype(int)
+        # Load outcomes
+        multitarget = paths_cfg.get("outcome_files", None) is not None
+        if multitarget:
+            outcomes = {}
+            for outcome_name, outcome_file in paths_cfg.outcome_files.items():
+                outcome_df = pd.read_csv(outcome_file)
+                outcome_df[PID_COL] = outcome_df[PID_COL].astype(int)
+                outcomes[outcome_name] = outcome_df
+        else:
+            outcome_df = pd.read_csv(paths_cfg.outcome)
+            outcome_df[PID_COL] = outcome_df[PID_COL].astype(int)
+            outcomes = {"outcome": outcome_df}
 
-        index_dates = filter_df_by_pids(index_dates, data.get_pids())
-        exposures = filter_df_by_pids(exposures, data.get_pids())
-        outcomes = filter_df_by_pids(outcomes, data.get_pids())
+        # Include only relevant pids
+        pids = data.get_pids()
+        index_dates = filter_df_by_pids(index_dates, pids)
+        exposures = filter_df_by_pids(exposures, pids)
+        outcomes = {name: filter_df_by_pids(df, pids) for name, df in outcomes.items()}
 
         deaths = data.process_in_parallel(
             extract_death, death_token=self.ds_preparer.vocab[DEATH_CODE]
@@ -125,21 +135,27 @@ class CausalDatasetPreparer:
             exposure_cfg.get("n_hours_end_follow_up"),
             data_end,
         )
-        binary_outcome, follow_ups = get_binary_outcome(
-            index_dates,
-            outcomes,
-            outcome_cfg.get("n_hours_start_follow_up", 0),
-            outcome_cfg.get("n_hours_end_follow_up", np.inf),
-            outcome_cfg.get("n_hours_compliance", np.inf),
-            index_date_matching=index_date_matching,
-            deaths=deaths,
-            exposures=exposures,
-            data_end=data_end,  # Pass the actual data end time
-        )
 
+        binary_outcomes = {}
+        for outcome_name, outcome_df in outcomes.items():
+            binary_outcomes[outcome_name], follow_ups = get_binary_outcome(
+                index_dates,
+                outcome_df,
+                outcome_cfg.get("n_hours_start_follow_up", 0),
+                outcome_cfg.get("n_hours_end_follow_up", np.inf),
+                outcome_cfg.get("n_hours_compliance", np.inf),
+                index_date_matching=index_date_matching,
+                deaths=deaths,
+                exposures=exposures,
+                data_end=data_end,  # Pass the actual data end time
+            )
+        binary_outcomes = pd.DataFrame(binary_outcomes)
         logger.info("Assigning exposures and outcomes")
-        data = data.assign_attributes(EXPOSURE, binary_exposure)
-        data = data.assign_attributes(OUTCOME, binary_outcome)
+        data.assign_attributes(EXPOSURE, binary_exposure)
+        if multitarget:
+            data.assign_outcomes(binary_outcomes)
+        else:
+            data.assign_attributes(OUTCOME, binary_outcomes["outcome"])
 
         censor_dates = (
             index_dates.set_index(PID_COL)[ABSPOS_COL] + exposure_cfg.n_hours_censoring
@@ -194,7 +210,9 @@ class CausalDatasetPreparer:
         )
         # save
         out_dir = join(self.ds_preparer.processed_dir, "causal")
-        artifacts = Artifacts(data, exposures, outcomes, index_dates, follow_ups)
+        artifacts = Artifacts(
+            data, exposures, binary_outcomes, binary_exposure, index_dates, follow_ups
+        )
         self.save_artifacts(out_dir, artifacts)
         return data
 
@@ -258,6 +276,7 @@ class CausalDatasetPreparer:
         save_vocabulary(self.ds_preparer.vocab, out_dir)
         artifacts.data.save(out_dir)
         artifacts.exposures.to_csv(join(out_dir, EXPOSURES_FILE), index=False)
-        artifacts.outcomes.to_csv(join(out_dir, OUTCOMES_FILE), index=False)
         artifacts.index_dates.to_csv(join(out_dir, INDEX_DATES_FILE), index=False)
         artifacts.follow_ups.to_csv(join(out_dir, FOLLOW_UPS_FILE), index=False)
+        artifacts.binary_outcomes.to_csv(join(out_dir, BINARY_OUTCOMES_FILE))
+        artifacts.binary_exposure.to_csv(join(out_dir, BINARY_EXPOSURE_FILE))
