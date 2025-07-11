@@ -36,32 +36,36 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         super().__init__(config)
 
         # --- Architecture Configuration ---
-        self.shared_representation = getattr(config, "shared_representation", True)
-        bidirectional = getattr(config, "bidirectional", True)
+        self.head_config = getattr(config, "head", {})
+        self.shared_representation = self.head_config.get("shared_representation", True)
+        self.bidirectional = self.head_config.get("bidirectional", True)
 
-        # --- 1. Pooling Layer(s) ---
+        self._setup_pooling_layers(config)
+        self._setup_mlp_heads(config)
+        self._setup_loss_functions(config)
+
+    def _setup_pooling_layers(self, config):
         if self.shared_representation:
+            logger.info("Using shared patient representation")
             # A single pooler for both tasks
             self.pooler = PatientRepresentationPooler(
-                hidden_size=config.hidden_size, bidirectional=bidirectional
+                hidden_size=config.hidden_size, bidirectional=self.bidirectional
             )
         else:
+            logger.info("Using separate patient representations")
             # Separate poolers for each task
             self.exposure_pooler = PatientRepresentationPooler(
-                hidden_size=config.hidden_size, bidirectional=bidirectional
+                hidden_size=config.hidden_size, bidirectional=self.bidirectional
             )
             self.outcome_pooler = PatientRepresentationPooler(
-                hidden_size=config.hidden_size, bidirectional=bidirectional
+                hidden_size=config.hidden_size, bidirectional=self.bidirectional
             )
 
-        # --- 2. MLP Prediction Heads (Common to both architectures) ---
+    def _setup_mlp_heads(self, config):
         self.exposure_head = MLPHead(input_size=config.hidden_size)
         self.outcome_head = MLPHead(
             input_size=config.hidden_size + 1
         )  # +1 for exposure status
-
-        # --- 3. Loss Functions (Common to both architectures) ---
-        self._setup_loss_functions(config)
 
     def _setup_loss_functions(self, config):
         """Helper method to initialize BCE loss functions with position weights."""
@@ -70,11 +74,13 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             if hasattr(config, "pos_weight_outcomes")
             else None
         )
+        logger.info(f"pos_weight_outcomes (loss): {pos_weight_outcomes}")
         pos_weight_exposures = (
             torch.tensor(config.pos_weight_exposures)
             if hasattr(config, "pos_weight_exposures")
             else None
         )
+        logger.info(f"pos_weight_exposures (loss): {pos_weight_exposures}")
 
         self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_exposures)
         self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_outcomes)
@@ -102,11 +108,12 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         if cf:
             exposure_status = -exposure_status  # Flip for counterfactual
 
-        outcome_input = torch.cat((outcome_repr, exposure_status.unsqueeze(-1)), dim=-1)
+        outcome_input = torch.cat(
+            (outcome_repr, exposure_status.unsqueeze(-1)), dim=-1
+        )  # [bs, hidden_size] vs [bs] -> [bs, hidden_size + 1]
         outcome_logits = self.outcome_head(outcome_input)
         outputs.outcome_logits = outcome_logits
 
-        # --- Loss Calculation ---
         self._compute_losses(outputs, batch)
 
         return outputs
