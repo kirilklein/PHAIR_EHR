@@ -12,7 +12,7 @@ outcomes:
   EXPOSURE:
     type: [code]
     match: [["EXPOSURE"]]
-    match_how: contains
+    match_how: exact
     case_sensitive: true
 
   OUTCOME:

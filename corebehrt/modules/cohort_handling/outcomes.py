@@ -48,7 +48,9 @@ class OutcomeMaker:
         concepts_plus = filter_table_by_pids(concepts_plus, patient_ids)
         patients_info = filter_table_by_pids(patients_info, patient_ids)
         concepts_plus = remove_missing_timestamps(concepts_plus)
-
+        concepts_plus = concepts_plus[
+            [PID_COL, TIMESTAMP_COL, CONCEPT_COL, VALUE_COL]
+        ]  # get only relevant columns
         outcome_tables = {}
         for outcome, attrs in self.outcomes.items():
             # Handle combination outcomes
@@ -60,7 +62,6 @@ class OutcomeMaker:
                 types = attrs["type"]
                 matches = attrs["match"]
                 timestamps = self.match_concepts(concepts_plus, types, matches, attrs)
-
             # Only process if we have data
             if len(timestamps) > 0:
                 timestamps[ABSPOS_COL] = get_hours_since_epoch(
@@ -68,7 +69,6 @@ class OutcomeMaker:
                 )
                 timestamps[ABSPOS_COL] = timestamps[ABSPOS_COL].astype(int)
                 timestamps[PID_COL] = timestamps[PID_COL].astype(int)
-
             outcome_tables[outcome] = timestamps
         return outcome_tables
 
