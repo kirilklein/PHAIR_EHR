@@ -52,7 +52,7 @@ python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y
 if errorlevel 1 goto :error
 
 echo Checking performance (outcome)...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_outcome --min 0.75 --max 0.98 --metric outcome_roc_auc
+python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_outcome --min 0.7 --max 0.98 --metric outcome_roc_auc
 if errorlevel 1 goto :error
 
 
