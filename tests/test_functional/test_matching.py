@@ -4,6 +4,7 @@ from corebehrt.functional.cohort_handling.matching import (
     get_col_booleans,
     startswith_match,
     contains_match,
+    exact_match,
 )
 from corebehrt.constants.data import CONCEPT_COL, VALUE_COL
 
@@ -64,6 +65,35 @@ class TestMatchingFunctions(unittest.TestCase):
         expected = pd.Series([True, True, False, False, True, False], name=CONCEPT_COL)
         pd.testing.assert_series_equal(result, expected)
 
+    def test_exact_match_case_sensitive(self):
+        # Test exact_match with case-sensitive matching
+        result = exact_match(
+            self.df, CONCEPT_COL, ["COVID", "POSITIVE"], case_sensitive=True
+        )
+        expected = pd.Series([True, False, True, False, False, False], name=CONCEPT_COL)
+        pd.testing.assert_series_equal(result, expected)
+
+    def test_exact_match_case_insensitive(self):
+        # Test exact_match with case-insensitive matching
+        result = exact_match(
+            self.df, CONCEPT_COL, ["covid", "positive"], case_sensitive=False
+        )
+        expected = pd.Series([True, False, True, False, False, False], name=CONCEPT_COL)
+        pd.testing.assert_series_equal(result, expected)
+
+    def test_exact_match_no_partial_matches(self):
+        # Test that exact_match doesn't match partial strings
+        result = exact_match(
+            self.df,
+            CONCEPT_COL,
+            ["OVID"],
+            case_sensitive=True,  # Should not match "COVID"
+        )
+        expected = pd.Series(
+            [False, False, False, False, False, False], name=CONCEPT_COL
+        )
+        pd.testing.assert_series_equal(result, expected)
+
     def test_get_col_booleans_startswith(self):
         # Test get_col_booleans with startswith matching
         result = get_col_booleans(
@@ -95,10 +125,29 @@ class TestMatchingFunctions(unittest.TestCase):
         for res, exp in zip(result, expected):
             pd.testing.assert_series_equal(res, exp)
 
+    def test_get_col_booleans_exact(self):
+        # Test get_col_booleans with exact matching
+        result = get_col_booleans(
+            self.df,
+            [CONCEPT_COL, VALUE_COL],
+            [["COVID", "OTHER"], ["POSITIVE"]],
+            match_how="exact",
+        )
+        expected = [
+            pd.Series([True, False, False, False, False, True], name=CONCEPT_COL),
+            pd.Series([True, False, True, False, True, False], name=VALUE_COL),
+        ]
+        for res, exp in zip(result, expected):
+            pd.testing.assert_series_equal(res, exp)
+
     def test_get_col_booleans_invalid_match_how(self):
         # Test get_col_booleans with an invalid match_how argument
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as context:
             get_col_booleans(self.df, [CONCEPT_COL], [["COVID"]], match_how="invalid")
+
+        # Check that the error message mentions all valid options
+        error_msg = str(context.exception)
+        self.assertIn("invalid", error_msg)
 
 
 if __name__ == "__main__":
