@@ -539,6 +539,6 @@ class CausalEHRTrainer(EHRTrainer):
         Freeze all encoder parameters to stop updating them.
         """
         for name, param in self.model.named_parameters():
-            if "cls" not in name:
+            if not any(substring in name for substring in ["pooler", "cls", "head"]):
                 param.requires_grad = False
         self.encoder_frozen = True
