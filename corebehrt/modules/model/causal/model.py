@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK, TARGET
-from corebehrt.modules.model.causal.heads import CausalFineTuneHead
+from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
 from corebehrt.modules.model.model import CorebehrtForFineTuning
 
 logger = logging.getLogger(__name__)
@@ -20,112 +20,107 @@ logger = logging.getLogger(__name__)
 
 class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
     """
-    Fine-tuning model for causal inference on EHR sequences.
+    A unified causal fine-tuning model for predicting exposure and outcome.
 
-    This model extends CorebehrtForFineTuning to simultaneously predict both exposure and outcome
-    variables. It uses two separate classification heads, each with its own BCEWithLogitsLoss,
-    to predict the probability of exposure and outcome occurrence. The final loss is computed
-    as the sum of both individual losses.
+    This class supports two architectures, controlled by `config.shared_representation`:
+    1.  True (default): Uses a single, shared BiGRU pooler to create a patient
+        representation for both tasks. This encourages learning a generalized
+        and efficient representation.
+    2.  False: Uses two independent BiGRU poolers, creating separate
+        representations for the exposure and outcome tasks.
 
-    The model is designed for causal inference tasks where we need to predict both the treatment
-    (exposure) and the outcome of interest, allowing for joint learning of both predictions.
-    The exposure status is appended to the BiGRU output vector for outcome prediction.
-
-    Attributes:
-        exposure_loss_fct (nn.BCEWithLogitsLoss): Loss function for exposure prediction
-        outcome_loss_fct (nn.BCEWithLogitsLoss): Loss function for outcome prediction
-        exposure_cls (CausalFineTuneHead): Classification head for exposure prediction
-        outcome_cls (CausalFineTuneHead): Classification head for outcome prediction with exposure input
-        counterfactual (bool): Whether to use counterfactual exposure values
+    The model always uses two separate MLP heads for the final predictions.
     """
 
     def __init__(self, config):
         super().__init__(config)
 
-        # Initialize loss functions for both targets
-        if getattr(config, "pos_weight_outcomes", None):
-            pos_weight_outcomes = torch.tensor(config.pos_weight_outcomes)
+        # --- Architecture Configuration ---
+        self.shared_representation = getattr(config, "shared_representation", True)
+        bidirectional = getattr(config, "bidirectional", True)
+
+        # --- 1. Pooling Layer(s) ---
+        if self.shared_representation:
+            # A single pooler for both tasks
+            self.pooler = PatientRepresentationPooler(
+                hidden_size=config.hidden_size, bidirectional=bidirectional
+            )
         else:
-            pos_weight_outcomes = None
-        if getattr(config, "pos_weight_exposures", None):
-            pos_weight_exposures = torch.tensor(config.pos_weight_exposures)
-        else:
-            pos_weight_exposures = None
+            # Separate poolers for each task
+            self.exposure_pooler = PatientRepresentationPooler(
+                hidden_size=config.hidden_size, bidirectional=bidirectional
+            )
+            self.outcome_pooler = PatientRepresentationPooler(
+                hidden_size=config.hidden_size, bidirectional=bidirectional
+            )
+
+        # --- 2. MLP Prediction Heads (Common to both architectures) ---
+        self.exposure_head = MLPHead(input_size=config.hidden_size)
+        self.outcome_head = MLPHead(
+            input_size=config.hidden_size + 1
+        )  # +1 for exposure status
+
+        # --- 3. Loss Functions (Common to both architectures) ---
+        self._setup_loss_functions(config)
+
+    def _setup_loss_functions(self, config):
+        """Helper method to initialize BCE loss functions with position weights."""
+        pos_weight_outcomes = (
+            torch.tensor(config.pos_weight_outcomes)
+            if hasattr(config, "pos_weight_outcomes")
+            else None
+        )
+        pos_weight_exposures = (
+            torch.tensor(config.pos_weight_exposures)
+            if hasattr(config, "pos_weight_exposures")
+            else None
+        )
 
         self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_exposures)
         self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_outcomes)
 
-        # Get pooling type and bidirectional setting from config
-        cls_config = getattr(config, "cls", {})
-        pooling_type = cls_config.get("pooling_type", "bigru")
-        bidirectional = cls_config.get("bidirectional", True)
-
-        # Two separate classification heads
-        self.exposure_cls = CausalFineTuneHead(
-            hidden_size=config.hidden_size,
-            with_exposure=False,
-            pooling_type=pooling_type,
-            bidirectional=bidirectional,
-        )
-        # Outcome head needs extra dimension for exposure
-        self.outcome_cls = CausalFineTuneHead(
-            hidden_size=config.hidden_size,
-            with_exposure=True,
-            pooling_type=pooling_type,
-            bidirectional=bidirectional,
-        )
-
     def forward(self, batch: dict, cf: bool = False):
-        """
-        Forward pass for causal fine-tuning.
-
-        Args:
-            batch (dict): must contain:
-                - 'concept', 'segment', 'age', 'abspos', 'attention_mask'
-                - 'exposure_target' and 'target' as labels
-
-        Returns:
-            BaseModelOutput: with exposure_logits, outcome_logits and optional losses if targets provided.
-        """
+        """Forward pass for causal inference."""
         outputs = super().forward(batch)
+        sequence_output = outputs[0]
+        attention_mask = batch[ATTENTION_MASK]
 
-        sequence_output = outputs[0]  # Last hidden state
+        # --- Get Patient Representations ---
+        if self.shared_representation:
+            shared_repr = self.pooler(sequence_output, attention_mask)
+            exposure_repr, outcome_repr = shared_repr, shared_repr
+        else:
+            exposure_repr = self.exposure_pooler(sequence_output, attention_mask)
+            outcome_repr = self.outcome_pooler(sequence_output, attention_mask)
 
-        # Get exposure prediction at sequence level
-        exposure_logits = self.exposure_cls(
-            sequence_output, batch[ATTENTION_MASK]
-        )  # shape: (batch_size, 1)
+        # --- Exposure Prediction ---
+        exposure_logits = self.exposure_head(exposure_repr)
         outputs.exposure_logits = exposure_logits
 
-        # Get exposure status (0/1) and convert to -1/1
-        exposure_status = batch[EXPOSURE_TARGET]
+        # --- Outcome Prediction ---
+        exposure_status = 2 * batch[EXPOSURE_TARGET] - 1  # Convert from 0/1 to -1/1
         if cf:
-            exposure_status = 1 - exposure_status
-        exposure_status = 2 * exposure_status - 1  # Convert from 0/1 to -1/1
+            exposure_status = -exposure_status  # Flip for counterfactual
 
-        # Get outcome prediction using sequence output with exposure
-        outcome_logits = self.outcome_cls(
-            sequence_output, batch[ATTENTION_MASK], exposure_status=exposure_status
-        )
+        outcome_input = torch.cat((outcome_repr, exposure_status.unsqueeze(-1)), dim=-1)
+        outcome_logits = self.outcome_head(outcome_input)
         outputs.outcome_logits = outcome_logits
 
-        # Calculate losses if targets are provided
-        if batch.get(EXPOSURE_TARGET) is not None and batch.get(TARGET) is not None:
-            exposure_loss = self.get_exposure_loss(
-                exposure_logits, batch[EXPOSURE_TARGET]
-            )
-            outcome_loss = self.get_outcome_loss(outcome_logits, batch[TARGET])
+        # --- Loss Calculation ---
+        self._compute_losses(outputs, batch)
 
-            # Store individual losses for tracking
-            outputs.exposure_loss = exposure_loss
-            outputs.outcome_loss = outcome_loss
-            outputs.loss = exposure_loss + outcome_loss  # Combined loss
         return outputs
 
-    def get_exposure_loss(self, logits, labels):
-        """Calculate binary cross-entropy loss for exposure prediction."""
-        return self.exposure_loss_fct(logits.view(-1), labels.view(-1))
+    def _compute_losses(self, outputs, batch):
+        """Helper method to compute and assign losses if labels are present."""
+        if EXPOSURE_TARGET in batch and TARGET in batch:
+            exposure_loss = self.exposure_loss_fct(
+                outputs.exposure_logits.view(-1), batch[EXPOSURE_TARGET].view(-1)
+            )
+            outcome_loss = self.outcome_loss_fct(
+                outputs.outcome_logits.view(-1), batch[TARGET].view(-1)
+            )
 
-    def get_outcome_loss(self, logits, labels):
-        """Calculate binary cross-entropy loss for outcome prediction."""
-        return self.outcome_loss_fct(logits.view(-1), labels.view(-1))
+            outputs.exposure_loss = exposure_loss
+            outputs.outcome_loss = outcome_loss
+            outputs.loss = exposure_loss + outcome_loss

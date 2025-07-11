@@ -78,16 +78,31 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
                 0, 2, size=(self.batch_size, 1), device=self.device, dtype=torch.float
             ),
             EXPOSURE_TARGET: torch.randint(
-                0, 2, size=(self.batch_size, 1), device=self.device, dtype=torch.float
+                0, 2, size=(self.batch_size,), device=self.device, dtype=torch.float
             ),
         }
 
-    def test_initialization(self):
+    def test_initialization_shared_representation(self):
+        """Test initialization with shared representation (default)."""
         model = CorebehrtForCausalFineTuning(self.config)
         self.assertIsInstance(model.exposure_loss_fct, nn.BCEWithLogitsLoss)
         self.assertIsInstance(model.outcome_loss_fct, nn.BCEWithLogitsLoss)
-        self.assertFalse(model.exposure_cls.pool.with_exposure)
-        self.assertTrue(model.outcome_cls.pool.with_exposure)
+        self.assertTrue(model.shared_representation)
+        self.assertTrue(hasattr(model, "pooler"))
+        self.assertTrue(hasattr(model, "exposure_head"))
+        self.assertTrue(hasattr(model, "outcome_head"))
+
+    def test_initialization_separate_representation(self):
+        """Test initialization with separate representations."""
+        self.config.shared_representation = False
+        model = CorebehrtForCausalFineTuning(self.config)
+        self.assertIsInstance(model.exposure_loss_fct, nn.BCEWithLogitsLoss)
+        self.assertIsInstance(model.outcome_loss_fct, nn.BCEWithLogitsLoss)
+        self.assertFalse(model.shared_representation)
+        self.assertTrue(hasattr(model, "exposure_pooler"))
+        self.assertTrue(hasattr(model, "outcome_pooler"))
+        self.assertTrue(hasattr(model, "exposure_head"))
+        self.assertTrue(hasattr(model, "outcome_head"))
 
     def test_forward_with_labels(self):
         model = CorebehrtForCausalFineTuning(self.config).to(self.device)
@@ -96,6 +111,8 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
         self.assertTrue(hasattr(outputs, "exposure_logits"))
         self.assertTrue(hasattr(outputs, "outcome_logits"))
         self.assertTrue(hasattr(outputs, "loss"))
+        self.assertTrue(hasattr(outputs, "exposure_loss"))
+        self.assertTrue(hasattr(outputs, "outcome_loss"))
         self.assertIsInstance(outputs.loss, torch.Tensor)
 
     def test_forward_without_labels(self):
@@ -120,20 +137,19 @@ class TestCorebehrtForCausalFineTuning(unittest.TestCase):
         # Use fixed logits to check inversion
         batch = self.batch.copy()
         batch[TARGET] = torch.ones(self.batch_size, 1, device=self.device)
-        batch[EXPOSURE_TARGET] = torch.zeros(self.batch_size, 1, device=self.device)
-        model(batch, cf=True)
+        batch[EXPOSURE_TARGET] = torch.zeros(self.batch_size, device=self.device)
+        outputs = model(batch, cf=True)
+        self.assertTrue(hasattr(outputs, "exposure_logits"))
+        self.assertTrue(hasattr(outputs, "outcome_logits"))
 
-    def test_loss_functions(self):
+    def test_separate_representations_forward(self):
+        """Test forward pass with separate representations."""
+        self.config.shared_representation = False
         model = CorebehrtForCausalFineTuning(self.config).to(self.device)
-        logits = torch.tensor([0.2, -0.5, 0.1, 0.7], device=self.device).reshape(-1, 1)
-        labels = torch.tensor([0.0, 1.0, 0.0, 1.0], device=self.device).reshape(-1, 1)
-        exposure_loss = model.get_exposure_loss(logits, labels)
-        outcome_loss = model.get_outcome_loss(logits, labels)
-        self.assertIsInstance(exposure_loss, torch.Tensor)
-        self.assertEqual(exposure_loss.shape, torch.Size([]))
-        self.assertIsInstance(outcome_loss, torch.Tensor)
-        self.assertEqual(outcome_loss.shape, torch.Size([]))
-        self.assertEqual(exposure_loss, outcome_loss)
+        outputs = model(self.batch)
+        self.assertTrue(hasattr(outputs, "exposure_logits"))
+        self.assertTrue(hasattr(outputs, "outcome_logits"))
+        self.assertTrue(hasattr(outputs, "loss"))
 
 
 if __name__ == "__main__":
