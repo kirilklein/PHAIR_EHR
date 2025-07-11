@@ -1,6 +1,8 @@
 import logging
 import os
+from dataclasses import dataclass
 from os.path import join
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -48,122 +50,199 @@ from corebehrt.modules.setup.config import Config
 logger = logging.getLogger(__name__)  # Get the logger for this module
 
 
+@dataclass
 class Artifacts:
-    def __init__(
-        self,
-        data: CausalPatientDataset,
-        exposures: pd.DataFrame,
-        binary_outcomes: pd.DataFrame,
-        binary_exposure: pd.Series,
-        index_dates: pd.DataFrame,
-        follow_ups: pd.DataFrame,
-    ):
-        self.data = data
-        self.exposures = exposures
-        self.binary_exposure = binary_exposure
-        self.binary_outcomes = binary_outcomes
-        self.index_dates = index_dates
-        self.follow_ups = follow_ups
+    """A container for the output artifacts of the data preparation process."""
+
+    data: CausalPatientDataset
+    exposures: pd.DataFrame
+    binary_outcomes: pd.DataFrame
+    binary_exposure: pd.Series
+    index_dates: pd.DataFrame
+    follow_ups: pd.DataFrame
+    vocabulary: dict
 
 
 class CausalDatasetPreparer:
     """
     Prepares and processes patient data for causal inference.
-    The major difference to the DatasetPreparer is that it also assigns exposures to the patients.
+    Differs from DatasetPreparer by also assigning exposures to patients.
     """
 
     def __init__(self, cfg: Config):
         self.ds_preparer = DatasetPreparer(cfg)
+        self.exposure_cfg = cfg.exposure
+        self.outcome_cfg = cfg.outcome
+        self.paths_cfg = cfg.paths
+        self.data_cfg = cfg.data
+        self.cohort_cfg = load_config(join(self.paths_cfg.cohort, COHORT_CFG))
+        self.is_multitarget = self.paths_cfg.get("outcome_files") is not None
+        self.vocabulary = self.ds_preparer.vocab
 
-    def prepare_finetune_data(self, mode="tuning") -> CausalPatientDataset:
+    def prepare_finetune_data(self, mode: str = "tuning") -> CausalPatientDataset:
         """
-        Prepares and processes patient data for fine-tuning, including censoring, truncation, and outcome assignment.
+        Prepares and processes patient data for fine-tuning.
 
-        Loads patient data, exposures, outcomes, applies cohort and cutoff filtering, assigns binary exposures and outcomes,
-            computes and validates censoring dates, applies censoring (optionally with concept-specific delays),
-            excludes short sequences, truncates and normalizes patient records,
-            and saves the processed dataset for downstream modeling.
+        This method orchestrates the loading, filtering, labeling, censoring,
+        and truncation of patient data to create a dataset ready for causal modeling.
 
         Args:
-            mode: Specifies which data split to use for fine-tuning (default is "tuning").
+            mode: The data split to use (e.g., "tuning", "validation").
 
         Returns:
-            A PatientDataset object containing the processed and labeled patient data ready for fine-tuning.
+            A CausalPatientDataset object ready for fine-tuning.
         """
-        exposure_cfg, outcome_cfg, paths_cfg, data_cfg = self._access_cfg_paths()
+        # 1. Load and filter initial data
+        pids = self.ds_preparer.load_cohort(self.paths_cfg)
+        data = self.load_shards_into_patient_data(pids, mode)
+        pids = data.get_pids()  # Use PIDs actually present in the data
 
-        pids = self.ds_preparer.load_cohort(paths_cfg)
-        cohort_cfg = load_config(join(paths_cfg.cohort, COHORT_CFG))
-        data = self.load_shards_into_patient_data(paths_cfg, data_cfg, pids, mode)
-
-        # Load data and do some basic filtering
         exposures, index_date_matching, index_dates = self.load_cohort_data(
-            paths_cfg.cohort
+            self.paths_cfg.cohort
         )
-        index_dates[PID_COL] = index_dates[PID_COL].astype(int)
-        index_dates[ABSPOS_COL] = get_hours_since_epoch(index_dates[TIMESTAMP_COL])
-        # Load outcomes
-        multitarget = paths_cfg.get("outcome_files", None) is not None
-        if multitarget:
-            outcomes = {}
-            for outcome_name, outcome_file in paths_cfg.outcome_files.items():
-                outcome_df = pd.read_csv(outcome_file)
-                outcome_df[PID_COL] = outcome_df[PID_COL].astype(int)
-                outcomes[outcome_name] = outcome_df
-        else:
-            outcome_df = pd.read_csv(paths_cfg.outcome)
-            outcome_df[PID_COL] = outcome_df[PID_COL].astype(int)
-            outcomes = {"outcome": outcome_df}
+        outcomes = self._load_outcomes()
 
-        # Include only relevant pids
-        pids = data.get_pids()
+        exposures, index_dates, outcomes = self._filter_dataframes_by_pids(
+            pids, exposures, index_dates, outcomes
+        )
+
+        # 2. Compute labels and outcomes
+        index_dates[ABSPOS_COL] = get_hours_since_epoch(index_dates[TIMESTAMP_COL])
+        deaths = self._extract_deaths(data)
+
+        binary_exposure, binary_outcomes, follow_ups = self._compute_binary_labels(
+            exposures, outcomes, index_dates, index_date_matching, deaths
+        )
+
+        # 3. Assign labels to patient data
+        self._assign_labels(data, binary_exposure, binary_outcomes)
+
+        # 4. Censor, truncate, and normalize sequences
+        self._censor_and_truncate_sequences(data, index_dates)
+        data.patients = data.process_in_parallel(normalize_segments_for_patient)
+
+        logger.info(
+            f"Max segment length: {max(max(p.segments, default=0) for p in data.patients)}"
+        )
+
+        # 5. Save all generated artifacts
+        artifacts = Artifacts(
+            data=data,
+            exposures=exposures,
+            binary_outcomes=binary_outcomes,
+            binary_exposure=binary_exposure,
+            index_dates=index_dates,
+            follow_ups=follow_ups,
+            vocabulary=self.vocabulary,
+        )
+        self._save_artifacts(artifacts, self.paths_cfg.prepared_data)
+
+        return data
+
+    def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
+        """Loads single or multiple outcome files into a dictionary."""
+        outcomes = {}
+        if self.is_multitarget:
+            for name, outcome_file in self.paths_cfg.outcome_files.items():
+                df = pd.read_csv(outcome_file)
+                df[PID_COL] = df[PID_COL].astype(int)
+                outcomes[name] = df
+        else:
+            df = pd.read_csv(self.paths_cfg.outcome)
+            df[PID_COL] = df[PID_COL].astype(int)
+            outcomes["outcome"] = df
+        return outcomes
+
+    def _filter_dataframes_by_pids(
+        self,
+        pids: List[int],
+        exposures: pd.DataFrame,
+        index_dates: pd.DataFrame,
+        outcomes: Dict[str, pd.DataFrame],
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame]]:
+        """Filters all relevant dataframes by the provided list of patient IDs."""
+        logger.info(f"Filtering dataframes for {len(pids)} patients.")
         index_dates = filter_df_by_pids(index_dates, pids)
         exposures = filter_df_by_pids(exposures, pids)
-        outcomes = {name: filter_df_by_pids(df, pids) for name, df in outcomes.items()}
+        filtered_outcomes = {
+            name: filter_df_by_pids(df, pids) for name, df in outcomes.items()
+        }
+        return exposures, index_dates, filtered_outcomes
 
-        deaths = data.process_in_parallel(
-            extract_death, death_token=self.ds_preparer.vocab[DEATH_CODE]
+    def _extract_deaths(self, data: CausalPatientDataset) -> Dict[int, Any]:
+        """Extracts death information for each patient."""
+        deaths_list = data.process_in_parallel(
+            extract_death, death_token=self.vocabulary[DEATH_CODE]
         )
-        deaths = {patient.pid: death for patient, death in zip(data.patients, deaths)}
+        return {
+            patient.pid: death for patient, death in zip(data.patients, deaths_list)
+        }
 
+    def _compute_binary_labels(
+        self,
+        exposures: pd.DataFrame,
+        outcomes: Dict[str, pd.DataFrame],
+        index_dates: pd.DataFrame,
+        index_date_matching: pd.DataFrame,
+        deaths: Dict[int, Any],
+    ) -> Tuple[pd.Series, pd.DataFrame, pd.DataFrame]:
+        """Computes binary exposure and outcome labels."""
         logger.info("Handling exposures and outcomes")
-        data_end = self.get_data_end(cohort_cfg)
+        data_end = self.get_data_end(self.cohort_cfg)
+
         binary_exposure = get_binary_exposure(
             exposures,
             index_dates,
-            exposure_cfg.get("n_hours_start_follow_up", -1),
-            exposure_cfg.get("n_hours_end_follow_up"),
+            self.exposure_cfg.get("n_hours_start_follow_up", -1),
+            self.exposure_cfg.get("n_hours_end_follow_up"),
             data_end,
         )
 
         binary_outcomes = {}
+        follow_ups = None
         for outcome_name, outcome_df in outcomes.items():
             binary_outcomes[outcome_name], follow_ups = get_binary_outcome(
                 index_dates,
                 outcome_df,
-                outcome_cfg.get("n_hours_start_follow_up", 0),
-                outcome_cfg.get("n_hours_end_follow_up", np.inf),
-                outcome_cfg.get("n_hours_compliance", np.inf),
+                self.outcome_cfg.get("n_hours_start_follow_up", 0),
+                self.outcome_cfg.get("n_hours_end_follow_up", np.inf),
+                self.outcome_cfg.get("n_hours_compliance", np.inf),
                 index_date_matching=index_date_matching,
                 deaths=deaths,
                 exposures=exposures,
-                data_end=data_end,  # Pass the actual data end time
+                data_end=data_end,
             )
-        binary_outcomes = pd.DataFrame(binary_outcomes)
+        return binary_exposure, pd.DataFrame(binary_outcomes), follow_ups
+
+    def _assign_labels(
+        self,
+        data: CausalPatientDataset,
+        binary_exposure: pd.Series,
+        binary_outcomes: pd.DataFrame,
+    ):
+        """Assigns computed labels to the CausalPatientDataset."""
         logger.info("Assigning exposures and outcomes")
         data.assign_attributes(EXPOSURE, binary_exposure)
-        if multitarget:
+        if self.is_multitarget:
             data.assign_outcomes(binary_outcomes)
         else:
             data.assign_attributes(OUTCOME, binary_outcomes["outcome"])
 
+    def _censor_and_truncate_sequences(
+        self, data: CausalPatientDataset, index_dates: pd.DataFrame
+    ):
+        """Applies censoring, filters short sequences, and truncates."""
+        # Censor sequences based on index dates
         censor_dates = (
-            index_dates.set_index(PID_COL)[ABSPOS_COL] + exposure_cfg.n_hours_censoring
+            index_dates.set_index(PID_COL)[ABSPOS_COL]
+            + self.exposure_cfg.n_hours_censoring
         )
         self.ds_preparer._validate_censoring(data.patients, censor_dates, logger)
+
         if "concept_pattern_hours_delay" in self.ds_preparer.cfg:
             concept_id_to_delay = get_concept_id_to_delay(
-                self.ds_preparer.cfg.concept_pattern_hours_delay, self.ds_preparer.vocab
+                self.ds_preparer.cfg.concept_pattern_hours_delay,
+                self.vocabulary,
             )
             data.patients = data.process_in_parallel(
                 censor_patient_with_delays,
@@ -177,81 +256,57 @@ class CausalDatasetPreparer:
                 censor_dates=censor_dates,
                 predict_token_id=self.ds_preparer.predict_token,
             )
-        background_length = get_background_length(data, self.ds_preparer.vocab)
+
         # Exclude short sequences
         logger.info("Excluding short sequences")
-        data.patients = exclude_short_sequences(
-            data.patients,
-            data_cfg.get("min_len", 1) + background_length,
-        )
+        background_length = get_background_length(data, self.vocabulary)
+        min_len = self.data_cfg.get("min_len", 1) + background_length
+        data.patients = exclude_short_sequences(data.patients, min_len)
 
+        # Truncate sequences
         non_priority_tokens = (
-            None
-            if data_cfg.get("low_priority_prefixes", None) is None
-            else get_non_priority_tokens(
-                self.ds_preparer.vocab, data_cfg.low_priority_prefixes
+            get_non_priority_tokens(
+                self.vocabulary, self.data_cfg.low_priority_prefixes
             )
+            if self.data_cfg.get("low_priority_prefixes")
+            else None
         )
         data.patients = data.process_in_parallel(
             truncate_patient,
-            max_len=data_cfg.truncation_len,
+            max_len=self.data_cfg.truncation_len,
             background_length=background_length,
-            sep_token=self.ds_preparer.vocab["[SEP]"],
+            sep_token=self.vocabulary["[SEP]"],
             non_priority_tokens=non_priority_tokens,
         )
 
-        data.patients = data.process_in_parallel(normalize_segments_for_patient)
-        # Check if max segment is larger than type_vocab b_size
-        # TODO: pass pt_model_config and perform this check
-        # max_segment(data, model_cfg.type_vocab_size)
-        # Previously had issue with it
-        logger.info(
-            f"Max segment length: {max(max(patient.segments) for patient in data.patients)}"
-        )
-        # save
-        out_dir = join(self.ds_preparer.processed_dir, "causal")
-        artifacts = Artifacts(
-            data, exposures, binary_outcomes, binary_exposure, index_dates, follow_ups
-        )
-        self.save_artifacts(out_dir, artifacts)
-        return data
-
-    def _access_cfg_paths(self):
-        exposure_cfg = self.ds_preparer.cfg.exposure
-        outcome_cfg = self.ds_preparer.cfg.outcome
-        paths_cfg = self.ds_preparer.cfg.paths
-        data_cfg = self.ds_preparer.cfg.data
-        return exposure_cfg, outcome_cfg, paths_cfg, data_cfg
-
     def load_shards_into_patient_data(
-        self, paths_cfg, data_cfg, pids=None, mode="tuning"
+        self, pids: List[int] = None, mode: str = "tuning"
     ) -> CausalPatientDataset:
-        # Load tokenized data
+        """Loads and processes data shards into a CausalPatientDataset."""
         loader = ShardLoader(
-            data_dir=paths_cfg.tokenized,
+            data_dir=self.paths_cfg.tokenized,
             splits=[f"features_{mode}"],
             patient_info_path=None,
         )
         patient_list = []
-        for df, _ in tqdm(
-            loader(), desc="Batch Process Data", file=TqdmToLogger(logger)
-        ):
+        desc = f"Loading and processing '{mode}' shards"
+        for df, _ in tqdm(loader(), desc=desc, file=TqdmToLogger(logger)):
             if pids is not None:
                 df = filter_df_by_pids(df, pids)
-            if data_cfg.get("cutoff_date"):
-                df = self.ds_preparer._cutoff_data(df, data_cfg.cutoff_date)
-            # !TODO: if index date is the same for all patients, then we can censor here.
+            if self.data_cfg.get("cutoff_date"):
+                df = self.ds_preparer._cutoff_data(df, self.data_cfg.cutoff_date)
+
             self.ds_preparer._check_sorted(df)
-            batch_patient_list = dataframe_to_causal_patient_list(df)
-            patient_list.extend(batch_patient_list)
-        logger.info(f"Number of patients: {len(patient_list)}")
-        data = CausalPatientDataset(patients=patient_list)
-        return data
+            patient_list.extend(dataframe_to_causal_patient_list(df))
+
+        logger.info(f"Loaded {len(patient_list)} patients.")
+        return CausalPatientDataset(patients=patient_list)
 
     @staticmethod
     def load_cohort_data(
         cohort_path: str,
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """Loads exposure and index date files."""
         exposures = pd.read_csv(join(cohort_path, EXPOSURES_FILE))
         index_date_matching = pd.read_csv(join(cohort_path, INDEX_DATE_MATCHING_FILE))
         index_dates = pd.read_csv(
@@ -261,19 +316,21 @@ class CausalDatasetPreparer:
 
     @staticmethod
     def get_data_end(cohort_cfg: Config) -> pd.Timestamp:
-        if hasattr(cohort_cfg, "time_windows") and hasattr(
-            cohort_cfg.time_windows, "data_end"
-        ):
+        """Retrieves the data end timestamp from the configuration."""
+        try:
             return pd.to_datetime(cohort_cfg.time_windows.data_end)
-        else:
+        except AttributeError:
             logger.warning(
-                "No data end time found in cohort configuration. Setting to today."
+                "No data_end found in cohort_cfg.time_windows. Defaulting to today."
             )
             return pd.to_datetime("today")
 
-    def save_artifacts(self, out_dir: str, artifacts: Artifacts):
+    @staticmethod
+    def _save_artifacts(artifacts: Artifacts, out_dir: str):
+        """Saves all processed data and artifacts to disk."""
         os.makedirs(out_dir, exist_ok=True)
-        save_vocabulary(self.ds_preparer.vocab, out_dir)
+        logger.info(f"Saving artifacts to {out_dir}")
+        save_vocabulary(artifacts.vocabulary, out_dir)
         artifacts.data.save(out_dir)
         artifacts.exposures.to_csv(join(out_dir, EXPOSURES_FILE), index=False)
         artifacts.index_dates.to_csv(join(out_dir, INDEX_DATES_FILE), index=False)
