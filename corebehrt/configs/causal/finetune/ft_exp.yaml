@@ -12,8 +12,8 @@ paths:
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 model:
-  cls:
-    _target_: ehr2vec.model.heads.ClassifierGRU
+  head:
+    shared_representation: false # whether to share the bigru representation for exposure and outcome
     bidirectional: true
 
 trainer_args:

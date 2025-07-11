@@ -1,19 +1,22 @@
 """
 Unit tests for causal head components.
 
-This module tests the CausalBiGRU and CausalFineTuneHead classes to ensure
-proper forward pass behavior and correct handling of exposure information.
+This module tests the PatientRepresentationPooler and MLPHead classes to ensure
+proper forward pass behavior and correct pooling/classification functionality.
 """
 
 import unittest
 
 import torch
 
-from corebehrt.modules.model.causal.heads import CausalBiGRU, CausalFineTuneHead
+from corebehrt.modules.model.causal.heads import (
+    MLPHead,
+    PatientRepresentationPooler,
+)
 
 
-class TestCausalBiGRU(unittest.TestCase):
-    """Test cases for the CausalBiGRU component."""
+class TestPatientRepresentationPooler(unittest.TestCase):
+    """Test cases for the PatientRepresentationPooler component."""
 
     def setUp(self):
         """Set up common test parameters."""
@@ -22,89 +25,28 @@ class TestCausalBiGRU(unittest.TestCase):
         self.seq_len = 10
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def test_initialization(self):
-        """Test that CausalBiGRU initializes with correct parameters."""
-        # Test without exposure
-        model = CausalBiGRU(self.hidden_size, with_exposure=False)
-        self.assertEqual(model.hidden_size, self.hidden_size)
-        self.assertEqual(model.rnn_hidden_size, self.hidden_size // 2)
-        self.assertEqual(model.classifier_input_size, self.hidden_size)
-        self.assertFalse(model.with_exposure)
+    def test_initialization_bidirectional(self):
+        """Test that PatientRepresentationPooler initializes correctly with bidirectional=True."""
+        pooler = PatientRepresentationPooler(self.hidden_size, bidirectional=True)
+        self.assertEqual(pooler.hidden_size, self.hidden_size)
+        self.assertTrue(pooler.bidirectional)
+        self.assertEqual(pooler.rnn_hidden_size, self.hidden_size // 2)
+        self.assertIsInstance(pooler.rnn, torch.nn.GRU)
+        self.assertTrue(pooler.rnn.bidirectional)
 
-        # Test with exposure
-        model = CausalBiGRU(self.hidden_size, with_exposure=True)
-        self.assertEqual(model.classifier_input_size, self.hidden_size + 1)
-        self.assertTrue(model.with_exposure)
+    def test_initialization_unidirectional(self):
+        """Test that PatientRepresentationPooler initializes correctly with bidirectional=False."""
+        pooler = PatientRepresentationPooler(self.hidden_size, bidirectional=False)
+        self.assertEqual(pooler.hidden_size, self.hidden_size)
+        self.assertFalse(pooler.bidirectional)
+        self.assertEqual(pooler.rnn_hidden_size, self.hidden_size)
+        self.assertFalse(pooler.rnn.bidirectional)
 
-    def test_forward_without_exposure(self):
-        """Test forward pass without exposure information."""
-        model = CausalBiGRU(self.hidden_size, with_exposure=False).to(self.device)
-
-        # Create dummy inputs
-        hidden_states = torch.randn(
-            self.batch_size, self.seq_len, self.hidden_size, device=self.device
+    def test_forward_bidirectional(self):
+        """Test forward pass with bidirectional GRU."""
+        pooler = PatientRepresentationPooler(self.hidden_size, bidirectional=True).to(
+            self.device
         )
-
-        # Important: Create attention mask with at least one token per sequence
-        # This prevents zero-length sequences that would cause issues
-        attention_mask = torch.ones(
-            self.batch_size, self.seq_len, device=self.device
-        ).bool()
-        # Make some sequences shorter BUT ensure at least one token is present
-        attention_mask[0, 5:] = 0
-        attention_mask[1, 8:] = 0
-
-        # Test standard forward pass
-        output = model(hidden_states, attention_mask)
-        self.assertEqual(output.shape, (self.batch_size, 1))
-
-        # Test with return_embedding=True
-        embeddings = model(hidden_states, attention_mask, return_embedding=True)
-        self.assertEqual(embeddings.shape, (self.batch_size, self.hidden_size))
-
-        # Verify last_pooled_output was stored
-        self.assertIsNotNone(model.last_pooled_output)
-        self.assertEqual(
-            model.last_pooled_output.shape, (self.batch_size, self.hidden_size)
-        )
-
-    def test_forward_with_exposure_batch_seq(self):
-        """Test forward pass with sequence-level exposure information."""
-        model = CausalBiGRU(self.hidden_size, with_exposure=True).to(self.device)
-
-        # Create dummy inputs
-        hidden_states = torch.randn(
-            self.batch_size, self.seq_len, self.hidden_size, device=self.device
-        )
-        attention_mask = torch.ones(
-            self.batch_size, self.seq_len, device=self.device
-        ).bool()
-        # Vary sequence lengths but keep at least one token
-        attention_mask[0, 5:] = 0
-        attention_mask[2, 7:] = 0
-
-        # Create sequence-level exposure status [batch_size, seq_len]
-        exposure_status = torch.zeros(self.batch_size, self.seq_len, device=self.device)
-        exposure_status[:, 0] = 1  # Set first token exposure to 1
-
-        # Test with exposure_status
-        output = model(hidden_states, attention_mask, exposure_status)
-        self.assertEqual(output.shape, (self.batch_size, 1))
-
-        # Test with return_embedding=True
-        embeddings = model(
-            hidden_states, attention_mask, exposure_status, return_embedding=True
-        )
-        self.assertEqual(embeddings.shape, (self.batch_size, self.hidden_size + 1))
-
-        # Verify last_pooled_output includes exposure
-        self.assertEqual(
-            model.last_pooled_output.shape, (self.batch_size, self.hidden_size + 1)
-        )
-
-    def test_forward_with_exposure_batch_one(self):
-        """Test forward pass with scalar exposure information per batch item."""
-        model = CausalBiGRU(self.hidden_size, with_exposure=True).to(self.device)
 
         # Create dummy inputs
         hidden_states = torch.randn(
@@ -114,25 +56,35 @@ class TestCausalBiGRU(unittest.TestCase):
             self.batch_size, self.seq_len, device=self.device
         ).bool()
 
-        # Create batch-level exposure status [batch_size, 1]
-        exposure_status = torch.zeros(self.batch_size, 1, device=self.device)
-        exposure_status[0] = 1
-        exposure_status[3] = 1
+        # Test forward pass
+        output = pooler(hidden_states, attention_mask)
+        self.assertEqual(output.shape, (self.batch_size, self.hidden_size))
 
-        # Test with exposure_status
-        output = model(hidden_states, attention_mask, exposure_status)
-        self.assertEqual(output.shape, (self.batch_size, 1))
-
-        # Verify last_pooled_output includes exposure
-        self.assertEqual(
-            model.last_pooled_output.shape, (self.batch_size, self.hidden_size + 1)
+    def test_forward_unidirectional(self):
+        """Test forward pass with unidirectional GRU."""
+        pooler = PatientRepresentationPooler(self.hidden_size, bidirectional=False).to(
+            self.device
         )
+
+        # Create dummy inputs
+        hidden_states = torch.randn(
+            self.batch_size, self.seq_len, self.hidden_size, device=self.device
+        )
+        attention_mask = torch.ones(
+            self.batch_size, self.seq_len, device=self.device
+        ).bool()
+
+        # Test forward pass
+        output = pooler(hidden_states, attention_mask)
+        self.assertEqual(output.shape, (self.batch_size, self.hidden_size))
 
     def test_variable_sequence_lengths(self):
         """Test handling of variable sequence lengths."""
-        model = CausalBiGRU(self.hidden_size, with_exposure=False).to(self.device)
+        pooler = PatientRepresentationPooler(self.hidden_size, bidirectional=True).to(
+            self.device
+        )
 
-        # Create dummy inputs with widely varying sequence lengths
+        # Create dummy inputs with varying sequence lengths
         hidden_states = torch.randn(
             self.batch_size, self.seq_len, self.hidden_size, device=self.device
         )
@@ -143,79 +95,160 @@ class TestCausalBiGRU(unittest.TestCase):
         # Set varying sequence lengths with minimum length of 1
         for i in range(self.batch_size):
             length = max(1, i + 1)  # Ensure at least length 1
-            attention_mask[i, :length] = 1
+            if length <= self.seq_len:
+                attention_mask[i, :length] = 1
+            else:
+                attention_mask[i, :] = 1
 
         # Test forward pass
-        output = model(hidden_states, attention_mask)
-        self.assertEqual(output.shape, (self.batch_size, 1))
+        output = pooler(hidden_states, attention_mask)
+        self.assertEqual(output.shape, (self.batch_size, self.hidden_size))
+
+    def test_edge_case_single_token_sequences(self):
+        """Test with sequences that have only one valid token."""
+        pooler = PatientRepresentationPooler(self.hidden_size, bidirectional=True).to(
+            self.device
+        )
+
+        # Create inputs where all sequences have only one valid token
+        hidden_states = torch.randn(
+            self.batch_size, self.seq_len, self.hidden_size, device=self.device
+        )
+        attention_mask = torch.zeros(
+            self.batch_size, self.seq_len, device=self.device
+        ).bool()
+        attention_mask[:, 0] = 1  # Only first token is valid
+
+        # Test forward pass
+        output = pooler(hidden_states, attention_mask)
+        self.assertEqual(output.shape, (self.batch_size, self.hidden_size))
+
+    def test_different_hidden_sizes(self):
+        """Test with different hidden sizes."""
+        for hidden_size in [32, 64, 128, 256]:
+            with self.subTest(hidden_size=hidden_size):
+                pooler = PatientRepresentationPooler(
+                    hidden_size, bidirectional=True
+                ).to(self.device)
+
+                hidden_states = torch.randn(
+                    self.batch_size, self.seq_len, hidden_size, device=self.device
+                )
+                attention_mask = torch.ones(
+                    self.batch_size, self.seq_len, device=self.device
+                ).bool()
+
+                output = pooler(hidden_states, attention_mask)
+                self.assertEqual(output.shape, (self.batch_size, hidden_size))
 
 
-class TestCausalFineTuneHead(unittest.TestCase):
-    """Test cases for the CausalFineTuneHead component."""
+class TestMLPHead(unittest.TestCase):
+    """Test cases for the MLPHead component."""
 
     def setUp(self):
         """Set up common test parameters."""
-        self.hidden_size = 64
+        self.input_size = 64
         self.batch_size = 8
-        self.seq_len = 10
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def test_initialization(self):
-        """Test initialization of CausalFineTuneHead."""
-        # Test without exposure
-        head = CausalFineTuneHead(self.hidden_size, with_exposure=False)
-        self.assertFalse(head.pool.with_exposure)
+    def test_initialization_default(self):
+        """Test that MLPHead initializes with default parameters."""
+        head = MLPHead(self.input_size)
+        self.assertIsInstance(head.norm, torch.nn.LayerNorm)
+        self.assertIsInstance(head.classifier, torch.nn.Sequential)
+        self.assertEqual(
+            len(head.classifier), 5
+        )  # Linear, LayerNorm, ReLU, Dropout, Linear
 
-        # Test with exposure
-        head = CausalFineTuneHead(self.hidden_size, with_exposure=True)
-        self.assertTrue(head.pool.with_exposure)
-
-    def test_forward_without_exposure(self):
-        """Test forward pass without exposure information."""
-        head = CausalFineTuneHead(self.hidden_size, with_exposure=False).to(self.device)
-
-        # Create dummy inputs
-        hidden_states = torch.randn(
-            self.batch_size, self.seq_len, self.hidden_size, device=self.device
+    def test_initialization_custom_params(self):
+        """Test that MLPHead initializes with custom parameters."""
+        hidden_size_ratio = 4
+        dropout_prob = 0.2
+        head = MLPHead(
+            self.input_size,
+            hidden_size_ratio=hidden_size_ratio,
+            dropout_prob=dropout_prob,
         )
 
-        # Important: Create attention mask with at least one token per sequence
-        attention_mask = torch.ones(
-            self.batch_size, self.seq_len, device=self.device
-        ).bool()
+        # Check that the first linear layer has correct input/output dimensions
+        first_linear = head.classifier[0]
+        self.assertIsInstance(first_linear, torch.nn.Linear)
+        self.assertEqual(first_linear.in_features, self.input_size)
+        self.assertEqual(
+            first_linear.out_features, self.input_size // hidden_size_ratio
+        )
 
-        # Test standard forward pass with proper conversion of indices
-        output = head(hidden_states, attention_mask)
+        # Check dropout probability
+        dropout_layer = head.classifier[3]
+        self.assertIsInstance(dropout_layer, torch.nn.Dropout)
+        self.assertEqual(dropout_layer.p, dropout_prob)
+
+    def test_forward_pass(self):
+        """Test forward pass of MLPHead."""
+        head = MLPHead(self.input_size).to(self.device)
+
+        # Create dummy input
+        x = torch.randn(self.batch_size, self.input_size, device=self.device)
+
+        # Test forward pass
+        output = head(x)
         self.assertEqual(output.shape, (self.batch_size, 1))
 
-        # Test with return_embedding=True
-        embeddings = head(hidden_states, attention_mask, return_embedding=True)
-        self.assertEqual(embeddings.shape, (self.batch_size, self.hidden_size))
+    def test_forward_pass_different_batch_sizes(self):
+        """Test forward pass with different batch sizes."""
+        head = MLPHead(self.input_size).to(self.device)
 
-    def test_forward_with_exposure(self):
-        """Test forward pass with exposure information."""
-        head = CausalFineTuneHead(self.hidden_size, with_exposure=True).to(self.device)
+        for batch_size in [1, 4, 16, 32]:
+            with self.subTest(batch_size=batch_size):
+                x = torch.randn(batch_size, self.input_size, device=self.device)
+                output = head(x)
+                self.assertEqual(output.shape, (batch_size, 1))
 
-        # Create dummy inputs
-        hidden_states = torch.randn(
-            self.batch_size, self.seq_len, self.hidden_size, device=self.device
+    def test_forward_pass_different_input_sizes(self):
+        """Test forward pass with different input sizes."""
+        for input_size in [32, 64, 128, 256]:
+            with self.subTest(input_size=input_size):
+                head = MLPHead(input_size).to(self.device)
+                x = torch.randn(self.batch_size, input_size, device=self.device)
+                output = head(x)
+                self.assertEqual(output.shape, (self.batch_size, 1))
+
+    def test_forward_pass_different_hidden_size_ratios(self):
+        """Test forward pass with different hidden size ratios."""
+        for ratio in [2, 4, 8]:
+            with self.subTest(ratio=ratio):
+                head = MLPHead(self.input_size, hidden_size_ratio=ratio).to(self.device)
+                x = torch.randn(self.batch_size, self.input_size, device=self.device)
+                output = head(x)
+                self.assertEqual(output.shape, (self.batch_size, 1))
+
+    def test_gradient_flow(self):
+        """Test that gradients flow through the MLPHead."""
+        head = MLPHead(self.input_size).to(self.device)
+        x = torch.randn(
+            self.batch_size, self.input_size, device=self.device, requires_grad=True
         )
-        attention_mask = torch.ones(
-            self.batch_size, self.seq_len, device=self.device
-        ).bool()
 
-        # Make sure exposure_status has the correct shape and device
-        exposure_status = torch.rand(self.batch_size, 1, device=self.device)
+        output = head(x)
+        loss = output.sum()
+        loss.backward()
 
-        # Test standard forward pass
-        output = head(hidden_states, attention_mask, exposure_status)
-        self.assertEqual(output.shape, (self.batch_size, 1))
+        # Check that gradients are computed
+        self.assertIsNotNone(x.grad)
+        self.assertFalse(torch.allclose(x.grad, torch.zeros_like(x.grad)))
 
-        # Test with return_embedding=True
-        embeddings = head(
-            hidden_states, attention_mask, exposure_status, return_embedding=True
-        )
-        self.assertEqual(embeddings.shape, (self.batch_size, self.hidden_size + 1))
+    def test_output_range(self):
+        """Test that output is in reasonable range (not extreme values)."""
+        head = MLPHead(self.input_size).to(self.device)
+        x = torch.randn(self.batch_size, self.input_size, device=self.device)
+
+        output = head(x)
+
+        # Check that outputs are finite
+        self.assertTrue(torch.isfinite(output).all())
+
+        # Check that outputs are not extremely large (arbitrary threshold)
+        self.assertTrue(torch.abs(output).max() < 100)
 
 
 if __name__ == "__main__":
