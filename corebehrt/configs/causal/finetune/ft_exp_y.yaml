@@ -23,7 +23,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 8
+  epochs: 7
   info: true
   gradient_clip:
     clip_value: 1.0
@@ -36,7 +36,7 @@ trainer_args:
   unfreeze_at_epoch: 20 # if unfrezze_on_plateau is true, whichever condition is met first
 
 optimizer:
-  lr: 1e-3
+  lr: 3e-3
   eps: 1e-6
 
 scheduler:
