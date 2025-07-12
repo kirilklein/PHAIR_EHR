@@ -8,7 +8,6 @@ from corebehrt.functional.preparation.causal.follow_up import (
 from corebehrt.constants.causal.data import (
     START_COL,
     END_COL,
-    GROUP_COL,
     NON_COMPLIANCE_COL,
     DEATH_COL,
     START_TIME_COL,
@@ -45,17 +44,8 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
             4: 350.0,  # Patient 4 dies at 350
         }
 
-        group_dict = {
-            1: 0,  # Patients 1 and 2 are in group 0
-            2: 0,
-            3: 1,  # Patients 3 and 4 are in group 1
-            4: 1,
-        }
-
         # 2. Execute function
-        result = prepare_follow_ups_adjusted(
-            follow_ups, non_compliance_abspos, deaths, group_dict
-        )
+        result = prepare_follow_ups_adjusted(follow_ups, non_compliance_abspos, deaths)
 
         # 3. Expected results (individual patient minimums):
         # Patient 1: min(100, 80, inf) = 80
@@ -75,11 +65,6 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
         pd.testing.assert_series_equal(
             result[DEATH_COL],
             pd.Series([np.nan, 180.0, np.nan, 350.0], name=DEATH_COL),
-            check_names=False,
-        )
-        pd.testing.assert_series_equal(
-            result[GROUP_COL],
-            pd.Series([0, 0, 1, 1], name=GROUP_COL),
             check_names=False,
         )
         pd.testing.assert_series_equal(
@@ -105,12 +90,8 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
             # Patient 2 missing from deaths
         }
 
-        group_dict = {1: 0, 2: 0}
-
         # 2. Execute function
-        result = prepare_follow_ups_adjusted(
-            follow_ups, non_compliance_abspos, deaths, group_dict
-        )
+        result = prepare_follow_ups_adjusted(follow_ups, non_compliance_abspos, deaths)
 
         # 3. Expected results (individual patient minimums):
         # Patient 1: min(100, 80, inf) = 80
@@ -136,12 +117,9 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
 
         non_compliance_abspos = {}
         deaths = {}
-        group_dict = {}
 
         # 2. Execute function
-        result = prepare_follow_ups_adjusted(
-            follow_ups, non_compliance_abspos, deaths, group_dict
-        )
+        result = prepare_follow_ups_adjusted(follow_ups, non_compliance_abspos, deaths)
 
         # 3. Assertions
         self.assertEqual(len(result), 0, "Empty input should return empty result")
@@ -149,10 +127,9 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
             NON_COMPLIANCE_COL in result.columns, "Should have non_compliance column"
         )
         self.assertTrue(DEATH_COL in result.columns, "Should have death column")
-        self.assertTrue(GROUP_COL in result.columns, "Should have group column")
 
     def test_prepare_follow_ups_adjusted_single_group(self):
-        """Test the function with all patients in a single group."""
+        """Test the function with individual patient minimums."""
         # 1. Setup test data
         follow_ups = pd.DataFrame(
             {PID_COL: [1, 2], START_COL: [10.0, 20.0], END_COL: [100.0, 200.0]}
@@ -160,12 +137,9 @@ class TestPrepareFollowUpsAdjusted(unittest.TestCase):
 
         non_compliance_abspos = {1: 80.0, 2: 150.0}
         deaths = {1: np.nan, 2: 120.0}
-        group_dict = {1: 0, 2: 0}  # Both in same group
 
         # 2. Execute function
-        result = prepare_follow_ups_adjusted(
-            follow_ups, non_compliance_abspos, deaths, group_dict
-        )
+        result = prepare_follow_ups_adjusted(follow_ups, non_compliance_abspos, deaths)
 
         # 3. Expected results (individual patient minimums):
         # Patient 1: min(100, 80, inf) = 80
