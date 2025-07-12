@@ -10,7 +10,6 @@ from corebehrt.constants.causal.data import (
     CF_OUTCOME,
     EXPOSURE,
     EXPOSURE_TARGET,
-    OUTCOME,
 )
 from corebehrt.constants.data import TARGET
 from corebehrt.modules.monitoring.logger import get_tqdm
@@ -47,10 +46,11 @@ class CausalEHRTrainer(EHRTrainer):
         self.plateau_threshold = plateau_threshold
         self.encoder_frozen = False
         self.best_exposure_auc = None
-        self.best_outcome_auc = None
+        self.best_outcome_aucs = {}  # Track best AUC for each outcome
+        self.outcome_names = self.model.config.outcome_names
 
     def _evaluate(self, epoch: int, mode="val") -> tuple:
-        """Returns the validation/test loss and metrics for both exposure and outcome."""
+        """Returns the validation/test loss and metrics for exposure and all outcomes."""
         if mode == "val":
             if self.val_dataset is None:
                 self.log("No validation dataset provided")
@@ -69,9 +69,8 @@ class CausalEHRTrainer(EHRTrainer):
         loop.set_description(mode)
         loss = 0
         exposure_loss_total = 0
-        outcome_loss_total = 0
+        outcome_losses_total = defaultdict(float)
 
-        # Metric tracking for both target types
         prediction_data = {
             EXPOSURE: CausalPredictionData(
                 metric_values={f"{EXPOSURE}_{name}": [] for name in self.metrics},
@@ -79,16 +78,18 @@ class CausalEHRTrainer(EHRTrainer):
                 targets_list=[] if self.accumulate_logits else None,
                 target_key=EXPOSURE_TARGET,
             ),
-            OUTCOME: CausalPredictionData(
-                metric_values={f"{OUTCOME}_{name}": [] for name in self.metrics},
+        }
+
+        for outcome_name in self.outcome_names:
+            prediction_data[outcome_name] = CausalPredictionData(
+                metric_values={f"{outcome_name}_{name}": [] for name in self.metrics},
                 logits_list=[] if self.accumulate_logits else None,
                 targets_list=[] if self.accumulate_logits else None,
-                target_key=TARGET,
-            ),
-            CF_OUTCOME: CausalPredictionData(
+                target_key=outcome_name,
+            )
+            prediction_data[f"{CF_OUTCOME}_{outcome_name}"] = CausalPredictionData(
                 logits_list=[] if self.accumulate_logits else None,
-            ),
-        }
+            )
 
         with torch.no_grad():
             for batch in loop:
@@ -96,110 +97,149 @@ class CausalEHRTrainer(EHRTrainer):
                 with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
                     outputs = self.model(batch)
                     cf_outputs = self.model(batch, cf=True)
-                # Add to total loss if available
+
                 if hasattr(outputs, "loss"):
                     loss += outputs.loss.item()
                 if hasattr(outputs, "exposure_loss"):
                     exposure_loss_total += outputs.exposure_loss.item()
-                if hasattr(outputs, "outcome_loss"):
-                    outcome_loss_total += outputs.outcome_loss.item()
+                if hasattr(outputs, "outcome_losses"):
+                    for outcome_name, outcome_loss in outputs.outcome_losses.items():
+                        outcome_losses_total[outcome_name] += outcome_loss.item()
 
                 if self.accumulate_logits:
-                    # Store predictions for later processing
                     self._accumulate_predictions(
                         batch, outputs, cf_outputs, prediction_data
                     )
                 else:
-                    # Calculate metrics on the fly
                     self._calculate_batch_metrics(batch, outputs, prediction_data)
 
-        # Process all accumulated predictions
         if self.accumulate_logits:
             metrics = self.process_causal_classification_results(
                 prediction_data, epoch, mode
             )
         else:
-            # Average metrics calculated on the fly
             exposure_metrics = compute_avg_metrics(
                 prediction_data[EXPOSURE].metric_values
             )
-            outcome_metrics = compute_avg_metrics(
-                prediction_data[OUTCOME].metric_values
-            )
 
-            # Compute simple average metrics
+            all_outcome_metrics = {}
+            for outcome_name in self.outcome_names:
+                outcome_metrics = compute_avg_metrics(
+                    prediction_data[outcome_name].metric_values
+                )
+                all_outcome_metrics.update(outcome_metrics)
+
             simple_metrics = {}
             for name in self.metrics.keys():
-                if (
-                    f"{EXPOSURE}_{name}" in exposure_metrics
-                    and f"{OUTCOME}_{name}" in outcome_metrics
-                ):
-                    simple_metrics[name] = (
+                outcome_values = [
+                    all_outcome_metrics[f"{outcome_name}_{name}"]
+                    for outcome_name in self.outcome_names
+                    if f"{outcome_name}_{name}" in all_outcome_metrics
+                ]
+                if outcome_values and f"{EXPOSURE}_{name}" in exposure_metrics:
+                    all_values = [
                         exposure_metrics[f"{EXPOSURE}_{name}"]
-                        + outcome_metrics[f"{OUTCOME}_{name}"]
-                    ) / 2
+                    ] + outcome_values
+                    simple_metrics[name] = sum(all_values) / len(all_values)
 
-            metrics = {**exposure_metrics, **outcome_metrics, **simple_metrics}
+            metrics = {**exposure_metrics, **all_outcome_metrics, **simple_metrics}
+
         self.model.train()
 
-        # Return average losses and all metrics
         avg_loss = loss / len(loop)
         avg_exposure_loss = exposure_loss_total / len(loop)
-        avg_outcome_loss = outcome_loss_total / len(loop)
+        avg_outcome_losses = {
+            outcome_name: total_loss / len(loop)
+            for outcome_name, total_loss in outcome_losses_total.items()
+        }
 
-        return avg_loss, metrics, avg_exposure_loss, avg_outcome_loss
+        return avg_loss, metrics, avg_exposure_loss, avg_outcome_losses
 
     def process_causal_classification_results(
         self,
         prediction_data: Dict[str, CausalPredictionData],
         epoch: int,
         mode="val",
+        outcome_names: list = None,
     ) -> dict:
-        """Process results for both exposure and outcome predictions."""
+        """Process results for exposure and all outcome predictions."""
 
         metrics = {}
 
-        # Process exposure and outcome predictions
-        for target_type in [EXPOSURE, OUTCOME]:
-            # Concatenate tensors
-            targets = torch.cat(prediction_data[target_type].targets_list)
-            logits = torch.cat(prediction_data[target_type].logits_list)
+        # Process exposure predictions
+        targets = torch.cat(prediction_data[EXPOSURE].targets_list)
+        logits = torch.cat(prediction_data[EXPOSURE].logits_list)
 
-            # Calculate metrics
+        # Calculate metrics for exposure
+        batch = {TARGET: targets}
+        outputs = namedtuple("Outputs", ["logits"])(logits)
+
+        for name, func in self.metrics.items():
+            value = func(outputs, batch)
+            key = f"{EXPOSURE}_{name}"
+            self.log(f"{key}: {value}")
+            metrics[key] = value
+
+        # Save exposure results
+        self._save_target_results(
+            EXPOSURE,
+            logits,
+            targets,
+            {k: v for k, v in metrics.items() if k.startswith(f"{EXPOSURE}_")},
+            epoch,
+            mode,
+        )
+
+        # Process each outcome prediction
+        for outcome_name in self.outcome_names:
+            targets = torch.cat(prediction_data[outcome_name].targets_list)
+            logits = torch.cat(prediction_data[outcome_name].logits_list)
+
+            # Calculate metrics for this outcome
             batch = {TARGET: targets}
             outputs = namedtuple("Outputs", ["logits"])(logits)
 
-            # Compute metrics
             for name, func in self.metrics.items():
                 value = func(outputs, batch)
-                key = f"{target_type}_{name}"
+                key = f"{outcome_name}_{name}"
                 self.log(f"{key}: {value}")
                 metrics[key] = value
 
-            # Save results
+            # Save results for this outcome
             self._save_target_results(
-                target_type, logits, targets, metrics, epoch, mode
+                outcome_name,
+                logits,
+                targets,
+                {k: v for k, v in metrics.items() if k.startswith(f"{outcome_name}_")},
+                epoch,
+                mode,
             )
 
-        # Compute average metrics (simple metric names)
+            # Save counterfactual predictions for this outcome
+            cf_logits = torch.cat(
+                prediction_data[f"{CF_OUTCOME}_{outcome_name}"].logits_list
+            )
+            save_predictions(
+                self.run_folder,
+                cf_logits,
+                None,
+                BEST_MODEL_ID,
+                f"{mode}_{CF_OUTCOME}_{outcome_name}",
+                save_targets=False,
+            )
+
+        # Compute average metrics across exposure + all outcomes
         for name in self.metrics.keys():
-            if f"{EXPOSURE}_{name}" in metrics and f"{OUTCOME}_{name}" in metrics:
-                avg_value = (
-                    metrics[f"{EXPOSURE}_{name}"] + metrics[f"{OUTCOME}_{name}"]
-                ) / 2
+            outcome_values = [
+                metrics[f"{outcome_name}_{name}"]
+                for outcome_name in self.outcome_names
+                if f"{outcome_name}_{name}" in metrics
+            ]
+            if outcome_values and f"{EXPOSURE}_{name}" in metrics:
+                all_values = [metrics[f"{EXPOSURE}_{name}"]] + outcome_values
+                avg_value = sum(all_values) / len(all_values)
                 metrics[name] = avg_value
                 self.log(f"{name} (avg): {avg_value}")
-
-        # Process counterfactual outcome
-        cf_logits = torch.cat(prediction_data[CF_OUTCOME].logits_list)
-        save_predictions(
-            self.run_folder,
-            cf_logits,
-            None,
-            BEST_MODEL_ID,
-            f"{mode}_{CF_OUTCOME}",
-            save_targets=False,
-        )
 
         return metrics
 
@@ -217,16 +257,19 @@ class CausalEHRTrainer(EHRTrainer):
         )
         prediction_data[EXPOSURE].targets_list.append(batch[EXPOSURE_TARGET].cpu())
 
-        # Store outcome predictions
-        prediction_data[OUTCOME].logits_list.append(
-            outputs.outcome_logits.float().cpu()
-        )
-        prediction_data[OUTCOME].targets_list.append(batch[TARGET].cpu())
+        # Store outcome predictions for each outcome
+        for outcome_name in self.outcome_names:
+            prediction_data[outcome_name].logits_list.append(
+                outputs.outcome_logits[outcome_name].float().cpu()
+            )
+            prediction_data[outcome_name].targets_list.append(
+                batch[f"outcome_{outcome_name}"].cpu()
+            )
 
-        # Store counterfactual outcome predictions
-        prediction_data[CF_OUTCOME].logits_list.append(
-            cf_outputs.outcome_logits.float().cpu()
-        )
+            # Store counterfactual outcome predictions
+            prediction_data[f"{CF_OUTCOME}_{outcome_name}"].logits_list.append(
+                cf_outputs.outcome_logits[outcome_name].float().cpu()
+            )
 
     def _calculate_batch_metrics(
         self,
@@ -246,13 +289,16 @@ class CausalEHRTrainer(EHRTrainer):
                 exposure_value
             )
 
-            # Outcome metrics
-            outcome_outputs = namedtuple("Outputs", ["logits"])(outputs.outcome_logits)
-            outcome_batch = {TARGET: batch[TARGET]}
-            outcome_value = func(outcome_outputs, outcome_batch)
-            prediction_data[OUTCOME].metric_values[f"{OUTCOME}_{name}"].append(
-                outcome_value
-            )
+            # Outcome metrics for each outcome
+            for outcome_name in self.outcome_names:
+                outcome_outputs = namedtuple("Outputs", ["logits"])(
+                    outputs.outcome_logits[outcome_name]
+                )
+                outcome_batch = {TARGET: batch[outcome_name]}
+                outcome_value = func(outcome_outputs, outcome_batch)
+                prediction_data[outcome_name].metric_values[
+                    f"{outcome_name}_{name}"
+                ].append(outcome_value)
 
     def _save_target_results(
         self,
@@ -331,7 +377,7 @@ class CausalEHRTrainer(EHRTrainer):
         )
 
         # Plot metrics
-        self._plot_metrics()
+        # self._plot_metrics()
 
         if epoch == 1:  # for testing purposes/if first epoch is best
             self._save_checkpoint(
@@ -486,25 +532,41 @@ class CausalEHRTrainer(EHRTrainer):
 
     def _check_and_freeze_encoder(self, metrics: dict):
         """
-        Freeze the encoder if either exposure or outcome AUC plateaus.
+        Freeze the encoder if exposure or any outcome AUC plateaus.
         """
         if self.encoder_frozen:
             return
 
         exposure_auc = metrics.get(f"{EXPOSURE}_roc_auc", 0.5)
-        outcome_auc = metrics.get(f"{OUTCOME}_roc_auc", 0.5)
 
+        # Check exposure plateau
         exp_plateau, self.best_exposure_auc = self._task_plateau(
             exposure_auc, self.best_exposure_auc, True
         )
-        out_plateau, self.best_outcome_auc = self._task_plateau(
-            outcome_auc, self.best_outcome_auc, True
-        )
 
-        if exp_plateau or out_plateau:
+        # Check each outcome plateau
+        outcome_plateaus = []
+        for outcome_name in self.best_outcome_aucs.keys():
+            outcome_auc = metrics.get(f"{outcome_name}_roc_auc", 0.5)
+            out_plateau, self.best_outcome_aucs[outcome_name] = self._task_plateau(
+                outcome_auc, self.best_outcome_aucs.get(outcome_name), True
+            )
+            outcome_plateaus.append(out_plateau)
+
+        # Initialize outcome AUCs for new outcomes
+        for outcome_name in [
+            k
+            for k in metrics.keys()
+            if k.endswith("_roc_auc") and k != f"{EXPOSURE}_roc_auc"
+        ]:
+            outcome_name_clean = outcome_name.replace("_roc_auc", "")
+            if outcome_name_clean not in self.best_outcome_aucs:
+                self.best_outcome_aucs[outcome_name_clean] = metrics[outcome_name]
+
+        if exp_plateau or any(outcome_plateaus):
             self._freeze_encoder()
             self.log(
-                f"Encoder frozen due to plateau (exp_plateau={exp_plateau}, out_plateau={out_plateau})"
+                f"Encoder frozen due to plateau (exp_plateau={exp_plateau}, outcome_plateaus={outcome_plateaus})"
             )
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = param_group["lr"] * 0.1

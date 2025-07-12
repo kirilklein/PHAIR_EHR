@@ -2,7 +2,7 @@
 Causal inference models for EHR data.
 
 This module extends the base Corebehrt models to support causal inference tasks,
-enabling simultaneous prediction of both exposure and outcome variables.
+enabling simultaneous prediction of both exposure and multiple outcome variables.
 """
 
 import logging
@@ -10,8 +10,8 @@ import logging
 import torch
 import torch.nn as nn
 
-from corebehrt.constants.causal.data import EXPOSURE_TARGET
-from corebehrt.constants.data import ATTENTION_MASK, TARGET
+from corebehrt.constants.causal.data import EXPOSURE_TARGET, OUTCOME_TARGETS
+from corebehrt.constants.data import ATTENTION_MASK
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
 from corebehrt.modules.model.model import CorebehrtForFineTuning
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
     """
-    A unified causal fine-tuning model for predicting exposure and outcome.
+    A unified causal fine-tuning model for predicting exposure and multiple outcomes.
 
     This class supports two architectures, controlled by `config.shared_representation`:
     1.  True (default): Uses a single, shared BiGRU pooler to create a patient
@@ -29,7 +29,7 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
     2.  False: Uses two independent BiGRU poolers, creating separate
         representations for the exposure and outcome tasks.
 
-    The model always uses two separate MLP heads for the final predictions.
+    The model uses separate MLP heads for exposure and each outcome prediction.
     """
 
     def __init__(self, config):
@@ -40,6 +40,9 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.shared_representation = self.head_config.get("shared_representation", True)
         self.bidirectional = self.head_config.get("bidirectional", True)
 
+        # Get outcome names from config
+        self.outcome_names = config.outcome_names
+
         self._setup_pooling_layers(config)
         self._setup_mlp_heads(config)
         self._setup_loss_functions(config)
@@ -47,34 +50,34 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
     def _setup_pooling_layers(self, config):
         if self.shared_representation:
             logger.info("Using shared patient representation")
-            # A single pooler for both tasks
+            # A single pooler for all tasks
             self.pooler = PatientRepresentationPooler(
                 hidden_size=config.hidden_size, bidirectional=self.bidirectional
             )
         else:
             logger.info("Using separate patient representations")
-            # Separate poolers for each task
+            # Separate poolers for exposure and each outcome
             self.exposure_pooler = PatientRepresentationPooler(
                 hidden_size=config.hidden_size, bidirectional=self.bidirectional
             )
-            self.outcome_pooler = PatientRepresentationPooler(
-                hidden_size=config.hidden_size, bidirectional=self.bidirectional
-            )
+            self.outcome_poolers = nn.ModuleDict()
+            for outcome_name in self.outcome_names:
+                self.outcome_poolers[outcome_name] = PatientRepresentationPooler(
+                    hidden_size=config.hidden_size, bidirectional=self.bidirectional
+                )
 
     def _setup_mlp_heads(self, config):
         self.exposure_head = MLPHead(input_size=config.hidden_size)
-        self.outcome_head = MLPHead(
-            input_size=config.hidden_size + 1
-        )  # +1 for exposure status
+
+        # Create separate heads for each outcome
+        self.outcome_heads = nn.ModuleDict()
+        for outcome_name in self.outcome_names:
+            self.outcome_heads[outcome_name] = MLPHead(
+                input_size=config.hidden_size + 1  # +1 for exposure status
+            )
 
     def _setup_loss_functions(self, config):
         """Helper method to initialize BCE loss functions with position weights."""
-        pos_weight_outcomes = (
-            torch.tensor(config.pos_weight_outcomes)
-            if hasattr(config, "pos_weight_outcomes")
-            else None
-        )
-        logger.info(f"pos_weight_outcomes (loss): {pos_weight_outcomes}")
         pos_weight_exposures = (
             torch.tensor(config.pos_weight_exposures)
             if hasattr(config, "pos_weight_exposures")
@@ -83,7 +86,20 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         logger.info(f"pos_weight_exposures (loss): {pos_weight_exposures}")
 
         self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_exposures)
-        self.outcome_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_outcomes)
+
+        # Create separate loss functions for each outcome
+        self.outcome_loss_fcts = nn.ModuleDict()
+        if hasattr(config, "pos_weight_outcomes"):
+            for outcome_name in self.outcome_names:
+                pos_weight_tensor = (
+                    torch.tensor(config.pos_weight_outcomes[outcome_name])
+                    if config.pos_weight_outcomes.get(outcome_name) is not None
+                    else None
+                )
+                logger.info(f"pos_weight_{outcome_name} (loss): {pos_weight_tensor}")
+                self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
+                    pos_weight=pos_weight_tensor
+                )
 
     def forward(self, batch: dict, cf: bool = False):
         """Forward pass for causal inference."""
@@ -94,25 +110,37 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         # --- Get Patient Representations ---
         if self.shared_representation:
             shared_repr = self.pooler(sequence_output, attention_mask)
-            exposure_repr, outcome_repr = shared_repr, shared_repr
+            exposure_repr = shared_repr
+            outcome_reprs = {
+                outcome_name: shared_repr for outcome_name in self.outcome_names
+            }
         else:
             exposure_repr = self.exposure_pooler(sequence_output, attention_mask)
-            outcome_repr = self.outcome_pooler(sequence_output, attention_mask)
+            outcome_reprs = {
+                outcome_name: self.outcome_poolers[outcome_name](
+                    sequence_output, attention_mask
+                )
+                for outcome_name in self.outcome_names
+            }
 
         # --- Exposure Prediction ---
         exposure_logits = self.exposure_head(exposure_repr)
         outputs.exposure_logits = exposure_logits
 
-        # --- Outcome Prediction ---
+        # --- Multiple Outcome Predictions ---
         exposure_status = 2 * batch[EXPOSURE_TARGET] - 1  # Convert from 0/1 to -1/1
         if cf:
             exposure_status = -exposure_status  # Flip for counterfactual
 
-        outcome_input = torch.cat(
-            (outcome_repr, exposure_status.unsqueeze(-1)), dim=-1
-        )  # [bs, hidden_size] vs [bs] -> [bs, hidden_size + 1]
-        outcome_logits = self.outcome_head(outcome_input)
-        outputs.outcome_logits = outcome_logits
+        # Compute logits for each outcome using its specific representation
+        outputs.outcome_logits = {}
+        for outcome_name in self.outcome_names:
+            outcome_input = torch.cat(
+                (outcome_reprs[outcome_name], exposure_status.unsqueeze(-1)), dim=-1
+            )  # [bs, hidden_size] vs [bs] -> [bs, hidden_size + 1]
+            outputs.outcome_logits[outcome_name] = self.outcome_heads[outcome_name](
+                outcome_input
+            )
 
         self._compute_losses(outputs, batch)
 
@@ -120,14 +148,26 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
     def _compute_losses(self, outputs, batch):
         """Helper method to compute and assign losses if labels are present."""
-        if EXPOSURE_TARGET in batch and TARGET in batch:
+        total_loss = 0
+
+        # Exposure loss
+        if EXPOSURE_TARGET in batch:
             exposure_loss = self.exposure_loss_fct(
                 outputs.exposure_logits.view(-1), batch[EXPOSURE_TARGET].view(-1)
             )
-            outcome_loss = self.outcome_loss_fct(
-                outputs.outcome_logits.view(-1), batch[TARGET].view(-1)
-            )
-
             outputs.exposure_loss = exposure_loss
-            outputs.outcome_loss = outcome_loss
-            outputs.loss = exposure_loss + outcome_loss
+            total_loss += exposure_loss
+
+        # Outcome losses
+        if OUTCOME_TARGETS in batch:
+            outputs.outcome_losses = {}
+            for outcome_name in self.outcome_names:
+                if outcome_name in batch[OUTCOME_TARGETS]:
+                    outcome_loss = self.outcome_loss_fcts[outcome_name](
+                        outputs.outcome_logits[outcome_name].view(-1),
+                        batch[OUTCOME_TARGETS][outcome_name].view(-1),
+                    )
+                    outputs.outcome_losses[outcome_name] = outcome_loss
+                    total_loss += outcome_loss
+
+        outputs.loss = total_loss

@@ -6,6 +6,7 @@ extending the base initializer to handle both exposure and outcome predictions.
 """
 
 import logging
+from typing import Dict, List
 
 from corebehrt.modules.model.causal.model import CorebehrtForCausalFineTuning
 from corebehrt.modules.setup.initializer import Initializer
@@ -21,15 +22,23 @@ class CausalInitializer(Initializer):
     both exposure and outcome. Currently only supports loading a pre-trained model from checkpoint.
     """
 
-    def initialize_finetune_model(self, outcomes, exposures):
+    def initialize_finetune_model(
+        self, outcomes: Dict[str, List[int]], exposures: List[int]
+    ):
         if self.checkpoint:
             logger.info("Loading model from checkpoint")
-            loss_weight_outcomes = get_loss_weight(self.cfg, outcomes)
+
+            loss_weight_outcomes = {
+                outcome_name: get_loss_weight(self.cfg, outcome_values)
+                for outcome_name, outcome_values in outcomes.items()
+            }
             loss_weight_exposures = get_loss_weight(self.cfg, exposures)
+
             add_config = {
                 **self.cfg.model,
                 "pos_weight_outcomes": loss_weight_outcomes,
                 "pos_weight_exposures": loss_weight_exposures,
+                "outcome_names": list(outcomes.keys()),
             }
             model = self.loader.load_model(
                 CorebehrtForCausalFineTuning,

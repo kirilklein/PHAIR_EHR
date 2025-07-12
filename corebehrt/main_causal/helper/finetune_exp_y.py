@@ -7,6 +7,7 @@ It handles dataset preparation, model initialization, and training loop executio
 
 import os
 from os.path import join
+from typing import Dict, List
 
 import torch
 
@@ -15,7 +16,7 @@ from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.trainer.setup import replace_steps_with_epochs
 from corebehrt.modules.preparation.causal.dataset import (
     CausalPatientDataset,
-    ExposureOutcomeDataset,
+    ExposureOutcomesDataset,
 )
 from corebehrt.modules.setup.causal.manager import CausalModelManager
 from corebehrt.modules.trainer.causal.trainer import CausalEHRTrainer
@@ -74,12 +75,14 @@ def finetune_fold(
 
     logger.info("Initializing datasets")
 
-    train_dataset = ExposureOutcomeDataset(train_data.patients)
-    val_dataset = ExposureOutcomeDataset(val_data.patients)
+    train_dataset = ExposureOutcomesDataset(train_data.patients)
+    val_dataset = ExposureOutcomesDataset(val_data.patients)
 
     modelmanager = CausalModelManager(cfg, fold)
     checkpoint = modelmanager.load_checkpoint()
-    outcomes = train_data.get_outcomes()  # needed for sampler/ can be made optional
+    outcomes: Dict[str, List[int]] = (
+        train_data.get_outcomes()
+    )  # needed for sampler/ can be made optional
     exposures = train_data.get_exposures()
     model = modelmanager.initialize_finetune_model(checkpoint, outcomes, exposures)
 
