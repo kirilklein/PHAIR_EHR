@@ -113,9 +113,7 @@ class CausalEHRTrainer(EHRTrainer):
                     self._calculate_batch_metrics(batch, outputs, prediction_data)
 
         if self.accumulate_logits:
-            metrics = self.process_causal_classification_results(
-                prediction_data, epoch, mode
-            )
+            metrics = self.process_causal_classification_results(prediction_data, mode)
         else:
             exposure_metrics = compute_avg_metrics(
                 prediction_data[EXPOSURE].metric_values
@@ -157,7 +155,6 @@ class CausalEHRTrainer(EHRTrainer):
     def process_causal_classification_results(
         self,
         prediction_data: Dict[str, CausalPredictionData],
-        epoch: int,
         mode="val",
     ) -> dict:
         """Process results for exposure and all outcome predictions."""
@@ -184,7 +181,6 @@ class CausalEHRTrainer(EHRTrainer):
             logits,
             targets,
             {k: v for k, v in metrics.items() if k.startswith(f"{EXPOSURE}_")},
-            epoch,
             mode,
         )
 
@@ -209,7 +205,6 @@ class CausalEHRTrainer(EHRTrainer):
                 logits,
                 targets,
                 {k: v for k, v in metrics.items() if k.startswith(f"{outcome_name}_")},
-                epoch,
                 mode,
             )
 
@@ -304,7 +299,6 @@ class CausalEHRTrainer(EHRTrainer):
         logits: torch.Tensor,
         targets: torch.Tensor,
         metrics: dict,
-        epoch: int,
         mode: str,
     ):
         """Helper method to save curves, metrics and predictions for a target type"""
@@ -312,21 +306,6 @@ class CausalEHRTrainer(EHRTrainer):
         target_metrics = {
             k: v for k, v in metrics.items() if k.startswith(f"{target_type}_")
         }
-
-        # Save for current epoch
-        save_curves(
-            self.run_folder,
-            logits,
-            targets,
-            epoch,
-            f"{mode}_{target_type}",
-        )
-        save_metrics_to_csv(
-            self.run_folder,
-            target_metrics,
-            epoch,
-            f"{mode}_{target_type}",
-        )
 
         # Save for best model ID (for backwards compatibility)
         save_curves(
