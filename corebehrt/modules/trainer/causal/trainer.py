@@ -2,15 +2,13 @@ import os
 from collections import defaultdict, namedtuple
 from typing import Dict
 
-import matplotlib.pyplot as plt
 import torch
 import yaml
-
+from corebehrt.functional.trainer.plotting import plot_training_curves
 from corebehrt.constants.causal.data import (
     CF_OUTCOME,
     EXPOSURE,
     EXPOSURE_TARGET,
-    OUTCOME_PREFIX,
 )
 from corebehrt.constants.data import TARGET
 from corebehrt.modules.monitoring.logger import get_tqdm
@@ -378,7 +376,12 @@ class CausalEHRTrainer(EHRTrainer):
         )
 
         # Plot metrics
-        self._plot_metrics()
+        plot_training_curves(
+            self.metric_history,
+            self.epoch_history,
+            os.path.join(self.run_folder, "figs"),
+            self.log,
+        )
 
         if epoch == 1:  # for testing purposes/if first epoch is best
             self._save_checkpoint(
@@ -459,102 +462,6 @@ class CausalEHRTrainer(EHRTrainer):
         if test_metrics:
             for metric_name, value in test_metrics.items():
                 self.metric_history[f"test_{metric_name}"].append(float(value))
-
-    def _plot_metrics(self):
-        """Plot all metrics and save to output_dir/figs"""
-        if len(self.epoch_history) < 2:  # Need at least 2 points to plot
-            return
-
-        figs_dir = os.path.join(self.run_folder, "figs")
-        os.makedirs(figs_dir, exist_ok=True)
-
-        # Group metrics by base name for better visualization
-        metric_groups = self._group_metrics()
-
-        for group_name, metrics in metric_groups.items():
-            self._plot_metric_group(group_name, metrics, figs_dir)
-
-    def _group_metrics(self):
-        """Group metrics by their base name (e.g., roc_auc, pr_auc, loss)"""
-        groups = defaultdict(dict)
-
-        for metric_name, values in self.metric_history.items():
-            if len(values) != len(self.epoch_history):
-                continue  # Skip if lengths don't match
-
-            # UPDATED: Handle different metric naming patterns
-            if metric_name in ["train_loss", "val_loss"]:
-                base_name = "loss"
-                prefix = metric_name.replace("_loss", "")
-            elif metric_name.startswith("val_") and metric_name.endswith("_loss"):
-                # Handle outcome-specific losses like "val_death_loss"
-                base_name = metric_name[4:]  # Remove 'val_' prefix
-                prefix = "val"
-            elif metric_name.startswith("test_") and metric_name.endswith("_loss"):
-                # Handle outcome-specific losses like "test_death_loss"
-                base_name = metric_name[5:]  # Remove 'test_' prefix
-                prefix = "test"
-            elif metric_name.startswith("val_"):
-                base_name = metric_name[4:]  # Remove 'val_' prefix
-                prefix = "val"
-            elif metric_name.startswith("test_"):
-                base_name = metric_name[5:]  # Remove 'test_' prefix
-                prefix = "test"
-            else:
-                base_name = metric_name
-                prefix = "train"
-
-            groups[base_name][prefix] = values
-
-        return groups
-
-    def _plot_metric_group(self, metric_name, metric_data, figs_dir):
-        """Plot a group of related metrics (e.g., train/val/test for same metric)"""
-        plt.figure(figsize=(10, 6))
-
-        # Define colors for different metric types
-        colors = {
-            "train": "blue",
-            "val": "orange",
-            "test": "green",
-            "exposure": "red",
-            "outcome": "purple",
-        }
-
-        for prefix, values in metric_data.items():
-            # UPDATED: Ensure values are numeric
-            try:
-                numeric_values = [float(v) for v in values]
-            except (ValueError, TypeError):
-                self.log(
-                    f"Warning: Skipping non-numeric values for {prefix}_{metric_name}"
-                )
-                continue
-
-            color = colors.get(prefix, "black")
-            plt.plot(
-                self.epoch_history,
-                numeric_values,
-                label=f"{prefix}_{metric_name}",
-                color=color,
-                marker="o",
-                markersize=3,
-            )
-
-        plt.xlabel("Epoch")
-        plt.ylabel(metric_name.replace("_", " ").title())
-        plt.title(f"{metric_name.replace('_', ' ').title()} Over Training")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-
-        # Save the plot
-        if metric_name.startswith(OUTCOME_PREFIX):
-            figs_dir = os.path.join(figs_dir, "outcomes")
-            os.makedirs(figs_dir, exist_ok=True)
-        plt.savefig(
-            os.path.join(figs_dir, f"{metric_name}.png"), dpi=150, bbox_inches="tight"
-        )
-        plt.close()  # Close to prevent memory issues
 
     def _check_and_freeze_encoder(self, metrics: dict):
         """
