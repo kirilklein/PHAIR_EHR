@@ -5,7 +5,7 @@ from os.path import join
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 import torch
 
-from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
+from corebehrt.constants.causal.data import EXPOSURE, OUTCOME, OUTCOME_PREFIX
 from corebehrt.constants.paths import FOLDS_FILE, PREPARED_ALL_PATIENTS, TEST_PIDS_FILE
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main.helper.finetune_cv import check_for_overlap
@@ -63,7 +63,7 @@ def main_finetune(config_path):
     )
 
     # Get outcome names from config
-    outcome_names = getattr(cfg, "outcome_names", [])
+    outcome_names = data.get_outcome_names()
 
     # Compute scores for exposure
     compute_and_save_scores_mean_std(

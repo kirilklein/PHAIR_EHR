@@ -71,6 +71,9 @@ class CausalPatientDataset(PatientDataset):
             for outcome in outcomes
         }
 
+    def get_outcome_names(self) -> List[str]:
+        return list(self.patients[0].outcomes.keys())
+
 
 class ExposureOutcomesDataset:
     """
