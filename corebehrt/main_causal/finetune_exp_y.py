@@ -62,19 +62,36 @@ def main_finetune(config_path):
         test_data,
     )
 
+    # Get outcome names from config
+    outcome_names = getattr(cfg, "outcome_names", [])
+
+    # Compute scores for exposure
     compute_and_save_scores_mean_std(
         n_folds, cfg.paths.model, mode="val", target_type=EXPOSURE
     )
-    compute_and_save_scores_mean_std(
-        n_folds, cfg.paths.model, mode="val", target_type=OUTCOME
-    )
+
+    # Compute scores for each outcome individually
+    if outcome_names:
+        compute_and_save_scores_mean_std(
+            n_folds,
+            cfg.paths.model,
+            mode="val",
+            target_type=OUTCOME,
+            outcome_names=outcome_names,
+        )
+
     if len(test_data) > 0:
         compute_and_save_scores_mean_std(
             n_folds, cfg.paths.model, mode="test", target_type=EXPOSURE
         )
-        compute_and_save_scores_mean_std(
-            n_folds, cfg.paths.model, mode="test", target_type=OUTCOME
-        )
+        if outcome_names:
+            compute_and_save_scores_mean_std(
+                n_folds,
+                cfg.paths.model,
+                mode="test",
+                target_type=OUTCOME,
+                outcome_names=outcome_names,
+            )
 
     logger.info("Done")
 

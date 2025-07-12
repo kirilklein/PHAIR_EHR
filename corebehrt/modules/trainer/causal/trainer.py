@@ -10,6 +10,7 @@ from corebehrt.constants.causal.data import (
     CF_OUTCOME,
     EXPOSURE,
     EXPOSURE_TARGET,
+    OUTCOME_PREFIX,
 )
 from corebehrt.constants.data import TARGET
 from corebehrt.modules.monitoring.logger import get_tqdm
@@ -377,7 +378,7 @@ class CausalEHRTrainer(EHRTrainer):
         )
 
         # Plot metrics
-        # self._plot_metrics()
+        self._plot_metrics()
 
         if epoch == 1:  # for testing purposes/if first epoch is best
             self._save_checkpoint(
@@ -437,12 +438,17 @@ class CausalEHRTrainer(EHRTrainer):
         # Store individual losses
         if val_exposure_loss is not None:
             self.metric_history["val_exposure_loss"].append(val_exposure_loss)
-        if val_outcome_loss is not None:
-            self.metric_history["val_outcome_loss"].append(val_outcome_loss)
         if test_exposure_loss is not None:
             self.metric_history["test_exposure_loss"].append(test_exposure_loss)
+
+        # UPDATED: Handle outcome losses as dictionaries
+        if val_outcome_loss is not None:
+            for outcome_name, loss_value in val_outcome_loss.items():
+                self.metric_history[f"val_{outcome_name}_loss"].append(loss_value)
+
         if test_outcome_loss is not None:
-            self.metric_history["test_outcome_loss"].append(test_outcome_loss)
+            for outcome_name, loss_value in test_outcome_loss.items():
+                self.metric_history[f"test_{outcome_name}_loss"].append(loss_value)
 
         # Store validation metrics
         if val_metrics:
@@ -476,10 +482,18 @@ class CausalEHRTrainer(EHRTrainer):
             if len(values) != len(self.epoch_history):
                 continue  # Skip if lengths don't match
 
-            # Determine base metric name and prefix
+            # UPDATED: Handle different metric naming patterns
             if metric_name in ["train_loss", "val_loss"]:
                 base_name = "loss"
                 prefix = metric_name.replace("_loss", "")
+            elif metric_name.startswith("val_") and metric_name.endswith("_loss"):
+                # Handle outcome-specific losses like "val_death_loss"
+                base_name = metric_name[4:]  # Remove 'val_' prefix
+                prefix = "val"
+            elif metric_name.startswith("test_") and metric_name.endswith("_loss"):
+                # Handle outcome-specific losses like "test_death_loss"
+                base_name = metric_name[5:]  # Remove 'test_' prefix
+                prefix = "test"
             elif metric_name.startswith("val_"):
                 base_name = metric_name[4:]  # Remove 'val_' prefix
                 prefix = "val"
@@ -508,10 +522,19 @@ class CausalEHRTrainer(EHRTrainer):
         }
 
         for prefix, values in metric_data.items():
+            # UPDATED: Ensure values are numeric
+            try:
+                numeric_values = [float(v) for v in values]
+            except (ValueError, TypeError):
+                self.log(
+                    f"Warning: Skipping non-numeric values for {prefix}_{metric_name}"
+                )
+                continue
+
             color = colors.get(prefix, "black")
             plt.plot(
                 self.epoch_history,
-                values,
+                numeric_values,
                 label=f"{prefix}_{metric_name}",
                 color=color,
                 marker="o",
@@ -525,6 +548,9 @@ class CausalEHRTrainer(EHRTrainer):
         plt.grid(True, alpha=0.3)
 
         # Save the plot
+        if metric_name.startswith(OUTCOME_PREFIX):
+            figs_dir = os.path.join(figs_dir, "outcomes")
+            os.makedirs(figs_dir, exist_ok=True)
         plt.savefig(
             os.path.join(figs_dir, f"{metric_name}.png"), dpi=150, bbox_inches="tight"
         )
