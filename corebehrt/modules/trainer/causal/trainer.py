@@ -159,7 +159,6 @@ class CausalEHRTrainer(EHRTrainer):
         prediction_data: Dict[str, CausalPredictionData],
         epoch: int,
         mode="val",
-        outcome_names: list = None,
     ) -> dict:
         """Process results for exposure and all outcome predictions."""
 
