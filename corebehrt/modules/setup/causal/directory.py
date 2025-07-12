@@ -19,6 +19,7 @@ from corebehrt.constants.paths import (
 )
 from corebehrt.modules.setup.config import Config
 from corebehrt.modules.setup.directory import DirectoryPreparer
+from corebehrt.modules.setup.utils import add_safe_globals
 
 logger = logging.getLogger(__name__)  # Get the logger for this module
 
@@ -29,6 +30,7 @@ class CausalDirectoryPreparer(DirectoryPreparer):
     def __init__(self, cfg: Config) -> None:
         """Sets up DirectoryPreparer and adds defaul configuration to cfg."""
         super().__init__(cfg)
+        add_safe_globals()
 
     def setup_encode(self) -> None:
         """
