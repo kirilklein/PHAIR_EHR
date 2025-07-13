@@ -1,3 +1,21 @@
+"""
+Slightly modified version of the PCGrad implementation from https://github.com/WeiChengTseng/Pytorch-PCGrad#
+@article{yu2020gradient,
+  title={Gradient surgery for multi-task learning},
+  author={Yu, Tianhe and Kumar, Saurabh and Gupta, Abhishek and Levine, Sergey and Hausman, Karol and Finn, Chelsea},
+  journal={arXiv preprint arXiv:2001.06782},
+  year={2020}
+}
+
+@misc{Pytorch-PCGrad,
+  author = {Wei-Cheng Tseng},
+  title = {WeiChengTseng/Pytorch-PCGrad},
+  url = {https://github.com/WeiChengTseng/Pytorch-PCGrad.git},
+  year = {2020}
+}
+
+"""
+
 import copy
 import random
 
