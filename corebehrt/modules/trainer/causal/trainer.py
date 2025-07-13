@@ -23,6 +23,7 @@ from corebehrt.modules.monitoring.metric_aggregation import (
 )
 from corebehrt.modules.setup.config import Config
 from corebehrt.modules.trainer.causal.utils import CausalPredictionData, EpochMetrics
+from corebehrt.modules.trainer.pcgrad import PCGrad
 from corebehrt.modules.trainer.trainer import EHRTrainer
 
 yaml.add_representer(Config, lambda dumper, data: data.yaml_repr(dumper))
@@ -39,10 +40,57 @@ class CausalEHRTrainer(EHRTrainer):
         self.epoch_history = []
         self.plateau_threshold = plateau_threshold
         self.encoder_frozen = False
-
         self.outcome_names = self.model.config.outcome_names
         self.best_outcome_aucs = {name: None for name in self.outcome_names}
         self.best_exposure_auc = None
+        self.optimizer = PCGrad(self.optimizer)
+
+    def _train_step(self, batch: dict):
+        self.optimizer.zero_grad()
+        self.batch_to_device(batch)
+
+        with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+            outputs = self.model(batch)
+
+            # Collect individual task losses for PCGrad
+            task_losses = []
+
+            # Add exposure loss if available
+            if hasattr(outputs, "exposure_loss") and outputs.exposure_loss is not None:
+                task_losses.append(outputs.exposure_loss)
+
+            # Add outcome losses if available
+            if hasattr(outputs, "outcome_losses") and outputs.outcome_losses:
+                for outcome_name, outcome_loss in outputs.outcome_losses.items():
+                    if outcome_loss is not None:
+                        task_losses.append(outcome_loss)
+
+            # If we don't have individual losses, fall back to total loss
+            if not task_losses and hasattr(outputs, "loss"):
+                task_losses = [outputs.loss]
+
+        # Scale each loss individually for PCGrad
+        scaled_losses = [self.scaler.scale(loss) for loss in task_losses]
+
+        # Use PCGrad backward instead of regular backward
+        if len(scaled_losses) > 1:
+            # Multiple tasks - use PCGrad
+            self.optimizer.pc_backward(scaled_losses)
+        else:
+            # Single task - use regular backward
+            scaled_losses[0].backward()
+
+        # Return the total loss for logging (unscaled)
+        return outputs.loss if hasattr(outputs, "loss") else sum(task_losses)
+
+    def _update(self):
+        """Updates the model (optimizer and scheduler) with PCGrad support"""
+        # PCGrad optimizer exposes param_groups, so scaler can work with it directly
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
+
+        if self.scheduler is not None:
+            self.scheduler.step()
 
     def _evaluate(self, mode="val") -> tuple:
         """Returns the validation/test loss and metrics for exposure and all outcomes."""
@@ -147,6 +195,17 @@ class CausalEHRTrainer(EHRTrainer):
         }
 
         return avg_loss, metrics, avg_exposure_loss, avg_outcome_losses
+
+    def _clip_gradients(self):
+        """Clip gradients with PCGrad support"""
+        if self.args.get("gradient_clip", False):
+            # PCGrad exposes param_groups, so scaler can unscale it directly
+            self.scaler.unscale_(self.optimizer)
+
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(),
+                max_norm=self.args.get("gradient_clip", {}).get("max_norm", 1.0),
+            )
 
     def process_causal_classification_results(
         self,
@@ -496,3 +555,28 @@ class CausalEHRTrainer(EHRTrainer):
             if not any(substring in name for substring in ["pooler", "cls", "head"]):
                 param.requires_grad = False
         self.encoder_frozen = True
+
+    def _save_checkpoint(self, epoch: int, best_model=False, **kwargs) -> None:
+        """Saves a checkpoint. Model with optimizer and scheduler if available."""
+        # Model/training specific
+        id = epoch if not best_model else BEST_MODEL_ID
+        os.makedirs(os.path.join(self.run_folder, "checkpoints"), exist_ok=True)
+        checkpoint_name = os.path.join(
+            self.run_folder, "checkpoints", f"checkpoint_epoch{id}_end.pt"
+        )
+
+        # PCGrad exposes the underlying optimizer via the optimizer property
+        optimizer_state_dict = self.optimizer.optimizer.state_dict()
+
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": optimizer_state_dict,
+                "scheduler_state_dict": (
+                    self.scheduler.state_dict() if self.scheduler is not None else None
+                ),
+                **kwargs,
+            },
+            checkpoint_name,
+        )
