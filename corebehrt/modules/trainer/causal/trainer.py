@@ -251,7 +251,7 @@ class CausalEHRTrainer(EHRTrainer):
                 outputs.outcome_logits[outcome_name].float().cpu()
             )
             prediction_data[outcome_name].targets_list.append(
-                batch[f"outcome_{outcome_name}"].cpu()
+                batch[f"{OUTCOME_PREFIX}{outcome_name}"].cpu()
             )
 
             # Store counterfactual outcome predictions
