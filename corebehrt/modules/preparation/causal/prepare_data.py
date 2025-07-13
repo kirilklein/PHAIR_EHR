@@ -9,7 +9,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from corebehrt.azure.util.config import load_config
-from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
+from corebehrt.constants.causal.data import EXPOSURE
 from corebehrt.constants.causal.paths import (
     BINARY_EXPOSURE_FILE,
     BINARY_OUTCOMES_FILE,
@@ -76,7 +76,6 @@ class CausalDatasetPreparer:
         self.paths_cfg = cfg.paths
         self.data_cfg = cfg.data
         self.cohort_cfg = load_config(join(self.paths_cfg.cohort, COHORT_CFG))
-        self.is_multitarget = self.paths_cfg.get("outcome_files") is not None
         self.vocabulary = self.ds_preparer.vocab
 
     def prepare_finetune_data(self, mode: str = "tuning") -> CausalPatientDataset:
@@ -142,15 +141,10 @@ class CausalDatasetPreparer:
     def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
         """Loads single or multiple outcome files into a dictionary."""
         outcomes = {}
-        if self.is_multitarget:
-            for name, outcome_file in self.paths_cfg.outcome_files.items():
-                df = pd.read_csv(outcome_file)
-                df[PID_COL] = df[PID_COL].astype(int)
-                outcomes[name] = df
-        else:
-            df = pd.read_csv(self.paths_cfg.outcome)
+        for name, outcome_file in self.paths_cfg.outcome_files.items():
+            df = pd.read_csv(outcome_file)
             df[PID_COL] = df[PID_COL].astype(int)
-            outcomes["outcome"] = df
+            outcomes[name] = df
         return outcomes
 
     def _filter_dataframes_by_pids(
@@ -223,10 +217,7 @@ class CausalDatasetPreparer:
         """Assigns computed labels to the CausalPatientDataset."""
         logger.info("Assigning exposures and outcomes")
         data.assign_attributes(EXPOSURE, binary_exposure)
-        if self.is_multitarget:
-            data.assign_outcomes(binary_outcomes)
-        else:
-            data.assign_attributes(OUTCOME, binary_outcomes["outcome"])
+        data.assign_outcomes(binary_outcomes)
 
     def _censor_and_truncate_sequences(
         self, data: CausalPatientDataset, index_dates: pd.DataFrame

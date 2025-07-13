@@ -169,20 +169,6 @@ class CausalDirectoryPreparer(DirectoryPreparer):
 
         self.write_config("stats", name=GET_STATS_CFG)
 
-    def setup_prepare_finetune_exposure_outcome(self, name=None) -> None:
-        """
-        Validates path config and sets up directories for preparing finetune data.
-        """
-        self.setup_prepare_finetune_exposure_outcome_shared(name)
-
-        # If "outcome" is set, check that it exists.
-        if outcome := self.cfg.paths.get("outcome", False):
-            # If "outcomes" is also set, use as prefix
-            if outcomes := self.cfg.paths.get("outcomes", False):
-                self.cfg.paths.outcome = join(outcomes, outcome)
-
-            self.check_file("outcome")
-
     def setup_prepare_finetune_exposure_multitarget(self, name=None) -> None:
         """
         Validates path config and sets up directories for preparing finetune data with multiple outcomes.

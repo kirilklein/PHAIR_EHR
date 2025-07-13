@@ -9,7 +9,8 @@ paths:
   cohort: ./outputs/causal/finetune/cohorts/full # path to cohort directory
 
   outcomes: ./outputs/causal/finetune/outcomes
-  outcome: OUTCOME.csv
+  outcome_names:
+    outcome: OUTCOME.csv
 
   ## OUTPUTS
   prepared_data: ./outputs/causal/finetune/processed_data/exp_y # Save model/outputs to this folder

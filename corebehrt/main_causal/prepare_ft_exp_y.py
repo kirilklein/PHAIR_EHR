@@ -21,7 +21,7 @@ def main(config_path):
     cfg = load_config(config_path)
 
     # Setup directories
-    CausalDirectoryPreparer(cfg).setup_prepare_finetune_exposure_outcome()
+    CausalDirectoryPreparer(cfg).setup_prepare_finetune_exposure_multitarget()
     logger = logging.getLogger("prepare finetune data")
     logger.info("Preparing finetune data")
     # Prepare data
