@@ -4,13 +4,11 @@ from typing import Dict
 
 import torch
 import yaml
-from corebehrt.functional.trainer.plotting import plot_training_curves
-from corebehrt.constants.causal.data import (
-    CF_OUTCOME,
-    EXPOSURE,
-    EXPOSURE_TARGET,
-)
+
+from corebehrt.constants.causal.data import CF_OUTCOME, EXPOSURE, EXPOSURE_TARGET
 from corebehrt.constants.data import TARGET
+from corebehrt.functional.trainer.freezing_utils import check_task_plateau
+from corebehrt.functional.trainer.plotting import plot_training_curves
 from corebehrt.modules.monitoring.logger import get_tqdm
 from corebehrt.modules.monitoring.metric_aggregation import (
     compute_avg_metrics,
@@ -444,68 +442,44 @@ class CausalEHRTrainer(EHRTrainer):
     def _check_and_freeze_encoder(self, metrics: dict):
         """
         Freeze the encoder if exposure or any outcome AUC plateaus.
+        This now uses the standalone `check_task_plateau` utility.
         """
         if self.encoder_frozen:
             return
 
         exposure_auc = metrics.get(f"{EXPOSURE}_roc_auc", 0.5)
 
-        # Check exposure plateau
-        exp_plateau, self.best_exposure_auc = self._task_plateau(
-            exposure_auc, self.best_exposure_auc, True
+        # --- REFACTORED CALL ---
+        # Use the new standalone function
+        exp_plateau, self.best_exposure_auc = check_task_plateau(
+            current_metric=exposure_auc,
+            best_metric=self.best_exposure_auc,
+            threshold=self.plateau_threshold,
+            higher_is_better=True,
         )
 
-        # Check each outcome plateau
+        # Check each outcome for a plateau
         outcome_plateaus = []
         for outcome_name in self.best_outcome_aucs.keys():
             outcome_auc = metrics.get(f"{outcome_name}_roc_auc", 0.5)
-            out_plateau, self.best_outcome_aucs[outcome_name] = self._task_plateau(
-                outcome_auc, self.best_outcome_aucs.get(outcome_name), True
+            # --- REFACTORED CALL ---
+            out_plateau, self.best_outcome_aucs[outcome_name] = check_task_plateau(
+                current_metric=outcome_auc,
+                best_metric=self.best_outcome_aucs[outcome_name],
+                threshold=self.plateau_threshold,
+                higher_is_better=True,
             )
             outcome_plateaus.append(out_plateau)
 
-        # Initialize outcome AUCs for new outcomes
-        for outcome_name in [
-            k
-            for k in metrics.keys()
-            if k.endswith("_roc_auc") and k != f"{EXPOSURE}_roc_auc"
-        ]:
-            outcome_name_clean = outcome_name.replace("_roc_auc", "")
-            if outcome_name_clean not in self.best_outcome_aucs:
-                self.best_outcome_aucs[outcome_name_clean] = metrics[outcome_name]
-
+        # Logic to freeze the encoder remains the same
         if exp_plateau or any(outcome_plateaus):
             self._freeze_encoder()
             self.log(
                 f"Encoder frozen due to plateau (exp_plateau={exp_plateau}, outcome_plateaus={outcome_plateaus})"
             )
             for param_group in self.optimizer.param_groups:
-                param_group["lr"] = param_group["lr"] * 0.1
+                param_group["lr"] *= 0.1
                 self.log(f"Learning rate updated to {param_group['lr']}")
-
-    def _task_plateau(
-        self, current_auc: float, best_auc: float, higher_is_better: bool
-    ):
-        """
-        Check if a task's AUC has plateaued and update best AUC.
-
-        Returns:
-            plateau (bool): True if improvement < threshold
-            new_best_auc (float): updated best AUC value
-        """
-        if best_auc is None:
-            # Initialize best AUC
-            return False, current_auc
-
-        improvement = (current_auc - best_auc) / best_auc
-        plateau = (
-            improvement < self.plateau_threshold
-            if higher_is_better
-            else improvement > -self.plateau_threshold
-        )
-        improvement = improvement if higher_is_better else -improvement
-        new_best = current_auc if improvement > 0 else best_auc
-        return plateau, new_best
 
     def _freeze_encoder(self):
         """
