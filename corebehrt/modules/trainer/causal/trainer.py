@@ -39,9 +39,10 @@ class CausalEHRTrainer(EHRTrainer):
         self.epoch_history = []
         self.plateau_threshold = plateau_threshold
         self.encoder_frozen = False
-        self.best_exposure_auc = None
-        self.best_outcome_aucs = {}  # Track best AUC for each outcome
+
         self.outcome_names = self.model.config.outcome_names
+        self.best_outcome_aucs = {name: None for name in self.outcome_names}
+        self.best_exposure_auc = None
 
     def _evaluate(self, mode="val") -> tuple:
         """Returns the validation/test loss and metrics for exposure and all outcomes."""
