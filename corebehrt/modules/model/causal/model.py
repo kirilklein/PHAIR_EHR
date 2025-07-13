@@ -10,7 +10,8 @@ import logging
 import torch
 import torch.nn as nn
 
-from corebehrt.constants.causal.data import EXPOSURE_TARGET, OUTCOME_TARGETS
+from corebehrt.constants.causal.data import OUTCOME_PREFIX
+from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
 from corebehrt.modules.model.model import CorebehrtForFineTuning
@@ -149,8 +150,8 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
     def _compute_losses(self, outputs, batch):
         """Helper method to compute and assign losses if labels are present."""
         total_loss = 0
+        outputs.outcome_losses = {}
 
-        # Exposure loss
         if EXPOSURE_TARGET in batch:
             exposure_loss = self.exposure_loss_fct(
                 outputs.exposure_logits.view(-1), batch[EXPOSURE_TARGET].view(-1)
@@ -158,16 +159,14 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             outputs.exposure_loss = exposure_loss
             total_loss += exposure_loss
 
-        # Outcome losses
-        if OUTCOME_TARGETS in batch:
-            outputs.outcome_losses = {}
-            for outcome_name in self.outcome_names:
-                if outcome_name in batch[OUTCOME_TARGETS]:
-                    outcome_loss = self.outcome_loss_fcts[outcome_name](
-                        outputs.outcome_logits[outcome_name].view(-1),
-                        batch[OUTCOME_TARGETS][outcome_name].view(-1),
-                    )
-                    outputs.outcome_losses[outcome_name] = outcome_loss
-                    total_loss += outcome_loss
+        for outcome_name in self.outcome_names:
+            outcome_key = f"{OUTCOME_PREFIX}{outcome_name}"
+
+            outcome_loss = self.outcome_loss_fcts[outcome_name](
+                outputs.outcome_logits[outcome_name].view(-1),
+                batch[outcome_key].view(-1),
+            )
+            outputs.outcome_losses[outcome_name] = outcome_loss
+            total_loss += outcome_loss
 
         outputs.loss = total_loss
