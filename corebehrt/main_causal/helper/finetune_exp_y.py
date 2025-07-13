@@ -118,4 +118,4 @@ def finetune_fold(
     trainer.model = model
     trainer.val_dataset = val_dataset
 
-    _ = trainer._evaluate(epoch, mode="val")
+    _ = trainer._evaluate(mode="val")

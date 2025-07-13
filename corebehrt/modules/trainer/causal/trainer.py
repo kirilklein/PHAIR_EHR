@@ -5,7 +5,12 @@ from typing import Dict
 import torch
 import yaml
 
-from corebehrt.constants.causal.data import CF_OUTCOME, EXPOSURE, EXPOSURE_TARGET
+from corebehrt.constants.causal.data import (
+    CF_OUTCOME,
+    EXPOSURE,
+    EXPOSURE_TARGET,
+    OUTCOME_PREFIX,
+)
 from corebehrt.constants.data import TARGET
 from corebehrt.functional.trainer.freezing_utils import check_task_plateau
 from corebehrt.functional.trainer.plotting import plot_training_curves
@@ -17,36 +22,13 @@ from corebehrt.modules.monitoring.metric_aggregation import (
     save_predictions,
 )
 from corebehrt.modules.setup.config import Config
+from corebehrt.modules.trainer.causal.utils import CausalPredictionData, EpochMetrics
 from corebehrt.modules.trainer.trainer import EHRTrainer
-
-from dataclasses import dataclass
-from typing import Dict, Optional
 
 yaml.add_representer(Config, lambda dumper, data: data.yaml_repr(dumper))
 
 BEST_MODEL_ID = 999  # For backwards compatibility
 DEFAULT_CHECKPOINT_FREQUENCY = 100
-
-
-@dataclass
-class CausalPredictionData:
-    logits_list: list
-    metric_values: dict = None
-    targets_list: list = None
-    target_key: str = None
-
-
-@dataclass
-class EpochMetrics:
-    epoch: int
-    train_loss: float
-    val_loss: Optional[float] = None
-    val_metrics: Optional[Dict] = None
-    test_metrics: Optional[Dict] = None
-    val_exposure_loss: Optional[float] = None
-    val_outcome_losses: Optional[Dict] = None
-    test_exposure_loss: Optional[float] = None
-    test_outcome_losses: Optional[Dict] = None
 
 
 class CausalEHRTrainer(EHRTrainer):
@@ -61,7 +43,7 @@ class CausalEHRTrainer(EHRTrainer):
         self.best_outcome_aucs = {}  # Track best AUC for each outcome
         self.outcome_names = self.model.config.outcome_names
 
-    def _evaluate(self, epoch: int, mode="val") -> tuple:
+    def _evaluate(self, mode="val") -> tuple:
         """Returns the validation/test loss and metrics for exposure and all outcomes."""
         if mode == "val":
             if self.val_dataset is None:
@@ -300,7 +282,7 @@ class CausalEHRTrainer(EHRTrainer):
                 outcome_outputs = namedtuple("Outputs", ["logits"])(
                     outputs.outcome_logits[outcome_name]
                 )
-                outcome_batch = {TARGET: batch[outcome_name]}
+                outcome_batch = {TARGET: batch[f"{OUTCOME_PREFIX}{outcome_name}"]}
                 outcome_value = func(outcome_outputs, outcome_batch)
                 prediction_data[outcome_name].metric_values[
                     f"{outcome_name}_{name}"
@@ -344,11 +326,28 @@ class CausalEHRTrainer(EHRTrainer):
 
     def validate_and_log(self, epoch: int, epoch_loss: float, train_loop) -> None:
         val_loss, val_metrics, val_exposure_loss, val_outcome_loss = self._evaluate(
-            epoch, mode="val"
+            mode="val"
         )
         _, test_metrics, test_exposure_loss, test_outcome_loss = self._evaluate(
-            epoch, mode="test"
+            mode="test"
         )
+
+        # Add debugging to see what metrics are being returned
+        self.log(
+            f"Validation metrics keys: {list(val_metrics.keys()) if val_metrics else 'None'}"
+        )
+        self.log(
+            f"Test metrics keys: {list(test_metrics.keys()) if test_metrics else 'None'}"
+        )
+
+        # Check outcome-specific metrics
+        if val_metrics:
+            outcome_metrics = {
+                k: v
+                for k, v in val_metrics.items()
+                if any(outcome in k for outcome in self.outcome_names)
+            }
+            self.log(f"Outcome metrics in validation: {outcome_metrics}")
 
         # Calculate average train loss for this epoch
         avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)
@@ -446,6 +445,9 @@ class CausalEHRTrainer(EHRTrainer):
             for metric_name, value in metrics.items():
                 key = f"{prefix}_{metric_name}"
                 self.metric_history[key].append(float(value))
+                # Add debugging to see what metrics are being stored
+                if "outcome" in metric_name.lower():
+                    self.log(f"Storing outcome metric: {key} = {value}")
 
     def _check_and_freeze_encoder(self, metrics: dict):
         """
