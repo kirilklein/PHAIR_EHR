@@ -19,8 +19,10 @@ from corebehrt.modules.monitoring.metric_aggregation import (
 from corebehrt.modules.setup.config import Config
 from corebehrt.modules.trainer.trainer import EHRTrainer
 
-yaml.add_representer(Config, lambda dumper, data: data.yaml_repr(dumper))
 from dataclasses import dataclass
+from typing import Dict, Optional
+
+yaml.add_representer(Config, lambda dumper, data: data.yaml_repr(dumper))
 
 BEST_MODEL_ID = 999  # For backwards compatibility
 DEFAULT_CHECKPOINT_FREQUENCY = 100
@@ -32,6 +34,19 @@ class CausalPredictionData:
     metric_values: dict = None
     targets_list: list = None
     target_key: str = None
+
+
+@dataclass
+class EpochMetrics:
+    epoch: int
+    train_loss: float
+    val_loss: Optional[float] = None
+    val_metrics: Optional[Dict] = None
+    test_metrics: Optional[Dict] = None
+    val_exposure_loss: Optional[float] = None
+    val_outcome_losses: Optional[Dict] = None
+    test_exposure_loss: Optional[float] = None
+    test_outcome_losses: Optional[Dict] = None
 
 
 class CausalEHRTrainer(EHRTrainer):
@@ -339,17 +354,18 @@ class CausalEHRTrainer(EHRTrainer):
         avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)
 
         # Store metrics for plotting
-        self._update_metric_history(
-            epoch,
-            avg_train_loss,
-            val_loss,
-            val_metrics,
-            test_metrics,
-            val_exposure_loss,
-            val_outcome_loss,
-            test_exposure_loss,
-            test_outcome_loss,
+        epoch_metrics = EpochMetrics(
+            epoch=epoch,
+            train_loss=avg_train_loss,
+            val_loss=val_loss,
+            val_metrics=val_metrics,
+            test_metrics=test_metrics,
+            val_exposure_loss=val_exposure_loss,
+            val_outcome_losses=val_outcome_loss,
+            test_exposure_loss=test_exposure_loss,
+            test_outcome_losses=test_outcome_loss,
         )
+        self._update_metric_history(epoch_metrics)
 
         # Plot metrics
         plot_training_curves(
@@ -390,54 +406,46 @@ class CausalEHRTrainer(EHRTrainer):
         )
         self._check_and_freeze_encoder(val_metrics)
 
-    def _update_metric_history(
-        self,
-        epoch,
-        train_loss,
-        val_loss,
-        val_metrics,
-        test_metrics,
-        val_exposure_loss=None,
-        val_outcome_loss=None,
-        test_exposure_loss=None,
-        test_outcome_loss=None,
-    ):
+    def _update_metric_history(self, metrics: EpochMetrics):
         """Update the metric history for plotting"""
-        self.epoch_history.append(epoch)
+        self.epoch_history.append(metrics.epoch)
 
-        # Store losses - use val_loss as default for first epoch if train_loss is 0
-        if train_loss == 0 and val_loss is not None:
-            self.metric_history["train_loss"].append(val_loss)
-        else:
-            self.metric_history["train_loss"].append(train_loss)
+        # Store main losses
+        self._store_scalar_loss(
+            "train_loss", metrics.train_loss, fallback=metrics.val_loss
+        )
+        self._store_scalar_loss("val_loss", metrics.val_loss)
 
-        if val_loss is not None:
-            self.metric_history["val_loss"].append(val_loss)
+        # Store exposure losses
+        self._store_scalar_loss("val_exposure_loss", metrics.val_exposure_loss)
+        self._store_scalar_loss("test_exposure_loss", metrics.test_exposure_loss)
 
-        # Store individual losses
-        if val_exposure_loss is not None:
-            self.metric_history["val_exposure_loss"].append(val_exposure_loss)
-        if test_exposure_loss is not None:
-            self.metric_history["test_exposure_loss"].append(test_exposure_loss)
+        # Store outcome losses and metrics
+        self._store_outcome_losses("val", metrics.val_outcome_losses)
+        self._store_outcome_losses("test", metrics.test_outcome_losses)
+        self._store_metrics("val", metrics.val_metrics)
+        self._store_metrics("test", metrics.test_metrics)
 
-        # UPDATED: Handle outcome losses as dictionaries
-        if val_outcome_loss is not None:
-            for outcome_name, loss_value in val_outcome_loss.items():
-                self.metric_history[f"val_{outcome_name}_loss"].append(loss_value)
+    def _store_scalar_loss(self, key: str, value, fallback=None):
+        """Store a scalar loss value with optional fallback"""
+        if value is not None:
+            self.metric_history[key].append(value)
+        elif value == 0 and fallback is not None:  # Handle train_loss special case
+            self.metric_history[key].append(fallback)
 
-        if test_outcome_loss is not None:
-            for outcome_name, loss_value in test_outcome_loss.items():
-                self.metric_history[f"test_{outcome_name}_loss"].append(loss_value)
+    def _store_outcome_losses(self, prefix: str, outcome_losses: dict):
+        """Store outcome losses from a dictionary"""
+        if outcome_losses is not None:
+            for outcome_name, loss_value in outcome_losses.items():
+                key = f"{prefix}_{outcome_name}_loss"
+                self.metric_history[key].append(loss_value)
 
-        # Store validation metrics
-        if val_metrics:
-            for metric_name, value in val_metrics.items():
-                self.metric_history[f"val_{metric_name}"].append(float(value))
-
-        # Store test metrics
-        if test_metrics:
-            for metric_name, value in test_metrics.items():
-                self.metric_history[f"test_{metric_name}"].append(float(value))
+    def _store_metrics(self, prefix: str, metrics: dict):
+        """Store metrics with a given prefix"""
+        if metrics:
+            for metric_name, value in metrics.items():
+                key = f"{prefix}_{metric_name}"
+                self.metric_history[key].append(float(value))
 
     def _check_and_freeze_encoder(self, metrics: dict):
         """
@@ -449,8 +457,6 @@ class CausalEHRTrainer(EHRTrainer):
 
         exposure_auc = metrics.get(f"{EXPOSURE}_roc_auc", 0.5)
 
-        # --- REFACTORED CALL ---
-        # Use the new standalone function
         exp_plateau, self.best_exposure_auc = check_task_plateau(
             current_metric=exposure_auc,
             best_metric=self.best_exposure_auc,
@@ -462,7 +468,6 @@ class CausalEHRTrainer(EHRTrainer):
         outcome_plateaus = []
         for outcome_name in self.best_outcome_aucs.keys():
             outcome_auc = metrics.get(f"{outcome_name}_roc_auc", 0.5)
-            # --- REFACTORED CALL ---
             out_plateau, self.best_outcome_aucs[outcome_name] = check_task_plateau(
                 current_metric=outcome_auc,
                 best_metric=self.best_outcome_aucs[outcome_name],
@@ -471,7 +476,6 @@ class CausalEHRTrainer(EHRTrainer):
             )
             outcome_plateaus.append(out_plateau)
 
-        # Logic to freeze the encoder remains the same
         if exp_plateau or any(outcome_plateaus):
             self._freeze_encoder()
             self.log(
