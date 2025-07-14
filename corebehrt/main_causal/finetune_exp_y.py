@@ -1,13 +1,17 @@
 import logging
 import os
 from os.path import join
-from corebehrt.modules.setup.config import Config
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 import torch
 
 from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
-from corebehrt.constants.paths import FOLDS_FILE, PREPARED_ALL_PATIENTS, TEST_PIDS_FILE
+from corebehrt.constants.paths import (
+    FOLDS_FILE,
+    OUTCOME_NAMES_FILE,
+    PREPARED_ALL_PATIENTS,
+    TEST_PIDS_FILE,
+)
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main.helper.finetune_cv import check_for_overlap
 from corebehrt.main_causal.helper.finetune_exp_y import cv_loop
@@ -15,7 +19,7 @@ from corebehrt.modules.monitoring.causal.metric_aggregation import (
     compute_and_save_scores_mean_std,
 )
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
-from corebehrt.modules.setup.config import load_config
+from corebehrt.modules.setup.config import Config, load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 
 CONFIG_PATH = "./corebehrt/configs/causal/finetune/ft_exp_y.yaml"
@@ -57,6 +61,11 @@ def main_finetune(config_path):
     )
 
     outcome_names = data.get_outcome_names()
+
+    # Save outcome names to the model directory
+    torch.save(outcome_names, join(cfg.paths.model, OUTCOME_NAMES_FILE))
+    logger.info(f"Saved outcome names: {outcome_names}")
+
     save_combined_scores(cfg, len(folds), outcome_names, "val")
     if len(test_data) > 0:
         save_combined_scores(cfg, len(folds), outcome_names, "test")
