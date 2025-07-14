@@ -19,11 +19,9 @@ from corebehrt.constants.causal.data import (
     PROBAS_CONTROL,
     PROBAS_EXPOSED,
     PS_COL,
-    TARGETS,
     TRUE_EFFECT_COL,
 )
 from corebehrt.constants.causal.paths import (
-    CALIBRATED_PREDICTIONS_FILE,
     ESTIMATE_RESULTS_FILE,
     EXPERIMENT_DATA_FILE,
     EXPERIMENT_STATS_FILE,
@@ -71,6 +69,7 @@ class EffectEstimator:
         """
         self.logger.info("Starting effect estimation process for multiple outcomes.")
         all_effects = []
+        all_stats = []
 
         for outcome_name in self.outcome_names:
             self.logger.info(f"--- Processing outcome: {outcome_name} ---")
@@ -91,16 +90,19 @@ class EffectEstimator:
                 analysis_df, effect_df, outcome_name
             )
 
-            # 5. Tag results with the outcome name and collect
+            # 5. Compute and collect stats for this outcome
+            outcome_stats = self._compute_outcome_stats(analysis_df, outcome_name)
+            all_stats.append(outcome_stats)
+
+            # 6. Tag results with the outcome name and collect
             effect_df["outcome"] = outcome_name
             all_effects.append(effect_df)
 
         # Combine and save all results
         final_results_df = pd.concat(all_effects, ignore_index=True)
+        combined_stats_df = pd.concat(all_stats, ignore_index=True)
 
-        print(final_results_df)
-        exit()
-        self._save_results(self.df, final_results_df)
+        self._save_results(self.df, final_results_df, combined_stats_df)
         self.logger.info("Effect estimation complete for all outcomes.")
 
     @staticmethod
@@ -344,19 +346,42 @@ class EffectEstimator:
             cf_outcomes, self.estimator_cfg.effect_type
         )
 
-    def _save_results(self, df: pd.DataFrame, effect_df: pd.DataFrame) -> None:
+    def _compute_outcome_stats(
+        self, analysis_df: pd.DataFrame, outcome_name: str
+    ) -> pd.DataFrame:
+        """
+        Compute treatment-outcome statistics for a specific outcome.
+
+        Args:
+            analysis_df: Analysis cohort dataframe with OUTCOME column
+            outcome_name: Name of the outcome being analyzed
+
+        Returns:
+            DataFrame with statistics tagged with outcome name
+        """
+        stats_table = compute_treatment_outcome_table(
+            analysis_df, EXPOSURE_COL, OUTCOME
+        )
+        stats_table = stats_table.reset_index(drop=False)
+        stats_table.rename(columns={"index": "status"}, inplace=True)
+        stats_table["outcome"] = outcome_name
+        return stats_table
+
+    def _save_results(
+        self, df: pd.DataFrame, effect_df: pd.DataFrame, stats_df: pd.DataFrame
+    ) -> None:
         self._save_experiment_data(df)
-        self._save_experiment_stats(df)
+        self._save_experiment_stats_combined(stats_df)
         self._save_estimate_results(effect_df)
 
     def _save_experiment_data(self, df: pd.DataFrame) -> None:
         filepath = join(self.exp_dir, EXPERIMENT_DATA_FILE)
         df.to_parquet(filepath, index=True)
 
-    def _save_experiment_stats(self, df: pd.DataFrame) -> None:
-        stats_table = compute_treatment_outcome_table(df, EXPOSURE_COL, TARGETS)
+    def _save_experiment_stats_combined(self, stats_df: pd.DataFrame) -> None:
+        """Save combined statistics for all outcomes."""
         filepath = join(self.exp_dir, EXPERIMENT_STATS_FILE)
-        stats_table.to_csv(filepath)
+        stats_df.to_csv(filepath, index=False)
 
     def _save_estimate_results(self, effect_df: pd.DataFrame) -> None:
         filepath = join(self.exp_dir, ESTIMATE_RESULTS_FILE)

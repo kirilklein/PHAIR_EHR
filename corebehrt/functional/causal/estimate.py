@@ -29,8 +29,7 @@ def calculate_risk_difference(
             "CI95_lower": [ci_lower_rd],
             "CI95_upper": [ci_upper_rd],
             "effect_1": [risk_exposed],
-            "effct_0": [risk_unexposed],
-            "n_beootstraps": [0],
+            "effect_0": [risk_unexposed],
         }
     )
 
@@ -72,6 +71,5 @@ def calculate_risk_ratio(
             "CI95_upper": [ci_upper_rr],
             "effect_1": [risk_exposed],
             "effect_0": [risk_unexposed],
-            "n_bootstraps": [0],
         }
     )
