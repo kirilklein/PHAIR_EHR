@@ -68,12 +68,25 @@ class PCGrad:
     def _project_conflicting(self, grads, has_grads):
         shared = torch.stack(has_grads).prod(0).bool()
         pc_grad = copy.deepcopy(grads)
-        for g_i in pc_grad:
-            random.shuffle(grads)
-            for g_j in grads:
+
+        # The paper suggests iterating through tasks in a random order
+        indices = list(range(len(pc_grad)))
+        random.shuffle(indices)
+
+        for i in indices:
+            for j in indices:
+                # Don't project a gradient against itself
+                if i == j:
+                    continue
+
+                g_i = pc_grad[i]
+                g_j = grads[j]  # Use the original, unmodified gradient for projection
+
                 g_i_g_j = torch.dot(g_i, g_j)
                 if g_i_g_j < 0:
+                    # Project g_i away from g_j
                     g_i -= (g_i_g_j) * g_j / (g_j.norm() ** 2)
+
         merged_grad = torch.zeros_like(grads[0]).to(grads[0].device)
         if self._reduction == "mean":
             merged_grad[shared] = torch.stack([g[shared] for g in pc_grad]).mean(dim=0)
