@@ -107,11 +107,16 @@ class PlottingManager:
             )
 
             # --- Plot Scatter Plots ---
-            plot_cf_probas_diff_vs_certainty_in_exposure(df, cf_fig_dir)
+            plot_cf_probas_diff_vs_certainty_in_exposure(df, cf_fig_dir, f"diff_{name}")
 
             # Plot difference vs. factual probability, grouped by exposure/outcome
             plot_cf_diff_vs_probas_by_group(
-                df, cf_fig_dir, EXPOSURE_COL, outcome_probas_col, ("Exposed", "Control")
+                df,
+                cf_fig_dir,
+                EXPOSURE_COL,
+                outcome_probas_col,
+                ("Exposed", "Control"),
+                f"diff_{name}",
             )
             plot_cf_diff_vs_probas_by_group(
                 df,
@@ -119,14 +124,25 @@ class PlottingManager:
                 outcome_col,
                 outcome_probas_col,
                 ("Positive", "Negative"),
+                f"diff_{name}",
             )
 
             # Plot difference vs. propensity score, grouped by exposure/outcome
             plot_cf_diff_vs_probas_by_group(
-                df, cf_fig_dir, EXPOSURE_COL, PS_COL, ("Exposed", "Control")
+                df,
+                cf_fig_dir,
+                EXPOSURE_COL,
+                PS_COL,
+                ("Exposed", "Control"),
+                f"diff_{name}",
             )
             plot_cf_diff_vs_probas_by_group(
-                df, cf_fig_dir, outcome_col, PS_COL, ("Positive", "Negative")
+                df,
+                cf_fig_dir,
+                outcome_col,
+                PS_COL,
+                ("Positive", "Negative"),
+                f"diff_{name}",
             )
 
     def _plot_histogram_group(

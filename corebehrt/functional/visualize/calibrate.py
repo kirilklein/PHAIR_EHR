@@ -53,7 +53,7 @@ def plot_probas_hist(
 
 
 def plot_cf_probas_diff_vs_certainty_in_exposure(
-    df: pd.DataFrame, save_dir: str
+    df: pd.DataFrame, save_dir: str, y_col: str
 ) -> None:
     """
     Plot the difference between counterfactual and factual probabilities vs certainty in actual exposure.
@@ -66,7 +66,7 @@ def plot_cf_probas_diff_vs_certainty_in_exposure(
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.scatter(
         df.loc[group_mask, "x"],
-        df.loc[group_mask, "diff"],
+        df.loc[group_mask, y_col],
         color="#e74c3c",  # red
         alpha=0.7,
         label="Exposed",
@@ -74,7 +74,7 @@ def plot_cf_probas_diff_vs_certainty_in_exposure(
     )
     ax.scatter(
         df.loc[~group_mask, "x"],
-        df.loc[~group_mask, "diff"],
+        df.loc[~group_mask, y_col],
         color="#3498db",  # blue
         alpha=0.7,
         label="Control",
@@ -105,6 +105,7 @@ def plot_cf_diff_vs_probas_by_group(
     group_col: str,
     proba_col: str,
     group_labels: Tuple[str, str],
+    y_col: str,
 ) -> None:
     """
     Plot the difference between counterfactual and factual probabilities vs outcome probability.
@@ -117,7 +118,7 @@ def plot_cf_diff_vs_probas_by_group(
 
     ax.scatter(
         df.loc[group_mask, proba_col],
-        df.loc[group_mask, "diff"],
+        df.loc[group_mask, y_col],
         color="#e74c3c",  # red
         alpha=0.6,
         label=group_labels[0],
@@ -125,7 +126,7 @@ def plot_cf_diff_vs_probas_by_group(
     )
     ax.scatter(
         df.loc[~group_mask, proba_col],
-        df.loc[~group_mask, "diff"],
+        df.loc[~group_mask, y_col],
         color="#3498db",  # blue
         alpha=0.6,
         label=group_labels[1],
