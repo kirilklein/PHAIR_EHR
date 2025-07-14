@@ -18,6 +18,7 @@ from corebehrt.constants.causal.data import (
 from corebehrt.constants.data import PID_COL, VAL_KEY
 from corebehrt.functional.causal.calibration import calibrate_folds
 from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
+from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
 
 
@@ -56,7 +57,7 @@ class CalibrationProcessor:
             path = self.paths.get_predictions_path("outcome", name)
             combined.to_csv(path, index=False)
 
-    def load_calibrate_and_save_all(self) -> pd.DataFrame:
+    def load_calibrate_and_save_all(self) -> CalibrationArtifacts:
         """Loads, calibrates, and saves all predictions, then returns them."""
         # Calibrate exposure
         df_exp, df_exp_calibrated = self._read_calibrate_write(
@@ -76,14 +77,14 @@ class CalibrationProcessor:
         combined_df = self._combine_predictions(df_exp_calibrated, outcomes_calibrated)
         combined_df.to_csv(self.paths.get_combined_calibrated_path(), index=False)
 
-        return {
-            "combined_df": combined_df,
-            "exposure_df": df_exp,
-            "calibrated_exposure_df": df_exp_calibrated,
-            "outcomes": outcomes,
-            "calibrated_outcomes": outcomes_calibrated,
-            "outcome_names": self.outcome_names,
-        }
+        return CalibrationArtifacts(
+            combined_df=combined_df,
+            exposure_df=df_exp,
+            calibrated_exposure_df=df_exp_calibrated,
+            outcomes=outcomes,
+            calibrated_outcomes=outcomes_calibrated,
+            outcome_names=self.outcome_names,
+        )
 
     def _collect_single_prediction(
         self, prediction_type: str, probas_name: str, collect_targets: bool = True

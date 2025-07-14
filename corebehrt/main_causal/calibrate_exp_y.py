@@ -2,6 +2,7 @@ import logging
 
 from corebehrt.functional.setup.args import get_args
 from corebehrt.modules.plot.calibration import PlottingManager
+from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
 from corebehrt.modules.setup.causal.prediction_processor import CalibrationProcessor
@@ -33,7 +34,9 @@ def main_calibrate(config_path):
 
     # 3. Calibrate predictions
     logger.info("Calibrating predictions...")
-    calibrated_data = prediction_processor.load_calibrate_and_save_all()
+    calibrated_data: CalibrationArtifacts = (
+        prediction_processor.load_calibrate_and_save_all()
+    )
 
     # 4. Generate plots
     logger.info("Generating plots...")

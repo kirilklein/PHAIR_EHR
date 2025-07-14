@@ -1,9 +1,7 @@
 import os
-from os.path import join
-from typing import Dict
+from pathlib import Path
 
 import pandas as pd
-from pathlib import Path
 
 from corebehrt.constants.causal.data import (
     CF_PROBAS,
@@ -19,6 +17,7 @@ from corebehrt.main_causal.helper.calibrate_plot import (
     plot_cf_probas_diff_vs_certainty_in_exposure,
     plot_cf_diff_vs_probas_by_group,
 )
+from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
 
 
@@ -31,7 +30,7 @@ class PlottingManager:
         """Initializes the PlottingManager with a path manager instance."""
         self.paths = path_manager
 
-    def generate_all_plots(self, data: Dict):
+    def generate_all_plots(self, data: CalibrationArtifacts):
         """
         Generates and saves all calibration and distribution plots.
         This is the main entry point for the class.
@@ -39,14 +38,14 @@ class PlottingManager:
         self._generate_calibration_plots(data)
         self._generate_distribution_plots(data)
 
-    def _generate_calibration_plots(self, data: Dict):
+    def _generate_calibration_plots(self, data: CalibrationArtifacts):
         """Generates and saves calibration reliability plots."""
         fig_dir = self.paths.get_figure_dir()
 
         # Plot calibration for propensity scores (exposure)
         produce_calibration_plots(
-            data["calibrated_exposure_df"],
-            data["exposure_df"],
+            data.calibrated_exposure_df,
+            data.exposure_df,
             fig_dir,
             "Propensity Score Calibration",
             "ps",
@@ -54,20 +53,20 @@ class PlottingManager:
 
         # Plot calibration for each outcome
         outcomes_fig_dir = self.paths.get_figure_dir(OUTCOMES_DIR)
-        for name in data["outcome_names"]:
+        for name in data.outcome_names:
             produce_calibration_plots(
-                data["calibrated_outcomes"][name],
-                data["outcomes"][name],
+                data.calibrated_outcomes[name],
+                data.outcomes[name],
                 outcomes_fig_dir,
                 "Outcome Probability Calibration",
                 name,
             )
 
-    def _generate_distribution_plots(self, data: Dict):
+    def _generate_distribution_plots(self, data: CalibrationArtifacts):
         """Generates and saves histogram and scatter plots for model outputs."""
-        df = data["combined_df"]
+        df = data.combined_df
 
-        for name in data["outcome_names"]:
+        for name in data.outcome_names:
             # Create outcome-specific directories
             hist_fig_dir = self.paths.get_figure_dir(f"histograms/{name}")
             cf_fig_dir = self.paths.get_figure_dir(f"cf_probas/{name}")
