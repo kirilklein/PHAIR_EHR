@@ -12,7 +12,7 @@ factual and counterfactual predictions from trained causal models. It handles:
 import os
 import warnings
 from os.path import join
-from typing import Tuple
+from typing import Tuple, Dict
 
 import numpy as np
 import pandas as pd
@@ -25,7 +25,6 @@ from corebehrt.constants.causal.data import (
     CF_PROBAS,
     EXPOSURE,
     EXPOSURE_COL,
-    OUTCOME,
     OUTCOME_COL,
     PROBAS,
     PS_COL,
@@ -36,9 +35,10 @@ from corebehrt.constants.causal.paths import (
     PREDICTIONS_DIR_EXPOSURE,
     PREDICTIONS_DIR_OUTCOME,
     PREDICTIONS_FILE,
+    OUTCOMES_DIR,
 )
 from corebehrt.constants.data import PID_COL, TRAIN_KEY, VAL_KEY
-from corebehrt.constants.paths import FOLDS_FILE
+from corebehrt.constants.paths import FOLDS_FILE, OUTCOME_NAMES_FILE
 from corebehrt.functional.causal.data_utils import split_data
 from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
 from corebehrt.functional.trainer.calibrate import train_calibrator
@@ -74,28 +74,40 @@ def load_calibrate_and_save(finetune_dir: str, write_dir: str) -> None:
                         ├── predictions_and_targets.csv
                         └── predictions_and_targets_calibrated.csv
     """
+
     # Load folds
     folds = torch.load(join(finetune_dir, FOLDS_FILE))
 
-    # Load collected predictions
-    df_exp = pd.read_csv(join(write_dir, PREDICTIONS_DIR_EXPOSURE, PREDICTIONS_FILE))
-    df_outcome = pd.read_csv(join(write_dir, PREDICTIONS_DIR_OUTCOME, PREDICTIONS_FILE))
-
-    # Calibrate
-    df_exp_calibrated = calibrate_folds(df_exp, folds)
-    df_outcome_calibrated = calibrate_folds(df_outcome, folds)
-
-    # Save calibrated predictions
-    df_exp_calibrated.to_csv(
-        join(write_dir, PREDICTIONS_DIR_EXPOSURE, CALIBRATED_PREDICTIONS_FILE),
-        index=False,
-    )
-    df_outcome_calibrated.to_csv(
-        join(write_dir, PREDICTIONS_DIR_OUTCOME, CALIBRATED_PREDICTIONS_FILE),
-        index=False,
+    # Calibrate exposure
+    df_exp, df_exp_calibrated = read_calibrate_write(
+        file_path=join(write_dir, PREDICTIONS_DIR_EXPOSURE, PREDICTIONS_FILE),
+        write_path=join(
+            write_dir, PREDICTIONS_DIR_EXPOSURE, CALIBRATED_PREDICTIONS_FILE
+        ),
+        folds=folds,
     )
 
-    df = combine_predictions(df_exp_calibrated, df_outcome_calibrated)
+    outcome_names = torch.load(join(finetune_dir, OUTCOME_NAMES_FILE))
+    outcomes_calibrated = {}
+    outcomes = {}
+    for outcome_name in outcome_names:
+        df_outcome, df_outcome_calibrated = read_calibrate_write(
+            file_path=join(
+                write_dir, PREDICTIONS_DIR_OUTCOME, outcome_name, PREDICTIONS_FILE
+            ),
+            write_path=join(
+                write_dir,
+                PREDICTIONS_DIR_OUTCOME,
+                outcome_name,
+                CALIBRATED_PREDICTIONS_FILE,
+            ),
+            folds=folds,
+        )
+
+        outcomes_calibrated[outcome_name] = df_outcome_calibrated
+        outcomes[outcome_name] = df_outcome
+
+    df = combine_predictions(df_exp_calibrated, outcomes_calibrated)
     df.to_csv(
         join(write_dir, "combined_predictions_and_targets_calibrated.csv"), index=False
     )
@@ -106,21 +118,53 @@ def load_calibrate_and_save(finetune_dir: str, write_dir: str) -> None:
     produce_calibration_plots(
         df_exp_calibrated, df_exp, fig_dir, "Propensity Score Calibration", "ps"
     )
-    produce_calibration_plots(
-        df_outcome_calibrated,
-        df_outcome,
-        fig_dir,
-        "Outcome Probability Calibration",
-        "outcome",
-    )
+    os.makedirs(join(fig_dir, OUTCOMES_DIR), exist_ok=True)
+    for outcome_name in outcome_names:
+        produce_calibration_plots(
+            outcomes_calibrated[outcome_name],
+            outcomes[outcome_name],
+            join(fig_dir, OUTCOMES_DIR),
+            "Outcome Probability Calibration",
+            outcome_name,
+        )
+        produce_plots(
+            df,
+            join(fig_dir, OUTCOMES_DIR),
+            PROBAS + "_" + outcome_name,
+            CF_PROBAS + "_" + outcome_name,
+            OUTCOME_COL + "_" + outcome_name,
+        )
 
-    produce_plots(df, fig_dir)
+
+def read_calibrate_write(
+    file_path: str, write_path: str, folds: list
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Read predictions, calibrate, and write calibrated predictions.
+    """
+    df = pd.read_csv(file_path)
+    df_calibrated = calibrate_folds(df, folds)
+    df_calibrated.to_csv(write_path, index=False)
+    return df, df_calibrated
 
 
-def combine_predictions(exp: pd.DataFrame, out: pd.DataFrame) -> pd.DataFrame:
-    exp = exp.rename(columns={PROBAS: PS_COL, TARGETS: EXPOSURE_COL})
-    out = out.rename(columns={TARGETS: OUTCOME_COL})
-    df = pd.merge(exp, out, on=PID_COL, how="inner", validate="1:1")
+def combine_predictions(exposure: pd.DataFrame, outcomes: dict) -> pd.DataFrame:
+    """
+    Combine exposure and outcome predictions.
+    Resulting dataframe has columns: PID_COL, PS_COL, EXPOSURE_COL,
+    and for each outcome_name: OUTCOME_COL_outcome_name, CF_PROBAS_outcome_name, PROBAS_outcome_name
+    """
+    exposure = exposure.rename(columns={PROBAS: PS_COL, TARGETS: EXPOSURE_COL})
+    df = exposure
+    for outcome_name, outcome in outcomes.items():
+        outcome = outcome.rename(
+            columns={
+                TARGETS: OUTCOME_COL + "_" + outcome_name,
+                CF_PROBAS: CF_PROBAS + "_" + outcome_name,
+                PROBAS: PROBAS + "_" + outcome_name,
+            }
+        )
+        df = pd.merge(df, outcome, on=PID_COL, how="inner", validate="1:1")
     return df
 
 
@@ -180,7 +224,7 @@ def calibrate_folds(
 def collect_and_save_predictions(
     finetune_dir: str,
     write_dir: str,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+):
     """
     Collect and save exposure and outcome predictions from all folds.
 
@@ -204,27 +248,31 @@ def collect_and_save_predictions(
         probas_name=PROBAS,
     )
     df_exp.to_csv(join(exposure_predictions_dir, PREDICTIONS_FILE), index=False)
-    df_outcome: pd.DataFrame = collect_combined_predictions(
-        finetune_model_dir=finetune_dir,
-        prediction_type=OUTCOME,
-        mode=VAL_KEY,
-        probas_name=PROBAS,
-    )
-    df_cf_outcome: pd.DataFrame = collect_combined_predictions(
-        finetune_model_dir=finetune_dir,
-        prediction_type=CF_OUTCOME,
-        mode=VAL_KEY,
-        probas_name=CF_PROBAS,
-        collect_targets=False,
-    )
 
-    df_outcome_combined = pd.merge(
-        df_outcome, df_cf_outcome, on=PID_COL, how="inner", validate="1:1"
-    )
-    df_outcome_combined.to_csv(
-        join(outcome_predictions_dir, PREDICTIONS_FILE), index=False
-    )
-    return df_exp, df_outcome_combined
+    outcome_names = torch.load(join(finetune_dir, OUTCOME_NAMES_FILE))
+    for outcome_name in outcome_names:
+        df_outcome: pd.DataFrame = collect_combined_predictions(
+            finetune_model_dir=finetune_dir,
+            prediction_type=outcome_name,
+            mode=VAL_KEY,
+            probas_name=PROBAS,
+        )
+        df_cf_outcome: pd.DataFrame = collect_combined_predictions(
+            finetune_model_dir=finetune_dir,
+            prediction_type=CF_OUTCOME + "_" + outcome_name,
+            mode=VAL_KEY,
+            probas_name=CF_PROBAS,
+            collect_targets=False,
+        )
+
+        df_outcome_combined = pd.merge(
+            df_outcome, df_cf_outcome, on=PID_COL, how="inner", validate="1:1"
+        )
+        os.makedirs(join(outcome_predictions_dir, outcome_name), exist_ok=True)
+        df_outcome_combined.to_csv(
+            join(outcome_predictions_dir, outcome_name, PREDICTIONS_FILE),
+            index=False,
+        )
 
 
 def collect_combined_predictions(

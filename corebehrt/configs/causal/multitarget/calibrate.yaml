@@ -1,0 +1,10 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  finetune_model: ./outputs/causal/multitarget/models/simple
+
+  ## OUTPUTS
+  calibrated_predictions: ./outputs/causal/multitarget/models/simple/calibrated

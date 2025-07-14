@@ -10,16 +10,20 @@ from sklearn.calibration import calibration_curve
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
 from corebehrt.constants.causal.data import (
-    CF_PROBAS,
     EXPOSURE_COL,
-    OUTCOME_COL,
     PROBAS,
     PS_COL,
     TARGETS,
 )
 
 
-def produce_plots(df: pd.DataFrame, fig_dir: str) -> None:
+def produce_plots(
+    df: pd.DataFrame,
+    fig_dir: str,
+    outcome_probas_col: str,
+    outcome_cf_probas_col: str,
+    outcome_col: str,
+) -> None:
     """
     Plot distributions of ps and probas, and difference between probas and cf_probas.
     Args:
@@ -34,13 +38,13 @@ def produce_plots(df: pd.DataFrame, fig_dir: str) -> None:
     hist_fig_dir = join(fig_dir, "histograms")
     os.makedirs(hist_fig_dir, exist_ok=True)
 
-    df["diff"] = df[CF_PROBAS] - df[PROBAS]
+    df["diff"] = df[outcome_cf_probas_col] - df[outcome_probas_col]
 
     probas_hist_dir = join(hist_fig_dir, "probas")
     os.makedirs(probas_hist_dir, exist_ok=True)
     plot_probas_hist(
         df,
-        PROBAS,
+        outcome_probas_col,
         EXPOSURE_COL,
         ("Control", "Exposed"),
         "Outcome Probability: Control vs Exposed",
@@ -50,8 +54,8 @@ def produce_plots(df: pd.DataFrame, fig_dir: str) -> None:
     )
     plot_probas_hist(
         df,
-        PROBAS,
-        OUTCOME_COL,
+        outcome_probas_col,
+        outcome_col,
         ("Negative", "Positive"),
         "Outcome Probability: Negative vs Positive",
         "Outcome Probability",
@@ -63,7 +67,7 @@ def produce_plots(df: pd.DataFrame, fig_dir: str) -> None:
     os.makedirs(cf_probas_hist_dir, exist_ok=True)
     plot_probas_hist(
         df,
-        CF_PROBAS,
+        outcome_cf_probas_col,
         EXPOSURE_COL,
         ("Control", "Exposed"),
         "CF Outcome Probability: Control vs Exposed",
@@ -73,8 +77,8 @@ def produce_plots(df: pd.DataFrame, fig_dir: str) -> None:
     )
     plot_probas_hist(
         df,
-        CF_PROBAS,
-        OUTCOME_COL,
+        outcome_cf_probas_col,
+        outcome_col,
         ("Negative", "Positive"),
         "CF Outcome Probability: Negative vs Positive",
         "CF Outcome Probability",
@@ -95,7 +99,7 @@ def produce_plots(df: pd.DataFrame, fig_dir: str) -> None:
     plot_probas_hist(
         df,
         "diff",
-        OUTCOME_COL,
+        outcome_col,
         ("Negative", "Positive"),
         "Counterfactual - Factual: Negative vs Positive",
         "Counterfactual - Factual",
@@ -118,7 +122,7 @@ def produce_plots(df: pd.DataFrame, fig_dir: str) -> None:
     plot_probas_hist(
         df,
         PS_COL,
-        OUTCOME_COL,
+        outcome_col,
         ("Negative", "Positive"),
         "Propensity Score: Negative vs Positive",
         "Propensity Score",
@@ -130,17 +134,17 @@ def produce_plots(df: pd.DataFrame, fig_dir: str) -> None:
     os.makedirs(cf_fig_dir, exist_ok=True)
     plot_cf_probas_diff_vs_certainty_in_exposure(df, cf_fig_dir)
     plot_cf_diff_vs_probas_by_group(
-        df, cf_fig_dir, EXPOSURE_COL, PROBAS, ("Exposed", "Control")
+        df, cf_fig_dir, EXPOSURE_COL, outcome_probas_col, ("Exposed", "Control")
     )
     plot_cf_diff_vs_probas_by_group(
-        df, cf_fig_dir, OUTCOME_COL, PROBAS, ("Positive", "Negative")
+        df, cf_fig_dir, outcome_col, outcome_probas_col, ("Positive", "Negative")
     )
 
     plot_cf_diff_vs_probas_by_group(
         df, cf_fig_dir, EXPOSURE_COL, PS_COL, ("Exposed", "Control")
     )
     plot_cf_diff_vs_probas_by_group(
-        df, cf_fig_dir, OUTCOME_COL, PS_COL, ("Positive", "Negative")
+        df, cf_fig_dir, outcome_col, PS_COL, ("Positive", "Negative")
     )
 
 

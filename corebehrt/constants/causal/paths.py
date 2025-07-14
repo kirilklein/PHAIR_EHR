@@ -31,6 +31,7 @@ CRITERIA_FLAGS_FILE = "criteria.csv"
 CRITERIA_DEFINITIONS_FILE = "criteria_definitions.yaml"
 
 DATA_DIR = "data"
+OUTCOMES_DIR = "outcomes"
 
 STATS_FILE_BINARY = "stats_binary.csv"
 STATS_RAW_FILE_BINARY = "stats_raw_binary.csv"
