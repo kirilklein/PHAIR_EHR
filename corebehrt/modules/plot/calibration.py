@@ -75,7 +75,8 @@ class PlottingManager:
             outcome_probas_col = f"{PROBAS}_{name}"
             cf_probas_col = f"{CF_PROBAS}_{name}"
             outcome_col = f"{OUTCOME_COL}_{name}"
-            df[f"diff_{name}"] = df[cf_probas_col] - df[outcome_probas_col]
+            diff_col = f"diff_{name}"
+            df[diff_col] = df[cf_probas_col] - df[outcome_probas_col]
 
             # --- Plot Histograms ---
             self._plot_histogram_group(
@@ -96,18 +97,18 @@ class PlottingManager:
             )
             self._plot_histogram_group(
                 df,
-                f"diff_{name}",
+                diff_col,
                 outcome_col,
-                f"diff_{name}",
+                diff_col,
                 "Counterfactual - Factual",
                 hist_fig_dir,
             )
             self._plot_histogram_group(
-                df, PS_COL, outcome_col, "ps", "Propensity Score", hist_fig_dir
+                df, PS_COL, outcome_col, PS_COL, "Propensity Score", hist_fig_dir
             )
 
             # --- Plot Scatter Plots ---
-            plot_cf_probas_diff_vs_certainty_in_exposure(df, cf_fig_dir, f"diff_{name}")
+            plot_cf_probas_diff_vs_certainty_in_exposure(df, cf_fig_dir, diff_col)
 
             # Plot difference vs. factual probability, grouped by exposure/outcome
             plot_cf_diff_vs_probas_by_group(
@@ -116,7 +117,7 @@ class PlottingManager:
                 EXPOSURE_COL,
                 outcome_probas_col,
                 ("Exposed", "Control"),
-                f"diff_{name}",
+                diff_col,
             )
             plot_cf_diff_vs_probas_by_group(
                 df,
@@ -124,7 +125,7 @@ class PlottingManager:
                 outcome_col,
                 outcome_probas_col,
                 ("Positive", "Negative"),
-                f"diff_{name}",
+                diff_col,
             )
 
             # Plot difference vs. propensity score, grouped by exposure/outcome
@@ -134,7 +135,7 @@ class PlottingManager:
                 EXPOSURE_COL,
                 PS_COL,
                 ("Exposed", "Control"),
-                f"diff_{name}",
+                diff_col,
             )
             plot_cf_diff_vs_probas_by_group(
                 df,
@@ -142,7 +143,7 @@ class PlottingManager:
                 outcome_col,
                 PS_COL,
                 ("Positive", "Negative"),
-                f"diff_{name}",
+                diff_col,
             )
 
     def _plot_histogram_group(
