@@ -16,6 +16,7 @@ from corebehrt.constants.causal.data import (
     TARGETS,
 )
 
+
 def plot_probas_hist(
     df: pd.DataFrame,
     value_col: str,

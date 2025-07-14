@@ -11,7 +11,7 @@ from corebehrt.constants.causal.data import (
     PS_COL,
 )
 from corebehrt.constants.causal.paths import OUTCOMES_DIR
-from corebehrt.functional.visualize.calibrate_plot import (
+from corebehrt.functional.visualize.calibrate import (
     produce_calibration_plots,
     plot_probas_hist,
     plot_cf_probas_diff_vs_certainty_in_exposure,
