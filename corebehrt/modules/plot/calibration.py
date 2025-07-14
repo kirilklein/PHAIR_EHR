@@ -11,7 +11,7 @@ from corebehrt.constants.causal.data import (
     PS_COL,
 )
 from corebehrt.constants.causal.paths import OUTCOMES_DIR
-from corebehrt.main_causal.helper.calibrate_plot import (
+from corebehrt.functional.visualize.calibrate_plot import (
     produce_calibration_plots,
     plot_probas_hist,
     plot_cf_probas_diff_vs_certainty_in_exposure,
@@ -48,7 +48,7 @@ class PlottingManager:
             data.exposure_df,
             fig_dir,
             "Propensity Score Calibration",
-            "ps",
+            PS_COL,
         )
 
         # Plot calibration for each outcome
@@ -75,14 +75,14 @@ class PlottingManager:
             outcome_probas_col = f"{PROBAS}_{name}"
             cf_probas_col = f"{CF_PROBAS}_{name}"
             outcome_col = f"{OUTCOME_COL}_{name}"
-            df["diff"] = df[cf_probas_col] - df[outcome_probas_col]
+            df[f"diff_{name}"] = df[cf_probas_col] - df[outcome_probas_col]
 
             # --- Plot Histograms ---
             self._plot_histogram_group(
                 df,
                 outcome_probas_col,
                 outcome_col,
-                "probas",
+                PROBAS,
                 "Outcome Probability",
                 hist_fig_dir,
             )
@@ -90,15 +90,15 @@ class PlottingManager:
                 df,
                 cf_probas_col,
                 outcome_col,
-                "cf_probas",
+                CF_PROBAS,
                 "CF Outcome Probability",
                 hist_fig_dir,
             )
             self._plot_histogram_group(
                 df,
-                "diff",
+                f"diff_{name}",
                 outcome_col,
-                "diff",
+                f"diff_{name}",
                 "Counterfactual - Factual",
                 hist_fig_dir,
             )
