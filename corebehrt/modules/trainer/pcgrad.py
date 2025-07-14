@@ -21,8 +21,6 @@ import random
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
 
 
 class PCGrad:
@@ -67,9 +65,9 @@ class PCGrad:
         self._set_grad(pc_grad)
         return
 
-    def _project_conflicting(self, grads, has_grads, shapes=None):
+    def _project_conflicting(self, grads, has_grads):
         shared = torch.stack(has_grads).prod(0).bool()
-        pc_grad, num_task = copy.deepcopy(grads), len(grads)
+        pc_grad = copy.deepcopy(grads)
         for g_i in pc_grad:
             random.shuffle(grads)
             for g_j in grads:
@@ -77,12 +75,12 @@ class PCGrad:
                 if g_i_g_j < 0:
                     g_i -= (g_i_g_j) * g_j / (g_j.norm() ** 2)
         merged_grad = torch.zeros_like(grads[0]).to(grads[0].device)
-        if self._reduction:
+        if self._reduction == "mean":
             merged_grad[shared] = torch.stack([g[shared] for g in pc_grad]).mean(dim=0)
         elif self._reduction == "sum":
             merged_grad[shared] = torch.stack([g[shared] for g in pc_grad]).sum(dim=0)
         else:
-            exit("invalid reduction method")
+            raise ValueError(f"Invalid reduction method: {self._reduction}")
 
         merged_grad[~shared] = torch.stack([g[~shared] for g in pc_grad]).sum(dim=0)
         return merged_grad
@@ -115,8 +113,8 @@ class PCGrad:
             self._optim.zero_grad(set_to_none=True)
             obj.backward(retain_graph=True)
             grad, shape, has_grad = self._retrieve_grad()
-            grads.append(self._flatten_grad(grad, shape))
-            has_grads.append(self._flatten_grad(has_grad, shape))
+            grads.append(self._flatten_grad(grad))
+            has_grads.append(self._flatten_grad(has_grad))
             shapes.append(shape)
         return grads, shapes, has_grads
 
@@ -128,7 +126,7 @@ class PCGrad:
             idx += length
         return unflatten_grad
 
-    def _flatten_grad(self, grads, shapes):
+    def _flatten_grad(self, grads):
         flatten_grad = torch.cat([g.flatten() for g in grads])
         return flatten_grad
 
@@ -157,56 +155,3 @@ class PCGrad:
                 grad.append(p.grad.clone())
                 has_grad.append(torch.ones_like(p).to(p.device))
         return grad, shape, has_grad
-
-
-class TestNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self._linear = nn.Linear(3, 4)
-
-    def forward(self, x):
-        return self._linear(x)
-
-
-class MultiHeadTestNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self._linear = nn.Linear(3, 2)
-        self._head1 = nn.Linear(2, 4)
-        self._head2 = nn.Linear(2, 4)
-
-    def forward(self, x):
-        feat = self._linear(x)
-        return self._head1(feat), self._head2(feat)
-
-
-if __name__ == "__main__":
-    # fully shared network test
-    torch.manual_seed(4)
-    x, y = torch.randn(2, 3), torch.randn(2, 4)
-    net = TestNet()
-    y_pred = net(x)
-    pc_adam = PCGrad(optim.Adam(net.parameters()))
-    pc_adam.zero_grad()
-    loss1_fn, loss2_fn = nn.L1Loss(), nn.MSELoss()
-    loss1, loss2 = loss1_fn(y_pred, y), loss2_fn(y_pred, y)
-
-    pc_adam.pc_backward([loss1, loss2])
-    for p in net.parameters():
-        print(p.grad)
-
-    print("-" * 80)
-    # seperated shared network test
-
-    torch.manual_seed(4)
-    x, y = torch.randn(2, 3), torch.randn(2, 4)
-    net = MultiHeadTestNet()
-    y_pred_1, y_pred_2 = net(x)
-    pc_adam = PCGrad(optim.Adam(net.parameters()))
-    pc_adam.zero_grad()
-    loss1_fn, loss2_fn = nn.MSELoss(), nn.MSELoss()
-    loss1, loss2 = loss1_fn(y_pred_1, y), loss2_fn(y_pred_2, y)
-
-    pc_adam.pc_backward([loss1, loss2])
-    for p in net.parameters():
-        print(p.grad)
