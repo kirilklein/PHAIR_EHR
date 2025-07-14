@@ -61,7 +61,7 @@ class CausalEHRTrainer(EHRTrainer):
 
             # Add outcome losses if available
             if hasattr(outputs, "outcome_losses") and outputs.outcome_losses:
-                for outcome_name, outcome_loss in outputs.outcome_losses.items():
+                for outcome_loss in outputs.outcome_losses.values():
                     if outcome_loss is not None:
                         task_losses.append(outcome_loss)
 
@@ -97,12 +97,12 @@ class CausalEHRTrainer(EHRTrainer):
         if mode == "val":
             if self.val_dataset is None:
                 self.log("No validation dataset provided")
-                return None, None, None, None
+                return None, None, None, None, None
             dataloader = self.get_dataloader(self.val_dataset, mode="val")
         elif mode == "test":
             if self.test_dataset is None:
                 self.log("No test dataset provided")
-                return None, None, None, None
+                return None, None, None, None, None
             dataloader = self.get_dataloader(self.test_dataset, mode="test")
         else:
             raise ValueError(f"Mode {mode} not supported. Use 'val' or 'test'")
@@ -157,7 +157,9 @@ class CausalEHRTrainer(EHRTrainer):
                     self._calculate_batch_metrics(batch, outputs, prediction_data)
 
         if self.accumulate_logits:
-            metrics = self.process_causal_classification_results(prediction_data, mode)
+            metrics = self.process_causal_classification_results(
+                prediction_data, mode, save_results=False
+            )
         else:
             exposure_metrics = compute_avg_metrics(
                 prediction_data[EXPOSURE].metric_values
@@ -194,7 +196,7 @@ class CausalEHRTrainer(EHRTrainer):
             for outcome_name, total_loss in outcome_losses_total.items()
         }
 
-        return avg_loss, metrics, avg_exposure_loss, avg_outcome_losses
+        return avg_loss, metrics, avg_exposure_loss, avg_outcome_losses, prediction_data
 
     def _clip_gradients(self):
         """Clip gradients with PCGrad support"""
@@ -211,6 +213,7 @@ class CausalEHRTrainer(EHRTrainer):
         self,
         prediction_data: Dict[str, CausalPredictionData],
         mode="val",
+        save_results=True,
     ) -> dict:
         """Process results for exposure and all outcome predictions."""
 
@@ -230,14 +233,14 @@ class CausalEHRTrainer(EHRTrainer):
             self.log(f"{key}: {value}")
             metrics[key] = value
 
-        # Save exposure results
-        self._save_target_results(
-            EXPOSURE,
-            logits,
-            targets,
-            {k: v for k, v in metrics.items() if k.startswith(f"{EXPOSURE}_")},
-            mode,
-        )
+        if save_results:
+            self._save_target_results(
+                EXPOSURE,
+                logits,
+                targets,
+                {k: v for k, v in metrics.items() if k.startswith(f"{EXPOSURE}_")},
+                mode,
+            )
 
         # Process each outcome prediction
         for outcome_name in self.outcome_names:
@@ -254,27 +257,29 @@ class CausalEHRTrainer(EHRTrainer):
                 self.log(f"{key}: {value}")
                 metrics[key] = value
 
-            # Save results for this outcome
-            self._save_target_results(
-                outcome_name,
-                logits,
-                targets,
-                {k: v for k, v in metrics.items() if k.startswith(f"{outcome_name}_")},
-                mode,
-            )
-
-            # Save counterfactual predictions for this outcome
-            cf_logits = torch.cat(
-                prediction_data[f"{CF_OUTCOME}_{outcome_name}"].logits_list
-            )
-            save_predictions(
-                self.run_folder,
-                cf_logits,
-                None,
-                BEST_MODEL_ID,
-                f"{mode}_{CF_OUTCOME}_{outcome_name}",
-                save_targets=False,
-            )
+            if save_results:
+                self._save_target_results(
+                    outcome_name,
+                    logits,
+                    targets,
+                    {
+                        k: v
+                        for k, v in metrics.items()
+                        if k.startswith(f"{outcome_name}_")
+                    },
+                    mode,
+                )
+                cf_logits = torch.cat(
+                    prediction_data[f"{CF_OUTCOME}_{outcome_name}"].logits_list
+                )
+                save_predictions(
+                    self.run_folder,
+                    cf_logits,
+                    None,
+                    BEST_MODEL_ID,
+                    f"{mode}_{CF_OUTCOME}_{outcome_name}",
+                    save_targets=False,
+                )
 
         # Compute average metrics across exposure + all outcomes
         for name in self.metrics.keys():
@@ -385,13 +390,34 @@ class CausalEHRTrainer(EHRTrainer):
         )
 
     def validate_and_log(self, epoch: int, epoch_loss: float, train_loop) -> None:
-        val_loss, val_metrics, val_exposure_loss, val_outcome_loss = self._evaluate(
-            mode="val"
-        )
-        _, test_metrics, test_exposure_loss, test_outcome_loss = self._evaluate(
-            mode="test"
+        (
+            val_loss,
+            val_metrics,
+            val_exposure_loss,
+            val_outcome_loss,
+            val_prediction_data,
+        ) = self._evaluate(mode="val")
+        _, test_metrics, test_exposure_loss, test_outcome_loss, test_prediction_data = (
+            self._evaluate(mode="test")
         )
 
+        current_metric_value = val_metrics.get(
+            self.stopping_metric, val_loss
+        )  # get the metric we monitor. Same as early stopping
+        is_best = self._is_improvement(current_metric_value)
+        if is_best:
+            self.log(
+                f"New best model found at epoch {epoch} with {self.stopping_metric}: {current_metric_value:.4f}. Saving results."
+            )
+            # If it's the best, save all the detailed artifacts
+            if self.accumulate_logits:
+                self.process_causal_classification_results(
+                    val_prediction_data, mode="val", save_results=True
+                )
+                if test_prediction_data:
+                    self.process_causal_classification_results(
+                        test_prediction_data, mode="test", save_results=True
+                    )
         # Add debugging to see what metrics are being returned
         self.log(
             f"Validation metrics keys: {list(val_metrics.keys()) if val_metrics else 'None'}"
@@ -434,24 +460,15 @@ class CausalEHRTrainer(EHRTrainer):
             self.log,
         )
 
-        if epoch == 1:  # for testing purposes/if first epoch is best
+        if is_best or (epoch == 1):  # for testing purposes/if first epoch is best
             self._save_checkpoint(
-                epoch,
-                train_loss=epoch_loss,
-                val_loss=val_loss,
-                val_metrics=val_metrics,
-                test_metrics=test_metrics,
-                final_step_loss=epoch_loss[-1],
+                BEST_MODEL_ID,
                 best_model=True,
             )
 
         self._self_log_results(
             epoch, val_loss, val_metrics, epoch_loss, len(train_loop)
         )
-
-        current_metric_value = val_metrics.get(
-            self.stopping_metric, val_loss
-        )  # get the metric we monitor. Same as early stopping
 
         if self._should_unfreeze_on_plateau(current_metric_value):
             self._unfreeze_model("Performance plateau detected!")
@@ -460,9 +477,6 @@ class CausalEHRTrainer(EHRTrainer):
             epoch, current_metric_value, val_loss, epoch_loss, val_metrics, test_metrics
         ):
             return
-        self._save_checkpoint_conditionally(
-            epoch, epoch_loss, val_loss, val_metrics, test_metrics
-        )
         self._check_and_freeze_encoder(val_metrics)
 
     def _update_metric_history(self, metrics: EpochMetrics):
@@ -544,7 +558,7 @@ class CausalEHRTrainer(EHRTrainer):
                 f"Encoder frozen due to plateau (exp_plateau={exp_plateau}, outcome_plateaus={outcome_plateaus})"
             )
             for param_group in self.optimizer.param_groups:
-                param_group["lr"] *= 0.1
+                param_group["lr"] *= 0.5
                 self.log(f"Learning rate updated to {param_group['lr']}")
 
     def _freeze_encoder(self):
