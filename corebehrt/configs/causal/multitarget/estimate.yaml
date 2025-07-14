@@ -1,0 +1,17 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  calibrated_predictions: ./outputs/causal/multitarget/models/simple/calibrated/
+  # counterfactual_outcomes: ./outputs/causal/counterfactual_outcomes # optional
+
+  ## OUTPUTS
+  estimate: ./outputs/causal/multitarget/estimate/simple
+
+estimator:
+  methods: ["IPW", "AIPW", "TMLE"]
+  effect_type: "ATE"
+  n_bootstrap: 30
+  common_support_threshold: 0.001

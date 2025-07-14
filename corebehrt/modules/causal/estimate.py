@@ -1,7 +1,6 @@
 from os.path import join
-from typing import Any, Dict
+from typing import Any, Dict, List
 
-import numpy as np
 import pandas as pd
 import torch
 from CausalEstimate import MultiEstimator
@@ -12,6 +11,7 @@ from CausalEstimate.stats.stats import compute_treatment_outcome_table
 from corebehrt.constants.causal.data import (
     CF_PROBAS,
     EXPOSURE_COL,
+    OUTCOME,
     PROB_C_KEY,
     PROB_KEY,
     PROB_T_KEY,
@@ -28,46 +28,98 @@ from corebehrt.constants.causal.paths import (
     EXPERIMENT_DATA_FILE,
     EXPERIMENT_STATS_FILE,
     PATIENTS_FILE,
-    PREDICTIONS_DIR_EXPOSURE,
-    PREDICTIONS_DIR_OUTCOME,
     SIMULATION_RESULTS_FILE,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.counterfactuals import expand_counterfactuals
 from corebehrt.functional.causal.effect import compute_effect_from_counterfactuals
+from corebehrt.functional.causal.estimate import (
+    calculate_risk_difference,
+    calculate_risk_ratio,
+)
 from corebehrt.modules.setup.config import Config
 
 
 class EffectEstimator:
     """
-    Orchestrates data loading, counterfactual expansion, and causal effect estimation,
-    with options for common-support filtering and bootstrap-based inference.
+    Orchestrates data loading, counterfactual expansion, and causal effect estimation
+    for multiple outcomes, with options for filtering and bootstrapping.
     """
 
     def __init__(self, cfg: Config, logger: Any):
         self.cfg = cfg
         self.logger = logger
-        self._set_paths()
-        self.estimator_cfg = self.cfg.get("estimator")
-        self.estimation_args = self._get_estimation_args()
-        self.estimator = self._build_multi_estimator()
-
-    def _set_paths(self) -> None:
         self.exp_dir = self.cfg.paths.estimate
 
-        if self.cfg.paths.get("exposure_predictions") is not None:
-            self.exposure_pred_dir = self.cfg.paths.exposure_predictions
-        else:
-            self.exposure_pred_dir = join(
-                self.cfg.paths.calibrated_predictions, PREDICTIONS_DIR_EXPOSURE
-            )
-        if self.cfg.paths.get("outcome_predictions") is not None:
-            self.outcome_pred_dir = self.cfg.paths.outcome_predictions
-        else:
-            self.outcome_pred_dir = join(
-                self.cfg.paths.calibrated_predictions, PREDICTIONS_DIR_OUTCOME
-            )
+        self.predictions_file = join(
+            self.cfg.paths.calibrated_predictions,
+            "combined_predictions_and_targets_calibrated.csv",
+        )
+        self.estimator_cfg = self.cfg.estimator
+        self.df = pd.read_csv(self.predictions_file)
+        self.outcome_names = self._get_outcome_names(self.df)
+        self._validate_columns(self.df, self.outcome_names)
         self.counterfactual_outcomes_dir = self.cfg.paths.get("counterfactual_outcomes")
+        self.estimation_args = self._get_estimation_args()
+        print(self.outcome_names)
+        print(self.df.columns)
+
+    def run(self) -> None:
+        """
+        Main pipeline: Loops through each outcome to prepare data, estimate effects,
+        add benchmarks, and save all results together.
+        """
+        self.logger.info("Starting effect estimation process for multiple outcomes.")
+        all_effects = []
+
+        for outcome_name in self.outcome_names:
+            self.logger.info(f"--- Processing outcome: {outcome_name} ---")
+
+            # 1. Prepare data with potential outcomes for the current outcome
+            df_for_outcome = self._prepare_data_for_outcome(self.df, outcome_name)
+
+            # 2. Build estimators with the correct outcome column
+            estimator = self._build_multi_estimator()
+
+            # 3. Estimate effects
+            effect_df = self._estimate_effects(df_for_outcome, estimator)
+
+            # 4. Get the analysis cohort and add benchmarks
+            analysis_df = self._get_analysis_cohort(df_for_outcome)
+            # effect_df = self._append_true_effect(analysis_df, effect_df, outcome_name)
+            effect_df = self._append_unadjusted_effect(
+                analysis_df, effect_df, outcome_name
+            )
+
+            # 5. Tag results with the outcome name and collect
+            effect_df["outcome"] = outcome_name
+            all_effects.append(effect_df)
+
+        # Combine and save all results
+        final_results_df = pd.concat(all_effects, ignore_index=True)
+
+        print(final_results_df)
+        exit()
+        self._save_results(self.df, final_results_df)
+        self.logger.info("Effect estimation complete for all outcomes.")
+
+    @staticmethod
+    def _get_outcome_names(df: pd.DataFrame) -> List[str]:
+        prefix = OUTCOME + "_"
+        return [
+            col.removeprefix(prefix) for col in df.columns if col.startswith(prefix)
+        ]
+
+    @staticmethod
+    def _validate_columns(df: pd.DataFrame, outcome_names: List[str]) -> None:
+        """"""
+        required_columns = [PID_COL, EXPOSURE_COL, PS_COL]
+        for name in outcome_names:
+            for prefix in [OUTCOME, PROBAS, CF_PROBAS]:
+                required_columns.append(prefix + "_" + name)
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}")
 
     def _get_estimation_args(self) -> Dict:
         """
@@ -100,43 +152,40 @@ class EffectEstimator:
             "n_bootstrap": self.estimator_cfg.get("n_bootstrap", 0),
         }
 
-    def run(self) -> None:
-        """Main pipeline: prepare data, estimate effects, add benchmarks, and save results."""
-        self.logger.info("Starting effect estimation process")
-        df = self._prepare_data()
+    @staticmethod
+    def _prepare_data_for_outcome(df: pd.DataFrame, outcome_name: str) -> pd.DataFrame:
+        """
+        Prepares the dataframe for a single outcome by creating potential outcome columns.
+        """
+        df = df.copy()
+        # Define the specific source columns for this outcome
+        probas_col = f"{PROBAS}_{outcome_name}"
+        cf_probas_col = f"{CF_PROBAS}_{outcome_name}"
+        outcome_col = f"{OUTCOME}_{outcome_name}"
 
-        # Estimate effects (CausalEstimate applies common support filtering internally)
-        effect_df = self._estimate_effects(df)
+        df.rename(
+            columns={
+                outcome_col: OUTCOME,
+                cf_probas_col: CF_PROBAS,
+                probas_col: PROBAS,
+            },
+            inplace=True,
+        )
+        df = df[[PID_COL, EXPOSURE_COL, PS_COL, PROBAS, CF_PROBAS, OUTCOME]]
 
-        # Apply the same common support filtering to get analysis cohort
-        analysis_df = self._get_analysis_cohort(df)
-
-        # Use filtered cohort for benchmarks to ensure consistency
-        effect_df = self._append_true_effect(analysis_df, effect_df)
-        effect_df = self._append_unadjusted_effect(analysis_df, effect_df)
-
-        self._save_results(df, effect_df)
-        self.logger.info("Effect estimation complete.")
-
-    def _prepare_data(self) -> pd.DataFrame:
-        df = self._load_data()
-        self._save_experiment_data(df)
-        self._save_experiment_stats(df)
+        # Expand counterfactuals to create the generic PROBAS_EXPOSED and PROBAS_CONTROL columns
+        # The underlying estimators will use these generic columns.
         return expand_counterfactuals(
-            df, EXPOSURE_COL, PROBAS, CF_PROBAS, PROBAS_CONTROL, PROBAS_EXPOSED
+            df,
+            exposure_col=EXPOSURE_COL,
+            factual_outcome_col=PROBAS,
+            cf_outcome_col=CF_PROBAS,
+            outcome_control_col=PROBAS_CONTROL,
+            outcome_exposed_col=PROBAS_EXPOSED,
         )
 
     def _load_data(self) -> pd.DataFrame:
-        exposure_preds = pd.read_csv(
-            join(self.exposure_pred_dir, CALIBRATED_PREDICTIONS_FILE)
-        )
-        exposure_preds.rename(
-            columns={TARGETS: EXPOSURE_COL, PROBAS: PS_COL}, inplace=True
-        )
-        outcome_preds = pd.read_csv(
-            join(self.outcome_pred_dir, CALIBRATED_PREDICTIONS_FILE)
-        )
-        df = pd.merge(exposure_preds, outcome_preds, on=PID_COL)
+        df = pd.read_csv(self.predictions_file)
         self.logger.info("Data loaded successfully")
         return df
 
@@ -162,9 +211,12 @@ class EffectEstimator:
         torch.save(df[PID_COL].values, join(self.exp_dir, PATIENTS_FILE))
         return df
 
-    def _estimate_effects(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Estimate effects using CausalEstimate (applies common support filtering internally)."""
-        effect_dict = self.estimator.compute_effects(
+    def _estimate_effects(
+        self, df: pd.DataFrame, estimator: MultiEstimator
+    ) -> pd.DataFrame:
+        """Estimate effects using the provided estimator instance."""
+        # This method is now simpler as it just runs the given estimator.
+        effect_dict = estimator.compute_effects(
             df,
             n_bootstraps=self.estimation_args["n_bootstrap"],
             apply_common_support=self.estimation_args["common_support"],
@@ -174,25 +226,29 @@ class EffectEstimator:
         return self._convert_effect_to_dataframe(effect_dict)
 
     def _append_true_effect(
-        self, df: pd.DataFrame, effect_df: pd.DataFrame
+        self, df: pd.DataFrame, effect_df: pd.DataFrame, outcome_name: str
     ) -> pd.DataFrame:
         """
+        ! This needs to be adjusted, depending on how we will save outcomes
         Add ground truth effect estimates from simulated counterfactual outcomes.
 
         Uses the same analysis cohort as other estimators for consistency.
         Only available when counterfactual outcomes directory is provided (simulation data).
         """
         if self.counterfactual_outcomes_dir:
-            cf_file = join(self.counterfactual_outcomes_dir, SIMULATION_RESULTS_FILE)
+            cf_file = join(
+                self.counterfactual_outcomes_dir,
+                outcome_name + "_" + SIMULATION_RESULTS_FILE,
+            )
             cf_outcomes = pd.read_csv(cf_file)
             true_effect = self._compute_true_effect_from_counterfactuals(
                 df, cf_outcomes
             )
-            effect_df[TRUE_EFFECT_COL] = true_effect
+            effect_df[TRUE_EFFECT_COL + "_" + outcome_name] = true_effect
         return effect_df
 
     def _append_unadjusted_effect(
-        self, df: pd.DataFrame, effect_df: pd.DataFrame
+        self, df: pd.DataFrame, effect_df: pd.DataFrame, outcome_name: str
     ) -> pd.DataFrame:
         """
         Append unadjusted Risk Difference (RD) and Risk Ratio (RR) to the effect estimates.
@@ -201,113 +257,41 @@ class EffectEstimator:
         Calculates simple two-sample comparisons between exposed and unexposed groups
         with standard errors and 95% confidence intervals.
         """
-        # Split data by exposure status (uses same filtered cohort as other estimators)
+
         exposed = df[df[EXPOSURE_COL] == 1]
         unexposed = df[df[EXPOSURE_COL] == 0]
 
         # Calculate basic statistics
-        risk_exposed = exposed[TARGETS].mean()
-        risk_unexposed = unexposed[TARGETS].mean()
+        risk_exposed = exposed[OUTCOME].mean()
+        risk_unexposed = unexposed[OUTCOME].mean()
         n_exposed = len(exposed)
         n_unexposed = len(unexposed)
 
         # Calculate both measures
-        rd_row = self._calculate_risk_difference(
+        rd_row = calculate_risk_difference(
             risk_exposed, risk_unexposed, n_exposed, n_unexposed
         )
-        rr_row = self._calculate_risk_ratio(
+        rr_row = calculate_risk_ratio(
             risk_exposed, risk_unexposed, n_exposed, n_unexposed
         )
 
         # Append both rows to existing results
         return pd.concat([effect_df, rd_row, rr_row], ignore_index=True)
 
-    def _calculate_risk_difference(
-        self,
-        risk_exposed: float,
-        risk_unexposed: float,
-        n_exposed: int,
-        n_unexposed: int,
-    ) -> pd.DataFrame:
-        """Calculate Risk Difference with 95% CI using delta method."""
-        risk_difference = risk_exposed - risk_unexposed
-
-        # Standard error using delta method
-        variance_exposed = risk_exposed * (1 - risk_exposed) / n_exposed
-        variance_unexposed = risk_unexposed * (1 - risk_unexposed) / n_unexposed
-        se_rd = np.sqrt(variance_exposed + variance_unexposed)
-
-        # 95% Confidence Interval
-        ci_margin = 1.96 * se_rd
-        ci_lower_rd = risk_difference - ci_margin
-        ci_upper_rd = risk_difference + ci_margin
-
-        return pd.DataFrame(
-            {
-                "method": ["RD"],
-                "effect": [risk_difference],
-                "std_err": [se_rd],
-                "CI95_lower": [ci_lower_rd],
-                "CI95_upper": [ci_upper_rd],
-                "effect_1": [risk_exposed],
-                "effect_0": [risk_unexposed],
-                "n_bootstraps": [0],
-            }
-        )
-
-    def _calculate_risk_ratio(
-        self,
-        risk_exposed: float,
-        risk_unexposed: float,
-        n_exposed: int,
-        n_unexposed: int,
-    ) -> pd.DataFrame:
-        """Calculate Risk Ratio with 95% CI using log transformation."""
-        # Handle division by zero
-        if risk_unexposed == 0 or risk_exposed == 0:
-            risk_ratio = np.inf if risk_exposed > 0 else np.nan
-            se_log_rr = np.nan
-            ci_lower_rr = np.nan
-            ci_upper_rr = np.nan
-        else:
-            risk_ratio = risk_exposed / risk_unexposed
-
-            # Standard error on log scale
-            se_log_rr = np.sqrt(
-                (1 - risk_exposed) / (risk_exposed * n_exposed)
-                + (1 - risk_unexposed) / (risk_unexposed * n_unexposed)
-            )
-
-            # 95% CI on log scale, then exponentiate
-            log_rr = np.log(risk_ratio)
-            ci_margin_log = 1.96 * se_log_rr
-            ci_lower_rr = np.exp(log_rr - ci_margin_log)
-            ci_upper_rr = np.exp(log_rr + ci_margin_log)
-
-        return pd.DataFrame(
-            {
-                "method": ["RR"],
-                "effect": [risk_ratio],
-                "std_err": [se_log_rr],
-                "CI95_lower": [ci_lower_rr],
-                "CI95_upper": [ci_upper_rr],
-                "effect_1": [risk_exposed],
-                "effect_0": [risk_unexposed],
-                "n_bootstraps": [0],
-            }
-        )
-
     def _build_multi_estimator(self) -> MultiEstimator:
+        """Builds a MultiEstimator for a specific outcome."""
         estimators = []
         method_args = self.estimation_args["method_args"]
+        # Define the specific observed outcome column for this run
+
         for method in self.estimator_cfg.methods:
             method_upper = method.upper()
             if method_upper == "TMLE":
                 estimators.append(
                     TMLE(
-                        effect_type=self.estimator_cfg.effect_type,
+                        effect_type=self.cfg.estimator.effect_type,
                         treatment_col=EXPOSURE_COL,
-                        outcome_col=TARGETS,
+                        outcome_col=OUTCOME,
                         ps_col=PS_COL,
                         probas_col=method_args.get("TMLE", {}).get(PROB_KEY, PROBAS),
                         probas_t1_col=method_args.get("TMLE", {}).get(
@@ -321,18 +305,18 @@ class EffectEstimator:
             elif method_upper == "IPW":
                 estimators.append(
                     IPW(
-                        effect_type=self.estimator_cfg.effect_type,
+                        effect_type=self.cfg.estimator.effect_type,
                         treatment_col=EXPOSURE_COL,
-                        outcome_col=TARGETS,
+                        outcome_col=OUTCOME,
                         ps_col=PS_COL,
                     )
                 )
             elif method_upper == "AIPW":
                 estimators.append(
                     AIPW(
-                        effect_type=self.estimator_cfg.effect_type,
+                        effect_type=self.cfg.estimator.effect_type,
                         treatment_col=EXPOSURE_COL,
-                        outcome_col=TARGETS,
+                        outcome_col=OUTCOME,
                         ps_col=PS_COL,
                         probas_t1_col=method_args.get("AIPW", {}).get(
                             PROB_T_KEY, PROBAS_EXPOSED
