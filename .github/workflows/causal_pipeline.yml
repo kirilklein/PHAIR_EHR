@@ -59,7 +59,7 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.prepare_ft_exp_y      prepare/simple.yaml
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare/simple.yaml
           python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetune/prepared_data
           
       - name: Finetune Exposure & Outcome
