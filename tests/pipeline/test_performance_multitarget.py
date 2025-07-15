@@ -36,6 +36,13 @@ def test_multitarget_performance(
     
     print(f"Looking for score files in: {scores_dir}")
     
+    # Load the combined scores file
+    try:
+        scores_df = load_combined_scores_file(scores_dir)
+    except Exception as e:
+        print(f"❌ Error loading scores file: {e}")
+        return False
+    
     all_passed = True
     
     # Test exposure metrics
@@ -43,17 +50,17 @@ def test_multitarget_performance(
     print("TESTING EXPOSURE PERFORMANCE")
     print(f"{'='*60}")
     
-    exposure_passed = test_target_from_file(
-        scores_dir, "exposure", exposure_bounds, metric_name
+    exposure_passed = test_target_from_combined_df(
+        scores_df, "exposure", exposure_bounds, metric_name
     )
     all_passed = all_passed and exposure_passed
 
     # Auto-detect outcome names if not provided
     if outcome_names is None:
-        outcome_names = auto_detect_outcome_names(scores_dir)
+        outcome_names = auto_detect_outcome_names_from_df(scores_df)
     
     if not outcome_names:
-        print(f"❌ Error: No outcome files found in {scores_dir}")
+        print(f"❌ Error: No outcomes found in scores file")
         return False
 
     # Test outcome metrics
@@ -67,8 +74,8 @@ def test_multitarget_performance(
         print(f"\n--- Testing {outcome_name} ---")
         current_bounds = outcome_bounds.get(outcome_name) if outcome_bounds else None
         
-        outcome_passed = test_target_from_file(
-            scores_dir, outcome_name, current_bounds, metric_name
+        outcome_passed = test_target_from_combined_df(
+            scores_df, outcome_name, current_bounds, metric_name
         )
         all_passed = all_passed and outcome_passed
 
@@ -85,36 +92,90 @@ def test_multitarget_performance(
     return all_passed
 
 
-def test_target_from_file(
-    scores_dir: str,
+def load_combined_scores_file(scores_dir: str) -> pd.DataFrame:
+    """Load the combined scores file."""
+    # Look for files matching pattern scores_{date}.csv
+    score_files = []
+    for file in os.listdir(scores_dir):
+        if file.startswith("scores_") and file.endswith('.csv'):
+            score_files.append(file)
+    
+    if not score_files:
+        raise FileNotFoundError(f"No scores files found in {scores_dir}")
+    
+    # If multiple files, get the latest one
+    if len(score_files) > 1:
+        latest_file = get_latest_scores_file(scores_dir, score_files)
+    else:
+        latest_file = score_files[0]
+    
+    file_path = os.path.join(scores_dir, latest_file)
+    print(f"Loading scores from: {latest_file}")
+    
+    df = pd.read_csv(file_path)
+    
+    # Validate required columns
+    required_cols = ["metric", "outcome", "mean"]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Missing required columns {missing_cols} in scores file")
+    
+    return df
+
+
+def get_latest_scores_file(scores_dir: str, score_files: List[str]) -> str:
+    """Get the latest scores file based on timestamp in filename."""
+    latest_file = None
+    latest_datetime = None
+    
+    for file in score_files:
+        # Extract datetime pattern from filename (format: scores_YYYYmmdd-HHMM.csv)
+        datetime_match = re.search(r"scores_(\d{8}-\d{4})\.csv", file)
+        if datetime_match:
+            datetime_str = datetime_match.group(1)
+            try:
+                file_datetime = datetime.strptime(datetime_str, "%Y%m%d-%H%M")
+                if latest_datetime is None or file_datetime > latest_datetime:
+                    latest_datetime = file_datetime
+                    latest_file = file
+            except ValueError:
+                continue
+    
+    if latest_file is None:
+        # Fallback to last file alphabetically if datetime parsing fails
+        latest_file = sorted(score_files)[-1]
+    
+    return latest_file
+
+
+def test_target_from_combined_df(
+    scores_df: pd.DataFrame,
     target_name: str, 
     bounds: Dict[str, float] = None, 
     metric_name: str = "roc_auc"
 ) -> bool:
-    """Test performance for a specific target by loading its dedicated file."""
+    """Test performance for a specific target from the combined dataframe."""
     try:
-        file_path = find_target_scores_file(scores_dir, target_name)
-        print(f"Found {target_name} file: {os.path.basename(file_path)}")
+        # Filter for the specific target and metric
+        target_metric_rows = scores_df[
+            (scores_df["outcome"] == target_name) & 
+            (scores_df["metric"] == metric_name)
+        ]
         
-        df = pd.read_csv(file_path)
-        
-        # Check if required columns exist
-        required_cols = ["metric", "mean"]
-        missing_cols = [col for col in required_cols if col not in df.columns]
-        if missing_cols:
-            print(f"❌ Error: Missing columns {missing_cols} in {target_name} file")
-            return False
-
-        # Look for the specific metric
-        metric_rows = df[df["metric"] == metric_name]
-        
-        if metric_rows.empty:
-            print(f"❌ Error: Metric '{metric_name}' not found in {target_name} file")
-            print(f"Available metrics: {df['metric'].unique().tolist()}")
+        if target_metric_rows.empty:
+            available_metrics = scores_df[scores_df["outcome"] == target_name]["metric"].unique().tolist()
+            available_outcomes = scores_df["outcome"].unique().tolist()
+            
+            if target_name not in available_outcomes:
+                print(f"❌ Error: Target '{target_name}' not found in scores")
+                print(f"Available targets: {available_outcomes}")
+            else:
+                print(f"❌ Error: Metric '{metric_name}' not found for {target_name}")
+                print(f"Available metrics for {target_name}: {available_metrics}")
             return False
         
-        metric_value = float(metric_rows["mean"].iloc[0])
-        std_value = float(metric_rows["std"].iloc[0]) if "std" in metric_rows.columns else None
+        metric_value = float(target_metric_rows["mean"].iloc[0])
+        std_value = float(target_metric_rows["std"].iloc[0]) if "std" in target_metric_rows.columns else None
         
         print(f"{target_name.upper()} {metric_name.upper()}:")
         if std_value is not None:
@@ -156,61 +217,44 @@ def test_target_from_file(
         return False
 
 
+def auto_detect_outcome_names_from_df(scores_df: pd.DataFrame) -> List[str]:
+    """Auto-detect outcome names from the combined scores dataframe."""
+    all_outcomes = scores_df["outcome"].unique().tolist()
+    # Remove 'exposure' and return the rest as outcome names
+    outcome_names = [outcome for outcome in all_outcomes if outcome != "exposure"]
+    return sorted(outcome_names)
+
+
+# Legacy functions kept for backward compatibility
 def find_target_scores_file(scores_dir: str, target_name: str) -> str:
-    """Find the scores file for a specific target (exposure or outcome)."""
-    file_pattern = f"val_{target_name}_scores_mean_std"
-    
-    matching_files = []
-    for file in os.listdir(scores_dir):
-        if file.startswith(file_pattern) and file.endswith('.csv'):
-            matching_files.append(file)
-
-    if not matching_files:
-        raise FileNotFoundError(
-            f"No CSV files found matching pattern '{file_pattern}*' in {scores_dir}"
-        )
-
-    if len(matching_files) == 1:
-        return os.path.join(scores_dir, matching_files[0])
-
-    # Parse datetime from filenames and find the latest
-    latest_file = None
-    latest_datetime = None
-
-    for file in matching_files:
-        # Extract datetime pattern from filename (assuming format like YYYYmmdd-HHMM)
-        datetime_match = re.search(r"(\d{8}-\d{4})", file)
-        if datetime_match:
-            datetime_str = datetime_match.group(1)
-            try:
-                file_datetime = datetime.strptime(datetime_str, "%Y%m%d-%H%M")
-                if latest_datetime is None or file_datetime > latest_datetime:
-                    latest_datetime = file_datetime
-                    latest_file = file
-            except ValueError:
-                continue
-
-    if latest_file is None:
-        # Fallback to last file if datetime parsing fails
-        latest_file = sorted(matching_files)[-1]
-
-    return os.path.join(scores_dir, latest_file)
+    """Legacy function - kept for backward compatibility."""
+    raise NotImplementedError(
+        "This function is deprecated. Use load_combined_scores_file instead."
+    )
 
 
 def auto_detect_outcome_names(scores_dir: str) -> List[str]:
-    """Auto-detect outcome names from score files in the directory."""
-    outcome_names = []
-    
-    for file in os.listdir(scores_dir):
-        if file.startswith("val_") and file.endswith(".csv") and "_scores_mean_std" in file:
-            # Extract target name from pattern: val_{target}_scores_mean_std_*.csv
-            match = re.match(r"val_([^_]+)_scores_mean_std", file)
-            if match:
-                target_name = match.group(1)
-                if target_name != "exposure":  # Skip exposure, we handle that separately
-                    outcome_names.append(target_name)
-    
-    return sorted(list(set(outcome_names)))  # Remove duplicates and sort
+    """Legacy function - kept for backward compatibility."""
+    try:
+        scores_df = load_combined_scores_file(scores_dir)
+        return auto_detect_outcome_names_from_df(scores_df)
+    except Exception:
+        return []
+
+
+def test_target_from_file(
+    scores_dir: str,
+    target_name: str, 
+    bounds: Dict[str, float] = None, 
+    metric_name: str = "roc_auc"
+) -> bool:
+    """Legacy function - kept for backward compatibility."""
+    try:
+        scores_df = load_combined_scores_file(scores_dir)
+        return test_target_from_combined_df(scores_df, target_name, bounds, metric_name)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return False
 
 
 def parse_bounds_arg(bounds_str: str) -> Dict[str, float]:
@@ -229,7 +273,7 @@ def parse_bounds_arg(bounds_str: str) -> Dict[str, float]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Test multi-target performance metrics (exposure + outcomes) from separate CSV files"
+        description="Test multi-target performance metrics (exposure + outcomes) from combined CSV file"
     )
     parser.add_argument(
         "path", type=str, help="Path to directory containing 'scores' subdirectory"
@@ -255,7 +299,7 @@ def main():
         "--outcomes",
         type=str,
         nargs="+",
-        help="Specific outcome names to test (if not provided, auto-detect from files)"
+        help="Specific outcome names to test (if not provided, auto-detect from scores file)"
     )
 
     args = parser.parse_args()
