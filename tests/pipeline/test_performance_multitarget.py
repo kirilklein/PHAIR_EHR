@@ -1,5 +1,46 @@
 #!/usr/bin/env python3
 
+"""
+Test multi-target performance metrics from combined CSV file.
+
+USAGE EXAMPLES:
+
+1. Basic usage (auto-detect all targets, no bounds):
+   python test_performance_multitarget.py outputs/causal/multitarget/models/simple
+
+2. Test with bounds for specific targets:
+   python test_performance_multitarget.py outputs/causal/multitarget/models/simple \
+     --target-bounds "exposure:min:0.55,max:0.65" \
+     --target-bounds "OUTCOME_2:min:0.65,max:0.85"
+
+3. Test specific targets only:
+   python test_performance_multitarget.py outputs/causal/multitarget/models/simple \
+     --targets exposure OUTCOME_2
+
+4. Test different metric (e.g., pr_auc instead of roc_auc):
+   python test_performance_multitarget.py outputs/causal/multitarget/models/simple \
+     --metric-name pr_auc \
+     --target-bounds "exposure:min:0.35,max:0.45"
+
+5. Comprehensive example with multiple bounds:
+   python test_performance_multitarget.py outputs/causal/multitarget/models/simple \
+     --metric-name roc_auc \
+     --target-bounds "exposure:min:0.50" \
+     --target-bounds "OUTCOME:min:0.35,max:0.60" \
+     --target-bounds "OUTCOME_2:min:0.55" \
+     --target-bounds "OUTCOME_3:min:0.40,max:0.70"
+
+Expected scores file format:
+  scores/scores_YYYYMMDD-HHMM.csv with columns: metric,outcome,mean,std
+  
+Example content:
+  metric,outcome,mean,std
+  pr_auc,OUTCOME,0.2203,0.0938
+  pr_auc,exposure,0.4053,0.0138
+  roc_auc,OUTCOME,0.3990,0.2418
+  roc_auc,exposure,0.5491,0.0223
+"""
+
 import argparse
 import pandas as pd
 import sys
@@ -11,20 +52,18 @@ from datetime import datetime
 
 def test_multitarget_performance(
     ft_dir: str,
-    exposure_bounds: Dict[str, float] = None,
-    outcome_bounds: Dict[str, Dict[str, float]] = None,
+    target_bounds: Dict[str, Dict[str, float]] = None,
     metric_name: str = "roc_auc",
-    outcome_names: List[str] = None,
+    target_names: List[str] = None,
 ) -> bool:
     """
-    Test whether performance metrics for exposure and multiple outcomes are within specified bounds.
+    Test whether performance metrics for all targets are within specified bounds.
 
     Args:
         ft_dir: Path to directory containing scores subdirectory
-        exposure_bounds: Dict with 'min' and 'max' bounds for exposure metric
-        outcome_bounds: Dict mapping outcome names to their min/max bounds
+        target_bounds: Dict mapping target names to their min/max bounds
         metric_name: Name of the metric to look for (e.g., 'roc_auc')
-        outcome_names: List of outcome names to test (if None, auto-detect)
+        target_names: List of target names to test (if None, auto-detect)
 
     Returns:
         bool: True if all metrics are within bounds, False otherwise
@@ -43,41 +82,30 @@ def test_multitarget_performance(
         print(f"❌ Error loading scores file: {e}")
         return False
     
-    all_passed = True
+    # Auto-detect target names if not provided
+    if target_names is None:
+        target_names = auto_detect_target_names_from_df(scores_df)
     
-    # Test exposure metrics
-    print(f"\n{'='*60}")
-    print("TESTING EXPOSURE PERFORMANCE")
-    print(f"{'='*60}")
-    
-    exposure_passed = test_target_from_combined_df(
-        scores_df, "exposure", exposure_bounds, metric_name
-    )
-    all_passed = all_passed and exposure_passed
-
-    # Auto-detect outcome names if not provided
-    if outcome_names is None:
-        outcome_names = auto_detect_outcome_names_from_df(scores_df)
-    
-    if not outcome_names:
-        print(f"❌ Error: No outcomes found in scores file")
+    if not target_names:
+        print(f"❌ Error: No targets found in scores file")
         return False
 
-    # Test outcome metrics
+    # Test all targets
     print(f"\n{'='*60}")
-    print("TESTING OUTCOME PERFORMANCE")
+    print("TESTING TARGET PERFORMANCE")
     print(f"{'='*60}")
+    print(f"Testing targets: {target_names}")
     
-    print(f"Testing outcomes: {outcome_names}")
+    all_passed = True
     
-    for outcome_name in outcome_names:
-        print(f"\n--- Testing {outcome_name} ---")
-        current_bounds = outcome_bounds.get(outcome_name) if outcome_bounds else None
+    for target_name in target_names:
+        print(f"\n--- Testing {target_name} ---")
+        current_bounds = target_bounds.get(target_name) if target_bounds else None
         
-        outcome_passed = test_target_from_combined_df(
-            scores_df, outcome_name, current_bounds, metric_name
+        target_passed = test_target_from_combined_df(
+            scores_df, target_name, current_bounds, metric_name
         )
-        all_passed = all_passed and outcome_passed
+        all_passed = all_passed and target_passed
 
     # Overall summary
     print(f"\n{'='*60}")
@@ -164,11 +192,11 @@ def test_target_from_combined_df(
         
         if target_metric_rows.empty:
             available_metrics = scores_df[scores_df["outcome"] == target_name]["metric"].unique().tolist()
-            available_outcomes = scores_df["outcome"].unique().tolist()
+            available_targets = scores_df["outcome"].unique().tolist()
             
-            if target_name not in available_outcomes:
+            if target_name not in available_targets:
                 print(f"❌ Error: Target '{target_name}' not found in scores")
-                print(f"Available targets: {available_outcomes}")
+                print(f"Available targets: {available_targets}")
             else:
                 print(f"❌ Error: Metric '{metric_name}' not found for {target_name}")
                 print(f"Available metrics for {target_name}: {available_metrics}")
@@ -217,44 +245,10 @@ def test_target_from_combined_df(
         return False
 
 
-def auto_detect_outcome_names_from_df(scores_df: pd.DataFrame) -> List[str]:
-    """Auto-detect outcome names from the combined scores dataframe."""
-    all_outcomes = scores_df["outcome"].unique().tolist()
-    # Remove 'exposure' and return the rest as outcome names
-    outcome_names = [outcome for outcome in all_outcomes if outcome != "exposure"]
-    return sorted(outcome_names)
-
-
-# Legacy functions kept for backward compatibility
-def find_target_scores_file(scores_dir: str, target_name: str) -> str:
-    """Legacy function - kept for backward compatibility."""
-    raise NotImplementedError(
-        "This function is deprecated. Use load_combined_scores_file instead."
-    )
-
-
-def auto_detect_outcome_names(scores_dir: str) -> List[str]:
-    """Legacy function - kept for backward compatibility."""
-    try:
-        scores_df = load_combined_scores_file(scores_dir)
-        return auto_detect_outcome_names_from_df(scores_df)
-    except Exception:
-        return []
-
-
-def test_target_from_file(
-    scores_dir: str,
-    target_name: str, 
-    bounds: Dict[str, float] = None, 
-    metric_name: str = "roc_auc"
-) -> bool:
-    """Legacy function - kept for backward compatibility."""
-    try:
-        scores_df = load_combined_scores_file(scores_dir)
-        return test_target_from_combined_df(scores_df, target_name, bounds, metric_name)
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return False
+def auto_detect_target_names_from_df(scores_df: pd.DataFrame) -> List[str]:
+    """Auto-detect all target names from the combined scores dataframe."""
+    all_targets = scores_df["outcome"].unique().tolist()
+    return sorted(all_targets)
 
 
 def parse_bounds_arg(bounds_str: str) -> Dict[str, float]:
@@ -273,7 +267,7 @@ def parse_bounds_arg(bounds_str: str) -> Dict[str, float]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Test multi-target performance metrics (exposure + outcomes) from combined CSV file"
+        description="Test multi-target performance metrics from combined CSV file"
     )
     parser.add_argument(
         "path", type=str, help="Path to directory containing 'scores' subdirectory"
@@ -285,52 +279,41 @@ def main():
         help="Name of metric to test (default: 'roc_auc')"
     )
     parser.add_argument(
-        "--exposure-bounds",
-        type=str,
-        help="Bounds for exposure metric as 'min:0.6,max:0.9'"
-    )
-    parser.add_argument(
-        "--outcome-bounds",
+        "--target-bounds",
         type=str,
         action="append",
-        help="Bounds for specific outcome as 'OUTCOME:min:0.7,max:0.95'. Can be used multiple times."
+        help="Bounds for specific target as 'TARGET_NAME:min:0.7,max:0.95'. Can be used multiple times."
     )
     parser.add_argument(
-        "--outcomes",
+        "--targets",
         type=str,
         nargs="+",
-        help="Specific outcome names to test (if not provided, auto-detect from scores file)"
+        help="Specific target names to test (if not provided, auto-detect from scores file)"
     )
 
     args = parser.parse_args()
 
-    # Parse exposure bounds
-    exposure_bounds = parse_bounds_arg(args.exposure_bounds) if args.exposure_bounds else None
-
-    # Parse outcome bounds
-    outcome_bounds = {}
-    if args.outcome_bounds:
-        for bound_spec in args.outcome_bounds:
+    # Parse target bounds
+    target_bounds = {}
+    if args.target_bounds:
+        for bound_spec in args.target_bounds:
             parts = bound_spec.split(':', 1)
             if len(parts) == 2:
-                outcome_name = parts[0]
+                target_name = parts[0]
                 bounds_str = parts[1]
-                outcome_bounds[outcome_name] = parse_bounds_arg(bounds_str)
+                target_bounds[target_name] = parse_bounds_arg(bounds_str)
 
     print(f"Testing directory: {args.path}")
     print(f"Metric: {args.metric_name}")
-    if exposure_bounds:
-        print(f"Exposure bounds: {exposure_bounds}")
-    if outcome_bounds:
-        print(f"Outcome bounds: {outcome_bounds}")
+    if target_bounds:
+        print(f"Target bounds: {target_bounds}")
 
     # Run the test
     success = test_multitarget_performance(
         args.path,
-        exposure_bounds,
-        outcome_bounds,
+        target_bounds,
         args.metric_name,
-        args.outcomes
+        args.targets
     )
 
     # Exit with appropriate code
