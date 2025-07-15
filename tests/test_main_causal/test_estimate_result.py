@@ -13,6 +13,9 @@ from corebehrt.constants.causal.paths import ESTIMATE_RESULTS_FILE
 ESTIMATE_RESULT_DIR = "./outputs/causal/generated/estimate_with_generated_data"
 MARGIN = 0.02
 
+# Methods that should be excluded from true effect comparison (unadjusted methods)
+UNADJUSTED_METHODS = {"RD", "RR"}
+
 
 def compare_estimate_result(margin, estimate_results_dir):
     """
@@ -21,43 +24,92 @@ def compare_estimate_result(margin, estimate_results_dir):
     # Read the results
     df = pd.read_csv(os.path.join(estimate_results_dir, ESTIMATE_RESULTS_FILE))
 
-    # Check if estimated effects are within margin of true effect
-    # Track differences for summary
-    differences = []
+    # Filter out unadjusted methods for true effect comparison
+    causal_methods_df = df[~df["method"].isin(UNADJUSTED_METHODS)].copy()
+    unadjusted_methods_df = df[df["method"].isin(UNADJUSTED_METHODS)].copy()
 
-    # Track which methods are off by more than the margin
-    off_methods = []
+    # Group by outcome for better organization
+    outcomes = df["outcome"].unique() if "outcome" in df.columns else ["default"]
 
-    for _, row in df.iterrows():
-        diff = abs(row["effect"] - row["true_effect"])
-        differences.append(
-            {
-                "method": row["method"],
-                "estimated": row["effect"],
-                "true": row["true_effect"],
-                "difference": diff,
-            }
+    print("\n" + "=" * 80)
+    print("CAUSAL EFFECT ESTIMATION RESULTS")
+    print("=" * 80)
+
+    all_passed = True
+    failed_methods = []
+
+    for outcome in outcomes:
+        outcome_causal_df = (
+            causal_methods_df[causal_methods_df["outcome"] == outcome]
+            if "outcome" in causal_methods_df.columns
+            else causal_methods_df
+        )
+        outcome_unadjusted_df = (
+            unadjusted_methods_df[unadjusted_methods_df["outcome"] == outcome]
+            if "outcome" in unadjusted_methods_df.columns
+            else unadjusted_methods_df
         )
 
-        if diff > abs(margin):
-            off_methods.append(
-                f"Method {row['method']}: estimated={row['effect']:.4f}, "
-                f"true={row['true_effect']:.4f}, diff={diff:.4f}"
+        print(f"\n📊 OUTCOME: {outcome.upper()}")
+        print("-" * 50)
+
+        # Check causal methods against true effects
+        outcome_passed = True
+        for _, row in outcome_causal_df.iterrows():
+            diff = abs(row["effect"] - row["true_effect"])
+            passed = diff <= abs(margin)
+            status = "✓" if passed else "✗"
+
+            print(
+                f"{status} {row['method']:>6}: {row['effect']:7.4f} (true: {row['true_effect']:7.4f}, diff: {diff:.4f})"
             )
 
-    if off_methods:
-        assert not off_methods, (
-            "\nThe following methods had effects outside the acceptable margin:\n"
-            + "\n".join(off_methods)
+            if not passed:
+                outcome_passed = False
+                all_passed = False
+                failed_methods.append(f"{outcome}-{row['method']}")
+
+        # Show unadjusted methods (no true effect comparison)
+        if not outcome_unadjusted_df.empty:
+            print("\n  📈 Unadjusted estimates (no ground truth comparison):")
+            for _, row in outcome_unadjusted_df.iterrows():
+                print(f"    {row['method']:>6}: {row['effect']:7.4f}")
+
+        print(
+            f"\n  Outcome {outcome}: {'✅ PASSED' if outcome_passed else '❌ FAILED'}"
         )
 
-    # Print summary of differences
-    print("\nSummary of differences between estimated and true effects:")
-    for d in differences:
-        print(
-            f"{d['method']}: estimated={d['estimated']:.4f}, true={d['true']:.4f}, diff={d['difference']:.4f}"
+    print("\n" + "=" * 80)
+    if all_passed:
+        print("🎉 ALL METHODS PASSED - Effects within acceptable margin!")
+        print(f"   Margin threshold: ±{margin:.4f}")
+    else:
+        print("❌ SOME METHODS FAILED")
+        print(f"   Failed: {', '.join(failed_methods)}")
+        print(f"   Margin threshold: ±{margin:.4f}")
+    print("=" * 80)
+
+    # Assert for test failure
+    if failed_methods:
+        failed_details = []
+        for outcome in outcomes:
+            outcome_df = (
+                causal_methods_df[causal_methods_df["outcome"] == outcome]
+                if "outcome" in causal_methods_df.columns
+                else causal_methods_df
+            )
+            for _, row in outcome_df.iterrows():
+                diff = abs(row["effect"] - row["true_effect"])
+                if diff > abs(margin):
+                    failed_details.append(
+                        f"{outcome}-{row['method']}: estimated={row['effect']:.4f}, "
+                        f"true={row['true_effect']:.4f}, diff={diff:.4f}"
+                    )
+
+        raise AssertionError(
+            f"\n❌ {len(failed_methods)} method(s) exceeded the acceptable margin of ±{margin:.4f}:\n"
+            + "\n".join(failed_details)
         )
-    print("All estimated effects are within the acceptable margin of error.")
 
 
 if __name__ == "__main__":

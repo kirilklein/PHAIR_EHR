@@ -1,3 +1,4 @@
+import os
 from os.path import join
 from typing import Any, Dict, List
 
@@ -7,7 +8,6 @@ from CausalEstimate import MultiEstimator
 from CausalEstimate.estimators import AIPW, IPW, TMLE
 from CausalEstimate.filter.propensity import filter_common_support
 from CausalEstimate.stats.stats import compute_treatment_outcome_table
-
 
 from corebehrt.constants.causal.data import (
     CF_PROBAS,
@@ -20,15 +20,19 @@ from corebehrt.constants.causal.data import (
     PROBAS_CONTROL,
     PROBAS_EXPOSED,
     PS_COL,
+    SIMULATED_OUTCOME_CONTROL,
+    SIMULATED_OUTCOME_EXPOSED,
+    SIMULATED_PROBAS_CONTROL,
+    SIMULATED_PROBAS_EXPOSED,
     TRUE_EFFECT_COL,
 )
 from corebehrt.constants.causal.paths import (
+    COMBINED_CALIBRATED_PREDICTIONS_FILE,
     ESTIMATE_RESULTS_FILE,
     EXPERIMENT_DATA_FILE,
     EXPERIMENT_STATS_FILE,
     PATIENTS_FILE,
     SIMULATION_RESULTS_FILE,
-    COMBINED_CALIBRATED_PREDICTIONS_FILE,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.counterfactuals import expand_counterfactuals
@@ -60,7 +64,28 @@ class EffectEstimator:
         self.outcome_names = self._get_outcome_names(self.df)
         self._validate_columns(self.df, self.outcome_names)
         self.counterfactual_outcomes_dir = self.cfg.paths.get("counterfactual_outcomes")
+        self.counterfactual_df = self._load_counterfactual_outcomes()
         self.estimation_args = self._get_estimation_args()
+
+    def _load_counterfactual_outcomes(self) -> pd.DataFrame:
+        """Load combined counterfactual outcomes if available."""
+        if not self.counterfactual_outcomes_dir:
+            return None
+
+        # Try to load combined counterfactual file first
+        combined_cf_file = join(
+            self.counterfactual_outcomes_dir, "combined_simulation_results.csv"
+        )
+        if os.path.exists(combined_cf_file):
+            self.logger.info(
+                f"Loading combined counterfactual outcomes from {combined_cf_file}"
+            )
+            return pd.read_csv(combined_cf_file)
+
+        self.logger.info(
+            "No combined counterfactual outcomes file found, will try individual files"
+        )
+        return None
 
     def run(self) -> None:
         """
@@ -85,7 +110,7 @@ class EffectEstimator:
 
             # 4. Get the analysis cohort and add benchmarks
             analysis_df = self._get_analysis_cohort(df_for_outcome)
-            # effect_df = self._append_true_effect(analysis_df, effect_df, outcome_name)
+            effect_df = self._append_true_effect(analysis_df, effect_df, outcome_name)
             effect_df = self._append_unadjusted_effect(
                 analysis_df, effect_df, outcome_name
             )
@@ -231,23 +256,58 @@ class EffectEstimator:
         self, df: pd.DataFrame, effect_df: pd.DataFrame, outcome_name: str
     ) -> pd.DataFrame:
         """
-        ! This needs to be adjusted, depending on how we will save outcomes
         Add ground truth effect estimates from simulated counterfactual outcomes.
 
         Uses the same analysis cohort as other estimators for consistency.
-        Only available when counterfactual outcomes directory is provided (simulation data).
+        Now supports both combined and individual counterfactual outcome files.
         """
-        if self.counterfactual_outcomes_dir:
+        if not self.counterfactual_outcomes_dir:
+            return effect_df
+
+        # Try combined file first
+        if self.counterfactual_df is not None:
+            cf_outcomes = self._prepare_counterfactual_data_for_outcome(
+                self.counterfactual_df, outcome_name
+            )
+        else:
+            # Fall back to individual file
             cf_file = join(
                 self.counterfactual_outcomes_dir,
                 outcome_name + "_" + SIMULATION_RESULTS_FILE,
             )
+            if not os.path.exists(cf_file):
+                self.logger.warning(f"Counterfactual file not found: {cf_file}")
+                return effect_df
             cf_outcomes = pd.read_csv(cf_file)
-            true_effect = self._compute_true_effect_from_counterfactuals(
-                df, cf_outcomes
-            )
-            effect_df[TRUE_EFFECT_COL + "_" + outcome_name] = true_effect
+
+        true_effect = self._compute_true_effect_from_counterfactuals(df, cf_outcomes)
+        effect_df[TRUE_EFFECT_COL] = true_effect
         return effect_df
+
+    def _prepare_counterfactual_data_for_outcome(
+        self, counterfactual_df: pd.DataFrame, outcome_name: str
+    ) -> pd.DataFrame:
+        """
+        Prepare counterfactual data for a specific outcome from the combined file.
+        """
+        cf_data = {
+            PID_COL: counterfactual_df[PID_COL],
+            SIMULATED_OUTCOME_CONTROL: counterfactual_df[
+                f"{SIMULATED_OUTCOME_CONTROL}_{outcome_name}"
+            ],
+            SIMULATED_OUTCOME_EXPOSED: counterfactual_df[
+                f"{SIMULATED_OUTCOME_EXPOSED}_{outcome_name}"
+            ],
+            SIMULATED_PROBAS_CONTROL: counterfactual_df[
+                f"{SIMULATED_PROBAS_CONTROL}_{outcome_name}"
+            ],
+            SIMULATED_PROBAS_EXPOSED: counterfactual_df[
+                f"{SIMULATED_PROBAS_EXPOSED}_{outcome_name}"
+            ],
+            EXPOSURE_COL: counterfactual_df[EXPOSURE_COL],
+            PS_COL: counterfactual_df[PS_COL],
+        }
+        return pd.DataFrame(cf_data)
 
     def _append_unadjusted_effect(
         self, df: pd.DataFrame, effect_df: pd.DataFrame, outcome_name: str
