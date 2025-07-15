@@ -14,5 +14,6 @@
     "reportOptionalSubscript": false,
     "reportGeneralTypeIssues": false,
     "reportAssignmentType": false,
+    "reportCallIssue": false,
     "typeCheckingMode": "basic"
 }
