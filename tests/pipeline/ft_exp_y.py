@@ -139,7 +139,7 @@ def main(finetune_dir: str):
     if not exists(outcome_names_path):
         print(f"Error: Outcome names file {outcome_names_path} not found")
         return False
-    
+
     outcome_names = torch.load(outcome_names_path)
     print(f"Loaded outcome names: {outcome_names}")
 
@@ -192,10 +192,14 @@ def main(finetune_dir: str):
                     all_checks_passed = all_checks_passed and predictions_match
 
                     if not predictions_match:
-                        print(f"Prediction mismatch in {fold_name} for {pred_type}_{outcome_name}")
+                        print(
+                            f"Prediction mismatch in {fold_name} for {pred_type}_{outcome_name}"
+                        )
 
                 except Exception as e:
-                    print(f"Error checking predictions for {fold_name}, {pred_type}_{outcome_name}: {e}")
+                    print(
+                        f"Error checking predictions for {fold_name}, {pred_type}_{outcome_name}: {e}"
+                    )
                     all_checks_passed = False
 
     if all_checks_passed:
