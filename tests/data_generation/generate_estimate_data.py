@@ -6,26 +6,17 @@ import pandas as pd
 from scipy.special import expit, logit
 
 from corebehrt.constants.causal.data import (
-    CF_PROBAS,
     EXPOSURE_COL,
     OUTCOMES,
-    PROBAS,
-    SIMULATED_OUTCOME_CONTROL,
-    SIMULATED_OUTCOME_EXPOSED,
-    SIMULATED_PROBAS_CONTROL,
-    SIMULATED_PROBAS_EXPOSED,
-    TARGETS,
 )
 from corebehrt.constants.causal.paths import (
-    CALIBRATED_PREDICTIONS_FILE,
     SIMULATION_RESULTS_FILE,
 )
 from corebehrt.constants.data import PID_COL
 
-# Paths from config
-EXPOSURE_PRED_DIR = "./outputs/causal/generated/calibrated_predictions"
-OUTCOME_PRED_DIR = "./outputs/causal/generated/trained_mlp_simulated"
-COUNTERFACTUAL_OUTCOMES_DIR = "./outputs/causal/generated/simulated_outcome"
+# Updated paths to match new structure
+OUTPUT_DIR = "./outputs/causal/generated/calibrated_predictions"
+COMBINED_PREDICTIONS_FILE = "combined_calibrated_predictions.csv"
 
 # Optional: Add different noise scales for different components
 EXPOSURE_NOISE = 0.03  # For propensity scores
@@ -39,19 +30,27 @@ CLIP_EPS = 0.001
 PS_BETA_A = 2
 PS_BETA_B = 5
 
+# Define multiple outcomes to match new format
+OUTCOME_NAMES = ["OUTCOME", "OUTCOME_2", "OUTCOME_3"]
+
 
 def create_directories():
     """Create necessary directories if they don't exist."""
-    for directory in [EXPOSURE_PRED_DIR, OUTCOME_PRED_DIR, COUNTERFACTUAL_OUTCOMES_DIR]:
-        Path(directory).mkdir(parents=True, exist_ok=True)
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
 
-def generate_exposure_predictions(
-    n_samples=NUM_SAMPLES, seed=42, exposure_noise=EXPOSURE_NOISE
+def generate_combined_predictions(
+    n_samples=NUM_SAMPLES, 
+    seed=42, 
+    exposure_noise=EXPOSURE_NOISE,
+    outcome_noise=OUTCOME_NOISE,
+    weight=OUTCOME_PS_WEIGHT,
+    intercept=OUTCOME_INTERCEPT,
+    exposure_effect=EXPOSURE_EFFECT,
 ):
     """
-    Generate exposure predictions data.
-    This data contains propensity scores and true exposure values.
+    Generate combined calibrated predictions data that matches the new format.
+    This creates a single CSV with propensity scores, exposure, and multiple outcomes.
     """
     np.random.seed(seed)
 
@@ -66,133 +65,106 @@ def generate_exposure_predictions(
     # Generate binary exposure based on propensity scores
     exposures = np.random.binomial(1, exposure_probas)
 
+    # Add noise to propensity scores for realistic predictions
     ps_scores = np.clip(
         expit(logit(exposure_probas) + np.random.normal(0, exposure_noise, n_samples)),
         CLIP_EPS,
         1 - CLIP_EPS,
     )
-    # Create DataFrame
-    df = pd.DataFrame(
-        {
-            PID_COL: subject_ids,
-            PROBAS: ps_scores,  # This will be used as the PS distribution
-            TARGETS: exposures,  # This column stores exposure (will be labeled accordingly)
-        }
-    )
 
-    # Save to file
-    output_path = os.path.join(EXPOSURE_PRED_DIR, CALIBRATED_PREDICTIONS_FILE)
+    # Initialize the main DataFrame with basic columns
+    df_data = {
+        "subject_id": subject_ids,
+        "ps": ps_scores,
+        "exposure": exposures,
+    }
+
+    # Generate data for each outcome
+    for outcome_name in OUTCOME_NAMES:
+        # Generate potential outcome probabilities for this outcome
+        # Each outcome may have slightly different characteristics
+        outcome_seed = seed + hash(outcome_name) % 1000
+        np.random.seed(outcome_seed)
+        
+        # Vary the effect sizes slightly for different outcomes
+        outcome_specific_effect = exposure_effect * (0.8 + 0.4 * np.random.random())
+        outcome_specific_intercept = intercept + np.random.normal(0, 0.2)
+        
+        # p0: probability of outcome if subject was in control group
+        # p1: probability of outcome if subject was in treatment group
+        p0 = expit(logit(exposure_probas) * weight + outcome_specific_intercept)
+        p0 = np.clip(p0, CLIP_EPS, 1 - CLIP_EPS)
+        p1 = expit(logit(p0) + outcome_specific_effect)
+        p1 = np.clip(p1, CLIP_EPS, 1 - CLIP_EPS)
+
+        # Generate potential outcomes
+        y0 = np.random.binomial(1, p0)  # Outcomes under control
+        y1 = np.random.binomial(1, p1)  # Outcomes under treatment
+
+        # The actual observed outcome matches either y0 or y1 depending on exposure
+        observed_outcomes = exposures * y1 + (1 - exposures) * y0
+
+        # Add noise to create "predicted" probabilities
+        noise_p0 = np.random.normal(0, outcome_noise, len(p0))
+        noise_p1 = np.random.normal(0, outcome_noise, len(p1))
+
+        predicted_p0 = np.clip(expit(logit(p0) + noise_p0), CLIP_EPS, 1 - CLIP_EPS)
+        predicted_p1 = np.clip(expit(logit(p1) + noise_p1), CLIP_EPS, 1 - CLIP_EPS)
+
+        # For each subject:
+        #   If exposure == 1: factual prediction is predicted_p1, counterfactual is predicted_p0
+        #   If exposure == 0: factual prediction is predicted_p0, counterfactual is predicted_p1
+        factual_probas = np.where(exposures == 1, predicted_p1, predicted_p0)
+        counterfactual_probas = np.where(exposures == 1, predicted_p0, predicted_p1)
+
+        # Add outcome-specific columns to the DataFrame
+        df_data[f"probas_{outcome_name}"] = factual_probas
+        df_data[f"outcome_{outcome_name}"] = observed_outcomes
+        df_data[f"cf_probas_{outcome_name}"] = counterfactual_probas
+
+    # Create the final DataFrame
+    df = pd.DataFrame(df_data)
+
+    # Save to the combined file
+    output_path = os.path.join(OUTPUT_DIR, COMBINED_PREDICTIONS_FILE)
     df.to_csv(output_path, index=False)
-    print(f"Exposure predictions saved to {output_path}")
-
-    return subject_ids, exposure_probas, ps_scores, exposures
-
-
-def generate_counterfactual_outcomes(
-    subject_ids,
-    exposures,
-    propensities,
-    weight=1,
-    intercept=0,
-    exposure_effect=1,
-    seed=42,
-):
-    """
-    Generate counterfactual (true) outcomes data.
-    This contains the ground truth potential outcomes under both treatment and control.
-    """
-    np.random.seed(seed)
-
-    # Generate potential outcome probabilities:
-    # p0: probability of outcome if subject was in control group
-    # p1: probability of outcome if subject was in treatment group
-    p0 = expit(logit(propensities) * weight + intercept)
-    p0 = np.clip(p0, CLIP_EPS, 1 - CLIP_EPS)
-    p1 = expit(logit(p0) + exposure_effect)
-    p1 = np.clip(p1, CLIP_EPS, 1 - CLIP_EPS)  # Ensure probas are in [0.01, 0.99]
-
-    # Generate potential outcomes
-    y0 = np.random.binomial(1, p0)  # Outcomes under control
-    y1 = np.random.binomial(1, p1)  # Outcomes under treatment
-
-    # The actual observed outcome should match either y0 or y1 depending on the actual exposure
-    observed_outcomes = exposures * y1 + (1 - exposures) * y0
-
-    # Create DataFrame with counterfactual outcomes
-    df = pd.DataFrame(
-        {
-            PID_COL: subject_ids,
-            SIMULATED_OUTCOME_EXPOSED: y1,  # Outcome under treatment (Y1)
-            SIMULATED_OUTCOME_CONTROL: y0,  # Outcome under control (Y0)
-            SIMULATED_PROBAS_EXPOSED: p1,  # P1
-            SIMULATED_PROBAS_CONTROL: p0,  # P0
-            EXPOSURE_COL: exposures,
-            PROBAS: np.where(
-                exposures == 1, p1, p0
-            ),  # Observed probability based on actual exposure
-            OUTCOMES: observed_outcomes,
-        }
-    )
-
-    # Save to file
-    output_path = os.path.join(COUNTERFACTUAL_OUTCOMES_DIR, SIMULATION_RESULTS_FILE)
-    df.to_csv(output_path, index=False)
-    print(f"Counterfactual outcomes saved to {output_path}")
+    print(f"Combined calibrated predictions saved to {output_path}")
 
     return df
 
 
-def generate_outcome_predictions(
-    subject_ids, cf_data, noise_scale=OUTCOME_NOISE, seed=42
-):
+def generate_counterfactual_outcomes_legacy(df, seed=42):
     """
-    Generate outcome predictions data.
-    This contains predicted probabilities of outcomes and the actual outcomes,
-    based on the true counterfactual data but with some noise added.
-
-    Output format:
-    - subject_id: Patient identifier
-    - probas: Predicted probability under the factual (observed) treatment
-    - cf_probas: Predicted probability under the counterfactual (alternative) treatment
-    - targets: Actual outcome
+    Generate a legacy simulation results file for backwards compatibility.
+    This extracts the true counterfactual data from the first outcome.
     """
     np.random.seed(seed)
-
-    # Extract true counterfactual data
-    p0 = cf_data[SIMULATED_PROBAS_CONTROL].values
-    p1 = cf_data[SIMULATED_PROBAS_EXPOSED].values
-    exposures = cf_data[EXPOSURE_COL].values
-    outcomes = cf_data[OUTCOMES].values
-
-    # Add noise to create "predicted" probabilities
-    noise_p0 = np.random.normal(0, noise_scale, len(p0))
-    noise_p1 = np.random.normal(0, noise_scale, len(p1))
-
-    predicted_p0 = np.clip(expit(logit(p0) + noise_p0), CLIP_EPS, 1 - CLIP_EPS)
-    predicted_p1 = np.clip(expit(logit(p1) + noise_p1), CLIP_EPS, 1 - CLIP_EPS)
-
-    # For each subject:
-    #   If exposure == 1: factual prediction is predicted_p1, counterfactual is predicted_p0.
-    #   If exposure == 0: factual prediction is predicted_p0, counterfactual is predicted_p1.
-    factual_probas = np.where(exposures == 1, predicted_p1, predicted_p0)
-    counterfactual_probas = np.where(exposures == 1, predicted_p0, predicted_p1)
-
-    # Create DataFrame with the correct format
-    df = pd.DataFrame(
-        {
-            PID_COL: subject_ids,
-            PROBAS: factual_probas,  # Predicted probability under factual exposure
-            CF_PROBAS: counterfactual_probas,  # Predicted probability under counterfactual exposure
-            TARGETS: outcomes,
-        }
-    )
-
-    # Save to file
-    output_path = os.path.join(OUTCOME_PRED_DIR, CALIBRATED_PREDICTIONS_FILE)
-    df.to_csv(output_path, index=False)
-    print(f"Outcome predictions saved to {output_path}")
-
-    return df
+    
+    # Use the first outcome for the legacy format
+    outcome_name = OUTCOME_NAMES[0]
+    
+    # Extract data for the legacy format
+    legacy_data = {
+        PID_COL: df["subject_id"],
+        "simulated_outcome_exposed": df[f"outcome_{outcome_name}"],  # Simplified for legacy
+        "simulated_outcome_control": df[f"outcome_{outcome_name}"],  # Simplified for legacy
+        "simulated_probas_exposed": df[f"cf_probas_{outcome_name}"],
+        "simulated_probas_control": df[f"probas_{outcome_name}"],
+        EXPOSURE_COL: df["exposure"],
+        "probas": df[f"probas_{outcome_name}"],
+        OUTCOMES: df[f"outcome_{outcome_name}"],
+    }
+    
+    legacy_df = pd.DataFrame(legacy_data)
+    
+    # Save legacy file for any remaining dependencies
+    legacy_output_dir = "./outputs/causal/generated/simulated_outcome"
+    Path(legacy_output_dir).mkdir(parents=True, exist_ok=True)
+    legacy_output_path = os.path.join(legacy_output_dir, SIMULATION_RESULTS_FILE)
+    legacy_df.to_csv(legacy_output_path, index=False)
+    print(f"Legacy simulation results saved to {legacy_output_path}")
+    
+    return legacy_df
 
 
 def main(
@@ -204,31 +176,27 @@ def main(
     intercept=OUTCOME_INTERCEPT,
     exposure_effect=EXPOSURE_EFFECT,
 ):
-    """Generate all necessary data for testing estimate.py"""
+    """Generate combined calibrated predictions data for testing estimate.py"""
     create_directories()
 
-    # Generate data with 1000 samples
-    subject_ids, exposure_probas, ps_scores, exposures = generate_exposure_predictions(
-        n_samples=num_samples, exposure_noise=exposure_noise
-    )
-
-    # Generate counterfactual/true (simulated) outcomes (ground truth)
-    cf_data = generate_counterfactual_outcomes(
-        subject_ids,
-        exposures,
-        propensities=exposure_probas,
+    # Generate the main combined predictions file
+    combined_df = generate_combined_predictions(
+        n_samples=num_samples,
+        exposure_noise=exposure_noise,
+        outcome_noise=outcome_noise,
         weight=weight,
         intercept=intercept,
         exposure_effect=exposure_effect,
     )
+    
+    # Generate legacy files for backwards compatibility
+    legacy_df = generate_counterfactual_outcomes_legacy(combined_df)
 
-    # Generate outcome/cf outcome predictions (with noise) using the counterfactual data
-    outcome_df = generate_outcome_predictions(
-        subject_ids, cf_data, noise_scale=outcome_noise
-    )
     if not generate_figures:
-        return
-    from tests.data_generation.plot_generated_data import (  # Save visualization figures using the proper data
+        return combined_df, legacy_df
+    
+    # Generate visualization figures if requested
+    from tests.data_generation.plot_generated_data import (
         save_comparison_figures,
         save_outcome_probas_by_exposure_figure,
         save_outcome_probas_figures,
@@ -236,12 +204,28 @@ def main(
         save_ps_distribution_figure,
     )
 
+    # Use the first outcome for visualization
+    outcome_name = OUTCOME_NAMES[0]
+    subject_ids = combined_df["subject_id"]
+    ps_scores = combined_df["ps"]
+    exposures = combined_df["exposure"]
+    
+    # Create a simplified outcome_df for visualization compatibility
+    outcome_df = pd.DataFrame({
+        PID_COL: subject_ids,
+        "probas": combined_df[f"probas_{outcome_name}"],
+        "cf_probas": combined_df[f"cf_probas_{outcome_name}"],
+        "targets": combined_df[f"outcome_{outcome_name}"],
+    })
+
     save_ps_distribution_figure(subject_ids, ps_scores, exposures)
-    save_outcome_probas_figures(subject_ids, cf_data, outcome_df)
-    save_comparison_figures(subject_ids, cf_data, outcome_df)
-    save_predicted_outcome_probas_distribution(cf_data, outcome_df)
-    save_outcome_probas_by_exposure_figure(subject_ids, cf_data, outcome_df)
+    save_outcome_probas_figures(subject_ids, legacy_df, outcome_df)
+    save_comparison_figures(subject_ids, legacy_df, outcome_df)
+    save_predicted_outcome_probas_distribution(legacy_df, outcome_df)
+    save_outcome_probas_by_exposure_figure(subject_ids, legacy_df, outcome_df)
     print("All test data generated successfully!")
+    
+    return combined_df, legacy_df
 
 
 if __name__ == "__main__":

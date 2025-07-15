@@ -53,7 +53,7 @@ jobs:
 
                   # Run estimation
                   python -m corebehrt.main_causal.estimate \
-                    --config_path ./corebehrt/configs/causal/estimate/estimate_generated_data.yaml
+                    --config_path ./corebehrt/configs/causal/estimate_generated_data.yaml
 
                   # Test results
                   python -m tests.test_main_causal.test_estimate_result --margin $margin
