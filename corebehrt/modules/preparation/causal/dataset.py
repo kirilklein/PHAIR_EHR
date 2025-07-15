@@ -4,7 +4,7 @@ from typing import Dict, List
 import pandas as pd
 import torch
 
-from corebehrt.constants.causal.data import EXPOSURE_TARGET, OUTCOME_PREFIX
+from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import (
     ABSPOS_FEAT,
     AGE_FEAT,
@@ -103,9 +103,7 @@ class ExposureOutcomesDataset:
         }
         sample[EXPOSURE_TARGET] = torch.tensor(patient.exposure, dtype=torch.float)
         for outcome_name, outcome_value in patient.outcomes.items():
-            sample[f"{OUTCOME_PREFIX}{outcome_name}"] = torch.tensor(
-                outcome_value, dtype=torch.float
-            )
+            sample[outcome_name] = torch.tensor(outcome_value, dtype=torch.float)
         return sample
 
     def __len__(self):

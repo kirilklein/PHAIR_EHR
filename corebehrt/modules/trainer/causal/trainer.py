@@ -9,7 +9,6 @@ from corebehrt.constants.causal.data import (
     CF_OUTCOME,
     EXPOSURE,
     EXPOSURE_TARGET,
-    OUTCOME_PREFIX,
 )
 from corebehrt.constants.data import TARGET
 from corebehrt.functional.trainer.freezing_utils import check_task_plateau
@@ -315,9 +314,7 @@ class CausalEHRTrainer(EHRTrainer):
             prediction_data[outcome_name].logits_list.append(
                 outputs.outcome_logits[outcome_name].float().cpu()
             )
-            prediction_data[outcome_name].targets_list.append(
-                batch[f"{OUTCOME_PREFIX}{outcome_name}"].cpu()
-            )
+            prediction_data[outcome_name].targets_list.append(batch[outcome_name].cpu())
 
             # Store counterfactual outcome predictions
             prediction_data[f"{CF_OUTCOME}_{outcome_name}"].logits_list.append(
@@ -347,7 +344,7 @@ class CausalEHRTrainer(EHRTrainer):
                 outcome_outputs = namedtuple("Outputs", ["logits"])(
                     outputs.outcome_logits[outcome_name]
                 )
-                outcome_batch = {TARGET: batch[f"{OUTCOME_PREFIX}{outcome_name}"]}
+                outcome_batch = {TARGET: batch[outcome_name]}
                 outcome_value = func(outcome_outputs, outcome_batch)
                 prediction_data[outcome_name].metric_values[
                     f"{outcome_name}_{name}"

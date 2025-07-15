@@ -65,4 +65,3 @@ NON_COMPLIANCE_COL = "non_compliance"
 # Training
 EXPOSURE_TARGET = "exposure_target"
 OUTCOME_TARGETS = "outcome_targets"
-OUTCOME_PREFIX = "outcome_"

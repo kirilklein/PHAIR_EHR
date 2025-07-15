@@ -10,7 +10,6 @@ import logging
 import torch
 import torch.nn as nn
 
-from corebehrt.constants.causal.data import OUTCOME_PREFIX
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
@@ -160,12 +159,10 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             total_loss += exposure_loss
 
         for outcome_name in self.outcome_names:
-            outcome_key = f"{OUTCOME_PREFIX}{outcome_name}"
+            predictions = outputs.outcome_logits[outcome_name].view(-1)
+            targets = batch[outcome_name].view(-1)
+            outcome_loss = self.outcome_loss_fcts[outcome_name](predictions, targets)
 
-            outcome_loss = self.outcome_loss_fcts[outcome_name](
-                outputs.outcome_logits[outcome_name].view(-1),
-                batch[outcome_key].view(-1),
-            )
             outputs.outcome_losses[outcome_name] = outcome_loss
             total_loss += outcome_loss
 
