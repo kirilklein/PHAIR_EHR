@@ -5,6 +5,7 @@ from corebehrt.constants.causal.paths import (
     PREDICTIONS_DIR_OUTCOME,
     PREDICTIONS_FILE,
     CALIBRATED_PREDICTIONS_FILE,
+    COMBINED_CALIBRATED_PREDICTIONS_FILE,
 )
 from corebehrt.constants.paths import FOLDS_FILE, OUTCOME_NAMES_FILE
 
@@ -65,7 +66,7 @@ class CalibrationPathManager:
         raise ValueError("Invalid prediction type or missing outcome name.")
 
     def get_combined_calibrated_path(self) -> Path:
-        path = self.write_dir / "combined_predictions_and_targets_calibrated.csv"
+        path = self.write_dir / COMBINED_CALIBRATED_PREDICTIONS_FILE
         os.makedirs(path.parent, exist_ok=True)
         return path
 

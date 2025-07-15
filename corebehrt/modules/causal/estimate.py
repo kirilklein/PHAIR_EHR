@@ -8,6 +8,7 @@ from CausalEstimate.estimators import AIPW, IPW, TMLE
 from CausalEstimate.filter.propensity import filter_common_support
 from CausalEstimate.stats.stats import compute_treatment_outcome_table
 
+
 from corebehrt.constants.causal.data import (
     CF_PROBAS,
     EXPOSURE_COL,
@@ -27,6 +28,7 @@ from corebehrt.constants.causal.paths import (
     EXPERIMENT_STATS_FILE,
     PATIENTS_FILE,
     SIMULATION_RESULTS_FILE,
+    COMBINED_CALIBRATED_PREDICTIONS_FILE,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.counterfactuals import expand_counterfactuals
@@ -51,7 +53,7 @@ class EffectEstimator:
 
         self.predictions_file = join(
             self.cfg.paths.calibrated_predictions,
-            "combined_predictions_and_targets_calibrated.csv",
+            COMBINED_CALIBRATED_PREDICTIONS_FILE,
         )
         self.estimator_cfg = self.cfg.estimator
         self.df = pd.read_csv(self.predictions_file)
@@ -59,8 +61,6 @@ class EffectEstimator:
         self._validate_columns(self.df, self.outcome_names)
         self.counterfactual_outcomes_dir = self.cfg.paths.get("counterfactual_outcomes")
         self.estimation_args = self._get_estimation_args()
-        print(self.outcome_names)
-        print(self.df.columns)
 
     def run(self) -> None:
         """

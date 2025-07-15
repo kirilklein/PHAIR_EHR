@@ -49,3 +49,5 @@ BINARY_OUTCOMES_FILE = "binary_outcomes.csv"
 BINARY_EXPOSURE_FILE = "binary_exposure.csv"
 STATS_PATH = "stats"
 PATIENTS_FILE = "patients.pt"
+
+COMBINED_CALIBRATED_PREDICTIONS_FILE = "combined_calibrated_predictions.csv"
