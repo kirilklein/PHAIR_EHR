@@ -1,6 +1,11 @@
 {
     "ignore": [
       "corebehrt/sandbox",
-      "**/*.ipynb"
-    ]
+      "**/*.ipynb",
+      "outputs",
+      "example_data"
+
+    ],
+    "reportUnusedExpression": false,
+    "typeCheckingMode": "basic"
 }
