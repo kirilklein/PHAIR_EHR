@@ -26,47 +26,53 @@ echo Running create_outcomes...
 python -m corebehrt.main.create_outcomes --config_path corebehrt\configs\causal\outcomes.yaml
 if errorlevel 1 goto :error
 
-echo Running select_cohort_full...
+echo Running select_cohort...
 python -m corebehrt.main_causal.select_cohort_full --config_path corebehrt\configs\causal\select_cohort_full\extract.yaml
 if errorlevel 1 goto :error
 
-:: Prepare Finetune Data
-echo Running prepare_finetune_data uncensored...
-python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp_uncensored.yaml
-if errorlevel 1 goto :error
-
-echo Checking Uncensored Data...
-echo We expect that all the triggers are the same as the outcomes.
-python -m tests.pipeline.test_uncensored_prepared --processed_data_dir ./outputs/causal/finetune/processed_data/exposure_uncensored --trigger_code EXPOSURE
-if errorlevel 1 goto :error
-
-echo Running xgb baseline uncensored...
-python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure_uncensored --min_roc_auc 0.95 --expected_most_important_concept EXPOSURE
-if errorlevel 1 goto :error
-
+:: Prepare and run finetuning
 echo Running prepare_finetune_data...
-python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\finetune\prepare\ft_exp.yaml
+python -m corebehrt.main_causal.prepare_ft_exp_y --config_path corebehrt\configs\causal\finetune\prepare\uncensored.yaml
 if errorlevel 1 goto :error
 
-echo Running xgb baseline censored...
-python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure --min_roc_auc 0.6 --multihot
-if errorlevel 1 goto :error
-
-:: Finetune Exposure & Outcome
-echo Running finetune uncensored...
-python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\finetune\ft_exp_uncensored.yaml
-if errorlevel 1 goto :error
-
-echo Checking Performance uncensored...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure_uncensored --min 0.85
+echo Testing prepare_data_ft_exp_y...
+python tests\pipeline\prepare_data_ft_exp_y.py .\outputs\causal\finetune\prepared_data
 if errorlevel 1 goto :error
 
 echo Running finetune...
-python -m corebehrt.main.finetune_cv --config_path corebehrt\configs\causal\finetune\ft_exp.yaml
+python -m corebehrt.main_causal.finetune_exp_y --config_path corebehrt\configs\causal\finetune\uncensored.yaml
 if errorlevel 1 goto :error
 
-echo Checking Performance...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exposure --min 0.6 --max 0.8
+echo Testing ft_exp_y...
+python tests\pipeline\ft_exp_y.py .\outputs\causal\finetune\models\uncensored
+if errorlevel 1 goto :error
+
+echo Checking performance...
+python -m tests.pipeline.test_performance_multitarget .\outputs\causal\finetune\models\uncensored --target-bounds "exposure:min:0.9,max:1" --target-bounds "OUTCOME:min:0.9,max:1" --target-bounds "OUTCOME_2:min:0.9,max:1" --target-bounds "OUTCOME_3:min:0.9,max:1"
+if errorlevel 1 goto :error
+
+
+:: Run Causal Steps
+echo Running calibrate...
+python -m corebehrt.main_causal.calibrate_exp_y --config_path corebehrt\configs\causal\multitarget\calibrate.yaml
+if errorlevel 1 goto :error
+
+:: Run Estimation
+echo Running estimate...
+python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\multitarget\estimate.yaml
+if errorlevel 1 goto :error
+
+echo Checking estimate...
+python -m tests.pipeline.test_estimate ./outputs/causal/multitarget/estimate/simple example_data/synthea_meds_causal/tuning
+
+
+:: Run Criteria and Stats
+echo Running extract_criteria...
+python -m corebehrt.main_causal.helper_scripts.extract_criteria --config_path corebehrt\configs\causal\helper\extract_criteria.yaml
+if errorlevel 1 goto :error
+
+echo Running get_stats...
+python -m corebehrt.main_causal.helper_scripts.get_stats --config_path corebehrt\configs\causal\helper\get_stats.yaml
 if errorlevel 1 goto :error
 
 echo Pipeline completed successfully.

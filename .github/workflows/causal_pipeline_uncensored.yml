@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
-          run_step main_causal.prepare_ft_exp_y      multitarget/prepare/uncensored.yaml
+          run_step main_causal.prepare_ft_exp_y      prepare/uncensored.yaml
           
       - name: Finetune Exposure & Outcome
         shell: bash
@@ -66,14 +66,14 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.finetune_exp_y         multitarget/finetune_uncensored.yaml
+          run_step main_causal.finetune_exp_y         finetune/uncensored.yaml
           
       - name: Check performance
         shell: bash
         run: |
           set -euo pipefail
           
-          python -m tests.pipeline.test_performance_multitarget ./outputs/causal/multitarget/models/uncensored \
+          python -m tests.pipeline.test_performance_multitarget ./outputs/causal/finetune/models/uncensored \
           --target-bounds "exposure:min:0.9,max:1" \
           --target-bounds "OUTCOME:min:0.9,max:1" \
           --target-bounds "OUTCOME_2:min:0.9,max:1" \

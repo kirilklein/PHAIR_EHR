@@ -32,50 +32,38 @@ if errorlevel 1 goto :error
 
 :: Prepare and run finetuning
 echo Running prepare_finetune_data...
-python -m corebehrt.main_causal.prepare_ft_exp_y --config_path corebehrt\configs\causal\finetune\prepare\ft_exp_y.yaml
+python -m corebehrt.main_causal.prepare_ft_exp_y --config_path corebehrt\configs\causal\finetune\prepare\simple.yaml
 if errorlevel 1 goto :error
 
 echo Testing prepare_data_ft_exp_y...
-python tests\pipeline\prepare_data_ft_exp_y.py .\outputs\causal\finetune\processed_data\exp_y
+python tests\pipeline\prepare_data_ft_exp_y.py .\outputs\causal\finetune\prepared_data
 if errorlevel 1 goto :error
 
 echo Running finetune...
-python -m corebehrt.main_causal.finetune_exp_y --config_path corebehrt\configs\causal\finetune\ft_exp_y.yaml
+python -m corebehrt.main_causal.finetune_exp_y --config_path corebehrt\configs\causal\finetune\simple.yaml
 if errorlevel 1 goto :error
 
 echo Testing ft_exp_y...
-python tests\pipeline\ft_exp_y.py .\outputs\causal\finetune\models\exp_y
+python tests\pipeline\ft_exp_y.py .\outputs\causal\finetune\models\simple
 if errorlevel 1 goto :error
 
-echo Checking performance (exposure)...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_exposure --min 0.6 --max 0.8 --metric exposure_roc_auc
+echo Checking performance...
+python -m tests.pipeline.test_performance_multitarget .\outputs\causal\finetune\models\simple --target-bounds "exposure:min:0.58,max:0.8" --target-bounds "OUTCOME:min:0.7,max:0.95" --target-bounds "OUTCOME_2:min:0.7,max:0.95" --target-bounds "OUTCOME_3:min:0.58,max:0.95"
 if errorlevel 1 goto :error
-
-echo Checking performance (outcome)...
-python -m tests.pipeline.test_performance .\outputs\causal\finetune\models\exp_y val_outcome --min 0.7 --max 0.98 --metric outcome_roc_auc
-if errorlevel 1 goto :error
-
 
 :: Run Causal Steps
 echo Running calibrate...
-python -m corebehrt.main_causal.calibrate_exp_y --config_path corebehrt\configs\causal\finetune\calibrate_exp_y.yaml
-if errorlevel 1 goto :error
-
-echo Testing calibrate (exposure)...
-python tests\pipeline\calibrate_exp_y.py --calibrated_dir .\outputs\causal\finetune\models\exp_y\calibrated\predictions_exposure
-if errorlevel 1 goto :error
-
-echo Testing calibrate (outcome)...
-python tests\pipeline\calibrate_exp_y.py --calibrated_dir .\outputs\causal\finetune\models\exp_y\calibrated\predictions_outcome
+python -m corebehrt.main_causal.calibrate_exp_y --config_path corebehrt\configs\causal\finetune\calibrate.yaml
 if errorlevel 1 goto :error
 
 :: Run Estimation
 echo Running estimate...
-python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\estimate\estimate.yaml
+python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\estimate.yaml
 if errorlevel 1 goto :error
 
 echo Checking estimate...
 python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
+if errorlevel 1 goto :error
 
 :: Run Criteria and Stats
 echo Running extract_criteria...

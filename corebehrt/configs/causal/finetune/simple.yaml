@@ -6,15 +6,15 @@ paths:
   ## INPUTS
   pretrain_model: ./outputs/causal/pretrain/model
   # restart_model: ... # Use for restarting from checkpoint
-  prepared_data: ./outputs/causal/finetune/processed_data/exp_y
+  prepared_data: ./outputs/causal/finetune/prepared_data
 
   ## OUTPUTS
-  model: ./outputs/causal/finetune/models/exp_y # Save model/outputs to this folder
+  model: ./outputs/causal/finetune/models/simple # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 model:
   head:
-    shared_representation: false # whether to share the bigru representation for exposure and outcome
+    shared_representation: true # whether to share the bigru representation for exposure and outcome
     bidirectional: true
 
 trainer_args:
@@ -23,7 +23,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 4
+  epochs: 3
   info: true
   gradient_clip:
     clip_value: 1.0
@@ -31,12 +31,12 @@ trainer_args:
   checkpoint_frequency: 1
   early_stopping: 3
   stopping_criterion: roc_auc
-  n_layers_to_freeze: 1
+  n_layers_to_freeze: 2
   unfreeze_on_plateau: false # unfreeze all layers if the performance is less than plateau_threshold
   unfreeze_at_epoch: 20 # if unfrezze_on_plateau is true, whichever condition is met first
 
 optimizer:
-  lr: 3e-3
+  lr: 6e-3
   eps: 1e-6
 
 scheduler:

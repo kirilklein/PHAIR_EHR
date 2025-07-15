@@ -1,15 +1,10 @@
 logging:
   level: INFO
-  path: ./outputs/logs
+  path: ./outputs/logs/causal
 
 paths:
-## INPUTS  
-  finetune_model: ./outputs/causal/finetuning_exposure
+  ## INPUTS
+  finetune_model: ./outputs/causal/finetune/models/simple
 
-## OUTPUTS
-  calibrated_predictions: ./outputs/causal/calibrated_predictions # Save encoded data to this folder
-
-
-    
-
- 
+  ## OUTPUTS
+  calibrated_predictions: ./outputs/causal/finetune/models/simple/calibrated

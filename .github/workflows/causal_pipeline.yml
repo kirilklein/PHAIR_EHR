@@ -59,8 +59,8 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.prepare_ft_exp_y      multitarget/prepare/simple.yaml
-          python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/multitarget/prepared_data
+          run_step main_causal.prepare_ft_exp_y      prepare/simple.yaml
+          python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetune/prepared_data
           
       - name: Finetune Exposure & Outcome
         shell: bash
@@ -68,15 +68,15 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.finetune_exp_y         multitarget/finetune.yaml
-          python tests/pipeline/ft_exp_y.py ./outputs/causal/multitarget/models/simple
+          run_step main_causal.finetune_exp_y         finetune/simple.yaml
+          python tests/pipeline/ft_exp_y.py ./outputs/causal/finetune/models/simple
           
       - name: Check performance
         shell: bash
         run: |
           set -euo pipefail
           
-          python -m tests.pipeline.test_performance_multitarget ./outputs/causal/multitarget/models/simple \
+          python -m tests.pipeline.test_performance_multitarget ./outputs/causal/finetune/models/simple \
           --target-bounds "exposure:min:0.58,max:0.8" \
           --target-bounds "OUTCOME:min:0.7,max:0.95" \
           --target-bounds "OUTCOME_2:min:0.7,max:0.95" \
@@ -88,7 +88,7 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.calibrate_exp_y        multitarget/finetune/calibrate.yaml
+          run_step main_causal.calibrate_exp_y        finetune/calibrate.yaml
 
       - name: Estimate
         shell: bash
@@ -96,5 +96,5 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.estimate        multitarget/estimate.yaml
-          python -m tests.pipeline.test_estimate ./outputs/causal/multitarget/estimate/simple example_data/synthea_meds_causal/tuning
+          run_step main_causal.estimate        estimate.yaml
+          python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning

@@ -6,10 +6,10 @@ paths:
   ## INPUTS
   pretrain_model: ./outputs/causal/pretrain/model
   # restart_model: ... # Use for restarting from checkpoint
-  prepared_data: ./outputs/causal/multitarget/prepared_data
+  prepared_data: ./outputs/causal/finetune/prepared_data_uncensored
 
   ## OUTPUTS
-  model: ./outputs/causal/multitarget/models/simple # Save model/outputs to this folder
+  model: ./outputs/causal/finetune/models/uncensored # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 model:
