@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
-          run_step main_causal.prepare_ft_exp_y      multitarget/prepare/simple.yaml
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare/simple.yaml
         
       - name: Criteria and stats
         shell: bash

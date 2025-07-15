@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
-          run_step main_causal.prepare_ft_exp_y      prepare/uncensored.yaml
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare/uncensored.yaml
           
       - name: Finetune Exposure & Outcome
         shell: bash
