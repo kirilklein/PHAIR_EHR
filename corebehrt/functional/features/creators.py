@@ -178,6 +178,10 @@ def _handle_missing_dobs(concepts: pd.DataFrame, birthdates: dict) -> pd.DataFra
     """
     Checks for, logs, and filters out patients with missing DOBs.
     """
+    # If the input DataFrame is empty, simply return it unchanged.
+    if concepts.empty:
+        return concepts
+
     # 1. Check for the critical error case: no DOBs found at all.
     if not birthdates:
         raise ValueError(
