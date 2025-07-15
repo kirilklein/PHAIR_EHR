@@ -1,5 +1,6 @@
 {
-    "exclude": [
-      "corebehrt/sandbox"
+    "ignore": [
+      "corebehrt/sandbox",
+      "**/*.ipynb"
     ]
-  }
+}
