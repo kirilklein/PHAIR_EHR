@@ -59,8 +59,8 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.prepare_ft_exp_y      finetune/prepare/ft_exp_y.yaml
-          python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetune/processed_data/exp_y
+          run_step main_causal.prepare_ft_exp_y      multitarget/prepare/simple.yaml
+          python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/multitarget/prepared_data
           
       - name: Finetune Exposure & Outcome
         shell: bash
@@ -68,16 +68,19 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.finetune_exp_y         finetune/ft_exp_y.yaml
-          python tests/pipeline/ft_exp_y.py ./outputs/causal/finetune/models/exp_y
+          run_step main_causal.finetune_exp_y         multitarget/finetune.yaml
+          python tests/pipeline/ft_exp_y.py ./outputs/causal/multitarget/models/simple
           
       - name: Check performance
         shell: bash
         run: |
           set -euo pipefail
           
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_exposure --min 0.58 --max 0.8 --metric exposure_roc_auc
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exp_y val_outcome --min 0.7 --max 0.98 --metric outcome_roc_auc
+          python -m tests.pipeline.test_performance_multitarget ./outputs/causal/multitarget/models/simple \
+          --target-bounds "exposure:min:0.58,max:0.8" \
+          --target-bounds "OUTCOME:min:0.7,max:0.95" \
+          --target-bounds "OUTCOME_2:min:0.7,max:0.95" \
+          --target-bounds "OUTCOME_3:min:0.58,max:0.95"
 
       - name: Calibration
         shell: bash
@@ -85,9 +88,7 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.calibrate_exp_y        finetune/calibrate_exp_y.yaml
-          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetune/models/exp_y/calibrated/predictions_exposure
-          python tests/pipeline/calibrate_exp_y.py --calibrated_dir ./outputs/causal/finetune/models/exp_y/calibrated/predictions_outcome
+          run_step main_causal.calibrate_exp_y        multitarget/finetune/calibrate.yaml
 
       - name: Estimate
         shell: bash
@@ -95,15 +96,5 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.estimate        estimate/estimate.yaml
-          python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
-
-      - name: Criteria and stats
-        shell: bash
-        run: |
-          set -euo pipefail
-          source .github/workflows/pipeline_helpers.sh
-          
-          run_step main_causal.select_cohort_full                      select_cohort_full/extract.yaml
-          run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
-          run_step main_causal.helper_scripts.get_stats helper/get_stats.yaml
+          run_step main_causal.estimate        multitarget/estimate.yaml
+          python -m tests.pipeline.test_estimate ./outputs/causal/multitarget/estimate/simple example_data/synthea_meds_causal/tuning

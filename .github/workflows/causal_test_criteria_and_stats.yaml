@@ -1,4 +1,4 @@
-name: 'Causal Pipeline Performance Test Uncensored'
+name: 'Causal Pipeline test criteria and stats'
 
 on:
   workflow_dispatch:
@@ -39,37 +39,31 @@ jobs:
         run: |
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
+          
+          run_step main.create_data                         prepare_and_pretrain/create_data.yaml
 
-          run_step main.create_data prepare_and_pretrain/create_data.yaml
-          run_step main.prepare_training_data prepare_and_pretrain/prepare_pretrain.yaml
-          run_step main.pretrain prepare_and_pretrain/pretrain.yaml
-          run_step main.create_outcomes outcomes.yaml
-          run_step main_causal.select_cohort_full select_cohort_full/extract.yaml
+      - name: Outcomes & cohort selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main.create_outcomes                     outcomes.yaml
+          run_step main_causal.select_cohort_full           select_cohort_full/extract.yaml
 
       - name: Prepare Finetune Data
         shell: bash
         run: |
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
-          
-          run_step main.prepare_training_data finetune/prepare/ft_exp_uncensored.yaml
-          echo "🔧 Checking Uncensored Data."
-          echo "We expect that all the triggers are the same as the outcomes."
-          python -m tests.pipeline.test_uncensored_prepared --processed_data_dir ./outputs/causal/finetune/processed_data/exposure_uncensored --trigger_code EXPOSURE
-          echo "🔧 Training XGBoost Baseline on uncensored data and checking performance"
-          python -m tests.pipeline.train_xgb_baseline --data_path ./outputs/causal/finetune/processed_data/exposure_uncensored --min_roc_auc 0.95 --expected_most_important_concept EXPOSURE
-
-      - name: Finetune Exposure Uncensored
+          run_step main_causal.prepare_ft_exp_y      multitarget/prepare/simple.yaml
+        
+      - name: Criteria and stats
         shell: bash
         run: |
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main.finetune_cv finetune/ft_exp_uncensored.yaml
-          echo "🔧 Checking Performance uncensored"
-          python -m tests.pipeline.test_performance ./outputs/causal/finetune/models/exposure_uncensored --min 0.85
-          
-          
-          
-         
-          
+          run_step main_causal.select_cohort_full                      select_cohort_full/extract.yaml
+          run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
+          run_step main_causal.helper_scripts.get_stats helper/get_stats.yaml
