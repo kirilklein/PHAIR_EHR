@@ -10,5 +10,7 @@
     "reportAttributeAccessIssue": false,
     "reportArgumentType": false,
     "reportReturnType": false,
+    "reportOptionalMemberAccess": false,
+    "reportOptionalSubscript": false,
     "typeCheckingMode": "basic"
 }

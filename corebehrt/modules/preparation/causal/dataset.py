@@ -17,8 +17,8 @@ from corebehrt.modules.preparation.dataset import PatientData, PatientDataset
 
 @dataclass
 class CausalPatientData(PatientData):
-    exposure: int = None
-    outcomes: dict[str, int] = None
+    exposure: int | None = None
+    outcomes: dict[str, int] | None = None
 
 
 class CausalPatientDataset(PatientDataset):
