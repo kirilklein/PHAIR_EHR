@@ -98,3 +98,15 @@ jobs:
           
           run_step main_causal.estimate        estimate.yaml
           python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
+      
+      - name: Criteria and stats # this relies on calibrated predictions for weighing.
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main_causal.select_cohort_full                      select_cohort_full/extract.yaml
+          run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
+          run_step main_causal.helper_scripts.get_stats helper/get_stats.yaml
+  
+      
