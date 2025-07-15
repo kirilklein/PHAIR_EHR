@@ -13,6 +13,6 @@
     "reportOptionalMemberAccess": false,
     "reportOptionalSubscript": false,
     "reportGeneralTypeIssues": false,
-    "reportAssignment": false,
+    "reportAssignmentType": false,
     "typeCheckingMode": "basic"
 }
