@@ -14,7 +14,9 @@ from corebehrt.constants.paths import (
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main.helper.finetune_cv import check_for_overlap
 from corebehrt.main_causal.helper.finetune_exp_y import cv_loop
-from corebehrt.modules.monitoring.causal.metric_aggregation import compute_and_save_combined_scores_mean_std
+from corebehrt.modules.monitoring.causal.metric_aggregation import (
+    compute_and_save_combined_scores_mean_std,
+)
 
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.config import Config, load_config
@@ -64,9 +66,14 @@ def main_finetune(config_path):
     torch.save(outcome_names, join(cfg.paths.model, OUTCOME_NAMES_FILE))
     logger.info(f"Saved outcome names: {outcome_names}")
 
-    save_combined_scores(cfg, len(folds), outcome_names, "val")
+    compute_and_save_combined_scores_mean_std(
+        len(folds), cfg.paths.model, mode="val", outcome_names=outcome_names
+    )
+
     if len(test_data) > 0:
-        save_combined_scores(cfg, len(folds), outcome_names, "test")
+        compute_and_save_combined_scores_mean_std(
+            len(folds), cfg.paths.model, mode="test", outcome_names=outcome_names
+        )
 
     logger.info("Done")
 
@@ -84,17 +91,6 @@ def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
     logger.info(f"Using {n_folds} predefined folds")
     torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
     return folds
-
-
-def save_combined_scores(
-    cfg: Config, n_folds: int, outcome_names: list, mode: str
-) -> None:
-    """
-    Save combined scores for exposure and outcomes in a single file.
-    """    
-    compute_and_save_combined_scores_mean_std(
-        n_folds, cfg.paths.model, mode=mode, outcome_names=outcome_names
-    )
 
 
 if __name__ == "__main__":

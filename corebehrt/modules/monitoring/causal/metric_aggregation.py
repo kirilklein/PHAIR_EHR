@@ -15,9 +15,9 @@ def compute_and_save_combined_scores_mean_std(
 ) -> None:
     """Compute mean and std of test/val scores for all targets and save to single file."""
     print("Save combined aggregated scores")
-    
+
     all_scores = []
-    
+
     # Collect exposure scores
     exposure_scores = _collect_single_target_scores(
         n_splits, finetune_folder, mode, EXPOSURE
@@ -25,7 +25,7 @@ def compute_and_save_combined_scores_mean_std(
     if exposure_scores is not None:
         exposure_scores[OUTCOME] = EXPOSURE
         all_scores.append(exposure_scores)
-    
+
     # Collect outcome scores
     if outcome_names:
         for outcome_name in outcome_names:
@@ -35,32 +35,34 @@ def compute_and_save_combined_scores_mean_std(
             if outcome_scores is not None:
                 outcome_scores[OUTCOME] = outcome_name
                 all_scores.append(outcome_scores)
-    
+
     # Combine all scores
     if not all_scores:
         print(f"Warning: No score files found for {mode}")
         return
-    
+
     try:
         combined_scores = pd.concat(all_scores, ignore_index=True)
-        scores_mean_std = combined_scores.groupby(['metric', 'outcome'])['value'].agg(['mean', 'std']).reset_index()
-        
+        scores_mean_std = (
+            combined_scores.groupby(["metric", "outcome"])["value"]
+            .agg(["mean", "std"])
+            .reset_index()
+        )
+
         date = datetime.now().strftime("%Y%m%d-%H%M")
         scores_dir = join(finetune_folder, "scores")
         os.makedirs(scores_dir, exist_ok=True)
-        output_path = join(
-            scores_dir, f"scores_{date}.csv"
-        )
+        output_path = join(scores_dir, f"scores_{date}.csv")
         scores_mean_std.to_csv(output_path, index=False)
-        
+
         # Log to Azure
         with setup_metrics_dir(f"{mode} combined scores"):
             for _, row in scores_mean_std.iterrows():
-                metric_name = row['metric']
-                outcome_name = row['outcome']
-                log_metric(f"{metric_name} mean {outcome_name}", row['mean'])
-                log_metric(f"{metric_name} std {outcome_name}", row['std'])
-                
+                metric_name = row["metric"]
+                outcome_name = row["outcome"]
+                log_metric(f"{metric_name} mean {outcome_name}", row["mean"])
+                log_metric(f"{metric_name} std {outcome_name}", row["std"])
+
     except Exception as e:
         print(f"Error processing combined scores for {mode}: {e}")
 
@@ -119,5 +121,12 @@ def _collect_single_target_scores(
     if not scores:
         print(f"Warning: No score files found for {mode}_{target_type}")
         return None
-    
-    return pd.concat(scores, ignore_index=True)
+
+    combined_scores = pd.concat(scores, ignore_index=True)
+
+    # Clean metric names by removing target_type prefix
+    combined_scores["metric"] = combined_scores["metric"].str.replace(
+        f"{target_type}_", "", regex=False
+    )
+
+    return combined_scores
