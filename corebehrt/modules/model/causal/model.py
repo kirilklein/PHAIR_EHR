@@ -78,9 +78,10 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
     def _setup_loss_functions(self, config):
         """Helper method to initialize BCE loss functions with position weights."""
+        pos_weight_exposures = getattr(config, "pos_weight_exposures", None)
         pos_weight_exposures = (
-            torch.tensor(config.pos_weight_exposures)
-            if hasattr(config, "pos_weight_exposures")
+            torch.tensor(pos_weight_exposures)
+            if pos_weight_exposures is not None
             else None
         )
         logger.info(f"pos_weight_exposures (loss): {pos_weight_exposures}")
@@ -89,13 +90,13 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
         # Create separate loss functions for each outcome
         self.outcome_loss_fcts = nn.ModuleDict()
-        if hasattr(config, "pos_weight_outcomes"):
+        if pos_weight_outcomes := getattr(config, "pos_weight_outcomes", None):
             for outcome_name in self.outcome_names:
-                pos_weight_tensor = (
-                    torch.tensor(config.pos_weight_outcomes[outcome_name])
-                    if config.pos_weight_outcomes.get(outcome_name) is not None
-                    else None
-                )
+                if outcome_weight := pos_weight_outcomes.get(outcome_name):
+                    pos_weight_tensor = torch.tensor(outcome_weight)
+                else:
+                    pos_weight_tensor = None
+
                 logger.info(f"pos_weight_{outcome_name} (loss): {pos_weight_tensor}")
                 self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
                     pos_weight=pos_weight_tensor
