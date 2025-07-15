@@ -433,7 +433,7 @@ class CausalEHRTrainer(EHRTrainer):
             self.log(f"Outcome metrics in validation: {outcome_metrics}")
 
         # Calculate average train loss for this epoch
-        avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)
+        avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)  # type: ignore
 
         # Store metrics for plotting
         epoch_metrics = EpochMetrics(
@@ -454,6 +454,7 @@ class CausalEHRTrainer(EHRTrainer):
             self.metric_history,
             self.epoch_history,
             os.path.join(self.run_folder, "figs"),
+            self.outcome_names,
             self.log,
         )
 
