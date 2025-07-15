@@ -7,7 +7,10 @@ import matplotlib.style as style
 from corebehrt.constants.causal.data import EXPOSURE
 
 # --- Configuration ---
-style.use("seaborn-v0_8-whitegrid")
+try:
+    style.use("seaborn-v0_8-whitegrid")
+except:
+    pass
 STYLE_CONFIG = {
     "colors": {
         "train": "#1f77b4",  # Muted Blue
