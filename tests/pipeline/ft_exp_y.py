@@ -26,7 +26,7 @@ from corebehrt.constants.causal.data import (
     TARGETS,
 )
 from corebehrt.constants.data import VAL_KEY
-from corebehrt.constants.paths import CHECKPOINTS_DIR, FOLDS_FILE
+from corebehrt.constants.paths import CHECKPOINTS_DIR, FOLDS_FILE, OUTCOME_NAMES_FILE
 from corebehrt.functional.io_operations.paths import get_fold_folders
 from corebehrt.functional.setup.model import get_last_checkpoint_epoch
 
@@ -72,7 +72,7 @@ def check_fold_pids_match(finetune_dir: str, fold_name: str, mode: str) -> bool:
 
 
 def check_predictions_match_pids(
-    fold_dir: str, mode: str, pred_type: str, epoch: int
+    fold_dir: str, mode: str, pred_type: str, epoch: int, outcome_name: str = None
 ) -> bool:
     """Check if prediction arrays match the number of PIDs."""
     # Load PIDs
@@ -83,10 +83,19 @@ def check_predictions_match_pids(
 
     pids = torch.load(pids_path)
 
+    # Build prediction file name
+    if outcome_name and pred_type == CF_OUTCOME:
+        pred_filename = f"{PROBAS}_{mode}_{pred_type}_{outcome_name}_{epoch}.npz"
+        target_filename = f"{TARGETS}_{mode}_{pred_type}_{outcome_name}_{epoch}.npz"
+    elif outcome_name and pred_type == OUTCOME:
+        pred_filename = f"{PROBAS}_{mode}_{outcome_name}_{epoch}.npz"
+        target_filename = f"{TARGETS}_{mode}_{outcome_name}_{epoch}.npz"
+    else:
+        pred_filename = f"{PROBAS}_{mode}_{pred_type}_{epoch}.npz"
+        target_filename = f"{TARGETS}_{mode}_{pred_type}_{epoch}.npz"
+
     # Load predictions
-    predictions_path = join(
-        fold_dir, CHECKPOINTS_DIR, f"{PROBAS}_{mode}_{pred_type}_{epoch}.npz"
-    )
+    predictions_path = join(fold_dir, CHECKPOINTS_DIR, pred_filename)
 
     if not exists(predictions_path):
         print(f"Error: {predictions_path} not found")
@@ -95,9 +104,7 @@ def check_predictions_match_pids(
     predictions = np.load(predictions_path, allow_pickle=True)[PROBAS]
 
     # Load targets if available
-    targets_path = join(
-        fold_dir, CHECKPOINTS_DIR, f"{TARGETS}_{mode}_{pred_type}_{epoch}.npz"
-    )
+    targets_path = join(fold_dir, CHECKPOINTS_DIR, target_filename)
 
     targets = None
     if exists(targets_path):
@@ -127,6 +134,15 @@ def main(finetune_dir: str):
         print(f"Error: Folds file {folds_path} not found")
         return False
 
+    # Load outcome names
+    outcome_names_path = join(finetune_dir, OUTCOME_NAMES_FILE)
+    if not exists(outcome_names_path):
+        print(f"Error: Outcome names file {outcome_names_path} not found")
+        return False
+    
+    outcome_names = torch.load(outcome_names_path)
+    print(f"Loaded outcome names: {outcome_names}")
+
     # Get fold directories
     fold_folders = get_fold_folders(finetune_dir)
     if not fold_folders:
@@ -152,20 +168,35 @@ def main(finetune_dir: str):
         pids_match = check_fold_pids_match(finetune_dir, fold_name, VAL_KEY)
         all_checks_passed = all_checks_passed and pids_match
 
-        # Check prediction files match PIDs
-        for pred_type in [OUTCOME, EXPOSURE, CF_OUTCOME]:
-            try:
-                predictions_match = check_predictions_match_pids(
-                    fold_dir, VAL_KEY, pred_type, last_epoch
-                )
-                all_checks_passed = all_checks_passed and predictions_match
+        # Check EXPOSURE predictions (no outcome name needed)
+        try:
+            predictions_match = check_predictions_match_pids(
+                fold_dir, VAL_KEY, EXPOSURE, last_epoch
+            )
+            all_checks_passed = all_checks_passed and predictions_match
 
-                if not predictions_match:
-                    print(f"Prediction mismatch in {fold_name} for {pred_type}")
+            if not predictions_match:
+                print(f"Prediction mismatch in {fold_name} for {EXPOSURE}")
 
-            except Exception as e:
-                print(f"Error checking predictions for {fold_name}, {pred_type}: {e}")
-                all_checks_passed = False
+        except Exception as e:
+            print(f"Error checking predictions for {fold_name}, {EXPOSURE}: {e}")
+            all_checks_passed = False
+
+        # Check OUTCOME and CF_OUTCOME predictions for each outcome name
+        for outcome_name in outcome_names:
+            for pred_type in [OUTCOME, CF_OUTCOME]:
+                try:
+                    predictions_match = check_predictions_match_pids(
+                        fold_dir, VAL_KEY, pred_type, last_epoch, outcome_name
+                    )
+                    all_checks_passed = all_checks_passed and predictions_match
+
+                    if not predictions_match:
+                        print(f"Prediction mismatch in {fold_name} for {pred_type}_{outcome_name}")
+
+                except Exception as e:
+                    print(f"Error checking predictions for {fold_name}, {pred_type}_{outcome_name}: {e}")
+                    all_checks_passed = False
 
     if all_checks_passed:
         print("✅ All checks passed! PIDs and predictions are consistent.")

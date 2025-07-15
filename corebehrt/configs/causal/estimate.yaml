@@ -4,11 +4,11 @@ logging:
 
 paths:
   ## INPUTS
-  calibrated_predictions: ./outputs/causal/multitarget/models/simple/calibrated/
+  calibrated_predictions: ./outputs/causal/finetune/models/simple/calibrated/
   # counterfactual_outcomes: ./outputs/causal/counterfactual_outcomes # optional
 
   ## OUTPUTS
-  estimate: ./outputs/causal/multitarget/estimate/simple
+  estimate: ./outputs/causal/estimate/simple
 
 estimator:
   methods: ["IPW", "AIPW", "TMLE"]
