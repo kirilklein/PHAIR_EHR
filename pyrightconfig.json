@@ -12,5 +12,6 @@
     "reportReturnType": false,
     "reportOptionalMemberAccess": false,
     "reportOptionalSubscript": false,
+    "reportGeneralTypeIssues": false,
     "typeCheckingMode": "basic"
 }
