@@ -18,7 +18,6 @@ from corebehrt.constants.data import (
     ATTENTION_MASK,
     CONCEPT_FEAT,
     SEGMENT_FEAT,
-    TARGET,
 )
 from corebehrt.modules.model.causal.model import CorebehrtForCausalFineTuning
 
