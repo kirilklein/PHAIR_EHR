@@ -88,12 +88,12 @@ def plot_cf_probas_diff_vs_certainty_in_exposure(
     # Remove top and right spines
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.set_title(f"Counterfactual - Factual vs Certainty in Exposure")
+    ax.set_title("Counterfactual - Factual vs Certainty in Exposure")
     # Add legend without frame
     ax.legend(frameon=False, loc=0, title="Exposure")
 
     fig.savefig(
-        join(save_dir, f"cf_diff_vs_certainty_in_exposure_by_exposure.png"),
+        join(save_dir, "cf_diff_vs_certainty_in_exposure_by_exposure.png"),
         bbox_inches="tight",
     )
     plt.close(fig)
