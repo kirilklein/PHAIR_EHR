@@ -78,29 +78,31 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
     def _setup_loss_functions(self, config):
         """Helper method to initialize BCE loss functions with position weights."""
-        pos_weight_exposures = getattr(config, "pos_weight_exposures", None)
-        pos_weight_exposures = (
-            torch.tensor(pos_weight_exposures)
-            if pos_weight_exposures is not None
-            else None
+        # Setup exposure loss
+        exposure_pos_weight = self._get_pos_weight_tensor(
+            getattr(config, "pos_weight_exposures", None)
         )
-        logger.info(f"pos_weight_exposures (loss): {pos_weight_exposures}")
+        logger.info(f"pos_weight_exposures (loss): {exposure_pos_weight}")
+        self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=exposure_pos_weight)
 
-        self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight_exposures)
-
-        # Create separate loss functions for each outcome
+        # Setup outcome losses
         self.outcome_loss_fcts = nn.ModuleDict()
-        if pos_weight_outcomes := getattr(config, "pos_weight_outcomes", None):
-            for outcome_name in self.outcome_names:
-                if outcome_weight := pos_weight_outcomes.get(outcome_name):
-                    pos_weight_tensor = torch.tensor(outcome_weight)
-                else:
-                    pos_weight_tensor = None
+        pos_weight_outcomes = getattr(config, "pos_weight_outcomes", {})
 
-                logger.info(f"pos_weight_{outcome_name} (loss): {pos_weight_tensor}")
-                self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
-                    pos_weight=pos_weight_tensor
-                )
+        for outcome_name in self.outcome_names:
+            outcome_pos_weight = self._get_pos_weight_tensor(
+                pos_weight_outcomes.get(outcome_name)
+            )
+            logger.info(f"pos_weight_{outcome_name} (loss): {outcome_pos_weight}")
+            self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
+                pos_weight=outcome_pos_weight
+            )
+
+    def _get_pos_weight_tensor(self, pos_weight_value):
+        """Helper method to convert pos_weight value to tensor if not None."""
+        if pos_weight_value is not None:
+            return torch.tensor(pos_weight_value)
+        return None
 
     def forward(self, batch: dict, cf: bool = False):
         """Forward pass for causal inference."""
@@ -143,15 +145,31 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
                 outcome_input
             )
 
-        self._compute_losses(outputs, batch)
+        # Only compute losses if we're training or if labels are available for evaluation
+        if self.training or self._should_compute_losses(batch):
+            self._compute_losses(outputs, batch)
 
         return outputs
+
+    def _should_compute_losses(self, batch):
+        """Check if we should compute losses based on available labels. If all outcome labels are present AND Exposure is present we can compute loss."""
+
+        # Check if exposure label is present
+        has_exposure_label = EXPOSURE_TARGET in batch
+
+        # Check if any outcome labels are present
+        has_outcome_labels = all(
+            outcome_name in batch for outcome_name in self.outcome_names
+        )
+
+        return has_exposure_label and has_outcome_labels
 
     def _compute_losses(self, outputs, batch):
         """Helper method to compute and assign losses if labels are present."""
         total_loss = 0
         outputs.outcome_losses = {}
 
+        # Only compute exposure loss if label is available
         if EXPOSURE_TARGET in batch:
             exposure_loss = self.exposure_loss_fct(
                 outputs.exposure_logits.view(-1), batch[EXPOSURE_TARGET].view(-1)
@@ -159,7 +177,10 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             outputs.exposure_loss = exposure_loss
             total_loss += exposure_loss
 
+        # Only compute outcome losses for available labels
         for outcome_name in self.outcome_names:
+            if outcome_name not in batch:
+                continue
             predictions = outputs.outcome_logits[outcome_name].view(-1)
             targets = batch[outcome_name].view(-1)
             outcome_loss = self.outcome_loss_fcts[outcome_name](predictions, targets)
