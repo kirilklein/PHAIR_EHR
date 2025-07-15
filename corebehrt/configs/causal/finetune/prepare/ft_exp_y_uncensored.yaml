@@ -9,8 +9,8 @@ paths:
   cohort: ./outputs/causal/finetune/cohorts/full # path to cohort directory
 
   outcomes: ./outputs/causal/finetune/outcomes
-  outcome_names:
-    outcome: OUTCOME.csv
+  outcome_files:
+    - OUTCOME.csv
 
   exposures: ./outputs/causal/finetune/outcomes
   exposure: EXPOSURE.csv
