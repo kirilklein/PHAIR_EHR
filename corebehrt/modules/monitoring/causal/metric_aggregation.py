@@ -1,42 +1,77 @@
 import os
 from datetime import datetime
 from os.path import join
-from typing import Literal
 
 import pandas as pd
-
+from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
 from corebehrt.azure import log_metric, setup_metrics_dir
 
 
-def compute_and_save_scores_mean_std(
+def compute_and_save_combined_scores_mean_std(
     n_splits: int,
     finetune_folder: str,
     mode="val",
-    target_type: Literal["exposure", "outcome"] = "exposure",
     outcome_names: list = None,
 ) -> None:
-    """Compute mean and std of test/val scores. And save to finetune folder."""
-    print("Save aggregated scores")
-    if target_type == "outcome" and outcome_names:
-        # Handle multiple outcomes separately
+    """Compute mean and std of test/val scores for all targets and save to single file."""
+    print("Save combined aggregated scores")
+    
+    all_scores = []
+    
+    # Collect exposure scores
+    exposure_scores = _collect_single_target_scores(
+        n_splits, finetune_folder, mode, EXPOSURE
+    )
+    if exposure_scores is not None:
+        exposure_scores[OUTCOME] = EXPOSURE
+        all_scores.append(exposure_scores)
+    
+    # Collect outcome scores
+    if outcome_names:
         for outcome_name in outcome_names:
-            _compute_and_save_single_target_scores(
+            outcome_scores = _collect_single_target_scores(
                 n_splits, finetune_folder, mode, outcome_name
             )
-    else:
-        # Handle single target (exposure or single outcome)
-        _compute_and_save_single_target_scores(
-            n_splits, finetune_folder, mode, target_type
+            if outcome_scores is not None:
+                outcome_scores[OUTCOME] = outcome_name
+                all_scores.append(outcome_scores)
+    
+    # Combine all scores
+    if not all_scores:
+        print(f"Warning: No score files found for {mode}")
+        return
+    
+    try:
+        combined_scores = pd.concat(all_scores, ignore_index=True)
+        scores_mean_std = combined_scores.groupby(['metric', 'outcome'])['value'].agg(['mean', 'std']).reset_index()
+        
+        date = datetime.now().strftime("%Y%m%d-%H%M")
+        scores_dir = join(finetune_folder, "scores")
+        os.makedirs(scores_dir, exist_ok=True)
+        output_path = join(
+            scores_dir, f"scores_{date}.csv"
         )
+        scores_mean_std.to_csv(output_path, index=False)
+        
+        # Log to Azure
+        with setup_metrics_dir(f"{mode} combined scores"):
+            for _, row in scores_mean_std.iterrows():
+                metric_name = row['metric']
+                outcome_name = row['outcome']
+                log_metric(f"{metric_name} mean {outcome_name}", row['mean'])
+                log_metric(f"{metric_name} std {outcome_name}", row['std'])
+                
+    except Exception as e:
+        print(f"Error processing combined scores for {mode}: {e}")
 
 
-def _compute_and_save_single_target_scores(
+def _collect_single_target_scores(
     n_splits: int,
     finetune_folder: str,
     mode: str,
     target_type: str,
-) -> None:
-    """Compute mean and std of test/val scores for a single target type."""
+) -> pd.DataFrame:
+    """Collect scores for a single target type and return as DataFrame."""
     scores = []
 
     for fold in range(1, n_splits + 1):
@@ -80,28 +115,9 @@ def _compute_and_save_single_target_scores(
         if fold_scores is not None:
             scores.append(fold_scores)
 
-    # Check if we have any scores to process
+    # Return concatenated scores or None if no scores found
     if not scores:
         print(f"Warning: No score files found for {mode}_{target_type}")
-        return
-
-    try:
-        scores = pd.concat(scores)
-        scores_mean_std = scores.groupby("metric")["value"].agg(["mean", "std"])
-
-        date = datetime.now().strftime("%Y%m%d-%H%M")
-        scores_dir = join(finetune_folder, "scores")
-        os.makedirs(scores_dir, exist_ok=True)
-        output_path = join(
-            scores_dir, f"{mode}_{target_type}_scores_mean_std_{date}.csv"
-        )
-        scores_mean_std.to_csv(output_path)
-
-        # Log to Azure
-        with setup_metrics_dir(f"{mode} {target_type} scores"):
-            for idx, row in scores_mean_std.iterrows():
-                for col in scores_mean_std.columns:
-                    log_metric(f"{idx} {col} {target_type}", row[col])
-
-    except Exception as e:
-        print(f"Error processing scores for {mode}_{target_type}: {e}")
+        return None
+    
+    return pd.concat(scores, ignore_index=True)

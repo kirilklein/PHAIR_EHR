@@ -5,7 +5,6 @@ from os.path import join
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 import torch
 
-from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
 from corebehrt.constants.paths import (
     FOLDS_FILE,
     OUTCOME_NAMES_FILE,
@@ -15,9 +14,8 @@ from corebehrt.constants.paths import (
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main.helper.finetune_cv import check_for_overlap
 from corebehrt.main_causal.helper.finetune_exp_y import cv_loop
-from corebehrt.modules.monitoring.causal.metric_aggregation import (
-    compute_and_save_scores_mean_std,
-)
+from corebehrt.modules.monitoring.causal.metric_aggregation import compute_and_save_combined_scores_mean_std
+
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.config import Config, load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
@@ -92,17 +90,10 @@ def save_combined_scores(
     cfg: Config, n_folds: int, outcome_names: list, mode: str
 ) -> None:
     """
-    Save combined scores for exposure and outcomes.
-    """
-    compute_and_save_scores_mean_std(
-        n_folds, cfg.paths.model, mode=mode, target_type=EXPOSURE
-    )
-    compute_and_save_scores_mean_std(
-        n_folds,
-        cfg.paths.model,
-        mode=mode,
-        target_type=OUTCOME,
-        outcome_names=outcome_names,
+    Save combined scores for exposure and outcomes in a single file.
+    """    
+    compute_and_save_combined_scores_mean_std(
+        n_folds, cfg.paths.model, mode=mode, outcome_names=outcome_names
     )
 
 
