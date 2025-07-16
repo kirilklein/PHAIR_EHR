@@ -57,32 +57,13 @@ class EffectEstimator:
             COMBINED_CALIBRATED_PREDICTIONS_FILE,
         )
         self.estimator_cfg = self.cfg.estimator
+        self.effect_type = self.cfg.estimator.effect_type
         self.df = pd.read_csv(self.predictions_file)
         self.outcome_names = get_outcome_names(self.df)
         validate_columns(self.df, self.outcome_names)
         self.counterfactual_outcomes_dir = self.cfg.paths.get("counterfactual_outcomes")
         self.counterfactual_df = self._load_counterfactual_outcomes()
         self.estimation_args = self._get_estimation_args()
-
-    def _load_counterfactual_outcomes(self) -> pd.DataFrame:
-        """Load combined counterfactual outcomes if available."""
-        if not self.counterfactual_outcomes_dir:
-            return None
-
-        # Try to load combined counterfactual file first
-        combined_cf_file = join(
-            self.counterfactual_outcomes_dir, "combined_simulation_results.csv"
-        )
-        if os.path.exists(combined_cf_file):
-            self.logger.info(
-                f"Loading combined counterfactual outcomes from {combined_cf_file}"
-            )
-            return pd.read_csv(combined_cf_file)
-
-        self.logger.info(
-            "No combined counterfactual outcomes file found, will try individual files"
-        )
-        return None
 
     def run(self) -> None:
         """
@@ -114,10 +95,12 @@ class EffectEstimator:
                     effect_df,
                     self.counterfactual_df,
                     outcome_name,
-                    self.cfg.estimator.effect_type,
+                    self.effect_type,
                 )
 
-            effect_df = append_unadjusted_effect(analysis_df, effect_df)
+            effect_df = append_unadjusted_effect(
+                analysis_df, effect_df, self.effect_type
+            )
 
             # 5. Compute and collect stats for this outcome
             outcome_stats = compute_outcome_stats(analysis_df, outcome_name)
@@ -145,7 +128,7 @@ class EffectEstimator:
             if method_upper == "TMLE":
                 estimators.append(
                     TMLE(
-                        effect_type=self.cfg.estimator.effect_type,
+                        effect_type=self.effect_type,
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
@@ -161,7 +144,7 @@ class EffectEstimator:
             elif method_upper == "IPW":
                 estimators.append(
                     IPW(
-                        effect_type=self.cfg.estimator.effect_type,
+                        effect_type=self.effect_type,
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
@@ -170,7 +153,7 @@ class EffectEstimator:
             elif method_upper == "AIPW":
                 estimators.append(
                     AIPW(
-                        effect_type=self.cfg.estimator.effect_type,
+                        effect_type=self.effect_type,
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
@@ -250,3 +233,23 @@ class EffectEstimator:
             return_bootstrap_samples=False,
         )
         return convert_effect_to_dataframe(effect_dict)
+
+    def _load_counterfactual_outcomes(self) -> pd.DataFrame:
+        """Load combined counterfactual outcomes if available."""
+        if not self.counterfactual_outcomes_dir:
+            return None
+
+        # Try to load combined counterfactual file first
+        combined_cf_file = join(
+            self.counterfactual_outcomes_dir, "combined_simulation_results.csv"
+        )
+        if os.path.exists(combined_cf_file):
+            self.logger.info(
+                f"Loading combined counterfactual outcomes from {combined_cf_file}"
+            )
+            return pd.read_csv(combined_cf_file)
+
+        self.logger.info(
+            "No combined counterfactual outcomes file found, will try individual files"
+        )
+        return None
