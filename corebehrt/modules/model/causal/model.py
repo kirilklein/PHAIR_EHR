@@ -12,7 +12,11 @@ import torch.nn as nn
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK
-from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
+from corebehrt.modules.model.causal.heads import (
+    MLPHead,
+    PatientRepresentationPooler,
+    SharedRepresentationPooler,
+)
 from corebehrt.modules.model.model import CorebehrtForFineTuning
 
 logger = logging.getLogger(__name__)
@@ -34,47 +38,126 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
     def __init__(self, config):
         super().__init__(config)
-
-        # --- Architecture Configuration ---
         self.head_config = getattr(config, "head", {})
-        self.shared_representation = self.head_config.get("shared_representation", True)
         self.bidirectional = self.head_config.get("bidirectional", True)
-
-        # Get outcome names from config
+        self.outcome_embedding_dim = self.head_config.get("outcome_embedding_dim", 32)
         self.outcome_names = config.outcome_names
+        self.num_outcomes = len(self.outcome_names)
+
+        # Create a mapping from outcome name to an integer index
+        self.outcome_to_idx = {name: i for i, name in enumerate(self.outcome_names)}
+
+        # ### 💡 NEW: Configuration for the split ###
+        # The total size of the pooled representation to be split.
+        self.pooled_hidden_size = config.hidden_size * 3
+        self.split_sizes = [config.hidden_size, config.hidden_size, config.hidden_size]
 
         self._setup_pooling_layers(config)
         self._setup_mlp_heads(config)
         self._setup_loss_functions(config)
 
+        # Orthogonality settings
+        self.use_orthogonality = self.head_config.get("use_orthogonality", True)
+        self.ortho_lambda = self.head_config.get("ortho_lambda", 1.0)
+
     def _setup_pooling_layers(self, config):
-        if self.shared_representation:
-            logger.info("Using shared patient representation")
-            # A single pooler for all tasks
-            self.pooler = PatientRepresentationPooler(
-                hidden_size=config.hidden_size, bidirectional=self.bidirectional
-            )
-        else:
-            logger.info("Using separate patient representations")
-            # Separate poolers for exposure and each outcome
-            self.exposure_pooler = PatientRepresentationPooler(
-                hidden_size=config.hidden_size, bidirectional=self.bidirectional
-            )
-            self.outcome_poolers = nn.ModuleDict()
-            for outcome_name in self.outcome_names:
-                self.outcome_poolers[outcome_name] = PatientRepresentationPooler(
-                    hidden_size=config.hidden_size, bidirectional=self.bidirectional
-                )
+        # ### MODIFIED: Create an internal disentangling pooler ###
+        logger.info(
+            f"Using a single pooler with output size {self.pooled_hidden_size} for splitting."
+        )
+        # This is the main internal module that creates the large representation
+        self.disentangling_pooler = PatientRepresentationPooler(
+            input_size=config.hidden_size,
+            output_size=self.pooled_hidden_size,
+            bidirectional=self.bidirectional,
+        )
+
+        # This becomes the public-facing pooler for inference and encoding.
+        # It wraps the disentangling pooler to return only the shared part.
+        self.pooler = SharedRepresentationPooler(
+            self.disentangling_pooler, self.split_sizes
+        )
 
     def _setup_mlp_heads(self, config):
-        self.exposure_head = MLPHead(input_size=config.hidden_size)
+        # Exposure head takes Z_c + Z_e
+        self.exposure_head = MLPHead(
+            input_size=self.split_sizes[0] + self.split_sizes[1]
+        )
 
-        # Create separate heads for each outcome
-        self.outcome_heads = nn.ModuleDict()
-        for outcome_name in self.outcome_names:
-            self.outcome_heads[outcome_name] = MLPHead(
-                input_size=config.hidden_size + 1  # +1 for exposure status
+        # 1. Embedding layer for the outcomes
+        self.outcome_embeddings = nn.Embedding(
+            num_embeddings=self.num_outcomes, embedding_dim=self.outcome_embedding_dim
+        )
+
+        # 2. A SINGLE, shared head for all outcomes
+        outcome_head_input_size = (
+            self.split_sizes[0]
+            + self.split_sizes[2]  # Z_c + Z_y
+            + self.outcome_embedding_dim  # Outcome ID embedding
+            + 1  # Exposure status
+        )
+        self.shared_outcome_head = MLPHead(input_size=outcome_head_input_size)
+
+    def forward(self, batch: dict, cf: bool = False):
+        outputs = super().forward(batch)
+        sequence_output = outputs[0]
+        attention_mask = batch[ATTENTION_MASK]
+
+        # 1. --- Pool into a single large representation using the *internal* pooler ---
+        pooled_repr = self.disentangling_pooler(sequence_output, attention_mask)
+
+        # 2. --- Split the representation into three parts ---
+        z_c, z_e, z_y = torch.split(pooled_repr, self.split_sizes, dim=-1)
+
+        # EXPLICITLY set the canonical pooler_output to the shared representation
+        outputs.pooler_output = z_c
+        outputs.representations = {"shared": z_c, "exposure": z_e, "outcome": z_y}
+
+        # 3. --- Exposure Prediction ---
+        exposure_input = torch.cat((z_c, z_e), dim=-1)
+        outputs.exposure_logits = self.exposure_head(exposure_input)
+
+        # 4. --- Scalable Outcome Predictions ---
+        patient_outcome_repr = torch.cat((z_c, z_y), dim=-1)
+        exposure_status = (2 * batch[EXPOSURE_TARGET] - 1).unsqueeze(-1)
+        if cf:
+            exposure_status = -exposure_status
+
+        outputs.outcome_logits = {}
+        # Loop through each outcome to make a prediction
+        for outcome_name, outcome_idx in self.outcome_to_idx.items():
+            # Get the embedding vector for the current outcome
+            outcome_idx_tensor = torch.tensor([outcome_idx], device=z_c.device).expand(
+                z_c.size(0)
             )
+            outcome_emb = self.outcome_embeddings(outcome_idx_tensor)
+
+            # Build the input for the shared head
+            outcome_input = torch.cat(
+                (patient_outcome_repr, outcome_emb, exposure_status), dim=-1
+            )
+
+            outputs.outcome_logits[outcome_name] = self.shared_outcome_head(
+                outcome_input
+            )
+
+        if self.training or self._should_compute_losses(batch):
+            self._compute_losses(outputs, batch)  # Loss computation remains similar
+
+        return outputs
+
+    def _should_compute_losses(self, batch):
+        """Check if we should compute losses based on available labels. If all outcome labels are present AND Exposure is present we can compute loss."""
+
+        # Check if exposure label is present
+        has_exposure_label = EXPOSURE_TARGET in batch
+
+        # Check if any outcome labels are present
+        has_outcome_labels = all(
+            outcome_name in batch for outcome_name in self.outcome_names
+        )
+
+        return has_exposure_label and has_outcome_labels
 
     def _setup_loss_functions(self, config):
         """Helper method to initialize BCE loss functions with position weights."""
@@ -97,72 +180,6 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
                 pos_weight=outcome_pos_weight
             )
-
-    def _get_pos_weight_tensor(self, pos_weight_value):
-        """Helper method to convert pos_weight value to tensor if not None."""
-        if pos_weight_value is not None:
-            return torch.tensor(pos_weight_value)
-        return None
-
-    def forward(self, batch: dict, cf: bool = False):
-        """Forward pass for causal inference."""
-        outputs = super().forward(batch)
-        sequence_output = outputs[0]
-        attention_mask = batch[ATTENTION_MASK]
-
-        # --- Get Patient Representations ---
-        if self.shared_representation:
-            shared_repr = self.pooler(sequence_output, attention_mask)
-            exposure_repr = shared_repr
-            outcome_reprs = {
-                outcome_name: shared_repr for outcome_name in self.outcome_names
-            }
-        else:
-            exposure_repr = self.exposure_pooler(sequence_output, attention_mask)
-            outcome_reprs = {
-                outcome_name: self.outcome_poolers[outcome_name](
-                    sequence_output, attention_mask
-                )
-                for outcome_name in self.outcome_names
-            }
-
-        # --- Exposure Prediction ---
-        exposure_logits = self.exposure_head(exposure_repr)
-        outputs.exposure_logits = exposure_logits
-
-        # --- Multiple Outcome Predictions ---
-        exposure_status = 2 * batch[EXPOSURE_TARGET] - 1  # Convert from 0/1 to -1/1
-        if cf:
-            exposure_status = -exposure_status  # Flip for counterfactual
-
-        # Compute logits for each outcome using its specific representation
-        outputs.outcome_logits = {}
-        for outcome_name in self.outcome_names:
-            outcome_input = torch.cat(
-                (outcome_reprs[outcome_name], exposure_status.unsqueeze(-1)), dim=-1
-            )  # [bs, hidden_size] vs [bs] -> [bs, hidden_size + 1]
-            outputs.outcome_logits[outcome_name] = self.outcome_heads[outcome_name](
-                outcome_input
-            )
-
-        # Only compute losses if we're training or if labels are available for evaluation
-        if self.training or self._should_compute_losses(batch):
-            self._compute_losses(outputs, batch)
-
-        return outputs
-
-    def _should_compute_losses(self, batch):
-        """Check if we should compute losses based on available labels. If all outcome labels are present AND Exposure is present we can compute loss."""
-
-        # Check if exposure label is present
-        has_exposure_label = EXPOSURE_TARGET in batch
-
-        # Check if any outcome labels are present
-        has_outcome_labels = all(
-            outcome_name in batch for outcome_name in self.outcome_names
-        )
-
-        return has_exposure_label and has_outcome_labels
 
     def _compute_losses(self, outputs, batch):
         """Helper method to compute and assign losses if labels are present."""
@@ -188,4 +205,41 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             outputs.outcome_losses[outcome_name] = outcome_loss
             total_loss += outcome_loss
 
+        if self.use_orthogonality:
+            ortho_loss = self._compute_orthogonality_loss(outputs.representations)
+            outputs.orthogonality_loss = ortho_loss
+            total_loss += self.ortho_lambda * ortho_loss
+
         outputs.loss = total_loss
+
+    def _compute_orthogonality_loss(self, representations: dict) -> torch.Tensor:
+        """
+        Computes the orthogonality penalty between the shared and specific representations.
+        Loss = (z_c * z_e)^2 + (z_c * z_y)^2
+        """
+        z_c = representations["shared"]
+        z_e = representations["exposure"]
+        z_y = representations["outcome"]
+
+        # Normalize the representations to prevent the loss from growing with embedding size
+        z_c = torch.nn.functional.normalize(z_c, p=2, dim=1)
+        z_e = torch.nn.functional.normalize(z_e, p=2, dim=1)
+        z_y = torch.nn.functional.normalize(z_y, p=2, dim=1)
+
+        # Dot product between shared and exposure representations
+        dot_product_e = torch.sum(z_c * z_e, dim=1)
+
+        # Dot product between shared and outcome representations
+        dot_product_y = torch.sum(z_c * z_y, dim=1)
+
+        # Loss is the squared dot product, averaged over the batch
+        loss_e = (dot_product_e**2).mean()
+        loss_y = (dot_product_y**2).mean()
+
+        return loss_e + loss_y
+
+    def _get_pos_weight_tensor(self, pos_weight_value):
+        """Helper method to convert pos_weight value to tensor if not None."""
+        if pos_weight_value is not None:
+            return torch.tensor(pos_weight_value)
+        return None

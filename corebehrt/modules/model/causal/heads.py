@@ -15,14 +15,15 @@ class PatientRepresentationPooler(nn.Module):
     This uses a bidirectional GRU to capture sequential information.
     """
 
-    def __init__(self, hidden_size: int, bidirectional: bool = True):
+    def __init__(self, input_size: int, output_size: int, bidirectional: bool = True):
         super().__init__()
-        self.hidden_size = hidden_size
+        self.input_size = input_size
+        self.output_size = output_size
         self.bidirectional = bidirectional
-        self.rnn_hidden_size = hidden_size // 2 if bidirectional else hidden_size
+        self.rnn_hidden_size = output_size // 2 if bidirectional else output_size
 
         self.rnn = nn.GRU(
-            hidden_size,
+            input_size,
             self.rnn_hidden_size,
             batch_first=True,
             bidirectional=bidirectional,
@@ -37,7 +38,7 @@ class PatientRepresentationPooler(nn.Module):
             attention_mask (torch.Tensor): The attention mask [batch_size, seq_len].
 
         Returns:
-            torch.Tensor: The patient representation vector [batch_size, hidden_size].
+            torch.Tensor: The patient representation vector [batch_size, output_size].
         """
         lengths = attention_mask.sum(dim=1).cpu()
         packed = nn.utils.rnn.pack_padded_sequence(
@@ -63,6 +64,33 @@ class PatientRepresentationPooler(nn.Module):
             patient_repr = output[batch_indices, last_sequence_idx]
 
         return patient_repr
+
+
+class SharedRepresentationPooler(nn.Module):
+    """
+    A wrapper pooler that uses a disentangling pooler internally but returns
+    only the shared component (z_c) of the representation.
+
+    This provides a clean interface for downstream tasks that need a single
+    patient vector for encoding or inference.
+    """
+
+    def __init__(
+        self, disentangling_pooler: PatientRepresentationPooler, split_sizes: list[int]
+    ):
+        super().__init__()
+        self.disentangling_pooler = disentangling_pooler
+        self.split_sizes = split_sizes
+
+    def forward(
+        self, hidden_states: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
+        # Get the full, combined representation from the internal pooler
+        full_repr = self.disentangling_pooler(hidden_states, attention_mask)
+
+        # Split and return only the first part (the shared representation)
+        z_c, _, _ = torch.split(full_repr, self.split_sizes, dim=-1)
+        return z_c
 
 
 class MLPHead(nn.Module):

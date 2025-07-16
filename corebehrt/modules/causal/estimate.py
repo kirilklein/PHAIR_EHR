@@ -58,6 +58,7 @@ class EffectEstimator:
         "CI95_upper",
         "effect_1",
         "effect_0",
+        "outcome",
     ]
 
     def __init__(self, cfg: Config, logger: Any):

@@ -51,17 +51,31 @@ class PCGrad:
 
         return self._optim.step()
 
-    def pc_backward(self, objectives):
+    def pc_backward(self, objectives, unprojected_objective=None):
         """
         calculate the gradient of the parameters
 
         input:
-        - objectives: a list of objectives
+        - objectives: a list of objectives to be projected
+        - unprojected_objective: an optional objective whose gradients will be added
+                                 to the final projected gradient without being
+                                 projected itself.
         """
 
         grads, shapes, has_grads = self._pack_grad(objectives)
-        pc_grad = self._project_conflicting(grads, has_grads)
-        pc_grad = self._unflatten_grad(pc_grad, shapes[0])
+        pc_grad_flat = self._project_conflicting(grads, has_grads)
+
+        if unprojected_objective is not None:
+            # Calculate gradients for the unprojected objective
+            self._optim.zero_grad(set_to_none=True)
+            unprojected_objective.backward()
+            unproj_grad_list, _, _ = self._retrieve_grad()
+            flat_unproj_grad = self._flatten_grad(unproj_grad_list)
+
+            # Add them to the projected gradients
+            pc_grad_flat += flat_unproj_grad
+
+        pc_grad = self._unflatten_grad(pc_grad_flat, shapes[0])
         self._set_grad(pc_grad)
         return
 

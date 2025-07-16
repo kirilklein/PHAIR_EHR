@@ -53,45 +53,50 @@ class CausalEHRTrainer(EHRTrainer):
         with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
             outputs = self.model(batch)
 
-        if self.use_pcgrad:
-            # Collect individual task losses for PCGrad
-            task_losses = []
+        loss = outputs.loss
+        if loss is None:
+            return None
 
-            # Add exposure loss if available
+        if self.use_pcgrad:
+            # Separate the "true" task losses from the regularization (orthogonality) loss
+            task_losses = []
             if hasattr(outputs, "exposure_loss") and outputs.exposure_loss is not None:
                 task_losses.append(outputs.exposure_loss)
-
-            # Add outcome losses if available
             if hasattr(outputs, "outcome_losses") and outputs.outcome_losses:
-                for outcome_loss in outputs.outcome_losses.values():
-                    if outcome_loss is not None:
-                        task_losses.append(outcome_loss)
+                task_losses.extend(
+                    [
+                        outcome_loss
+                        for outcome_loss in outputs.outcome_losses.values()
+                        if outcome_loss is not None
+                    ]
+                )
 
-            # If we don't have individual losses, fall back to total loss
-            if not task_losses and hasattr(outputs, "loss"):
-                task_losses = [outputs.loss]
+            # The orthogonality loss is passed as a separate, unprojected objective
+            ortho_loss = (
+                outputs.orthogonality_loss
+                if hasattr(outputs, "orthogonality_loss")
+                else None
+            )
 
-            if not task_losses:
-                return outputs.loss if hasattr(outputs, "loss") else None
+            # If we have multiple tasks to project, use PCGrad
+            if len(task_losses) > 1:
+                scaled_task_losses = [self.scaler.scale(l) for l in task_losses]
+                scaled_ortho_loss = (
+                    self.scaler.scale(ortho_loss) if ortho_loss is not None else None
+                )
 
-            # Scale each loss individually for PCGrad
-            scaled_losses = [self.scaler.scale(loss) for loss in task_losses]
-
-            # Use PCGrad backward instead of regular backward
-            if len(scaled_losses) > 1:
-                # Multiple tasks - use PCGrad
-                self.optimizer.pc_backward(scaled_losses)
+                self.optimizer.pc_backward(
+                    scaled_task_losses, unprojected_objective=scaled_ortho_loss
+                )
             else:
-                # Single task - use regular backward
-                scaled_losses[0].backward()
-
-            # Return the total loss for logging (unscaled)
-            return outputs.loss if hasattr(outputs, "loss") else sum(task_losses)
-        else:
-            loss = outputs.loss
-            if loss is not None:
+                # With one or zero tasks, PCGrad is not needed.
+                # Just use the total loss, which sums all components correctly.
                 self.scaler.scale(loss).backward()
-            return loss
+        else:
+            # Without PCGrad, just use the total loss
+            self.scaler.scale(loss).backward()
+
+        return loss
 
     def _update(self):
         """Updates the model (optimizer and scheduler) with PCGrad support"""
