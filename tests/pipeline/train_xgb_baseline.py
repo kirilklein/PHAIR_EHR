@@ -21,16 +21,7 @@ from corebehrt.modules.preparation.causal.dataset import CausalPatientData
 def create_multihot_features_from_patients(
     patients: list[CausalPatientData], vocabulary: dict, multihot: bool = False
 ) -> tuple:
-    """Create multi-hot encoded features from patient concept sequences.
-
-    Args:
-        patients: list of CausalPatientData objects
-        vocabulary: dictionary mapping concept codes to their names
-        multihot: whether to use counts or binary encoding
-
-    Returns:
-        Tuple of (feature_matrix, targets_dict)
-    """
+    """Create multi-hot encoded features from patient concept sequences."""
     print("Extracting concepts from patients...")
 
     # Extract all concepts and targets
@@ -79,7 +70,6 @@ def create_multihot_features_from_patients(
     # Clean feature names for XGBoost
     def clean_feature_name(name):
         """Clean feature name by removing problematic characters."""
-        # Replace problematic characters with underscores
         cleaned = (
             str(name)
             .replace("[", "_")
@@ -87,17 +77,13 @@ def create_multihot_features_from_patients(
             .replace("<", "_")
             .replace(">", "_")
         )
-        # Remove any other special characters that might cause issues
         cleaned = "".join(c if c.isalnum() or c in ["_", "-"] else "_" for c in cleaned)
-        # Ensure it doesn't start with a number (some ML libraries don't like this)
         if cleaned and cleaned[0].isdigit():
             cleaned = "feat_" + cleaned
         return cleaned
 
-    # Create clean feature names
     clean_feature_names = [clean_feature_name(key) for key in vocabulary.keys()]
 
-    # Check for duplicate names after cleaning and make them unique
     seen = set()
     unique_names = []
     for name in clean_feature_names:
@@ -112,6 +98,13 @@ def create_multihot_features_from_patients(
     # Convert to DataFrame for easier handling
     feature_df = pd.DataFrame(feature_matrix, columns=unique_names)
 
+    # -------------------------------------------------------------------
+    # >>>>>>> THE FIX: Add exposure as a feature for outcome prediction <<<<<<<
+    # -------------------------------------------------------------------
+    if "exposure" in targets_dict:
+        feature_df["exposure"] = targets_dict["exposure"]
+    # -------------------------------------------------------------------
+
     # Print contingency tables for each target
     for target_name, target_values in targets_dict.items():
         if target_name == "exposure" and "EXPOSURE" in vocabulary:
@@ -120,13 +113,11 @@ def create_multihot_features_from_patients(
                 target_values, feature_matrix, exposure_idx
             )
             normalized_contingency_table = contingency_table / np.sum(contingency_table)
-
             contingency_df = pd.DataFrame(
                 normalized_contingency_table,
                 index=[f"EXPOSURE=0", f"EXPOSURE=1"],
                 columns=[f"{target_name}=0", f"{target_name}=1"],
             )
-
             print("=" * 50)
             print(
                 f"CONTINGENCY TABLE FOR {target_name.upper()} (rows: exposure, columns: {target_name})"
@@ -238,7 +229,7 @@ def plot_results_multitarget(y_val_dict, results_dict):
     """Plot ROC curves and feature importance for multiple targets."""
 
     n_targets = len(results_dict)
-    fig, axes = plt.subplots(1, min(n_targets + 1, 4), figsize=(15, 5))
+    _, axes = plt.subplots(1, min(n_targets + 1, 4), figsize=(15, 5))
     if n_targets == 1:
         axes = [axes]
 
@@ -352,9 +343,27 @@ def main(
             f"Positive class ({target_name}): {target_values.sum()} ({target_values.mean():.3f})"
         )
 
+        # By default, use all features.
+        X_for_training = feature_df
+
+        # If the target is 'exposure', drop it from the feature set to prevent data leakage.
+        if target_name == "exposure":
+            if "exposure" in X_for_training.columns:
+                X_for_training = feature_df.drop(columns=["exposure"])
+                print(
+                    "✅ Temporarily removed 'exposure' from features for its own prediction."
+                )
+        # -------------------------------------------------------------------------
+
+        print(f"Total patients: {len(X_for_training)}")
+        print(f"Features for this task: {X_for_training.shape[1]}")
+        print(
+            f"Positive class ({target_name}): {target_values.sum()} ({target_values.mean():.3f})"
+        )
+
         # Train-test split
         X_train, X_val, y_train, y_val = train_test_split(
-            feature_df,
+            X_for_training,
             target_values,
             test_size=0.2,
             random_state=42,
@@ -366,7 +375,7 @@ def main(
 
         # Train model
         result = train_xgb_for_target(
-            X_train, y_train, X_val, y_val, feature_df.columns, target_name
+            X_train, y_train, X_val, y_val, X_for_training.columns, target_name
         )
         all_results[target_name] = result
 
