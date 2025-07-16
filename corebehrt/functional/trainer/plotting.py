@@ -1,9 +1,11 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Any, Callable, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import matplotlib.style as style
+import numpy as np
+
 from corebehrt.constants.causal.data import EXPOSURE
 
 # --- Configuration ---
@@ -156,7 +158,24 @@ def _create_metric_plot(
 
     fig, ax = plt.subplots(figsize=STYLE_CONFIG["figure_size"])
 
-    # The keys of the 'data' dict are now the labels for the lines
+    # --- Color mapping for outcomes ---
+    color_map = {}
+    if group == "outcomes":
+        # Extract unique outcomes to assign a consistent color to each
+        unique_outcomes = sorted(
+            list(set(" ".join(label.split()[1:]) for label in data.keys()))
+        )
+        num_unique_outcomes = len(unique_outcomes)
+
+        # Use a continuous colormap and discretize it for a large number of outcomes
+        if num_unique_outcomes > 0:
+            colormap = plt.colormaps.get("viridis")
+            colors = colormap(np.linspace(0, 1, num_unique_outcomes))
+            color_map = {
+                outcome: colors[i] for i, outcome in enumerate(unique_outcomes)
+            }
+
+    # --- Plotting loop ---
     for line_label, values in data.items():
         try:
             numeric_values = [float(v) for v in values]
@@ -164,12 +183,18 @@ def _create_metric_plot(
                 log_func(f"⚠️ Length mismatch for '{line_label}'. Skipping plot line.")
                 continue
 
-            # Infer prefix ('train', 'val') from the line label to set color and style
+            # Infer prefix ('train', 'val') from the line label to set style
             prefix = line_label.split()[0].lower()
-            color = STYLE_CONFIG["colors"].get(
-                prefix, STYLE_CONFIG["colors"]["default"]
-            )
             linestyle = "--" if prefix == "val" else "-"
+
+            # Determine color: unique for each outcome, or standard for loss/exposure
+            if group == "outcomes":
+                outcome_name = " ".join(line_label.split()[1:])
+                color = color_map.get(outcome_name, STYLE_CONFIG["colors"]["default"])
+            else:
+                color = STYLE_CONFIG["colors"].get(
+                    prefix, STYLE_CONFIG["colors"]["default"]
+                )
 
             ax.plot(
                 epochs,
@@ -198,11 +223,17 @@ def _create_metric_plot(
     ax.set_xlabel("Epoch", fontsize=12)
     ax.set_ylabel(title_name, fontsize=12)
     ax.set_title(plot_title, fontsize=16, weight="bold")
-
-    # Set legend title based on the plot type
-    legend_title = "Split / Outcome" if group == "outcomes" else "Split"
-    ax.legend(title=legend_title)
     ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+
+    # --- Legend Handling ---
+    num_lines = len(data)
+    if num_lines > 100:
+        log_func(
+            f"ℹ️ Omitting legend for '{base_metric}' plot as it has {num_lines} lines (>100)."
+        )
+    else:
+        legend_title = "Split / Outcome" if group == "outcomes" else "Split"
+        ax.legend(title=legend_title)
 
     # --- Saving and Closing ---
     try:
