@@ -42,7 +42,9 @@ class CausalEHRTrainer(EHRTrainer):
         self.outcome_names = self.model.config.outcome_names
         self.best_outcome_aucs = {name: None for name in self.outcome_names}
         self.best_exposure_auc = None
-        self.optimizer = PCGrad(self.optimizer)
+        self.use_pcgrad = self.args.get("use_pcgrad", True)
+        if self.use_pcgrad:
+            self.optimizer = PCGrad(self.optimizer)
 
     def _train_step(self, batch: dict):
         self.optimizer.zero_grad()
@@ -51,6 +53,7 @@ class CausalEHRTrainer(EHRTrainer):
         with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
             outputs = self.model(batch)
 
+        if self.use_pcgrad:
             # Collect individual task losses for PCGrad
             task_losses = []
 
@@ -68,19 +71,27 @@ class CausalEHRTrainer(EHRTrainer):
             if not task_losses and hasattr(outputs, "loss"):
                 task_losses = [outputs.loss]
 
-        # Scale each loss individually for PCGrad
-        scaled_losses = [self.scaler.scale(loss) for loss in task_losses]
+            if not task_losses:
+                return outputs.loss if hasattr(outputs, "loss") else None
 
-        # Use PCGrad backward instead of regular backward
-        if len(scaled_losses) > 1:
-            # Multiple tasks - use PCGrad
-            self.optimizer.pc_backward(scaled_losses)
+            # Scale each loss individually for PCGrad
+            scaled_losses = [self.scaler.scale(loss) for loss in task_losses]
+
+            # Use PCGrad backward instead of regular backward
+            if len(scaled_losses) > 1:
+                # Multiple tasks - use PCGrad
+                self.optimizer.pc_backward(scaled_losses)
+            else:
+                # Single task - use regular backward
+                scaled_losses[0].backward()
+
+            # Return the total loss for logging (unscaled)
+            return outputs.loss if hasattr(outputs, "loss") else sum(task_losses)
         else:
-            # Single task - use regular backward
-            scaled_losses[0].backward()
-
-        # Return the total loss for logging (unscaled)
-        return outputs.loss if hasattr(outputs, "loss") else sum(task_losses)
+            loss = outputs.loss
+            if loss is not None:
+                self.scaler.scale(loss).backward()
+            return loss
 
     def _update(self):
         """Updates the model (optimizer and scheduler) with PCGrad support"""
@@ -577,8 +588,11 @@ class CausalEHRTrainer(EHRTrainer):
             self.run_folder, "checkpoints", f"checkpoint_epoch{id}_end.pt"
         )
 
-        # PCGrad exposes the underlying optimizer via the optimizer property
-        optimizer_state_dict = self.optimizer.optimizer.state_dict()
+        if self.use_pcgrad:
+            # PCGrad exposes the underlying optimizer via the optimizer property
+            optimizer_state_dict = self.optimizer.optimizer.state_dict()
+        else:
+            optimizer_state_dict = self.optimizer.state_dict()
 
         torch.save(
             {

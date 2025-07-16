@@ -34,6 +34,7 @@ trainer_args:
   n_layers_to_freeze: 2
   unfreeze_on_plateau: false # unfreeze all layers if the performance is less than plateau_threshold
   unfreeze_at_epoch: 20 # if unfrezze_on_plateau is true, whichever condition is met first
+  use_pcgrad: true
 
 optimizer:
   lr: 6e-3
