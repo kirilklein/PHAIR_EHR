@@ -84,7 +84,8 @@ def _group_metrics_for_plotting(
         A dictionary where keys are (group, base_metric) tuples and values are
         the data for that plot. The 'group' corresponds to the subdirectory.
     """
-    outcome_names = outcome_names or []
+    # Sort by length descending to match longer names first (e.g., 'outcome_2' before 'outcome')
+    outcome_names = sorted(outcome_names or [], key=len, reverse=True)
     structured_metrics = defaultdict(dict)
 
     for name, values in metric_history.items():
