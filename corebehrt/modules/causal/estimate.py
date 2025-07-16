@@ -37,7 +37,10 @@ from corebehrt.functional.estimate.report import (
     compute_outcome_stats,
     convert_effect_to_dataframe,
 )
-from corebehrt.functional.io_operations.estimate import save_all_results
+from corebehrt.functional.io_operations.estimate import (
+    save_all_results,
+    save_tmle_analysis,
+)
 from corebehrt.modules.setup.config import Config
 
 
@@ -46,6 +49,16 @@ class EffectEstimator:
     Orchestrates data loading, counterfactual expansion, and causal effect estimation
     for multiple outcomes, with options for filtering and bootstrapping.
     """
+
+    RELEVANT_COLUMNS = [
+        "method",
+        "effect",
+        "std_err",
+        "CI95_lower",
+        "CI95_upper",
+        "effect_1",
+        "effect_0",
+    ]
 
     def __init__(self, cfg: Config, logger: Any):
         self.cfg = cfg
@@ -73,7 +86,7 @@ class EffectEstimator:
         self.logger.info("Starting effect estimation process for multiple outcomes.")
         all_effects = []
         all_stats = []
-
+        initial_estimates = []
         for outcome_name in self.outcome_names:
             self.logger.info(f"--- Processing outcome: {outcome_name} ---")
 
@@ -98,9 +111,7 @@ class EffectEstimator:
                     self.effect_type,
                 )
 
-            effect_df = append_unadjusted_effect(
-                analysis_df, effect_df, self.effect_type
-            )
+            effect_df = append_unadjusted_effect(analysis_df, effect_df)
 
             # 5. Compute and collect stats for this outcome
             outcome_stats = compute_outcome_stats(analysis_df, outcome_name)
@@ -108,13 +119,18 @@ class EffectEstimator:
 
             # 6. Tag results with the outcome name and collect
             effect_df["outcome"] = outcome_name
-            all_effects.append(effect_df)
+            effect_df_clean = effect_df[self.RELEVANT_COLUMNS]
+            initial_estimates.append(effect_df)
+            all_effects.append(effect_df_clean)
 
         # Combine and save all results
         final_results_df = pd.concat(all_effects, ignore_index=True)
         combined_stats_df = pd.concat(all_stats, ignore_index=True)
+        initial_estimates_df = pd.concat(initial_estimates, ignore_index=True)
 
         save_all_results(self.exp_dir, self.df, final_results_df, combined_stats_df)
+        save_tmle_analysis(initial_estimates_df, self.exp_dir)
+
         self.logger.info("Effect estimation complete for all outcomes.")
 
     def _build_multi_estimator(self) -> MultiEstimator:
