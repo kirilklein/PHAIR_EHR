@@ -1,0 +1,93 @@
+name: 'Causal test (data preparation)'
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      # ─── Setup ───────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Clean outputs & create venv
+        run: |
+          rm -rf ./outputs/causal
+          python -m venv .venv
+          echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements.txt
+      - name: Set Python path
+        run: |
+          echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
+
+      # ─── Pipeline & Tests ────────────────────────────────────
+      - name: Data prep
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh          
+          run_step main.create_data                         prepare_and_pretrain/create_data.yaml
+
+      - name: Outcomes & cohort selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          run_step main.create_outcomes                     outcomes.yaml
+          run_step main_causal.select_cohort_full           select_cohort_full/extract.yaml
+
+      - name: Prepare Finetune Data
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare/simple.yaml
+          python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetune/prepared_data
+          
+      - name: Train xgb baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          python tests/pipeline/train_xgb_baseline.py --data_path outputs/causal/finetune/prepared_data \
+          --targets exposure OUTCOME OUTCOME_2 OUTCOME_3 \
+          --target-bounds "exposure:min:0.6" \
+          --target-bounds "OUTCOME:min:0.8" \
+          --target-bounds "OUTCOME_2:min:0.68" \
+          --target-bounds "OUTCOME_3:min:0.68"
+          
+      - name: Prepare Uncensored Data
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare/uncensored.yaml
+
+      - name: Train xgb on uncensored data
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          python tests/pipeline/train_xgb_baseline.py --data_path outputs/causal/finetune/prepared_data_uncensored \
+          --targets exposure OUTCOME OUTCOME_2 OUTCOME_3 \
+          --target-bounds "exposure:min:0.9" \
+          --target-bounds "OUTCOME:min:0.88" \
+          --target-bounds "OUTCOME_2:min:0.88" \
+          --target-bounds "OUTCOME_3:min:0.88"
+
+      
