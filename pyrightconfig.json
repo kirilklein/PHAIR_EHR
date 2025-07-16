@@ -1,6 +1,6 @@
 {
     "ignore": [
-      "corebehrt/sandbox",
+      "sandbox",
       "**/*.ipynb",
       "outputs",
       "example_data"

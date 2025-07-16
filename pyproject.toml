@@ -59,7 +59,7 @@ Source = "https://github.com/FGA-DIKU/EHR"
 Tracker = "https://github.com/FGA-DIKU/EHR/issues"
 
 [tool.pyright]
-exclude = ["**/*.ipynb", "corebehrt/sandbox/*"]
+exclude = ["**/*.ipynb", "sandbox/*"]
 
 [tool.ruff]
 line-length = 88
