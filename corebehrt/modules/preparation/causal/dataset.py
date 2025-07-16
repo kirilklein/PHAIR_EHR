@@ -61,6 +61,11 @@ class CausalPatientDataset(PatientDataset):
         return [p.exposure for p in self.patients]
 
     def assign_outcomes(self, outcomes: dict[str, pd.Series]):
+        """Assigns multiple binary outcomes to each patient in the dataset.
+        Args:
+            outcomes: Dictionary mapping outcome names to pandas Series.
+                Each Series has patient IDs as index and outcome values.
+        """
         for p in self.patients:
             setattr(p, "outcomes", {k: v[p.pid] for k, v in outcomes.items()})
 
