@@ -1,6 +1,6 @@
 """
-Test the baseline classifier for EXPOSURE prediction using prepared patient data with one-hot encoding.
-Baseline classifier for EXPOSURE prediction using prepared patient data with one-hot encoding.
+Test the baseline classifier for EXPOSURE and OUTCOMES prediction using prepared patient data with one-hot encoding.
+Baseline classifier for multi-target prediction using prepared patient data with one-hot encoding.
 """
 
 import argparse
@@ -26,16 +26,17 @@ def create_multihot_features_from_patients(
     Args:
         patients: list of CausalPatientData objects
         vocabulary: dictionary mapping concept codes to their names
+        multihot: whether to use counts or binary encoding
 
     Returns:
-        Tuple of (feature_matrix, targets)
+        Tuple of (feature_matrix, targets_dict)
     """
     print("Extracting concepts from patients...")
 
     # Extract all concepts and targets
-    targets = []
     feature_matrix = np.zeros((len(patients), len(vocabulary)), dtype=int)
     feature_counts = [Counter(patient.concepts) for patient in patients]
+
     if multihot:
         feature_matrix = np.array(
             [
@@ -50,10 +51,30 @@ def create_multihot_features_from_patients(
                 for count in feature_counts
             ]
         )
-    try:
-        targets = [patient.exposure for patient in patients]
-    except Exception:
-        targets = [patient.outcome for patient in patients]
+
+    # Extract all targets (exposure + outcomes)
+    targets_dict = {}
+
+    # Extract exposure target
+    exposure_targets = []
+    for patient in patients:
+        if patient.exposure is not None:
+            exposure_targets.append(patient.exposure)
+        else:
+            exposure_targets.append(0)  # Default to 0 if missing
+    targets_dict["exposure"] = np.array(exposure_targets)
+
+    # Extract outcome targets
+    if patients[0].outcomes is not None:
+        outcome_names = list(patients[0].outcomes.keys())
+        for outcome_name in outcome_names:
+            outcome_targets = []
+            for patient in patients:
+                if patient.outcomes is not None and outcome_name in patient.outcomes:
+                    outcome_targets.append(patient.outcomes[outcome_name])
+                else:
+                    outcome_targets.append(0)  # Default to 0 if missing
+            targets_dict[outcome_name] = np.array(outcome_targets)
 
     # Clean feature names for XGBoost
     def clean_feature_name(name):
@@ -91,33 +112,36 @@ def create_multihot_features_from_patients(
     # Convert to DataFrame for easier handling
     feature_df = pd.DataFrame(feature_matrix, columns=unique_names)
 
-    targets = np.array(targets)
+    # Print contingency tables for each target
+    for target_name, target_values in targets_dict.items():
+        if target_name == "exposure" and "EXPOSURE" in vocabulary:
+            exposure_idx = vocabulary["EXPOSURE"]
+            contingency_table = compute_2x2_matrix(
+                target_values, feature_matrix, exposure_idx
+            )
+            normalized_contingency_table = contingency_table / np.sum(contingency_table)
 
-    contingency_table = compute_2x2_matrix(
-        targets, feature_matrix, vocabulary["EXPOSURE"]
-    )
-    normalized_contingency_table = contingency_table / np.sum(contingency_table)
+            contingency_df = pd.DataFrame(
+                normalized_contingency_table,
+                index=[f"EXPOSURE=0", f"EXPOSURE=1"],
+                columns=[f"{target_name}=0", f"{target_name}=1"],
+            )
 
-    # Make a labeled DataFrame for clarity
-    exposure_code = (
-        "EXPOSURE" if isinstance(vocabulary, dict) else str(vocabulary["EXPOSURE"])
-    )
-    contingency_df = pd.DataFrame(
-        normalized_contingency_table,
-        index=[f"{exposure_code}=0", f"{exposure_code}=1"],
-        columns=["outcome=0", "outcome=1"],
-    )
-
-    print("=" * 50)
-    print("CONTINGENCY TABLE (rows: exposure, columns: outcome)")
-    print("=" * 50)
-    print(contingency_df)
-    print("=" * 50)
+            print("=" * 50)
+            print(
+                f"CONTINGENCY TABLE FOR {target_name.upper()} (rows: exposure, columns: {target_name})"
+            )
+            print("=" * 50)
+            print(contingency_df)
+            print("=" * 50)
 
     print(f"Feature matrix shape: {feature_df.shape}")
-    print(f"Target distribution: {pd.Series(targets).value_counts().to_dict()}")
+    for target_name, target_values in targets_dict.items():
+        print(
+            f"{target_name} distribution: {pd.Series(target_values).value_counts().to_dict()}"
+        )
 
-    return feature_df, targets
+    return feature_df, targets_dict
 
 
 def compute_2x2_matrix(targets, feature_matrix, exposure_idx):
@@ -152,16 +176,20 @@ def compute_2x2_matrix(targets, feature_matrix, exposure_idx):
     return matrix
 
 
-def train_xgb(X_train, y_train, X_val, y_val, concept_names):
-    """Train Random Forest and XGBoost models."""
+def train_xgb_for_target(X_train, y_train, X_val, y_val, concept_names, target_name):
+    """Train XGBoost model for a specific target."""
 
-    print("\n" + "=" * 50)
-    print("MODEL TRAINING")
-    print("=" * 50)
+    print(f"\n--- Training XGBoost for {target_name.upper()} ---")
 
-    # XGBoost
-    print("\nTraining XGBoost...")
-    scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum()
+    # Check if we have any positive cases
+    if y_train.sum() == 0:
+        print(f"❌ No positive cases for {target_name} in training set!")
+        return None
+
+    if y_val.sum() == 0:
+        print(f"⚠️  No positive cases for {target_name} in validation set!")
+
+    scale_pos_weight = (y_train == 0).sum() / max((y_train == 1).sum(), 1)
 
     xgb_model = xgb.XGBClassifier(
         n_estimators=10,
@@ -180,19 +208,23 @@ def train_xgb(X_train, y_train, X_val, y_val, concept_names):
 
     xgb_auc = roc_auc_score(y_val, y_pred_proba_xgb)
 
-    print(f"XGBoost ROC-AUC: {xgb_auc:.4f}")
+    print(f"XGBoost ROC-AUC for {target_name}: {xgb_auc:.4f}")
     print("Classification Report:")
     print(classification_report(y_val, y_pred_xgb))
 
     # Feature importance
     xgb_importance = pd.DataFrame(
-        {"concept": concept_names, "importance": xgb_model.feature_importances_}
-    ).sort_values("importance", ascending=False)
+        {
+            "concept": concept_names,
+            "importance_pct": (xgb_model.feature_importances_ * 100).round(1),
+        }
+    ).sort_values("importance_pct", ascending=False)
 
-    print("Top 10 important concepts (XGBoost):")
-    print(xgb_importance.head(10))
+    print(f"Top 5 important concepts for {target_name} (XGBoost):")
+    print(xgb_importance.head(5))
 
     results = {
+        "target": target_name,
         "model": xgb_model,
         "auc": xgb_auc,
         "predictions": y_pred_proba_xgb,
@@ -202,29 +234,38 @@ def train_xgb(X_train, y_train, X_val, y_val, concept_names):
     return results
 
 
-def plot_results(y_val, results):
-    """Plot ROC curves and feature importance."""
+def plot_results_multitarget(y_val_dict, results_dict):
+    """Plot ROC curves and feature importance for multiple targets."""
 
-    plt.figure(figsize=(15, 5))
+    n_targets = len(results_dict)
+    fig, axes = plt.subplots(1, min(n_targets + 1, 4), figsize=(15, 5))
+    if n_targets == 1:
+        axes = [axes]
 
     # ROC curves
-    plt.subplot(1, 3, 1)
-    for model_name, result in results.items():
-        fpr, tpr, _ = roc_curve(y_val, result["predictions"])
-        plt.plot(fpr, tpr, label=f"{model_name.upper()} (AUC = {result['auc']:.3f})")
+    ax_roc = axes[0]
+    for target_name, result in results_dict.items():
+        if result is not None:
+            y_val = y_val_dict[target_name]
+            fpr, tpr, _ = roc_curve(y_val, result["predictions"])
+            ax_roc.plot(fpr, tpr, label=f"{target_name} (AUC = {result['auc']:.3f})")
 
-    plt.plot([0, 1], [0, 1], "k--", alpha=0.5)
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title("ROC Curves Comparison")
-    plt.legend()
+    ax_roc.plot([0, 1], [0, 1], "k--", alpha=0.5)
+    ax_roc.set_xlabel("False Positive Rate")
+    ax_roc.set_ylabel("True Positive Rate")
+    ax_roc.set_title("ROC Curves Comparison")
+    ax_roc.legend()
 
-    xgb_top = results["xgb"]["importance"].head(15)
-    plt.subplot(1, 3, 3)
-    plt.barh(range(len(xgb_top)), xgb_top["importance"])
-    plt.yticks(range(len(xgb_top)), xgb_top["concept"])
-    plt.xlabel("Importance")
-    plt.title("Top 15 Concepts - XGBoost")
+    # Feature importance for each target (up to 3 additional plots)
+    for idx, (target_name, result) in enumerate(list(results_dict.items())[:3]):
+        if result is not None and idx + 1 < len(axes):
+            ax = axes[idx + 1]
+            top_features = result["importance"].head(10)
+            ax.barh(range(len(top_features)), top_features["importance"])
+            ax.set_yticks(range(len(top_features)))
+            ax.set_yticklabels(top_features["concept"])
+            ax.set_xlabel("Importance")
+            ax.set_title(f"Top 10 Features - {target_name}")
 
     plt.tight_layout()
     plt.show()
@@ -232,14 +273,16 @@ def plot_results(y_val, results):
 
 def main(
     data_path: str,
-    min_roc_auc: float,
+    min_roc_auc: float = 0.5,
     expected_most_important_concept: str = None,
     multihot: bool = False,
+    targets: list = None,
+    target_bounds: dict = None,
 ):
-    """Main function to run the prepared data baseline experiment."""
+    """Main function to run the multi-target prepared data baseline experiment."""
 
     print("=" * 60)
-    print("BASELINE EXPOSURE CLASSIFICATION - PREPARED DATA")
+    print("MULTI-TARGET BASELINE CLASSIFICATION - PREPARED DATA")
     print("=" * 60)
 
     # Load prepared patient data
@@ -248,17 +291,27 @@ def main(
 
     # Create multi-hot features
     print("\nCreating multi-hot encoded features...")
-    feature_df, targets = create_multihot_features_from_patients(
+    feature_df, targets_dict = create_multihot_features_from_patients(
         patients, vocabulary, multihot
     )
+
+    # Determine which targets to train
+    available_targets = list(targets_dict.keys())
+    if targets is None:
+        targets_to_train = available_targets
+    else:
+        targets_to_train = [t for t in targets if t in available_targets]
+        if not targets_to_train:
+            print(
+                f"❌ None of the specified targets {targets} found in available targets {available_targets}"
+            )
+            return None
+
+    print(f"Training targets: {targets_to_train}")
 
     # Check if we have enough data for training
     if len(feature_df) < 10:
         print("❌ Not enough patients for training!")
-        return None
-
-    if targets.sum() == 0 or targets.sum() == len(targets):
-        print("❌ No variation in exposure labels!")
         return None
 
     # Remove features with zero variance (all zeros)
@@ -276,71 +329,164 @@ def main(
         print("❌ No features remaining after filtering!")
         return None
 
-    # Train-test split
-    print(f"\nSplitting data...")
-    print(f"Total patients: {len(feature_df)}")
-    print(f"Features: {feature_df.shape[1]}")
-    print(f"Positive class (EXPOSURE): {targets.sum()} ({targets.mean():.3f})")
+    # Train models for each target
+    all_results = {}
+    all_passed = True
 
-    X_train, X_val, y_train, y_val = train_test_split(
-        feature_df, targets, test_size=0.2, random_state=42, stratify=targets
-    )
+    for target_name in targets_to_train:
+        print(f"\n{'=' * 60}")
+        print(f"PROCESSING TARGET: {target_name.upper()}")
+        print(f"{'=' * 60}")
 
-    print(f"Train set: {len(X_train)} patients, {y_train.mean():.3f} positive rate")
-    print(f"Val set: {len(X_val)} patients, {y_val.mean():.3f} positive rate")
+        target_values = targets_dict[target_name]
 
-    # Train models
-    results = train_xgb(X_train, y_train, X_val, y_val, feature_df.columns)
-    auc = results["auc"]
-    most_important_concept_name = results["importance"].iloc[0]["concept"]
-    n_important = results["importance"].shape[0]
+        # Check if target has variation
+        if target_values.sum() == 0 or target_values.sum() == len(target_values):
+            print(f"❌ No variation in {target_name} labels!")
+            all_results[target_name] = None
+            continue
 
-    # Print essentials
-    print(f"ROC-AUC: {auc:.4f}")
-    print(f"Most important concept: {most_important_concept_name}")
+        print(f"Total patients: {len(feature_df)}")
+        print(f"Features: {feature_df.shape[1]}")
+        print(
+            f"Positive class ({target_name}): {target_values.sum()} ({target_values.mean():.3f})"
+        )
 
-    # Test: ROC-AUC threshold
-    if auc < min_roc_auc:
-        print(f"❌ ROC-AUC {auc:.4f} is below threshold {min_roc_auc}")
-        return None
-    else:
-        print(f"✓ ROC-AUC passes threshold ({min_roc_auc})")
+        # Train-test split
+        X_train, X_val, y_train, y_val = train_test_split(
+            feature_df,
+            target_values,
+            test_size=0.2,
+            random_state=42,
+            stratify=target_values,
+        )
 
-    # Test: most important concept matches expected
-    if expected_most_important_concept is not None:
-        if most_important_concept_name != expected_most_important_concept:
+        print(f"Train set: {len(X_train)} patients, {y_train.mean():.3f} positive rate")
+        print(f"Val set: {len(X_val)} patients, {y_val.mean():.3f} positive rate")
+
+        # Train model
+        result = train_xgb_for_target(
+            X_train, y_train, X_val, y_val, feature_df.columns, target_name
+        )
+        all_results[target_name] = result
+
+        if result is None:
+            all_passed = False
+            continue
+
+        auc = result["auc"]
+        most_important_concept_name = result["importance"].iloc[0]["concept"]
+
+        # Test: ROC-AUC threshold
+        current_bounds = target_bounds.get(target_name, {}) if target_bounds else {}
+        min_auc_threshold = current_bounds.get("min", min_roc_auc)
+        max_auc_threshold = current_bounds.get("max", 1.0)
+
+        if auc < min_auc_threshold:
             print(
-                f"❌ Most important concept '{most_important_concept_name}' does not match expected '{expected_most_important_concept}'"
+                f"❌ ROC-AUC {auc:.4f} is below threshold {min_auc_threshold} for {target_name}"
             )
-            return None
+            all_passed = False
+        elif auc > max_auc_threshold:
+            print(
+                f"❌ ROC-AUC {auc:.4f} is above threshold {max_auc_threshold} for {target_name}"
+            )
+            all_passed = False
         else:
-            print(
-                f"✓ Most important concept matches expected: '{expected_most_important_concept}'"
-            )
+            print(f"✓ ROC-AUC {auc:.4f} passes thresholds for {target_name}")
+
+        # Test: most important concept matches expected (only for exposure if specified)
+        if expected_most_important_concept is not None and target_name == "exposure":
+            if most_important_concept_name != expected_most_important_concept:
+                print(
+                    f"❌ Most important concept '{most_important_concept_name}' does not match expected '{expected_most_important_concept}' for {target_name}"
+                )
+                all_passed = False
+            else:
+                print(
+                    f"✓ Most important concept matches expected: '{expected_most_important_concept}' for {target_name}"
+                )
+
+    # Summary
+    print(f"\n{'=' * 60}")
+    print("FINAL SUMMARY")
+    print(f"{'=' * 60}")
+
+    successful_results = {k: v for k, v in all_results.items() if v is not None}
+
+    for target_name, result in successful_results.items():
+        print(
+            f"{target_name}: ROC-AUC = {result['auc']:.4f}, Most important = {result['importance'].iloc[0]['concept']}"
+        )
+
+    if all_passed:
+        print("🎉 ALL TESTS PASSED!")
+    else:
+        print("💥 SOME TESTS FAILED!")
 
     return {
-        "auc": auc,
-        "most_important_concept": most_important_concept_name,
-        "n_important": n_important,
+        "results": successful_results,
+        "all_passed": all_passed,
+        "targets_trained": targets_to_train,
     }
+
+
+def parse_bounds_arg(bounds_str: str) -> dict:
+    """Parse bounds string like 'min:0.6,max:0.9' into dict."""
+    if not bounds_str:
+        return {}
+
+    bounds = {}
+    for part in bounds_str.split(","):
+        if ":" in part:
+            key, value = part.split(":", 1)
+            bounds[key.strip()] = float(value.strip())
+
+    return bounds
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, required=True)
-    parser.add_argument("--min_roc_auc", type=float, required=True)
+    parser.add_argument("--min_roc_auc", type=float, default=0.5)
     parser.add_argument(
         "--expected_most_important_concept",
         type=str,
         required=False,
         default=None,
-        help="Expected name of the most important concept (optional)",
+        help="Expected name of the most important concept for exposure (optional)",
     )
     parser.add_argument("--multihot", action="store_true", required=False)
+    parser.add_argument(
+        "--targets",
+        type=str,
+        nargs="+",
+        help="Specific target names to train (if not provided, train all available targets)",
+    )
+    parser.add_argument(
+        "--target-bounds",
+        type=str,
+        action="append",
+        help="Bounds for specific target as 'TARGET_NAME:min:0.7,max:0.95'. Can be used multiple times.",
+    )
+
     args = parser.parse_args()
+
+    # Parse target bounds
+    target_bounds = {}
+    if args.target_bounds:
+        for bound_spec in args.target_bounds:
+            parts = bound_spec.split(":", 1)
+            if len(parts) == 2:
+                target_name = parts[0]
+                bounds_str = parts[1]
+                target_bounds[target_name] = parse_bounds_arg(bounds_str)
+
     main(
         args.data_path,
         args.min_roc_auc,
         args.expected_most_important_concept,
         args.multihot,
+        args.targets,
+        target_bounds,
     )
