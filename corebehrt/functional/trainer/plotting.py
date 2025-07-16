@@ -36,7 +36,8 @@ def plot_training_curves(
     This function organizes plots as follows:
     - `loss` plots are saved directly in `output_dir`.
     - `exposure` metrics are saved in `output_dir/exposure/`.
-    - Each outcome's metrics are saved in `output_dir/{outcome_name}/`.
+    - All outcome metrics are grouped by metric type (e.g., a single 'auroc' plot
+      for all outcomes) and saved in `output_dir/outcomes/`.
 
     Args:
         metric_history: Dictionary mapping metric names to their value history.
@@ -78,15 +79,20 @@ def _group_metrics_for_plotting(
     log_func: Callable[[str], None],
 ) -> Dict:
     """
-    Parses metric names using the explicit outcome_names list and groups them.
+    Parses metric names to group them for plotting.
+
+    - 'loss' metrics get their own plot.
+    - 'exposure' metrics are grouped into an 'exposure' directory.
+    - All specified 'outcome' metrics are grouped together by base metric
+      (e.g., 'auroc'), resulting in a single plot per metric that contains
+      lines for all outcomes.
 
     Returns:
         A dictionary where keys are (group, base_metric) tuples and values are
         the data for that plot. The 'group' corresponds to the subdirectory.
     """
-    # Sort by length descending to match longer names first (e.g., 'outcome_2' before 'outcome')
     outcome_names = sorted(outcome_names or [], key=len, reverse=True)
-    structured_metrics = defaultdict(dict)
+    grouped_plots = defaultdict(dict)
 
     for name, values in metric_history.items():
         if not values:
@@ -96,37 +102,42 @@ def _group_metrics_for_plotting(
         if len(parts) < 2:
             continue
 
-        prefix = parts[0]
+        prefix = parts[0]  # 'train', 'val', etc.
         metric_body = "_".join(parts[1:])
 
-        group_name: Optional[str] = None
-        base_metric: Optional[str] = None
-
-        # 1. Check for the 'loss' special case
+        # Case 1: Handle 'loss' metric
         if metric_body == "loss":
-            group_name = None  # Signals root directory
-            base_metric = "loss"
+            group_key = (None, "loss")  # Group=None saves to root output_dir
+            grouped_plots[group_key][prefix] = values
+            continue
 
-        # 2. Check for the 'exposure' special case
-        elif EXPOSURE in metric_body:
-            group_name = EXPOSURE
+        # Case 2: Handle 'exposure' metrics
+        if EXPOSURE in metric_body:
             base_metric = metric_body.replace(f"{EXPOSURE}_", "").strip("_") or EXPOSURE
+            group_key = (EXPOSURE, base_metric)
+            grouped_plots[group_key][prefix] = values
+            continue
 
-        # 3. Check against the provided list of outcome names
-        else:
-            for outcome in outcome_names:
-                if metric_body.startswith(f"{outcome}_") or metric_body == outcome:
-                    group_name = outcome
-                    base_metric = metric_body.replace(f"{outcome}_", "").strip("_")
-                    break
+        # Case 3: Handle outcome metrics
+        matched = False
+        for outcome in outcome_names:
+            if metric_body.startswith(f"{outcome}_") or metric_body == outcome:
+                group_name = "outcomes"  # All outcomes go to the 'outcomes' group
+                base_metric = (
+                    metric_body.replace(f"{outcome}_", "").strip("_") or "value"
+                )
+                group_key = (group_name, base_metric)
 
-        # Add the parsed metric to our structured dictionary
-        if base_metric:
-            structured_metrics[(group_name, base_metric)][prefix] = values
-        else:
+                # Create a descriptive key for the line, e.g., "Train Diabetes"
+                line_key = f"{prefix.title()} {outcome.replace('_', ' ').title()}"
+                grouped_plots[group_key][line_key] = values
+                matched = True
+                break
+
+        if not matched:
             log_func(f"⚠️ Skipping unrecognized metric: '{name}'")
 
-    return structured_metrics
+    return grouped_plots
 
 
 def _create_metric_plot(
@@ -138,46 +149,59 @@ def _create_metric_plot(
     log_func: Callable[[str], None],
 ):
     """Creates, styles, and saves a single plot for a group of metrics."""
+    # Determine plot directory: 'output_dir/outcomes', 'output_dir/exposure', or 'output_dir'
     plot_dir = output_dir / group if group else output_dir
     plot_dir.mkdir(parents=True, exist_ok=True)
     fig_path = plot_dir / f"{base_metric}.png"
 
     fig, ax = plt.subplots(figsize=STYLE_CONFIG["figure_size"])
 
-    for prefix, values in data.items():
+    # The keys of the 'data' dict are now the labels for the lines
+    for line_label, values in data.items():
         try:
             numeric_values = [float(v) for v in values]
             if len(numeric_values) != len(epochs):
-                log_func(
-                    f"⚠️ Length mismatch for '{prefix}_{base_metric}'. Skipping plot."
-                )
+                log_func(f"⚠️ Length mismatch for '{line_label}'. Skipping plot line.")
                 continue
+
+            # Infer prefix ('train', 'val') from the line label to set color and style
+            prefix = line_label.split()[0].lower()
+            color = STYLE_CONFIG["colors"].get(
+                prefix, STYLE_CONFIG["colors"]["default"]
+            )
+            linestyle = "--" if prefix == "val" else "-"
 
             ax.plot(
                 epochs,
                 numeric_values,
-                label=prefix.title(),
-                color=STYLE_CONFIG["colors"].get(
-                    prefix, STYLE_CONFIG["colors"]["default"]
-                ),
+                label=line_label.title(),
+                color=color,
                 marker="o",
-                linestyle="-",
+                linestyle=linestyle,
                 markersize=4,
                 alpha=0.8,
             )
         except (ValueError, TypeError):
-            log_func(f"⚠️ Non-numeric data for '{prefix}_{base_metric}'. Skipping plot.")
+            log_func(f"⚠️ Non-numeric data for '{line_label}'. Skipping plot line.")
 
     # --- Styling ---
     title_name = base_metric.replace("_", " ").title()
-    plot_group_name = f" for {group.replace('_', ' ').title()}" if group else ""
+    plot_group_name = (
+        f" for {group.replace('_', ' ').title()}"
+        if group and group != "outcomes"
+        else ""
+    )
+    plot_title = f"{title_name}{plot_group_name} Over Epochs"
+    if group == "outcomes":
+        plot_title = f"{title_name} for All Outcomes Over Epochs"
 
     ax.set_xlabel("Epoch", fontsize=12)
     ax.set_ylabel(title_name, fontsize=12)
-    ax.set_title(
-        f"{title_name}{plot_group_name} Over Epochs", fontsize=16, weight="bold"
-    )
-    ax.legend(title="Split")
+    ax.set_title(plot_title, fontsize=16, weight="bold")
+
+    # Set legend title based on the plot type
+    legend_title = "Split / Outcome" if group == "outcomes" else "Split"
+    ax.legend(title=legend_title)
     ax.grid(True, which="both", linestyle="--", linewidth=0.5)
 
     # --- Saving and Closing ---
