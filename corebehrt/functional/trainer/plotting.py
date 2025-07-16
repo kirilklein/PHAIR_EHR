@@ -114,7 +114,7 @@ def _group_metrics_for_plotting(
         # 3. Check against the provided list of outcome names
         else:
             for outcome in outcome_names:
-                if outcome in metric_body:
+                if metric_body.startswith(f"{outcome}_") or metric_body == outcome:
                     group_name = outcome
                     base_metric = metric_body.replace(f"{outcome}_", "").strip("_")
                     break
