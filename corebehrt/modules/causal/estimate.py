@@ -28,6 +28,7 @@ from corebehrt.functional.estimate.data_handler import (
     get_outcome_names,
     prepare_data_for_outcome,
     validate_columns,
+    prepare_tmle_analysis_df,
 )
 from corebehrt.functional.estimate.benchmarks import (
     append_true_effect,
@@ -124,15 +125,25 @@ class EffectEstimator:
             initial_estimates.append(effect_df)
             all_effects.append(effect_df_clean)
 
-        # Combine and save all results
+        self._process_and_save_results(all_effects, all_stats, initial_estimates)
+
+        self.logger.info("Effect estimation complete for all outcomes.")
+
+    def _process_and_save_results(
+        self,
+        all_effects: list,
+        all_stats: list,
+        initial_estimates: list,
+    ) -> None:
+        """Combines results from all outcomes and saves them to disk."""
         final_results_df = pd.concat(all_effects, ignore_index=True)
         combined_stats_df = pd.concat(all_stats, ignore_index=True)
         initial_estimates_df = pd.concat(initial_estimates, ignore_index=True)
 
         save_all_results(self.exp_dir, self.df, final_results_df, combined_stats_df)
-        save_tmle_analysis(initial_estimates_df, self.exp_dir)
 
-        self.logger.info("Effect estimation complete for all outcomes.")
+        tmle_analysis_df = prepare_tmle_analysis_df(initial_estimates_df)
+        save_tmle_analysis(tmle_analysis_df, self.exp_dir)
 
     def _build_multi_estimator(self) -> MultiEstimator:
         """Builds a MultiEstimator for a specific outcome."""

@@ -14,13 +14,6 @@ from corebehrt.constants.causal.paths import (
     ESTIMATE_RESULTS_FILE,
 )
 
-INITIAL_ESTIMATES_COLUMNS = [
-    "initial_effect_1",
-    "initial_effect_0",
-    "adjustment_1",
-    "adjustment_0",
-]
-
 
 def save_all_results(
     exp_dir: str, df: pd.DataFrame, results_df: pd.DataFrame, stats_df: pd.DataFrame
@@ -50,24 +43,8 @@ def save_estimate_results(effect_df: pd.DataFrame, exp_dir: str) -> None:
     effect_df.to_csv(filepath, index=False)
 
 
-def save_tmle_analysis(initial_estimates_df: pd.DataFrame, exp_dir: str) -> None:
-    """Handle and save TMLE analysis."""
-    if not all(
-        col in initial_estimates_df.columns
-        for col in INITIAL_ESTIMATES_COLUMNS + ["method", "outcome", "effect"]
-    ):
+def save_tmle_analysis(tmle_analysis_df: pd.DataFrame | None, exp_dir: str) -> None:
+    """Saves the pre-computed TMLE analysis dataframe to a CSV file."""
+    if tmle_analysis_df is None or tmle_analysis_df.empty:
         return
-    initial_estimates_df = initial_estimates_df[
-        INITIAL_ESTIMATES_COLUMNS + ["method", "effect", "outcome"]
-    ]
-    initial_estimates_df = initial_estimates_df[
-        initial_estimates_df["method"] == "TMLE"
-    ]
-    initial_estimates_df["initial_effect"] = (
-        initial_estimates_df["initial_effect_1"]
-        - initial_estimates_df["initial_effect_0"]
-    )
-    initial_estimates_df["adjustment"] = (
-        initial_estimates_df["adjustment_1"] - initial_estimates_df["adjustment_0"]
-    )
-    initial_estimates_df.to_csv(join(exp_dir, "tmle_analysis.csv"), index=False)
+    tmle_analysis_df.to_csv(join(exp_dir, "tmle_analysis.csv"), index=False)

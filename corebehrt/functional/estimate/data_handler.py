@@ -14,6 +14,13 @@ from corebehrt.constants.causal.data import (
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.counterfactuals import expand_counterfactuals
 
+TMLE_ANALYSIS_INPUT_COLS = [
+    "initial_effect_1",
+    "initial_effect_0",
+    "adjustment_1",
+    "adjustment_0",
+]
+
 
 def get_outcome_names(df: pd.DataFrame) -> List[str]:
     """
@@ -107,3 +114,30 @@ def prepare_data_for_outcome(df: pd.DataFrame, outcome_name: str) -> pd.DataFram
         outcome_control_col=PROBAS_CONTROL,
         outcome_exposed_col=PROBAS_EXPOSED,
     )
+
+
+def prepare_tmle_analysis_df(initial_estimates_df: pd.DataFrame) -> pd.DataFrame | None:
+    """
+    Filters for TMLE results and calculates specific analysis columns.
+    Returns a dataframe ready for saving, or None if conditions are not met.
+    """
+    required_cols = TMLE_ANALYSIS_INPUT_COLS + ["method", "outcome", "effect"]
+
+    if not all(col in initial_estimates_df.columns for col in required_cols):
+        print("Skipping TMLE analysis: required columns not found.")
+        return None
+
+    tmle_df = initial_estimates_df[initial_estimates_df["method"] == "TMLE"].copy()
+
+    if tmle_df.empty:
+        print("Skipping TMLE analysis: no TMLE results found.")
+        return None
+
+    print("Preparing TMLE-specific analysis file.")
+    tmle_df["initial_effect"] = (
+        tmle_df["initial_effect_1"] - tmle_df["initial_effect_0"]
+    )
+    tmle_df["adjustment"] = tmle_df["adjustment_1"] - tmle_df["adjustment_0"]
+
+    final_cols = required_cols + ["initial_effect", "adjustment"]
+    return tmle_df[final_cols]
