@@ -15,5 +15,6 @@
     "reportGeneralTypeIssues": false,
     "reportAssignmentType": false,
     "reportCallIssue": false,
+    "reportOptionalCall": false,
     "typeCheckingMode": "basic"
 }

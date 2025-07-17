@@ -16,6 +16,9 @@ model:
   head:
     shared_representation: true # whether to share the bigru representation for exposure and outcome
     bidirectional: true
+    exposure_lambda: 0
+    consistency_lambda: 1.5
+    ortho_lambda: 0.5
 
 trainer_args:
   loss_weight_function:
@@ -23,7 +26,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 3
+  epochs: 10
   info: true
   gradient_clip:
     clip_value: 1.0
@@ -34,15 +37,16 @@ trainer_args:
   n_layers_to_freeze: 2
   unfreeze_on_plateau: false # unfreeze all layers if the performance is less than plateau_threshold
   unfreeze_at_epoch: 20 # if unfrezze_on_plateau is true, whichever condition is met first
+  use_pcgrad: true
 
 optimizer:
-  lr: 6e-3
+  lr: 9e-4
   eps: 1e-6
 
 scheduler:
   _target_: transformers.get_linear_schedule_with_warmup
   num_training_epochs: 15
-  num_warmup_epochs: 2
+  num_warmup_epochs: 3
 
 metrics:
   roc_auc:

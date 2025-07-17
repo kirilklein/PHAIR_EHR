@@ -42,7 +42,9 @@ class CausalEHRTrainer(EHRTrainer):
         self.outcome_names = self.model.config.outcome_names
         self.best_outcome_aucs = {name: None for name in self.outcome_names}
         self.best_exposure_auc = None
-        self.optimizer = PCGrad(self.optimizer)
+        self.use_pcgrad = self.args.get("use_pcgrad", True)
+        if self.use_pcgrad:
+            self.optimizer = PCGrad(self.optimizer)
 
     def _train_step(self, batch: dict):
         self.optimizer.zero_grad()
@@ -51,36 +53,64 @@ class CausalEHRTrainer(EHRTrainer):
         with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
             outputs = self.model(batch)
 
-            # Collect individual task losses for PCGrad
-            task_losses = []
+        loss = outputs.loss
+        if loss is None:
+            return None
 
-            # Add exposure loss if available
+        if self.use_pcgrad:
+            # Separate the "true" task losses from the regularization (orthogonality) loss
+            task_losses = []
             if hasattr(outputs, "exposure_loss") and outputs.exposure_loss is not None:
                 task_losses.append(outputs.exposure_loss)
-
-            # Add outcome losses if available
             if hasattr(outputs, "outcome_losses") and outputs.outcome_losses:
-                for outcome_loss in outputs.outcome_losses.values():
-                    if outcome_loss is not None:
-                        task_losses.append(outcome_loss)
+                task_losses.extend(
+                    [
+                        outcome_loss
+                        for outcome_loss in outputs.outcome_losses.values()
+                        if outcome_loss is not None
+                    ]
+                )
 
-            # If we don't have individual losses, fall back to total loss
-            if not task_losses and hasattr(outputs, "loss"):
-                task_losses = [outputs.loss]
+            # The orthogonality loss is passed as a separate, unprojected objective
+            ortho_loss = (
+                outputs.orthogonality_loss
+                if hasattr(outputs, "orthogonality_loss")
+                else None
+            )
 
-        # Scale each loss individually for PCGrad
-        scaled_losses = [self.scaler.scale(loss) for loss in task_losses]
+            # Sum all regularization losses to be passed as a single unprojected objective
+            unprojected_reg_loss = None
+            if ortho_loss is not None:
+                unprojected_reg_loss = ortho_loss
+            if hasattr(outputs, "consistency_losses") and outputs.consistency_losses:
+                # Sum up all consistency losses from the different outcomes
+                total_consistency_loss = sum(outputs.consistency_losses.values())
+                if unprojected_reg_loss is None:
+                    unprojected_reg_loss = total_consistency_loss
+                else:
+                    unprojected_reg_loss += total_consistency_loss
 
-        # Use PCGrad backward instead of regular backward
-        if len(scaled_losses) > 1:
-            # Multiple tasks - use PCGrad
-            self.optimizer.pc_backward(scaled_losses)
+            # If we have multiple tasks to project, use PCGrad
+            if len(task_losses) > 1:
+                scaled_task_losses = [self.scaler.scale(l) for l in task_losses]
+                scaled_unprojected_loss = (
+                    self.scaler.scale(unprojected_reg_loss)
+                    if unprojected_reg_loss is not None
+                    else None
+                )
+
+                self.optimizer.pc_backward(
+                    scaled_task_losses, unprojected_objective=scaled_unprojected_loss
+                )
+            else:
+                # With one or zero tasks, PCGrad is not needed.
+                # Just use the total loss, which sums all components correctly.
+                self.scaler.scale(loss).backward()
         else:
-            # Single task - use regular backward
-            scaled_losses[0].backward()
+            # Without PCGrad, just use the total loss
+            self.scaler.scale(loss).backward()
 
-        # Return the total loss for logging (unscaled)
-        return outputs.loss if hasattr(outputs, "loss") else sum(task_losses)
+        return loss
 
     def _update(self):
         """Updates the model (optimizer and scheduler) with PCGrad support"""
@@ -96,12 +126,12 @@ class CausalEHRTrainer(EHRTrainer):
         if mode == "val":
             if self.val_dataset is None:
                 self.log("No validation dataset provided")
-                return None, None, None, None, None
+                return None, None, None, None, None, None
             dataloader = self.get_dataloader(self.val_dataset, mode="val")
         elif mode == "test":
             if self.test_dataset is None:
                 self.log("No test dataset provided")
-                return None, None, None, None, None
+                return None, None, None, None, None, None
             dataloader = self.get_dataloader(self.test_dataset, mode="test")
         else:
             raise ValueError(f"Mode {mode} not supported. Use 'val' or 'test'")
@@ -112,6 +142,7 @@ class CausalEHRTrainer(EHRTrainer):
         loss = 0
         exposure_loss_total = 0
         outcome_losses_total = defaultdict(float)
+        consistency_losses_total = defaultdict(float)
 
         prediction_data = {
             EXPOSURE: CausalPredictionData(
@@ -147,6 +178,14 @@ class CausalEHRTrainer(EHRTrainer):
                 if hasattr(outputs, "outcome_losses"):
                     for outcome_name, outcome_loss in outputs.outcome_losses.items():
                         outcome_losses_total[outcome_name] += outcome_loss.item()
+                if hasattr(outputs, "consistency_losses"):
+                    for (
+                        outcome_name,
+                        consistency_loss,
+                    ) in outputs.consistency_losses.items():
+                        consistency_losses_total[outcome_name] += (
+                            consistency_loss.item()
+                        )
 
                 if self.accumulate_logits:
                     self._accumulate_predictions(
@@ -194,8 +233,19 @@ class CausalEHRTrainer(EHRTrainer):
             outcome_name: total_loss / len(loop)
             for outcome_name, total_loss in outcome_losses_total.items()
         }
+        avg_consistency_losses = {
+            outcome_name: total_loss / len(loop)
+            for outcome_name, total_loss in consistency_losses_total.items()
+        }
 
-        return avg_loss, metrics, avg_exposure_loss, avg_outcome_losses, prediction_data
+        return (
+            avg_loss,
+            metrics,
+            avg_exposure_loss,
+            avg_outcome_losses,
+            avg_consistency_losses,
+            prediction_data,
+        )
 
     def _clip_gradients(self):
         """Clip gradients with PCGrad support"""
@@ -392,11 +442,17 @@ class CausalEHRTrainer(EHRTrainer):
             val_metrics,
             val_exposure_loss,
             val_outcome_loss,
+            val_consistency_loss,
             val_prediction_data,
         ) = self._evaluate(mode="val")
-        _, test_metrics, test_exposure_loss, test_outcome_loss, test_prediction_data = (
-            self._evaluate(mode="test")
-        )
+        (
+            _,
+            test_metrics,
+            test_exposure_loss,
+            test_outcome_loss,
+            test_consistency_loss,
+            test_prediction_data,
+        ) = self._evaluate(mode="test")
 
         current_metric_value = val_metrics.get(
             self.stopping_metric, val_loss
@@ -444,8 +500,10 @@ class CausalEHRTrainer(EHRTrainer):
             test_metrics=test_metrics,
             val_exposure_loss=val_exposure_loss,
             val_outcome_losses=val_outcome_loss,
+            val_consistency_losses=val_consistency_loss,
             test_exposure_loss=test_exposure_loss,
             test_outcome_losses=test_outcome_loss,
+            test_consistency_losses=test_consistency_loss,
         )
         self._update_metric_history(epoch_metrics)
 
@@ -494,6 +552,16 @@ class CausalEHRTrainer(EHRTrainer):
         # Store outcome losses and metrics
         self._store_outcome_losses("val", metrics.val_outcome_losses)
         self._store_outcome_losses("test", metrics.test_outcome_losses)
+        self._store_outcome_losses(
+            "val_consistency",
+            metrics.val_consistency_losses,
+            suffix="_consistency_loss",
+        )
+        self._store_outcome_losses(
+            "test_consistency",
+            metrics.test_consistency_losses,
+            suffix="_consistency_loss",
+        )
         self._store_metrics("val", metrics.val_metrics)
         self._store_metrics("test", metrics.test_metrics)
 
@@ -504,11 +572,13 @@ class CausalEHRTrainer(EHRTrainer):
         elif value == 0 and fallback is not None:  # Handle train_loss special case
             self.metric_history[key].append(fallback)
 
-    def _store_outcome_losses(self, prefix: str, outcome_losses: dict):
+    def _store_outcome_losses(
+        self, prefix: str, outcome_losses: dict, suffix: str = "_loss"
+    ):
         """Store outcome losses from a dictionary"""
         if outcome_losses is not None:
             for outcome_name, loss_value in outcome_losses.items():
-                key = f"{prefix}_{outcome_name}_loss"
+                key = f"{prefix}_{outcome_name}{suffix}"
                 self.metric_history[key].append(loss_value)
 
     def _store_metrics(self, prefix: str, metrics: dict):
@@ -577,8 +647,11 @@ class CausalEHRTrainer(EHRTrainer):
             self.run_folder, "checkpoints", f"checkpoint_epoch{id}_end.pt"
         )
 
-        # PCGrad exposes the underlying optimizer via the optimizer property
-        optimizer_state_dict = self.optimizer.optimizer.state_dict()
+        if self.use_pcgrad:
+            # PCGrad exposes the underlying optimizer via the optimizer property
+            optimizer_state_dict = self.optimizer.optimizer.state_dict()
+        else:
+            optimizer_state_dict = self.optimizer.state_dict()
 
         torch.save(
             {
