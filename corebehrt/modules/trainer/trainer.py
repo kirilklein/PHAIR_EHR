@@ -261,7 +261,7 @@ class EHRTrainer:
                 val_loss=val_loss,
                 val_metrics=val_metrics,
                 test_metrics=test_metrics,
-                final_step_loss=epoch_loss[-1],
+                final_step_loss=epoch_loss[-1],  # type: ignore
                 best_model=True,
             )
 
@@ -303,7 +303,7 @@ class EHRTrainer:
                 val_loss=val_loss,
                 val_metrics=val_metrics,
                 test_metrics=test_metrics,
-                final_step_loss=epoch_loss[-1],
+                final_step_loss=epoch_loss[-1],  # type: ignore
                 best_model=True,
             )
 
@@ -346,7 +346,7 @@ class EHRTrainer:
                 val_loss=val_loss,
                 val_metrics=val_metrics,
                 test_metrics=test_metrics,
-                final_step_loss=epoch_loss[-1],
+                final_step_loss=epoch_loss[-1],  # type: ignore
                 best_model=True,
             )
             return False

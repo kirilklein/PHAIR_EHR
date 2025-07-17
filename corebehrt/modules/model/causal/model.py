@@ -58,8 +58,8 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
         # Orthogonality settings
         self.use_orthogonality = self.head_config.get("use_orthogonality", True)
+        self.exposure_lambda = self.head_config.get("exposure_lambda", 1.0)
         self.ortho_lambda = self.head_config.get("ortho_lambda", 1.0)
-        # Student-Teacher settings
         self.consistency_lambda = self.head_config.get("consistency_lambda", 1.0)
 
     def _setup_pooling_layers(self, config):
@@ -82,8 +82,13 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
     def _setup_mlp_heads(self):
         # Exposure head takes Z_c + Z_e
-        self.exposure_head = MLPHead(
+        self.teacher_exposure_head = MLPHead(
             input_size=self.split_sizes[0] + self.split_sizes[1]
+        )
+
+        # 2. Student Head for Exposure (for inference, uses only z_c)
+        self.student_exposure_head = MLPHead(
+            input_size=self.split_sizes[0]  # Z_c only
         )
 
         # 1. Embedding layer for the outcomes
@@ -123,9 +128,24 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         outputs.pooler_output = z_c
         outputs.representations = {"shared": z_c, "exposure": z_e, "outcome": z_y}
 
-        # 3. --- Exposure Prediction ---
-        exposure_input = torch.cat((z_c, z_e), dim=-1)
-        outputs.exposure_logits = self.exposure_head(exposure_input)
+        # 3. --- Exposure Prediction (Student-Teacher) ---
+        # Teacher Prediction (uses z_c + z_e)
+        teacher_exposure_input = torch.cat((z_c, z_e), dim=-1)
+        outputs.teacher_exposure_logits = self.teacher_exposure_head(
+            teacher_exposure_input
+        )
+
+        # Student Prediction (uses ONLY z_c.detach())
+        student_exposure_input = z_c.detach()  # Stop gradients to encoder
+        outputs.student_exposure_logits = self.student_exposure_head(
+            student_exposure_input
+        )
+
+        # Use student logits for evaluation, teacher logits for training's BCE loss
+        if self.training:
+            outputs.exposure_logits = outputs.teacher_exposure_logits
+        else:
+            outputs.exposure_logits = outputs.student_exposure_logits
 
         # 4. --- Outcome Predictions (Student-Teacher) ---
         outputs.teacher_outcome_logits = {}
@@ -213,11 +233,31 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
         # Only compute exposure loss if label is available
         if EXPOSURE_TARGET in batch:
+            # Get predictions from both heads
+            teacher_exposure_predictions = outputs.teacher_exposure_logits.view(-1)
+            student_exposure_predictions = outputs.student_exposure_logits.view(-1)
+            exposure_targets = batch[EXPOSURE_TARGET].view(-1)
+
+            # a) Main Task Loss (from Teacher)
+            # This loss drives the learning of the encoder and disentangling pooler.
             exposure_loss = self.exposure_loss_fct(
-                outputs.exposure_logits.view(-1), batch[EXPOSURE_TARGET].view(-1)
+                teacher_exposure_predictions, exposure_targets
             )
             outputs.exposure_loss = exposure_loss
-            total_loss += exposure_loss
+            total_loss += (
+                self.exposure_lambda * exposure_loss
+            )  # Use a lambda for weighting
+
+            # b) Consistency Loss (for Student)
+            # This loss only trains the student head, using the teacher as a fixed target.
+            teacher_exposure_probs = torch.sigmoid(
+                teacher_exposure_predictions.detach()
+            )
+            exposure_consistency_loss = self.exposure_loss_fct(
+                student_exposure_predictions, teacher_exposure_probs
+            )
+            outputs.exposure_consistency_loss = exposure_consistency_loss
+            total_loss += self.consistency_lambda * exposure_consistency_loss
 
         # Only compute outcome losses for available labels
         for outcome_name in self.outcome_names:
@@ -225,8 +265,17 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
                 continue
 
             # BCE loss is calculated on the TEACHER's predictions
+            student_predictions = outputs.student_outcome_logits[outcome_name].view(-1)
             teacher_predictions = outputs.teacher_outcome_logits[outcome_name].view(-1)
+
+            # The "target" for the student is the teacher's probability distribution.
+            # We use .detach() so the teacher is a fixed target.
+            teacher_probs_as_target = torch.sigmoid(teacher_predictions.detach())
             targets = batch[outcome_name].view(-1)
+
+            # We can reuse the same BCE loss function and pos_weight. This is crucial.
+            # The pos_weight will correctly scale the loss even when comparing two models,
+            # adjusting for the class imbalance of the underlying data.
             outcome_loss = self.outcome_loss_fcts[outcome_name](
                 teacher_predictions, targets
             )
@@ -234,10 +283,11 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             total_loss += outcome_loss
 
             # Consistency loss between student and DETACHED teacher
-            student_predictions = outputs.student_outcome_logits[outcome_name].view(-1)
-            consistency_loss = self.consistency_loss_fct(
-                student_predictions, teacher_predictions.detach()
+            consistency_loss_fct = self.outcome_loss_fcts[outcome_name]
+            consistency_loss = consistency_loss_fct(
+                student_predictions, teacher_probs_as_target
             )
+
             outputs.consistency_losses[outcome_name] = consistency_loss
             total_loss += self.consistency_lambda * consistency_loss
 
