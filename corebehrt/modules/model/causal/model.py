@@ -222,8 +222,6 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
                 pos_weight=outcome_pos_weight
             )
-        # Add consistency loss for student-teacher learning
-        self.consistency_loss_fct = nn.MSELoss()
 
     def _compute_losses(self, outputs, batch):
         """Helper method to compute and assign losses if labels are present."""
@@ -244,9 +242,7 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
                 teacher_exposure_predictions, exposure_targets
             )
             outputs.exposure_loss = exposure_loss
-            total_loss += (
-                self.exposure_lambda * exposure_loss
-            )  # Use a lambda for weighting
+            total_loss += exposure_loss
 
             # b) Consistency Loss (for Student)
             # This loss only trains the student head, using the teacher as a fixed target.
@@ -257,7 +253,7 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
                 student_exposure_predictions, teacher_exposure_probs
             )
             outputs.exposure_consistency_loss = exposure_consistency_loss
-            total_loss += self.consistency_lambda * exposure_consistency_loss
+            total_loss += (self.consistency_lambda + self.exposure_lambda) * exposure_consistency_loss
 
         # Only compute outcome losses for available labels
         for outcome_name in self.outcome_names:
