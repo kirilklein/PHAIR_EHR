@@ -66,6 +66,20 @@ class PlottingManager:
         """Generates and saves histogram and scatter plots for model outputs."""
         df = data.combined_df
 
+        # --- Plot propensity score distribution ---
+        ps_hist_fig_dir = self.paths.get_figure_dir("histograms/exposure")
+        os.makedirs(ps_hist_fig_dir, exist_ok=True)
+        plot_probas_hist(
+            df,
+            PS_COL,
+            EXPOSURE_COL,
+            ("Control", "Exposed"),
+            "Propensity Score: Control vs Exposed",
+            "Propensity Score",
+            f"{PS_COL}_by_exposure",
+            ps_hist_fig_dir,
+        )
+
         for name in data.outcome_names:
             # Create outcome-specific directories
             hist_fig_dir = self.paths.get_figure_dir(f"histograms/{name}")
@@ -103,8 +117,15 @@ class PlottingManager:
                 "Counterfactual - Factual",
                 hist_fig_dir,
             )
-            self._plot_histogram_group(
-                df, PS_COL, outcome_col, PS_COL, "Propensity Score", hist_fig_dir
+            plot_probas_hist(
+                df,
+                PS_COL,
+                outcome_col,
+                ("Negative", "Positive"),
+                f"Propensity Score: Negative vs Positive",
+                "Propensity Score",
+                f"{PS_COL}_by_outcome",
+                hist_fig_dir,
             )
 
             # --- Plot Scatter Plots ---
