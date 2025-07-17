@@ -26,8 +26,8 @@ def save_all_results(
     exp_dir: str, df: pd.DataFrame, results_df: pd.DataFrame, stats_df: pd.DataFrame
 ):
     """Save all results to CSV files."""
-    results_df.to_csv(join(exp_dir, "results.csv"), index=False)
-    stats_df.to_csv(join(exp_dir, "stats.csv"), index=False)
+    results_df.to_csv(join(exp_dir, "estimate_results.csv"), index=False)
+    stats_df.to_csv(join(exp_dir, "estimate_stats.csv"), index=False)
     df.to_csv(join(exp_dir, "cohort.csv"), index=False)
 
 
