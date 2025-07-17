@@ -53,12 +53,14 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.split_sizes = [config.hidden_size, config.hidden_size, config.hidden_size]
 
         self._setup_pooling_layers(config)
-        self._setup_mlp_heads(config)
+        self._setup_mlp_heads()
         self._setup_loss_functions(config)
 
         # Orthogonality settings
         self.use_orthogonality = self.head_config.get("use_orthogonality", True)
         self.ortho_lambda = self.head_config.get("ortho_lambda", 1.0)
+        # Student-Teacher settings
+        self.consistency_lambda = self.head_config.get("consistency_lambda", 1.0)
 
     def _setup_pooling_layers(self, config):
         # ### MODIFIED: Create an internal disentangling pooler ###
@@ -78,7 +80,7 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             self.disentangling_pooler, self.split_sizes
         )
 
-    def _setup_mlp_heads(self, config):
+    def _setup_mlp_heads(self):
         # Exposure head takes Z_c + Z_e
         self.exposure_head = MLPHead(
             input_size=self.split_sizes[0] + self.split_sizes[1]
@@ -89,14 +91,22 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             num_embeddings=self.num_outcomes, embedding_dim=self.outcome_embedding_dim
         )
 
-        # 2. A SINGLE, shared head for all outcomes
-        outcome_head_input_size = (
+        # 2. Teacher Head for all outcomes (uses full information: z_c + z_y)
+        teacher_head_input_size = (
             self.split_sizes[0]
             + self.split_sizes[2]  # Z_c + Z_y
             + self.outcome_embedding_dim  # Outcome ID embedding
             + 1  # Exposure status
         )
-        self.shared_outcome_head = MLPHead(input_size=outcome_head_input_size)
+        self.teacher_outcome_head = MLPHead(input_size=teacher_head_input_size)
+
+        # 3. Student Head for all outcomes (for inference, uses only shared info: z_c)
+        student_head_input_size = (
+            self.split_sizes[0]  # Z_c only
+            + self.outcome_embedding_dim  # Outcome ID embedding
+            + 1  # Exposure status
+        )
+        self.student_outcome_head = MLPHead(input_size=student_head_input_size)
 
     def forward(self, batch: dict, cf: bool = False):
         outputs = super().forward(batch)
@@ -117,14 +127,13 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         exposure_input = torch.cat((z_c, z_e), dim=-1)
         outputs.exposure_logits = self.exposure_head(exposure_input)
 
-        # 4. --- Scalable Outcome Predictions ---
-        patient_outcome_repr = torch.cat((z_c, z_y), dim=-1)
+        # 4. --- Outcome Predictions (Student-Teacher) ---
+        outputs.teacher_outcome_logits = {}
+        outputs.student_outcome_logits = {}
         exposure_status = (2 * batch[EXPOSURE_TARGET] - 1).unsqueeze(-1)
         if cf:
             exposure_status = -exposure_status
 
-        outputs.outcome_logits = {}
-        # Loop through each outcome to make a prediction
         for outcome_name, outcome_idx in self.outcome_to_idx.items():
             # Get the embedding vector for the current outcome
             outcome_idx_tensor = torch.tensor([outcome_idx], device=z_c.device).expand(
@@ -132,14 +141,27 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             )
             outcome_emb = self.outcome_embeddings(outcome_idx_tensor)
 
-            # Build the input for the shared head
-            outcome_input = torch.cat(
-                (patient_outcome_repr, outcome_emb, exposure_status), dim=-1
+            # Teacher Prediction (uses z_c + z_y)
+            teacher_patient_repr = torch.cat((z_c, z_y), dim=-1)
+            teacher_input = torch.cat(
+                (teacher_patient_repr, outcome_emb, exposure_status), dim=-1
             )
+            teacher_logits = self.teacher_outcome_head(teacher_input)
+            outputs.teacher_outcome_logits[outcome_name] = teacher_logits
 
-            outputs.outcome_logits[outcome_name] = self.shared_outcome_head(
-                outcome_input
+            # Student Prediction (uses ONLY z_c.detach())
+            student_patient_repr = z_c.detach()  # Stop gradients to encoder
+            student_input = torch.cat(
+                (student_patient_repr, outcome_emb, exposure_status), dim=-1
             )
+            student_logits = self.student_outcome_head(student_input)
+            outputs.student_outcome_logits[outcome_name] = student_logits
+
+        # Use student logits for evaluation, teacher logits for training's BCE loss
+        if self.training:
+            outputs.outcome_logits = outputs.teacher_outcome_logits
+        else:
+            outputs.outcome_logits = outputs.student_outcome_logits
 
         if self.training or self._should_compute_losses(batch):
             self._compute_losses(outputs, batch)  # Loss computation remains similar
@@ -180,11 +202,14 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
                 pos_weight=outcome_pos_weight
             )
+        # Add consistency loss for student-teacher learning
+        self.consistency_loss_fct = nn.MSELoss()
 
     def _compute_losses(self, outputs, batch):
         """Helper method to compute and assign losses if labels are present."""
         total_loss = 0
         outputs.outcome_losses = {}
+        outputs.consistency_losses = {}
 
         # Only compute exposure loss if label is available
         if EXPOSURE_TARGET in batch:
@@ -198,12 +223,23 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         for outcome_name in self.outcome_names:
             if outcome_name not in batch:
                 continue
-            predictions = outputs.outcome_logits[outcome_name].view(-1)
-            targets = batch[outcome_name].view(-1)
-            outcome_loss = self.outcome_loss_fcts[outcome_name](predictions, targets)
 
+            # BCE loss is calculated on the TEACHER's predictions
+            teacher_predictions = outputs.teacher_outcome_logits[outcome_name].view(-1)
+            targets = batch[outcome_name].view(-1)
+            outcome_loss = self.outcome_loss_fcts[outcome_name](
+                teacher_predictions, targets
+            )
             outputs.outcome_losses[outcome_name] = outcome_loss
             total_loss += outcome_loss
+
+            # Consistency loss between student and DETACHED teacher
+            student_predictions = outputs.student_outcome_logits[outcome_name].view(-1)
+            consistency_loss = self.consistency_loss_fct(
+                student_predictions, teacher_predictions.detach()
+            )
+            outputs.consistency_losses[outcome_name] = consistency_loss
+            total_loss += self.consistency_lambda * consistency_loss
 
         if self.use_orthogonality:
             ortho_loss = self._compute_orthogonality_loss(outputs.representations)
