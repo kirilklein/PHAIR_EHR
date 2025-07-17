@@ -24,6 +24,10 @@ echo ==== Running calibrate... ====
 python -m corebehrt.main_causal.calibrate_exp_y --config_path corebehrt\configs\causal\finetune\calibrate.yaml
 if errorlevel 1 goto :error
 
+echo ==== Checking cf magnitude... ====
+python -m tests.pipeline.test_cf_magnitude ./outputs/causal/finetune/models/simple/calibrated example_data/synthea_meds_causal/tuning --top_n_percent 10 --ate_tolerance 0.2
+if errorlevel 1 goto :error
+
 :: Run Estimation
 echo ==== Running estimate... ====
 python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\estimate.yaml
