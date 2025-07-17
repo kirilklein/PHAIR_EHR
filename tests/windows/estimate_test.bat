@@ -16,7 +16,7 @@ if errorlevel 1 goto :error
 call :run_estimate_test 0.01 0.02 0.5 0.02 "Low noise test" 0.05 0.5
 if errorlevel 1 goto :error
 
-call :run_estimate_test 0.02 0.05 2.0 0.02 "Default test with negative intercept" 0.2 -1.0
+call :run_estimate_test 0.02 0.05 2.0 0.02 "Default test" 0.2 -1.0
 if errorlevel 1 goto :error
 
 echo All estimate tests completed successfully!
