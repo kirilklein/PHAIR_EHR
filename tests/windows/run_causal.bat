@@ -6,40 +6,40 @@ REM -------------------------------
 
 :: Run the pipeline with inline error checking
 :: Run Preprocessing and Pretraining
-@REM echo ======================================
-@REM echo ==== Running Preprocessing and Pretraining... ====
-@REM echo ==== Deleting old features... ====
-@REM rmdir /s /q outputs\causal\data\features
+echo ======================================
+echo ==== Running Preprocessing and Pretraining... ====
+echo ==== Deleting old features... ====
+rmdir /s /q outputs\causal\data\features
 
-@REM echo ==== Running create_data... ====
-@REM python -m corebehrt.main.create_data --config_path corebehrt\configs\causal\prepare_and_pretrain\create_data.yaml
-@REM if errorlevel 1 goto :error
+echo ==== Running create_data... ====
+python -m corebehrt.main.create_data --config_path corebehrt\configs\causal\prepare_and_pretrain\create_data.yaml
+if errorlevel 1 goto :error
 
-@REM echo ==== Running prepare_training_data... ====
-@REM python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\prepare_and_pretrain\prepare_pretrain.yaml
-@REM if errorlevel 1 goto :error
+echo ==== Running prepare_training_data... ====
+python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\prepare_and_pretrain\prepare_pretrain.yaml
+if errorlevel 1 goto :error
 
-@REM echo ==== Running pretrain... ====
-@REM python -m corebehrt.main.pretrain --config_path corebehrt\configs\causal\prepare_and_pretrain\pretrain.yaml
-@REM if errorlevel 1 goto :error
+echo ==== Running pretrain... ====
+python -m corebehrt.main.pretrain --config_path corebehrt\configs\causal\prepare_and_pretrain\pretrain.yaml
+if errorlevel 1 goto :error
 
-@REM :: Run Outcomes and Cohort Selection
-@REM echo ==== Running create_outcomes... ====
-@REM python -m corebehrt.main.create_outcomes --config_path corebehrt\configs\causal\outcomes.yaml
-@REM if errorlevel 1 goto :error
+:: Run Outcomes and Cohort Selection
+echo ==== Running create_outcomes... ====
+python -m corebehrt.main.create_outcomes --config_path corebehrt\configs\causal\outcomes.yaml
+if errorlevel 1 goto :error
 
-@REM echo ==== Running select_cohort... ====
-@REM python -m corebehrt.main_causal.select_cohort_full --config_path corebehrt\configs\causal\select_cohort_full\extract.yaml
-@REM if errorlevel 1 goto :error
+echo ==== Running select_cohort... ====
+python -m corebehrt.main_causal.select_cohort_full --config_path corebehrt\configs\causal\select_cohort_full\extract.yaml
+if errorlevel 1 goto :error
 
-@REM echo ======================================
-@REM echo ==== Running prepare_finetune_data... ====
-@REM python -m corebehrt.main_causal.prepare_ft_exp_y --config_path corebehrt\configs\causal\finetune\prepare\simple.yaml
-@REM if errorlevel 1 goto :error
+echo ======================================
+echo ==== Running prepare_finetune_data... ====
+python -m corebehrt.main_causal.prepare_ft_exp_y --config_path corebehrt\configs\causal\finetune\prepare\simple.yaml
+if errorlevel 1 goto :error
 
-@REM echo ==== Testing prepare_data_ft_exp_y... ====
-@REM python tests\pipeline\prepare_data_ft_exp_y.py .\outputs\causal\finetune\prepared_data
-@REM if errorlevel 1 goto :error
+echo ==== Testing prepare_data_ft_exp_y... ====
+python tests\pipeline\prepare_data_ft_exp_y.py .\outputs\causal\finetune\prepared_data
+if errorlevel 1 goto :error
 
 echo ==== Running finetune... ====
 python -m corebehrt.main_causal.finetune_exp_y --config_path corebehrt\configs\causal\finetune\simple.yaml
@@ -67,14 +67,14 @@ echo ==== Checking estimate... ====
 python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
 if errorlevel 1 goto :error
 
-@REM :: Run Criteria and Stats
-@REM echo ==== Running extract_criteria... ====
-@REM python -m corebehrt.main_causal.helper_scripts.extract_criteria --config_path corebehrt\configs\causal\helper\extract_criteria.yaml
-@REM if errorlevel 1 goto :error
+:: Run Criteria and Stats
+echo ==== Running extract_criteria... ====
+python -m corebehrt.main_causal.helper_scripts.extract_criteria --config_path corebehrt\configs\causal\helper\extract_criteria.yaml
+if errorlevel 1 goto :error
 
-@REM echo ==== Running get_stats... ====
-@REM python -m corebehrt.main_causal.helper_scripts.get_stats --config_path corebehrt\configs\causal\helper\get_stats.yaml
-@REM if errorlevel 1 goto :error
+echo ==== Running get_stats... ====
+python -m corebehrt.main_causal.helper_scripts.get_stats --config_path corebehrt\configs\causal\helper\get_stats.yaml
+if errorlevel 1 goto :error
 
 echo Pipeline completed successfully.
 pause
