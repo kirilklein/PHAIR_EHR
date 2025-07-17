@@ -89,6 +89,12 @@ jobs:
           source .github/workflows/pipeline_helpers.sh
           
           run_step main_causal.calibrate_exp_y        finetune/calibrate.yaml
+          
+          python -m tests.pipeline.test_cf_magnitude \
+          ./outputs/causal/finetune/models/simple/calibrated \
+          example_data/synthea_meds_causal/tuning \
+          --top_n_percent 10 \
+          --ate_tolerance 0.1
 
       - name: Estimate
         shell: bash
