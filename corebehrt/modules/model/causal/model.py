@@ -50,8 +50,8 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
                 logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
             self.bottleneck = nn.Sequential(
                 nn.Linear(config.hidden_size, self.bottleneck_dim),
-                nn.ReLU(),  # Or nn.ReLU()
                 nn.LayerNorm(self.bottleneck_dim),
+                nn.GELU(),
             )
 
         # Get outcome names from config

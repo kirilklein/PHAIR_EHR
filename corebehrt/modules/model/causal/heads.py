@@ -76,13 +76,13 @@ class MLPHead(nn.Module):
         self, input_size: int, hidden_size_ratio: int = 2, dropout_prob: float = 0.1
     ):
         super().__init__()
-        self.norm = nn.LayerNorm(input_size)
+        intermediate_size = input_size // hidden_size_ratio
         self.classifier = nn.Sequential(
-            nn.Linear(input_size, input_size // hidden_size_ratio, bias=True),
-            nn.LayerNorm(input_size // hidden_size_ratio),
-            nn.ReLU(),
+            nn.Linear(input_size, intermediate_size, bias=True),
+            nn.LayerNorm(intermediate_size),
+            nn.GELU(),
             nn.Dropout(dropout_prob),
-            nn.Linear(input_size // hidden_size_ratio, 1, bias=True),
+            nn.Linear(intermediate_size, 1, bias=True),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -93,5 +93,4 @@ class MLPHead(nn.Module):
         Returns:
             torch.Tensor: The output logits of shape [batch_size, 1].
         """
-        x = self.norm(x)
         return self.classifier(x)
