@@ -47,6 +47,16 @@ class CausalEHRTrainer(EHRTrainer):
         self.best_exposure_auc = None
         self.use_pcgrad = self.args.get("use_pcgrad", True)
         self.plot_histograms = self.args.get("plot_histograms", False)
+        self.freeze_encoder_on_plateau = self.args.get(
+            "freeze_encoder_on_plateau", False
+        )
+        self.freeze_encoder_on_plateau_threshold = self.args.get(
+            "freeze_encoder_on_plateau_threshold", 0.01
+        )
+        self.freeze_encoder_on_plateau_patience = self.args.get(
+            "freeze_encoder_on_plateau_patience", 3
+        )
+        self.plateau_counter = 0
         if self.use_pcgrad:
             self.optimizer = PCGrad(self.optimizer)
 
@@ -490,13 +500,11 @@ class CausalEHRTrainer(EHRTrainer):
             epoch, val_loss, val_metrics, epoch_loss, len(train_loop)
         )
 
-        if self._should_unfreeze_on_plateau(current_metric_value):
-            self._unfreeze_model("Performance plateau detected!")
-
         if self._should_stop_early(
             epoch, current_metric_value, val_loss, epoch_loss, val_metrics, test_metrics
         ):
             return
+
         self._check_and_freeze_encoder(val_metrics)
 
     def _update_metric_history(self, metrics: EpochMetrics):
@@ -545,10 +553,10 @@ class CausalEHRTrainer(EHRTrainer):
 
     def _check_and_freeze_encoder(self, metrics: dict):
         """
-        Freeze the encoder if exposure or any outcome AUC plateaus.
+        Freeze the encoder if exposure or any outcome AUC plateaus for a number of epochs.
         This now uses the standalone `check_task_plateau` utility.
         """
-        if self.encoder_frozen:
+        if not self.freeze_encoder_on_plateau or self.encoder_frozen:
             return
 
         exposure_auc = metrics.get(f"{EXPOSURE}_roc_auc", 0.5)
@@ -556,7 +564,7 @@ class CausalEHRTrainer(EHRTrainer):
         exp_plateau, self.best_exposure_auc = check_task_plateau(
             current_metric=exposure_auc,
             best_metric=self.best_exposure_auc,
-            threshold=self.plateau_threshold,
+            threshold=self.freeze_encoder_on_plateau_threshold,
             higher_is_better=True,
         )
 
@@ -567,15 +575,25 @@ class CausalEHRTrainer(EHRTrainer):
             out_plateau, self.best_outcome_aucs[outcome_name] = check_task_plateau(
                 current_metric=outcome_auc,
                 best_metric=self.best_outcome_aucs[outcome_name],
-                threshold=self.plateau_threshold,
+                threshold=self.freeze_encoder_on_plateau_threshold,
                 higher_is_better=True,
             )
             outcome_plateaus.append(out_plateau)
 
         if exp_plateau or any(outcome_plateaus):
+            self.plateau_counter += 1
+            self.log(
+                f"Plateau detected. Counter: {self.plateau_counter}/{self.freeze_encoder_on_plateau_patience}"
+            )
+        else:
+            if self.plateau_counter > 0:
+                self.log(f"No plateau. Counter reset to 0.")
+            self.plateau_counter = 0
+
+        if self.plateau_counter >= self.freeze_encoder_on_plateau_patience:
             self._freeze_encoder()
             self.log(
-                f"Encoder frozen due to plateau (exp_plateau={exp_plateau}, outcome_plateaus={outcome_plateaus})"
+                f"Encoder frozen due to plateau for {self.freeze_encoder_on_plateau_patience} epochs (exp_plateau={exp_plateau}, outcome_plateaus={outcome_plateaus})"
             )
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] *= 0.5
