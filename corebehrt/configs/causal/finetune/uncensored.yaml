@@ -16,7 +16,7 @@ model:
   head:
     shared_representation: true # whether to share the bigru representation for exposure and outcome
     bidirectional: true
-    bottleneck_dim: 64
+    bottleneck_dim: 128
 
 trainer_args:
   loss_weight_function:
@@ -24,7 +24,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 10
+  epochs: 8
   info: true
   gradient_clip:
     clip_value: 1.0
