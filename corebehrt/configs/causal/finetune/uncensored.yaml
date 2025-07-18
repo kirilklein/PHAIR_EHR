@@ -32,9 +32,9 @@ trainer_args:
   checkpoint_frequency: 1
   early_stopping: 3
   stopping_criterion: roc_auc
-  n_layers_to_freeze: 0
+  n_layers_to_freeze: 1
   freeze_encoder_on_plateau: false
-  use_pcgrad: true
+  use_pcgrad: false
 
 optimizer:
   lr: 7e-3
