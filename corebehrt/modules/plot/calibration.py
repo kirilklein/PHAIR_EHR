@@ -140,14 +140,14 @@ class PlottingManager:
                 ("Exposed", "Control"),
                 diff_col,
             )
-            plot_cf_diff_vs_probas_by_group(
-                df,
-                cf_fig_dir,
-                outcome_col,
-                outcome_probas_col,
-                ("Positive", "Negative"),
-                diff_col,
-            )
+            # plot_cf_diff_vs_probas_by_group(
+            #     df,
+            #     cf_fig_dir,
+            #     outcome_col,
+            #     outcome_probas_col,
+            #     ("Positive", "Negative"),
+            #     diff_col,
+            # )
 
             # Plot difference vs. propensity score, grouped by exposure/outcome
             plot_cf_diff_vs_probas_by_group(
@@ -158,14 +158,14 @@ class PlottingManager:
                 ("Exposed", "Control"),
                 diff_col,
             )
-            plot_cf_diff_vs_probas_by_group(
-                df,
-                cf_fig_dir,
-                outcome_col,
-                PS_COL,
-                ("Positive", "Negative"),
-                diff_col,
-            )
+            # plot_cf_diff_vs_probas_by_group(
+            #     df,
+            #     cf_fig_dir,
+            #     outcome_col,
+            #     PS_COL,
+            #     ("Positive", "Negative"),
+            #     diff_col,
+            # )
 
     def _plot_histogram_group(
         self,

@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -5,8 +6,12 @@ from typing import Any, Callable, Dict, List, Optional
 import matplotlib.pyplot as plt
 import matplotlib.style as style
 import numpy as np
+import pandas as pd
+import torch
 
 from corebehrt.constants.causal.data import EXPOSURE
+from corebehrt.functional.visualize.calibrate import plot_probas_hist
+from corebehrt.modules.trainer.causal.utils import CausalPredictionData
 
 # --- Configuration ---
 try:
@@ -243,3 +248,63 @@ def _create_metric_plot(
         log_func(f"❌ Failed to save plot '{fig_path}'. Error: {e}")
     finally:
         plt.close(fig)
+
+
+def plot_prediction_histograms(
+    prediction_data: Dict[str, CausalPredictionData],
+    run_folder: str,
+    outcome_names: List[str],
+    accumulate_logits: bool,
+):
+    """Plots prediction histograms for exposure and outcomes."""
+    if not accumulate_logits:
+        return
+
+    hist_dir = os.path.join(run_folder, "figs", "histograms")
+    os.makedirs(hist_dir, exist_ok=True)
+
+    # Plot for exposure
+    if EXPOSURE in prediction_data and prediction_data[EXPOSURE].logits_list:
+        create_and_save_hist(
+            logits=torch.cat(prediction_data[EXPOSURE].logits_list),
+            targets=torch.cat(prediction_data[EXPOSURE].targets_list),
+            title="Exposure Prediction Distribution",
+            filename="exposure_predictions",
+            save_dir=hist_dir,
+        )
+
+    # Plot for outcomes
+    for outcome_name in outcome_names:
+        if (
+            outcome_name in prediction_data
+            and prediction_data[outcome_name].logits_list
+        ):
+            create_and_save_hist(
+                logits=torch.cat(prediction_data[outcome_name].logits_list),
+                targets=torch.cat(prediction_data[outcome_name].targets_list),
+                title=f"{outcome_name} Prediction Distribution",
+                filename=f"{outcome_name}_predictions",
+                save_dir=hist_dir,
+            )
+
+
+def create_and_save_hist(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    title: str,
+    filename: str,
+    save_dir: str,
+):
+    probas = torch.sigmoid(logits).squeeze().numpy()
+    targets = targets.squeeze().numpy()
+    df = pd.DataFrame({"probas": probas, "targets": targets})
+    plot_probas_hist(
+        df,
+        value_col="probas",
+        group_col="targets",
+        group_labels=("Negative", "Positive"),
+        title=title,
+        xlabel="Predicted Probability",
+        name=filename,
+        save_dir=save_dir,
+    )
