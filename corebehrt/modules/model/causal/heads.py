@@ -78,10 +78,10 @@ class MLPHead(nn.Module):
         super().__init__()
         intermediate_size = input_size // hidden_size_ratio
         self.classifier = nn.Sequential(
-            nn.Linear(input_size, intermediate_size, bias=True),
-            nn.LayerNorm(intermediate_size),
+            nn.LayerNorm(input_size),
+            nn.Linear(input_size, intermediate_size),
             nn.GELU(),
-            nn.Dropout(dropout_prob),
+            # nn.Dropout(dropout_prob),
             nn.Linear(intermediate_size, 1, bias=True),
         )
 
