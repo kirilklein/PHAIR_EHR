@@ -60,6 +60,7 @@ class EffectEstimator:
         "effect_1",
         "effect_0",
         "outcome",
+        "true_effect",
     ]
 
     def __init__(self, cfg: Config, logger: Any):
@@ -121,7 +122,13 @@ class EffectEstimator:
 
             # 6. Tag results with the outcome name and collect
             effect_df["outcome"] = outcome_name
-            effect_df_clean = effect_df[self.RELEVANT_COLUMNS]
+
+            current_columns = effect_df.columns.tolist()
+            filter_columns = [
+                col for col in self.RELEVANT_COLUMNS if col in current_columns
+            ]
+            effect_df_clean = effect_df[filter_columns]
+
             initial_estimates.append(effect_df)
             all_effects.append(effect_df_clean)
 

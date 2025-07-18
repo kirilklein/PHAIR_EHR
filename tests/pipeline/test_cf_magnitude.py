@@ -50,6 +50,8 @@ def test_cf_magnitude(
     ate_dict = load_ate_from_file(ate_file_path)
     outcome_names = get_outcome_names(df)
 
+    results = []
+
     for outcome_name in outcome_names:
         probas_col = f"probas_{outcome_name}"
         cf_probas_col = f"cf_probas_{outcome_name}"
@@ -70,13 +72,49 @@ def test_cf_magnitude(
             f"ATE for outcome {outcome_name} not found in {ate_file_path}"
         )
 
-        print(
-            f"Outcome: {outcome_name}, "
-            f"Mean of top {top_n_percent}% absolute differences: {mean_of_top_abs_diffs:.4f}, "
-            f"ATE: {ate_value:.4f}"
+        diff = abs(mean_of_top_abs_diffs - ate_value)
+        passed = diff <= ate_tolerance
+
+        results.append(
+            {
+                "outcome": outcome_name,
+                "mean_of_top_diffs": mean_of_top_abs_diffs,
+                "ate_value": ate_value,
+                "difference": diff,
+                "passed": passed,
+            }
         )
 
-        assert abs(mean_of_top_abs_diffs - ate_value) <= ate_tolerance
+    results_df = pd.DataFrame(results)
+    passed_outcomes = results_df[results_df["passed"]]
+    failed_outcomes = results_df[~results_df["passed"]]
+
+    print("\n--- Counterfactual Magnitude Test Summary ---")
+    print(f"ATE Tolerance: {ate_tolerance:.4f}")
+    print(f"Top N Percent: {top_n_percent}%")
+
+    if not passed_outcomes.empty:
+        print("\n--- PASSED ---")
+        print(
+            passed_outcomes[
+                ["outcome", "mean_of_top_diffs", "ate_value", "difference"]
+            ].to_string(index=False)
+        )
+
+    if not failed_outcomes.empty:
+        print("\n--- FAILED ---")
+        print(
+            failed_outcomes[
+                ["outcome", "mean_of_top_diffs", "ate_value", "difference"]
+            ].to_string(index=False)
+        )
+        print("\n-------------------------------------------")
+        raise AssertionError(
+            f"{len(failed_outcomes)}/{len(results_df)} outcomes failed the counterfactual magnitude test."
+        )
+    else:
+        print("\nAll outcomes passed.")
+        print("-------------------------------------------")
 
 
 def main():

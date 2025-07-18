@@ -39,6 +39,20 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.head_config = getattr(config, "head", {})
         self.shared_representation = self.head_config.get("shared_representation", True)
         self.bidirectional = self.head_config.get("bidirectional", True)
+        self.bottleneck_dim = self.head_config.get("bottleneck_dim", 128)
+        self.l1_lambda = self.head_config.get("l1_lambda", 0.0)
+
+        if self.shared_representation:
+            logger.info(
+                f"Using a shared bottleneck layer with dimension {self.bottleneck_dim}"
+            )
+            if self.l1_lambda > 0:
+                logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
+            self.bottleneck = nn.Sequential(
+                nn.Linear(config.hidden_size, self.bottleneck_dim),
+                nn.GELU(),
+                nn.Dropout(0.1),
+            )
 
         # Get outcome names from config
         self.outcome_names = config.outcome_names
@@ -67,14 +81,17 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
                 )
 
     def _setup_mlp_heads(self, config):
-        self.exposure_head = MLPHead(input_size=config.hidden_size)
+        if self.shared_representation:
+            head_input_size = self.bottleneck_dim
+        else:
+            head_input_size = config.hidden_size
+
+        self.exposure_head = MLPHead(input_size=head_input_size)
 
         # Create separate heads for each outcome
         self.outcome_heads = nn.ModuleDict()
         for outcome_name in self.outcome_names:
-            self.outcome_heads[outcome_name] = MLPHead(
-                input_size=config.hidden_size + 1  # +1 for exposure status
-            )
+            self.outcome_heads[outcome_name] = MLPHead(input_size=head_input_size + 1)
 
     def _setup_loss_functions(self, config):
         """Helper method to initialize BCE loss functions with position weights."""
@@ -113,9 +130,11 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         # --- Get Patient Representations ---
         if self.shared_representation:
             shared_repr = self.pooler(sequence_output, attention_mask)
-            exposure_repr = shared_repr
+            bottleneck_repr = self.bottleneck(shared_repr)
+            outputs.bottleneck_repr = bottleneck_repr  # Store for L1 loss
+            exposure_repr = bottleneck_repr
             outcome_reprs = {
-                outcome_name: shared_repr for outcome_name in self.outcome_names
+                outcome_name: bottleneck_repr for outcome_name in self.outcome_names
             }
         else:
             exposure_repr = self.exposure_pooler(sequence_output, attention_mask)
@@ -187,5 +206,13 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
             outputs.outcome_losses[outcome_name] = outcome_loss
             total_loss += outcome_loss
+
+        # Add L1 regularization on the bottleneck representation
+        if self.shared_representation and self.l1_lambda > 0:
+            # L1 norm per sample, then mean over batch
+            l1_regularization = torch.norm(outputs.bottleneck_repr, p=1, dim=-1).mean()
+            l1_loss = self.l1_lambda * l1_regularization
+            outputs.l1_loss = l1_loss
+            total_loss += l1_loss
 
         outputs.loss = total_loss

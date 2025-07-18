@@ -93,7 +93,7 @@ def plot_cf_probas_diff_vs_certainty_in_exposure(
     ax.legend(frameon=False, loc=0, title="Exposure")
 
     fig.savefig(
-        join(save_dir, "cf_diff_vs_certainty_in_exposure_by_exposure.png"),
+        join(save_dir, "vs_certainty_in_exposure_by_exposure.png"),
         bbox_inches="tight",
     )
     plt.close(fig)
@@ -146,7 +146,7 @@ def plot_cf_diff_vs_probas_by_group(
     ax.legend(frameon=False)
 
     fig.savefig(
-        join(save_dir, f"cf_diff_vs_{proba_col}_by_{group_col}.png"),
+        join(save_dir, f"vs_{proba_col}_by_{group_col}.png"),
         bbox_inches="tight",
     )
     plt.close(fig)

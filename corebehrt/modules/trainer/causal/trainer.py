@@ -12,7 +12,10 @@ from corebehrt.constants.causal.data import (
 )
 from corebehrt.constants.data import TARGET
 from corebehrt.functional.trainer.freezing_utils import check_task_plateau
-from corebehrt.functional.trainer.plotting import plot_training_curves
+from corebehrt.functional.trainer.plotting import (
+    plot_prediction_histograms,
+    plot_training_curves,
+)
 from corebehrt.modules.monitoring.logger import get_tqdm
 from corebehrt.modules.monitoring.metric_aggregation import (
     compute_avg_metrics,
@@ -43,6 +46,7 @@ class CausalEHRTrainer(EHRTrainer):
         self.best_outcome_aucs = {name: None for name in self.outcome_names}
         self.best_exposure_auc = None
         self.use_pcgrad = self.args.get("use_pcgrad", True)
+        self.plot_histograms = self.args.get("plot_histograms", False)
         if self.use_pcgrad:
             self.optimizer = PCGrad(self.optimizer)
 
@@ -433,6 +437,15 @@ class CausalEHRTrainer(EHRTrainer):
         self.log(
             f"Test metrics keys: {list(test_metrics.keys()) if test_metrics else 'None'}"
         )
+
+        # Plot prediction histograms
+        if self.plot_histograms and val_prediction_data:
+            plot_prediction_histograms(
+                val_prediction_data,
+                self.run_folder,
+                self.outcome_names,
+                self.accumulate_logits,
+            )
 
         # Check outcome-specific metrics
         if val_metrics:

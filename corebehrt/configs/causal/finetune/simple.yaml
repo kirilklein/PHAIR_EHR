@@ -16,6 +16,8 @@ model:
   head:
     shared_representation: true # whether to share the bigru representation for exposure and outcome
     bidirectional: true
+    bottleneck_dim: 64
+    l1_lambda: 0
 
 trainer_args:
   loss_weight_function:
@@ -23,7 +25,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 3
+  epochs: 5
   info: true
   gradient_clip:
     clip_value: 1.0
@@ -35,9 +37,10 @@ trainer_args:
   unfreeze_on_plateau: false # unfreeze all layers if the performance is less than plateau_threshold
   unfreeze_at_epoch: 20 # if unfrezze_on_plateau is true, whichever condition is met first
   use_pcgrad: true
+  plot_histograms: true
 
 optimizer:
-  lr: 6e-3
+  lr: 7e-3
   eps: 1e-6
 
 scheduler:

@@ -10,7 +10,6 @@ from corebehrt.constants.causal.data import (
     PROBAS,
     PS_COL,
 )
-from corebehrt.constants.causal.paths import OUTCOMES_DIR
 from corebehrt.functional.visualize.calibrate import (
     produce_calibration_plots,
     plot_probas_hist,
@@ -52,12 +51,11 @@ class PlottingManager:
         )
 
         # Plot calibration for each outcome
-        outcomes_fig_dir = self.paths.get_figure_dir(OUTCOMES_DIR)
         for name in data.outcome_names:
             produce_calibration_plots(
                 data.calibrated_outcomes[name],
                 data.outcomes[name],
-                outcomes_fig_dir,
+                fig_dir,
                 "Outcome Probability Calibration",
                 name,
             )
@@ -65,6 +63,20 @@ class PlottingManager:
     def _generate_distribution_plots(self, data: CalibrationArtifacts):
         """Generates and saves histogram and scatter plots for model outputs."""
         df = data.combined_df
+
+        # --- Plot propensity score distribution ---
+        ps_hist_fig_dir = self.paths.get_figure_dir("histograms/exposure")
+        os.makedirs(ps_hist_fig_dir, exist_ok=True)
+        plot_probas_hist(
+            df,
+            PS_COL,
+            EXPOSURE_COL,
+            ("Control", "Exposed"),
+            "Propensity Score: Control vs Exposed",
+            "Propensity Score",
+            f"{PS_COL}_by_exposure",
+            ps_hist_fig_dir,
+        )
 
         for name in data.outcome_names:
             # Create outcome-specific directories
@@ -103,8 +115,15 @@ class PlottingManager:
                 "Counterfactual - Factual",
                 hist_fig_dir,
             )
-            self._plot_histogram_group(
-                df, PS_COL, outcome_col, PS_COL, "Propensity Score", hist_fig_dir
+            plot_probas_hist(
+                df,
+                PS_COL,
+                outcome_col,
+                ("Negative", "Positive"),
+                f"Propensity Score: Negative vs Positive",
+                "Propensity Score",
+                f"{PS_COL}_by_outcome",
+                hist_fig_dir,
             )
 
             # --- Plot Scatter Plots ---
@@ -119,14 +138,14 @@ class PlottingManager:
                 ("Exposed", "Control"),
                 diff_col,
             )
-            plot_cf_diff_vs_probas_by_group(
-                df,
-                cf_fig_dir,
-                outcome_col,
-                outcome_probas_col,
-                ("Positive", "Negative"),
-                diff_col,
-            )
+            # plot_cf_diff_vs_probas_by_group(
+            #     df,
+            #     cf_fig_dir,
+            #     outcome_col,
+            #     outcome_probas_col,
+            #     ("Positive", "Negative"),
+            #     diff_col,
+            # )
 
             # Plot difference vs. propensity score, grouped by exposure/outcome
             plot_cf_diff_vs_probas_by_group(
@@ -137,14 +156,14 @@ class PlottingManager:
                 ("Exposed", "Control"),
                 diff_col,
             )
-            plot_cf_diff_vs_probas_by_group(
-                df,
-                cf_fig_dir,
-                outcome_col,
-                PS_COL,
-                ("Positive", "Negative"),
-                diff_col,
-            )
+            # plot_cf_diff_vs_probas_by_group(
+            #     df,
+            #     cf_fig_dir,
+            #     outcome_col,
+            #     PS_COL,
+            #     ("Positive", "Negative"),
+            #     diff_col,
+            # )
 
     def _plot_histogram_group(
         self,
