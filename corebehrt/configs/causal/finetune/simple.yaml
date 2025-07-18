@@ -16,7 +16,7 @@ model:
   head:
     shared_representation: true # whether to share the bigru representation for exposure and outcome
     bidirectional: true
-    bottleneck_dim: 32
+    bottleneck_dim: 64
     l1_lambda: 0
 
 trainer_args:
