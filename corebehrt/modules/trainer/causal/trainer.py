@@ -100,6 +100,7 @@ class CausalEHRTrainer(EHRTrainer):
     def _update(self):
         """Updates the model (optimizer and scheduler) with PCGrad support"""
         # PCGrad optimizer exposes param_groups, so scaler can work with it directly
+        self._clip_gradients()
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
@@ -220,7 +221,7 @@ class CausalEHRTrainer(EHRTrainer):
 
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
-                max_norm=self.args.get("gradient_clip", {}).get("max_norm", 1.0),
+                max_norm=self.args.get("gradient_clip", {}).get("clip_value", 1.0),
             )
 
     def process_causal_classification_results(
