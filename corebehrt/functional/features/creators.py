@@ -140,7 +140,7 @@ def create_background(concepts: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
     """
     Create background concepts for each patient based on the static background variables in the dataframe.
     Sets the time of the background concepts to the birthdate of the patient.
-    Expects 'DOB' concept to be present in the patients_info DataFrame.
+    Skips patients if the 'DOB' concept is not present for them.
 
     Args:
         concepts: DataFrame with columns 'subject_id', 'time', 'code'
@@ -156,10 +156,8 @@ def create_background(concepts: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
     # Extract birthdates from DOB rows
     dob_rows = concepts[concepts[CONCEPT_COL] == BIRTH_CODE]
     birthdates = dict(zip(dob_rows[PID_COL], dob_rows[TIMESTAMP_COL]))
+    concepts = _handle_missing_dobs(concepts, birthdates)
     concepts[BIRTHDATE_COL] = concepts[PID_COL].map(birthdates)
-    if concepts[BIRTHDATE_COL].isna().any():
-        raise ValueError("Some patients have no DOB")
-
     # Use boolean masking instead of index-based selection for background rows
     bg_mask = concepts[TIMESTAMP_COL].isna()
     concepts.loc[bg_mask, TIMESTAMP_COL] = concepts.loc[bg_mask, BIRTHDATE_COL]
@@ -174,6 +172,35 @@ def create_background(concepts: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
     # Get the patient info
     patient_info = _create_patient_info(concepts)
     return concepts, patient_info
+
+
+def _handle_missing_dobs(concepts: pd.DataFrame, birthdates: dict) -> pd.DataFrame:
+    """
+    Checks for, logs, and filters out patients with missing DOBs.
+    """
+    # If the input DataFrame is empty, simply return it unchanged.
+    if concepts.empty:
+        return concepts
+
+    # 1. Check for the critical error case: no DOBs found at all.
+    if not birthdates:
+        raise ValueError(
+            "Critical Error: No patients in the provided data have a DOB entry."
+        )
+
+    # 2. Identify patients to skip
+    all_pids = set(concepts[PID_COL].unique())
+    pids_with_dob = set(birthdates.keys())
+    pids_to_skip = all_pids - pids_with_dob
+
+    # 3. Log and filter if necessary
+    if pids_to_skip:
+        print(f"Skipping {len(pids_to_skip)} patients due to missing DOB.")
+        # Return a filtered dataframe, using .copy() to avoid SettingWithCopyWarning
+        return concepts[concepts[PID_COL].isin(pids_with_dob)].copy()
+
+    # 4. If no patients need to be skipped, return the original dataframe
+    return concepts
 
 
 def assign_index_and_order(df: pd.DataFrame) -> pd.DataFrame:

@@ -1,13 +1,12 @@
 import logging
 
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main_causal.helper.calibrate_exp_y import (
-    collect_and_save_predictions,
-    load_calibrate_and_save,
-)
+from corebehrt.modules.plot.calibration import PlottingManager
+from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
+from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
+from corebehrt.modules.setup.causal.prediction_processor import CalibrationProcessor
 from corebehrt.modules.setup.config import load_config
-
 
 CONFIG_PATH = "./corebehrt/configs/causal/finetune/calibrate_exp_y.yaml"
 
@@ -24,11 +23,26 @@ def main_calibrate(config_path):
     write_dir = cfg.paths.calibrated_predictions
     finetune_dir = cfg.paths.finetune_model
 
-    logger.info("Collecting and saving predictions")
-    collect_and_save_predictions(finetune_dir, write_dir)
-    logger.info("Computing and saving calibrated predictions")
-    load_calibrate_and_save(finetune_dir, write_dir)
-    logger.info("Done")
+    # 1. Setup managers
+    path_manager = CalibrationPathManager(finetune_dir, write_dir)
+    prediction_processor = CalibrationProcessor(path_manager, finetune_dir)
+    plotting_manager = PlottingManager(path_manager)
+
+    # 2. Collect raw predictions
+    logger.info("Collecting and saving predictions...")
+    prediction_processor.collect_and_save_all_predictions()
+
+    # 3. Calibrate predictions
+    logger.info("Calibrating predictions...")
+    calibrated_data: CalibrationArtifacts = (
+        prediction_processor.load_calibrate_and_save_all()
+    )
+
+    # 4. Generate plots
+    logger.info("Generating plots...")
+    plotting_manager.generate_all_plots(calibrated_data)
+
+    logger.info("Pipeline finished successfully!")
 
 
 if __name__ == "__main__":

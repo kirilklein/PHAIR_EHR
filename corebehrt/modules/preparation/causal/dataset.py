@@ -1,20 +1,24 @@
 from dataclasses import dataclass
-from typing import List
+from typing import Dict, List
 
 import pandas as pd
 import torch
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
-from corebehrt.modules.preparation.dataset import (
-    BinaryOutcomeDataset,
-    PatientData,
-    PatientDataset,
+from corebehrt.constants.data import (
+    ABSPOS_FEAT,
+    AGE_FEAT,
+    ATTENTION_MASK,
+    CONCEPT_FEAT,
+    SEGMENT_FEAT,
 )
+from corebehrt.modules.preparation.dataset import PatientData, PatientDataset
 
 
 @dataclass
 class CausalPatientData(PatientData):
-    exposure: int = None
+    exposure: int | None = None
+    outcomes: dict[str, int] | None = None
 
 
 class CausalPatientDataset(PatientDataset):
@@ -27,7 +31,7 @@ class CausalPatientDataset(PatientDataset):
         super().__init__(patients)
         self.patients: List[CausalPatientData] = patients
 
-    def assign_attributes(self, attribute_name: str, values: pd.Series):
+    def assign_attributes(self, attribute_name: str, values: pd.Series) -> None:
         """Assigns binary attributes (outcomes or exposures) to each patient in the dataset.
 
         Takes a pandas Series mapping patient IDs to attributes and assigns them to each patient in the dataset.
@@ -49,8 +53,6 @@ class CausalPatientDataset(PatientDataset):
         for p in self.patients:
             setattr(p, attribute_name, values[p.pid])
 
-        return self
-
     def filter_by_pids(self, pids: List[str]) -> "CausalPatientDataset":
         pids_set = set(pids)
         return CausalPatientDataset([p for p in self.patients if p.pid in pids_set])
@@ -58,20 +60,56 @@ class CausalPatientDataset(PatientDataset):
     def get_exposures(self):
         return [p.exposure for p in self.patients]
 
+    def assign_outcomes(self, outcomes: dict[str, pd.Series]):
+        """Assigns multiple binary outcomes to each patient in the dataset.
+        Args:
+            outcomes: Dictionary mapping outcome names to pandas Series.
+                Each Series has patient IDs as index and outcome values.
+        """
+        for p in self.patients:
+            setattr(p, "outcomes", {k: v[p.pid] for k, v in outcomes.items()})
 
-class ExposureOutcomeDataset(BinaryOutcomeDataset):
+    def get_outcomes(self) -> Dict[str, List[int]]:
+        outcomes = self.patients[0].outcomes.keys()
+        return {
+            outcome: [p.outcomes[outcome] for p in self.patients]
+            for outcome in outcomes
+        }
+
+    def get_outcome_names(self) -> List[str]:
+        return list(self.patients[0].outcomes.keys())
+
+
+class ExposureOutcomesDataset:
     """
-    outcomes: absolute position when outcome occured for each patient
-    exposures: absolute position when exposure occured for each patient
-    For details on the dataset structure, see corebehrt.modules.preparation.dataset.BinaryOutcomeDataset.
+    Dataset for causal inference with exposure and multiple outcome targets.
+
+    Returns samples with exposure target (single tensor) and outcome targets
+    (dictionary mapping outcome names to tensors). Patient data includes concepts,
+    absolute positions, segments, ages, and attention masks.
+
+    For base dataset structure details, see corebehrt.modules.preparation.dataset.BinaryOutcomeDataset.
     """
 
     def __init__(self, patients: List[CausalPatientData]):
-        super().__init__(patients)
+        self.patients = patients
 
     def __getitem__(self, index: int) -> dict:
-        sample = super().__getitem__(index)
-        sample[EXPOSURE_TARGET] = torch.tensor(
-            self.patients[index].exposure, dtype=torch.float
-        )
+        patient = self.patients[index]
+        attention_mask = torch.ones(
+            len(patient.concepts), dtype=torch.long
+        )  # Require attention mask for bi-gru head
+        sample = {
+            CONCEPT_FEAT: torch.tensor(patient.concepts, dtype=torch.long),
+            ABSPOS_FEAT: torch.tensor(patient.abspos, dtype=torch.float),
+            SEGMENT_FEAT: torch.tensor(patient.segments, dtype=torch.long),
+            AGE_FEAT: torch.tensor(patient.ages, dtype=torch.float),
+            ATTENTION_MASK: attention_mask,
+        }
+        sample[EXPOSURE_TARGET] = torch.tensor(patient.exposure, dtype=torch.float)
+        for outcome_name, outcome_value in patient.outcomes.items():
+            sample[outcome_name] = torch.tensor(outcome_value, dtype=torch.float)
         return sample
+
+    def __len__(self):
+        return len(self.patients)

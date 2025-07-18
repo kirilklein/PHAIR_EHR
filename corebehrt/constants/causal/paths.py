@@ -31,6 +31,7 @@ CRITERIA_FLAGS_FILE = "criteria.csv"
 CRITERIA_DEFINITIONS_FILE = "criteria_definitions.yaml"
 
 DATA_DIR = "data"
+OUTCOMES_DIR = "outcomes"
 
 STATS_FILE_BINARY = "stats_binary.csv"
 STATS_RAW_FILE_BINARY = "stats_raw_binary.csv"
@@ -44,6 +45,9 @@ PS_SUMMARY_FILE_FILTERED = "ps_summary_filtered.csv"
 
 EXPOSURES_FILE = "exposures.csv"
 INDEX_DATE_MATCHING_FILE = "index_date_matching.csv"
-
+BINARY_OUTCOMES_FILE = "binary_outcomes.csv"
+BINARY_EXPOSURE_FILE = "binary_exposure.csv"
 STATS_PATH = "stats"
 PATIENTS_FILE = "patients.pt"
+
+COMBINED_CALIBRATED_PREDICTIONS_FILE = "combined_calibrated_predictions.csv"

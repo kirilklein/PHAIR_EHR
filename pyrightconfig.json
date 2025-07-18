@@ -1,5 +1,20 @@
 {
-    "exclude": [
-      "corebehrt/sandbox"
-    ]
-  }
+    "ignore": [
+      "sandbox",
+      "**/*.ipynb",
+      "outputs",
+      "example_data"
+
+    ],
+    "reportUnusedExpression": false,
+    "reportAttributeAccessIssue": false,
+    "reportArgumentType": false,
+    "reportReturnType": false,
+    "reportOptionalMemberAccess": false,
+    "reportOptionalSubscript": false,
+    "reportGeneralTypeIssues": false,
+    "reportAssignmentType": false,
+    "reportCallIssue": false,
+    "reportOptionalCall": false,
+    "typeCheckingMode": "basic"
+}

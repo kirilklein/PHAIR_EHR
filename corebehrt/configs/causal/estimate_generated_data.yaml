@@ -1,0 +1,17 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ## INPUTS
+  calibrated_predictions: ./outputs/causal/generated/calibrated_predictions # containing predictions_and_targets_calibrated.csv
+  counterfactual_outcomes: ./outputs/causal/generated/simulated_outcome # containing probas_and_outcomes.csv
+
+  ## OUTPUTS
+  estimate: ./outputs/causal/generated/estimate_with_generated_data
+
+estimator:
+  methods: ["IPW", "AIPW", "TMLE"]
+  effect_type: "ATE"
+  n_bootstrap: 30
+  common_support_threshold: 0.01

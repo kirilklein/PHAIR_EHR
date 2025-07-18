@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from corebehrt.constants.causal.data import EXPOSURE, OUTCOME, PROBAS, TARGETS
+from corebehrt.constants.causal.data import PROBAS, TARGETS
 from corebehrt.constants.paths import CHECKPOINTS_DIR
 from corebehrt.functional.io_operations.load import get_pids_file
 from corebehrt.functional.io_operations.paths import get_fold_folders
@@ -107,8 +107,6 @@ def get_prediction_file_path(
     Builds a standardized path to prediction files based on fold directory,
     data split mode, prediction type, and model checkpoint epoch.
     """
-    file_suffix = pred_type if pred_type in [OUTCOME, EXPOSURE] else pred_type
-
     return join(
-        fold_dir, CHECKPOINTS_DIR, f"{type_prefix}_{mode}_{file_suffix}_{epoch}.npz"
+        fold_dir, CHECKPOINTS_DIR, f"{type_prefix}_{mode}_{pred_type}_{epoch}.npz"
     )

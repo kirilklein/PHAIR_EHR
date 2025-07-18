@@ -2,7 +2,6 @@ import os
 from collections import defaultdict, namedtuple
 from typing import Dict
 
-import matplotlib.pyplot as plt
 import torch
 import yaml
 
@@ -10,9 +9,13 @@ from corebehrt.constants.causal.data import (
     CF_OUTCOME,
     EXPOSURE,
     EXPOSURE_TARGET,
-    OUTCOME,
 )
 from corebehrt.constants.data import TARGET
+from corebehrt.functional.trainer.freezing_utils import check_task_plateau
+from corebehrt.functional.trainer.plotting import (
+    plot_prediction_histograms,
+    plot_training_curves,
+)
 from corebehrt.modules.monitoring.logger import get_tqdm
 from corebehrt.modules.monitoring.metric_aggregation import (
     compute_avg_metrics,
@@ -21,21 +24,14 @@ from corebehrt.modules.monitoring.metric_aggregation import (
     save_predictions,
 )
 from corebehrt.modules.setup.config import Config
+from corebehrt.modules.trainer.causal.utils import CausalPredictionData, EpochMetrics
+from corebehrt.modules.trainer.pcgrad import PCGrad
 from corebehrt.modules.trainer.trainer import EHRTrainer
 
 yaml.add_representer(Config, lambda dumper, data: data.yaml_repr(dumper))
-from dataclasses import dataclass
 
 BEST_MODEL_ID = 999  # For backwards compatibility
 DEFAULT_CHECKPOINT_FREQUENCY = 100
-
-
-@dataclass
-class CausalPredictionData:
-    logits_list: list
-    metric_values: dict = None
-    targets_list: list = None
-    target_key: str = None
 
 
 class CausalEHRTrainer(EHRTrainer):
@@ -46,20 +42,92 @@ class CausalEHRTrainer(EHRTrainer):
         self.epoch_history = []
         self.plateau_threshold = plateau_threshold
         self.encoder_frozen = False
+        self.outcome_names = self.model.config.outcome_names
+        self.best_outcome_aucs = {name: None for name in self.outcome_names}
         self.best_exposure_auc = None
-        self.best_outcome_auc = None
+        self.use_pcgrad = self.args.get("use_pcgrad", True)
+        self.plot_histograms = self.args.get("plot_histograms", False)
+        self.freeze_encoder_on_plateau = self.args.get(
+            "freeze_encoder_on_plateau", False
+        )
+        self.freeze_encoder_on_plateau_threshold = self.args.get(
+            "freeze_encoder_on_plateau_threshold", 0.01
+        )
+        self.freeze_encoder_on_plateau_patience = self.args.get(
+            "freeze_encoder_on_plateau_patience", 3
+        )
+        self.plateau_counter = 0
+        if self.use_pcgrad:
+            self.optimizer = PCGrad(self.optimizer)
 
-    def _evaluate(self, epoch: int, mode="val") -> tuple:
-        """Returns the validation/test loss and metrics for both exposure and outcome."""
+    def _train_step(self, batch: dict):
+        self.optimizer.zero_grad()
+        self.batch_to_device(batch)
+
+        with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+            outputs = self.model(batch)
+
+        if self.use_pcgrad:
+            # Collect individual task losses for PCGrad
+            task_losses = []
+
+            # Add exposure loss if available
+            if hasattr(outputs, "exposure_loss") and outputs.exposure_loss is not None:
+                task_losses.append(outputs.exposure_loss)
+
+            # Add outcome losses if available
+            if hasattr(outputs, "outcome_losses") and outputs.outcome_losses:
+                for outcome_loss in outputs.outcome_losses.values():
+                    if outcome_loss is not None:
+                        task_losses.append(outcome_loss)
+
+            # If we don't have individual losses, fall back to total loss
+            if not task_losses and hasattr(outputs, "loss"):
+                task_losses = [outputs.loss]
+
+            if not task_losses:
+                return outputs.loss if hasattr(outputs, "loss") else None
+
+            # Scale each loss individually for PCGrad
+            scaled_losses = [self.scaler.scale(loss) for loss in task_losses]
+
+            # Use PCGrad backward instead of regular backward
+            if len(scaled_losses) > 1:
+                # Multiple tasks - use PCGrad
+                self.optimizer.pc_backward(scaled_losses)
+            else:
+                # Single task - use regular backward
+                scaled_losses[0].backward()
+
+            # Return the total loss for logging (unscaled)
+            return outputs.loss if hasattr(outputs, "loss") else sum(task_losses)
+        else:
+            loss = outputs.loss
+            if loss is not None:
+                self.scaler.scale(loss).backward()
+            return loss
+
+    def _update(self):
+        """Updates the model (optimizer and scheduler) with PCGrad support"""
+        # PCGrad optimizer exposes param_groups, so scaler can work with it directly
+        self._clip_gradients()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
+
+        if self.scheduler is not None:
+            self.scheduler.step()
+
+    def _evaluate(self, mode="val") -> tuple:
+        """Returns the validation/test loss and metrics for exposure and all outcomes."""
         if mode == "val":
             if self.val_dataset is None:
                 self.log("No validation dataset provided")
-                return None, None, None, None
+                return None, None, None, None, None
             dataloader = self.get_dataloader(self.val_dataset, mode="val")
         elif mode == "test":
             if self.test_dataset is None:
                 self.log("No test dataset provided")
-                return None, None, None, None
+                return None, None, None, None, None
             dataloader = self.get_dataloader(self.test_dataset, mode="test")
         else:
             raise ValueError(f"Mode {mode} not supported. Use 'val' or 'test'")
@@ -69,9 +137,8 @@ class CausalEHRTrainer(EHRTrainer):
         loop.set_description(mode)
         loss = 0
         exposure_loss_total = 0
-        outcome_loss_total = 0
+        outcome_losses_total = defaultdict(float)
 
-        # Metric tracking for both target types
         prediction_data = {
             EXPOSURE: CausalPredictionData(
                 metric_values={f"{EXPOSURE}_{name}": [] for name in self.metrics},
@@ -79,16 +146,18 @@ class CausalEHRTrainer(EHRTrainer):
                 targets_list=[] if self.accumulate_logits else None,
                 target_key=EXPOSURE_TARGET,
             ),
-            OUTCOME: CausalPredictionData(
-                metric_values={f"{OUTCOME}_{name}": [] for name in self.metrics},
+        }
+
+        for outcome_name in self.outcome_names:
+            prediction_data[outcome_name] = CausalPredictionData(
+                metric_values={f"{outcome_name}_{name}": [] for name in self.metrics},
                 logits_list=[] if self.accumulate_logits else None,
                 targets_list=[] if self.accumulate_logits else None,
-                target_key=TARGET,
-            ),
-            CF_OUTCOME: CausalPredictionData(
+                target_key=outcome_name,
+            )
+            prediction_data[f"{CF_OUTCOME}_{outcome_name}"] = CausalPredictionData(
                 logits_list=[] if self.accumulate_logits else None,
-            ),
-        }
+            )
 
         with torch.no_grad():
             for batch in loop:
@@ -96,110 +165,156 @@ class CausalEHRTrainer(EHRTrainer):
                 with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
                     outputs = self.model(batch)
                     cf_outputs = self.model(batch, cf=True)
-                # Add to total loss if available
+
                 if hasattr(outputs, "loss"):
                     loss += outputs.loss.item()
                 if hasattr(outputs, "exposure_loss"):
                     exposure_loss_total += outputs.exposure_loss.item()
-                if hasattr(outputs, "outcome_loss"):
-                    outcome_loss_total += outputs.outcome_loss.item()
+                if hasattr(outputs, "outcome_losses"):
+                    for outcome_name, outcome_loss in outputs.outcome_losses.items():
+                        outcome_losses_total[outcome_name] += outcome_loss.item()
 
                 if self.accumulate_logits:
-                    # Store predictions for later processing
                     self._accumulate_predictions(
                         batch, outputs, cf_outputs, prediction_data
                     )
                 else:
-                    # Calculate metrics on the fly
                     self._calculate_batch_metrics(batch, outputs, prediction_data)
 
-        # Process all accumulated predictions
         if self.accumulate_logits:
             metrics = self.process_causal_classification_results(
-                prediction_data, epoch, mode
+                prediction_data, mode, save_results=False
             )
         else:
-            # Average metrics calculated on the fly
             exposure_metrics = compute_avg_metrics(
                 prediction_data[EXPOSURE].metric_values
             )
-            outcome_metrics = compute_avg_metrics(
-                prediction_data[OUTCOME].metric_values
-            )
 
-            # Compute simple average metrics
+            all_outcome_metrics = {}
+            for outcome_name in self.outcome_names:
+                outcome_metrics = compute_avg_metrics(
+                    prediction_data[outcome_name].metric_values
+                )
+                all_outcome_metrics.update(outcome_metrics)
+
             simple_metrics = {}
             for name in self.metrics.keys():
-                if (
-                    f"{EXPOSURE}_{name}" in exposure_metrics
-                    and f"{OUTCOME}_{name}" in outcome_metrics
-                ):
-                    simple_metrics[name] = (
+                outcome_values = [
+                    all_outcome_metrics[f"{outcome_name}_{name}"]
+                    for outcome_name in self.outcome_names
+                    if f"{outcome_name}_{name}" in all_outcome_metrics
+                ]
+                if outcome_values and f"{EXPOSURE}_{name}" in exposure_metrics:
+                    all_values = [
                         exposure_metrics[f"{EXPOSURE}_{name}"]
-                        + outcome_metrics[f"{OUTCOME}_{name}"]
-                    ) / 2
+                    ] + outcome_values
+                    simple_metrics[name] = sum(all_values) / len(all_values)
 
-            metrics = {**exposure_metrics, **outcome_metrics, **simple_metrics}
+            metrics = {**exposure_metrics, **all_outcome_metrics, **simple_metrics}
+
         self.model.train()
 
-        # Return average losses and all metrics
         avg_loss = loss / len(loop)
         avg_exposure_loss = exposure_loss_total / len(loop)
-        avg_outcome_loss = outcome_loss_total / len(loop)
+        avg_outcome_losses = {
+            outcome_name: total_loss / len(loop)
+            for outcome_name, total_loss in outcome_losses_total.items()
+        }
 
-        return avg_loss, metrics, avg_exposure_loss, avg_outcome_loss
+        return avg_loss, metrics, avg_exposure_loss, avg_outcome_losses, prediction_data
+
+    def _clip_gradients(self):
+        """Clip gradients with PCGrad support"""
+        if self.args.get("gradient_clip", False):
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(),
+                max_norm=self.args.get("gradient_clip", {}).get("clip_value", 1.0),
+            )
 
     def process_causal_classification_results(
         self,
         prediction_data: Dict[str, CausalPredictionData],
-        epoch: int,
         mode="val",
+        save_results=True,
     ) -> dict:
-        """Process results for both exposure and outcome predictions."""
+        """Process results for exposure and all outcome predictions."""
 
         metrics = {}
 
-        # Process exposure and outcome predictions
-        for target_type in [EXPOSURE, OUTCOME]:
-            # Concatenate tensors
-            targets = torch.cat(prediction_data[target_type].targets_list)
-            logits = torch.cat(prediction_data[target_type].logits_list)
+        # Process exposure predictions
+        targets = torch.cat(prediction_data[EXPOSURE].targets_list)
+        logits = torch.cat(prediction_data[EXPOSURE].logits_list)
 
-            # Calculate metrics
+        # Calculate metrics for exposure
+        batch = {TARGET: targets}
+        outputs = namedtuple("Outputs", ["logits"])(logits)
+
+        for name, func in self.metrics.items():
+            value = func(outputs, batch)
+            key = f"{EXPOSURE}_{name}"
+            self.log(f"{key}: {value}")
+            metrics[key] = value
+
+        if save_results:
+            self._save_target_results(
+                EXPOSURE,
+                logits,
+                targets,
+                {k: v for k, v in metrics.items() if k.startswith(f"{EXPOSURE}_")},
+                mode,
+            )
+
+        # Process each outcome prediction
+        for outcome_name in self.outcome_names:
+            targets = torch.cat(prediction_data[outcome_name].targets_list)
+            logits = torch.cat(prediction_data[outcome_name].logits_list)
+
+            # Calculate metrics for this outcome
             batch = {TARGET: targets}
             outputs = namedtuple("Outputs", ["logits"])(logits)
 
-            # Compute metrics
             for name, func in self.metrics.items():
                 value = func(outputs, batch)
-                key = f"{target_type}_{name}"
+                key = f"{outcome_name}_{name}"
                 self.log(f"{key}: {value}")
                 metrics[key] = value
 
-            # Save results
-            self._save_target_results(
-                target_type, logits, targets, metrics, epoch, mode
-            )
+            if save_results:
+                self._save_target_results(
+                    outcome_name,
+                    logits,
+                    targets,
+                    {
+                        k: v
+                        for k, v in metrics.items()
+                        if k.startswith(f"{outcome_name}_")
+                    },
+                    mode,
+                )
+                cf_logits = torch.cat(
+                    prediction_data[f"{CF_OUTCOME}_{outcome_name}"].logits_list
+                )
+                save_predictions(
+                    self.run_folder,
+                    cf_logits,
+                    None,
+                    BEST_MODEL_ID,
+                    f"{mode}_{CF_OUTCOME}_{outcome_name}",
+                    save_targets=False,
+                )
 
-        # Compute average metrics (simple metric names)
+        # Compute average metrics across exposure + all outcomes
         for name in self.metrics.keys():
-            if f"{EXPOSURE}_{name}" in metrics and f"{OUTCOME}_{name}" in metrics:
-                avg_value = (
-                    metrics[f"{EXPOSURE}_{name}"] + metrics[f"{OUTCOME}_{name}"]
-                ) / 2
+            outcome_values = [
+                metrics[f"{outcome_name}_{name}"]
+                for outcome_name in self.outcome_names
+                if f"{outcome_name}_{name}" in metrics
+            ]
+            if outcome_values and f"{EXPOSURE}_{name}" in metrics:
+                all_values = [metrics[f"{EXPOSURE}_{name}"]] + outcome_values
+                avg_value = sum(all_values) / len(all_values)
                 metrics[name] = avg_value
                 self.log(f"{name} (avg): {avg_value}")
-
-        # Process counterfactual outcome
-        cf_logits = torch.cat(prediction_data[CF_OUTCOME].logits_list)
-        save_predictions(
-            self.run_folder,
-            cf_logits,
-            None,
-            BEST_MODEL_ID,
-            f"{mode}_{CF_OUTCOME}",
-            save_targets=False,
-        )
 
         return metrics
 
@@ -217,16 +332,17 @@ class CausalEHRTrainer(EHRTrainer):
         )
         prediction_data[EXPOSURE].targets_list.append(batch[EXPOSURE_TARGET].cpu())
 
-        # Store outcome predictions
-        prediction_data[OUTCOME].logits_list.append(
-            outputs.outcome_logits.float().cpu()
-        )
-        prediction_data[OUTCOME].targets_list.append(batch[TARGET].cpu())
+        # Store outcome predictions for each outcome
+        for outcome_name in self.outcome_names:
+            prediction_data[outcome_name].logits_list.append(
+                outputs.outcome_logits[outcome_name].float().cpu()
+            )
+            prediction_data[outcome_name].targets_list.append(batch[outcome_name].cpu())
 
-        # Store counterfactual outcome predictions
-        prediction_data[CF_OUTCOME].logits_list.append(
-            cf_outputs.outcome_logits.float().cpu()
-        )
+            # Store counterfactual outcome predictions
+            prediction_data[f"{CF_OUTCOME}_{outcome_name}"].logits_list.append(
+                cf_outputs.outcome_logits[outcome_name].float().cpu()
+            )
 
     def _calculate_batch_metrics(
         self,
@@ -246,13 +362,16 @@ class CausalEHRTrainer(EHRTrainer):
                 exposure_value
             )
 
-            # Outcome metrics
-            outcome_outputs = namedtuple("Outputs", ["logits"])(outputs.outcome_logits)
-            outcome_batch = {TARGET: batch[TARGET]}
-            outcome_value = func(outcome_outputs, outcome_batch)
-            prediction_data[OUTCOME].metric_values[f"{OUTCOME}_{name}"].append(
-                outcome_value
-            )
+            # Outcome metrics for each outcome
+            for outcome_name in self.outcome_names:
+                outcome_outputs = namedtuple("Outputs", ["logits"])(
+                    outputs.outcome_logits[outcome_name]
+                )
+                outcome_batch = {TARGET: batch[outcome_name]}
+                outcome_value = func(outcome_outputs, outcome_batch)
+                prediction_data[outcome_name].metric_values[
+                    f"{outcome_name}_{name}"
+                ].append(outcome_value)
 
     def _save_target_results(
         self,
@@ -260,7 +379,6 @@ class CausalEHRTrainer(EHRTrainer):
         logits: torch.Tensor,
         targets: torch.Tensor,
         metrics: dict,
-        epoch: int,
         mode: str,
     ):
         """Helper method to save curves, metrics and predictions for a target type"""
@@ -268,21 +386,6 @@ class CausalEHRTrainer(EHRTrainer):
         target_metrics = {
             k: v for k, v in metrics.items() if k.startswith(f"{target_type}_")
         }
-
-        # Save for current epoch
-        save_curves(
-            self.run_folder,
-            logits,
-            targets,
-            epoch,
-            f"{mode}_{target_type}",
-        )
-        save_metrics_to_csv(
-            self.run_folder,
-            target_metrics,
-            epoch,
-            f"{mode}_{target_type}",
-        )
 
         # Save for best model ID (for backwards compatibility)
         save_curves(
@@ -307,40 +410,89 @@ class CausalEHRTrainer(EHRTrainer):
         )
 
     def validate_and_log(self, epoch: int, epoch_loss: float, train_loop) -> None:
-        val_loss, val_metrics, val_exposure_loss, val_outcome_loss = self._evaluate(
-            epoch, mode="val"
-        )
-        _, test_metrics, test_exposure_loss, test_outcome_loss = self._evaluate(
-            epoch, mode="test"
-        )
-
-        # Calculate average train loss for this epoch
-        avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)
-
-        # Store metrics for plotting
-        self._update_metric_history(
-            epoch,
-            avg_train_loss,
+        (
             val_loss,
             val_metrics,
-            test_metrics,
             val_exposure_loss,
             val_outcome_loss,
-            test_exposure_loss,
-            test_outcome_loss,
+            val_prediction_data,
+        ) = self._evaluate(mode="val")
+        _, test_metrics, test_exposure_loss, test_outcome_loss, test_prediction_data = (
+            self._evaluate(mode="test")
         )
 
-        # Plot metrics
-        self._plot_metrics()
+        current_metric_value = val_metrics.get(
+            self.stopping_metric, val_loss
+        )  # get the metric we monitor. Same as early stopping
+        is_best = self._is_improvement(current_metric_value)
+        if is_best:
+            self.log(
+                f"New best model found at epoch {epoch} with {self.stopping_metric}: {current_metric_value:.4f}. Saving results."
+            )
+            # If it's the best, save all the detailed artifacts
+            if self.accumulate_logits:
+                self.process_causal_classification_results(
+                    val_prediction_data, mode="val", save_results=True
+                )
+                if test_prediction_data:
+                    self.process_causal_classification_results(
+                        test_prediction_data, mode="test", save_results=True
+                    )
+        # Add debugging to see what metrics are being returned
+        self.log(
+            f"Validation metrics keys: {list(val_metrics.keys()) if val_metrics else 'None'}"
+        )
+        self.log(
+            f"Test metrics keys: {list(test_metrics.keys()) if test_metrics else 'None'}"
+        )
 
-        if epoch == 1:  # for testing purposes/if first epoch is best
+        # Plot prediction histograms
+        if self.plot_histograms and val_prediction_data:
+            plot_prediction_histograms(
+                val_prediction_data,
+                self.run_folder,
+                self.outcome_names,
+                self.accumulate_logits,
+            )
+
+        # Check outcome-specific metrics
+        if val_metrics:
+            outcome_metrics = {
+                k: v
+                for k, v in val_metrics.items()
+                if any(outcome in k for outcome in self.outcome_names)
+            }
+            self.log(f"Outcome metrics in validation: {outcome_metrics}")
+
+        # Calculate average train loss for this epoch
+        avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)  # type: ignore
+
+        # Store metrics for plotting
+        epoch_metrics = EpochMetrics(
+            epoch=epoch,
+            train_loss=avg_train_loss,
+            val_loss=val_loss,
+            val_metrics=val_metrics,
+            test_metrics=test_metrics,
+            val_exposure_loss=val_exposure_loss,
+            val_outcome_losses=val_outcome_loss,
+            test_exposure_loss=test_exposure_loss,
+            test_outcome_losses=test_outcome_loss,
+        )
+        self._update_metric_history(epoch_metrics)
+
+        # Plot metrics
+        plot_training_curves(
+            self.metric_history,
+            self.epoch_history,
+            os.path.join(self.run_folder, "figs"),
+            self.outcome_names,
+            self.log,
+        )
+
+        if is_best or (epoch == 1):  # for testing purposes/if first epoch is best
             self._save_checkpoint(
-                epoch,
-                train_loss=epoch_loss,
-                val_loss=val_loss,
-                val_metrics=val_metrics,
-                test_metrics=test_metrics,
-                final_step_loss=epoch_loss[-1],
+                BEST_MODEL_ID,
                 best_model=True,
             )
 
@@ -348,191 +500,104 @@ class CausalEHRTrainer(EHRTrainer):
             epoch, val_loss, val_metrics, epoch_loss, len(train_loop)
         )
 
-        current_metric_value = val_metrics.get(
-            self.stopping_metric, val_loss
-        )  # get the metric we monitor. Same as early stopping
-
-        if self._should_unfreeze_on_plateau(current_metric_value):
-            self._unfreeze_model("Performance plateau detected!")
-
         if self._should_stop_early(
             epoch, current_metric_value, val_loss, epoch_loss, val_metrics, test_metrics
         ):
             return
-        self._save_checkpoint_conditionally(
-            epoch, epoch_loss, val_loss, val_metrics, test_metrics
-        )
+
         self._check_and_freeze_encoder(val_metrics)
 
-    def _update_metric_history(
-        self,
-        epoch,
-        train_loss,
-        val_loss,
-        val_metrics,
-        test_metrics,
-        val_exposure_loss=None,
-        val_outcome_loss=None,
-        test_exposure_loss=None,
-        test_outcome_loss=None,
-    ):
+    def _update_metric_history(self, metrics: EpochMetrics):
         """Update the metric history for plotting"""
-        self.epoch_history.append(epoch)
+        self.epoch_history.append(metrics.epoch)
 
-        # Store losses - use val_loss as default for first epoch if train_loss is 0
-        if train_loss == 0 and val_loss is not None:
-            self.metric_history["train_loss"].append(val_loss)
-        else:
-            self.metric_history["train_loss"].append(train_loss)
-
-        if val_loss is not None:
-            self.metric_history["val_loss"].append(val_loss)
-
-        # Store individual losses
-        if val_exposure_loss is not None:
-            self.metric_history["val_exposure_loss"].append(val_exposure_loss)
-        if val_outcome_loss is not None:
-            self.metric_history["val_outcome_loss"].append(val_outcome_loss)
-        if test_exposure_loss is not None:
-            self.metric_history["test_exposure_loss"].append(test_exposure_loss)
-        if test_outcome_loss is not None:
-            self.metric_history["test_outcome_loss"].append(test_outcome_loss)
-
-        # Store validation metrics
-        if val_metrics:
-            for metric_name, value in val_metrics.items():
-                self.metric_history[f"val_{metric_name}"].append(float(value))
-
-        # Store test metrics
-        if test_metrics:
-            for metric_name, value in test_metrics.items():
-                self.metric_history[f"test_{metric_name}"].append(float(value))
-
-    def _plot_metrics(self):
-        """Plot all metrics and save to output_dir/figs"""
-        if len(self.epoch_history) < 2:  # Need at least 2 points to plot
-            return
-
-        figs_dir = os.path.join(self.run_folder, "figs")
-        os.makedirs(figs_dir, exist_ok=True)
-
-        # Group metrics by base name for better visualization
-        metric_groups = self._group_metrics()
-
-        for group_name, metrics in metric_groups.items():
-            self._plot_metric_group(group_name, metrics, figs_dir)
-
-    def _group_metrics(self):
-        """Group metrics by their base name (e.g., roc_auc, pr_auc, loss)"""
-        groups = defaultdict(dict)
-
-        for metric_name, values in self.metric_history.items():
-            if len(values) != len(self.epoch_history):
-                continue  # Skip if lengths don't match
-
-            # Determine base metric name and prefix
-            if metric_name in ["train_loss", "val_loss"]:
-                base_name = "loss"
-                prefix = metric_name.replace("_loss", "")
-            elif metric_name.startswith("val_"):
-                base_name = metric_name[4:]  # Remove 'val_' prefix
-                prefix = "val"
-            elif metric_name.startswith("test_"):
-                base_name = metric_name[5:]  # Remove 'test_' prefix
-                prefix = "test"
-            else:
-                base_name = metric_name
-                prefix = "train"
-
-            groups[base_name][prefix] = values
-
-        return groups
-
-    def _plot_metric_group(self, metric_name, metric_data, figs_dir):
-        """Plot a group of related metrics (e.g., train/val/test for same metric)"""
-        plt.figure(figsize=(10, 6))
-
-        # Define colors for different metric types
-        colors = {
-            "train": "blue",
-            "val": "orange",
-            "test": "green",
-            "exposure": "red",
-            "outcome": "purple",
-        }
-
-        for prefix, values in metric_data.items():
-            color = colors.get(prefix, "black")
-            plt.plot(
-                self.epoch_history,
-                values,
-                label=f"{prefix}_{metric_name}",
-                color=color,
-                marker="o",
-                markersize=3,
-            )
-
-        plt.xlabel("Epoch")
-        plt.ylabel(metric_name.replace("_", " ").title())
-        plt.title(f"{metric_name.replace('_', ' ').title()} Over Training")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-
-        # Save the plot
-        plt.savefig(
-            os.path.join(figs_dir, f"{metric_name}.png"), dpi=150, bbox_inches="tight"
+        # Store main losses
+        self._store_scalar_loss(
+            "train_loss", metrics.train_loss, fallback=metrics.val_loss
         )
-        plt.close()  # Close to prevent memory issues
+        self._store_scalar_loss("val_loss", metrics.val_loss)
+
+        # Store exposure losses
+        self._store_scalar_loss("val_exposure_loss", metrics.val_exposure_loss)
+        self._store_scalar_loss("test_exposure_loss", metrics.test_exposure_loss)
+
+        # Store outcome losses and metrics
+        self._store_outcome_losses("val", metrics.val_outcome_losses)
+        self._store_outcome_losses("test", metrics.test_outcome_losses)
+        self._store_metrics("val", metrics.val_metrics)
+        self._store_metrics("test", metrics.test_metrics)
+
+    def _store_scalar_loss(self, key: str, value, fallback=None):
+        """Store a scalar loss value with optional fallback"""
+        if value is not None:
+            self.metric_history[key].append(value)
+        elif value == 0 and fallback is not None:  # Handle train_loss special case
+            self.metric_history[key].append(fallback)
+
+    def _store_outcome_losses(self, prefix: str, outcome_losses: dict):
+        """Store outcome losses from a dictionary"""
+        if outcome_losses is not None:
+            for outcome_name, loss_value in outcome_losses.items():
+                key = f"{prefix}_{outcome_name}_loss"
+                self.metric_history[key].append(loss_value)
+
+    def _store_metrics(self, prefix: str, metrics: dict):
+        """Store metrics with a given prefix"""
+        if metrics:
+            for metric_name, value in metrics.items():
+                key = f"{prefix}_{metric_name}"
+                self.metric_history[key].append(float(value))
+                # Add debugging to see what metrics are being stored
+                if "outcome" in metric_name.lower():
+                    self.log(f"Storing outcome metric: {key} = {value}")
 
     def _check_and_freeze_encoder(self, metrics: dict):
         """
-        Freeze the encoder if either exposure or outcome AUC plateaus.
+        Freeze the encoder if exposure or any outcome AUC plateaus for a number of epochs.
+        This now uses the standalone `check_task_plateau` utility.
         """
-        if self.encoder_frozen:
+        if not self.freeze_encoder_on_plateau or self.encoder_frozen:
             return
 
         exposure_auc = metrics.get(f"{EXPOSURE}_roc_auc", 0.5)
-        outcome_auc = metrics.get(f"{OUTCOME}_roc_auc", 0.5)
 
-        exp_plateau, self.best_exposure_auc = self._task_plateau(
-            exposure_auc, self.best_exposure_auc, True
-        )
-        out_plateau, self.best_outcome_auc = self._task_plateau(
-            outcome_auc, self.best_outcome_auc, True
+        exp_plateau, self.best_exposure_auc = check_task_plateau(
+            current_metric=exposure_auc,
+            best_metric=self.best_exposure_auc,
+            threshold=self.freeze_encoder_on_plateau_threshold,
+            higher_is_better=True,
         )
 
-        if exp_plateau or out_plateau:
+        # Check each outcome for a plateau
+        outcome_plateaus = []
+        for outcome_name in self.best_outcome_aucs.keys():
+            outcome_auc = metrics.get(f"{outcome_name}_roc_auc", 0.5)
+            out_plateau, self.best_outcome_aucs[outcome_name] = check_task_plateau(
+                current_metric=outcome_auc,
+                best_metric=self.best_outcome_aucs[outcome_name],
+                threshold=self.freeze_encoder_on_plateau_threshold,
+                higher_is_better=True,
+            )
+            outcome_plateaus.append(out_plateau)
+
+        if exp_plateau or any(outcome_plateaus):
+            self.plateau_counter += 1
+            self.log(
+                f"Plateau detected. Counter: {self.plateau_counter}/{self.freeze_encoder_on_plateau_patience}"
+            )
+        else:
+            if self.plateau_counter > 0:
+                self.log(f"No plateau. Counter reset to 0.")
+            self.plateau_counter = 0
+
+        if self.plateau_counter >= self.freeze_encoder_on_plateau_patience:
             self._freeze_encoder()
             self.log(
-                f"Encoder frozen due to plateau (exp_plateau={exp_plateau}, out_plateau={out_plateau})"
+                f"Encoder frozen due to plateau for {self.freeze_encoder_on_plateau_patience} epochs (exp_plateau={exp_plateau}, outcome_plateaus={outcome_plateaus})"
             )
             for param_group in self.optimizer.param_groups:
-                param_group["lr"] = param_group["lr"] * 0.1
+                param_group["lr"] *= 0.5
                 self.log(f"Learning rate updated to {param_group['lr']}")
-
-    def _task_plateau(
-        self, current_auc: float, best_auc: float, higher_is_better: bool
-    ):
-        """
-        Check if a task's AUC has plateaued and update best AUC.
-
-        Returns:
-            plateau (bool): True if improvement < threshold
-            new_best_auc (float): updated best AUC value
-        """
-        if best_auc is None:
-            # Initialize best AUC
-            return False, current_auc
-
-        improvement = (current_auc - best_auc) / best_auc
-        plateau = (
-            improvement < self.plateau_threshold
-            if higher_is_better
-            else improvement > -self.plateau_threshold
-        )
-        improvement = improvement if higher_is_better else -improvement
-        new_best = current_auc if improvement > 0 else best_auc
-        return plateau, new_best
 
     def _freeze_encoder(self):
         """
@@ -542,3 +607,31 @@ class CausalEHRTrainer(EHRTrainer):
             if not any(substring in name for substring in ["pooler", "cls", "head"]):
                 param.requires_grad = False
         self.encoder_frozen = True
+
+    def _save_checkpoint(self, epoch: int, best_model=False, **kwargs) -> None:
+        """Saves a checkpoint. Model with optimizer and scheduler if available."""
+        # Model/training specific
+        id = epoch if not best_model else BEST_MODEL_ID
+        os.makedirs(os.path.join(self.run_folder, "checkpoints"), exist_ok=True)
+        checkpoint_name = os.path.join(
+            self.run_folder, "checkpoints", f"checkpoint_epoch{id}_end.pt"
+        )
+
+        if self.use_pcgrad:
+            # PCGrad exposes the underlying optimizer via the optimizer property
+            optimizer_state_dict = self.optimizer.optimizer.state_dict()
+        else:
+            optimizer_state_dict = self.optimizer.state_dict()
+
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": optimizer_state_dict,
+                "scheduler_state_dict": (
+                    self.scheduler.state_dict() if self.scheduler is not None else None
+                ),
+                **kwargs,
+            },
+            checkpoint_name,
+        )

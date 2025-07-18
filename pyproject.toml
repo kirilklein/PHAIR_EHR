@@ -58,3 +58,10 @@ Homepage = "https://github.com/FGA-DIKU/EHR"
 Source = "https://github.com/FGA-DIKU/EHR"
 Tracker = "https://github.com/FGA-DIKU/EHR/issues"
 
+[tool.pyright]
+exclude = ["**/*.ipynb", "sandbox/*"]
+
+[tool.ruff]
+line-length = 88
+fix = true
+lint.select = ["E9", "F63", "F7", "F82", "E711", "E712", "E713", "E714", "E721", "F401", "F402", "F405", "F811", "F821", "F822", "F823", "F841", "F901"]

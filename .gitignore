@@ -7,7 +7,7 @@ azure_job_config.yaml
 .azure_job_configs
 .amlignore
 **.amltmp
-corebehrt/sandbox
+sandbox
 /profiling
 /tmp
 corebehrt/main/create_data_profiling.py

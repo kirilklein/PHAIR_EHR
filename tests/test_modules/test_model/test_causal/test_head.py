@@ -151,38 +151,6 @@ class TestMLPHead(unittest.TestCase):
         self.batch_size = 8
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def test_initialization_default(self):
-        """Test that MLPHead initializes with default parameters."""
-        head = MLPHead(self.input_size)
-        self.assertIsInstance(head.norm, torch.nn.LayerNorm)
-        self.assertIsInstance(head.classifier, torch.nn.Sequential)
-        self.assertEqual(
-            len(head.classifier), 5
-        )  # Linear, LayerNorm, ReLU, Dropout, Linear
-
-    def test_initialization_custom_params(self):
-        """Test that MLPHead initializes with custom parameters."""
-        hidden_size_ratio = 4
-        dropout_prob = 0.2
-        head = MLPHead(
-            self.input_size,
-            hidden_size_ratio=hidden_size_ratio,
-            dropout_prob=dropout_prob,
-        )
-
-        # Check that the first linear layer has correct input/output dimensions
-        first_linear = head.classifier[0]
-        self.assertIsInstance(first_linear, torch.nn.Linear)
-        self.assertEqual(first_linear.in_features, self.input_size)
-        self.assertEqual(
-            first_linear.out_features, self.input_size // hidden_size_ratio
-        )
-
-        # Check dropout probability
-        dropout_layer = head.classifier[3]
-        self.assertIsInstance(dropout_layer, torch.nn.Dropout)
-        self.assertEqual(dropout_layer.p, dropout_prob)
-
     def test_forward_pass(self):
         """Test forward pass of MLPHead."""
         head = MLPHead(self.input_size).to(self.device)

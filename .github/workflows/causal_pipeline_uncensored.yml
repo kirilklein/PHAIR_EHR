@@ -1,0 +1,79 @@
+name: 'Causal Pipeline Uncensored Test'
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      # ─── Setup ───────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Clean outputs & create venv
+        run: |
+          rm -rf ./outputs/causal
+          python -m venv .venv
+          echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements.txt
+      - name: Set Python path
+        run: |
+          echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
+
+      # ─── Pipeline & Tests ────────────────────────────────────
+      - name: Data prep & pretrain
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main.create_data                         prepare_and_pretrain/create_data.yaml
+          run_step main.prepare_training_data               prepare_and_pretrain/prepare_pretrain.yaml
+          run_step main.pretrain                            prepare_and_pretrain/pretrain.yaml
+
+      - name: Outcomes & cohort selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main.create_outcomes                     outcomes.yaml
+          run_step main_causal.select_cohort_full           select_cohort_full/extract.yaml
+
+      - name: Prepare Finetune Data
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare/uncensored.yaml
+          
+      - name: Finetune Exposure & Outcome
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          run_step main_causal.finetune_exp_y         finetune/uncensored.yaml
+          
+      - name: Check performance
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          python -m tests.pipeline.test_performance_multitarget ./outputs/causal/finetune/models/uncensored \
+          --target-bounds "exposure:min:0.9,max:1" \
+          --target-bounds "OUTCOME:min:0.8,max:1" \
+          --target-bounds "OUTCOME_2:min:0.78,max:1" \
+          --target-bounds "OUTCOME_3:min:0.78,max:1"

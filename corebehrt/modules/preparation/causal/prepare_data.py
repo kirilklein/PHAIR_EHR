@@ -1,35 +1,32 @@
 import logging
 import os
+from dataclasses import dataclass
 from os.path import join
+from typing import Any, Dict, List, Tuple
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 from corebehrt.azure.util.config import load_config
-from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSURE, OUTCOME
-from corebehrt.constants.causal.paths import EXPOSURES_FILE, INDEX_DATE_MATCHING_FILE
+from corebehrt.constants.causal.data import EXPOSURE
+from corebehrt.constants.causal.paths import (
+    BINARY_EXPOSURE_FILE,
+    BINARY_OUTCOMES_FILE,
+    EXPOSURES_FILE,
+    INDEX_DATE_MATCHING_FILE,
+)
 from corebehrt.constants.data import ABSPOS_COL, DEATH_CODE, PID_COL, TIMESTAMP_COL
-from corebehrt.constants.paths import (
-    FOLLOW_UPS_FILE,
-    INDEX_DATES_FILE,
-    OUTCOMES_FILE,
-    COHORT_CFG,
-)
-from corebehrt.functional.preparation.causal.utils import (
-    get_group_dict,
-    get_non_compliance_abspos,
-)
-from corebehrt.functional.preparation.causal.convert import abspos_to_binary_outcome
-from corebehrt.functional.preparation.causal.extract import extract_death
+from corebehrt.constants.paths import COHORT_CFG, FOLLOW_UPS_FILE, INDEX_DATES_FILE
 from corebehrt.functional.features.normalize import normalize_segments_for_patient
 from corebehrt.functional.io_operations.save import save_vocabulary
 from corebehrt.functional.preparation.causal.convert import (
     dataframe_to_causal_patient_list,
 )
-from corebehrt.functional.preparation.causal.follow_up import (
-    prepare_follow_ups_simple,
-    prepare_follow_ups_adjusted,
+from corebehrt.functional.preparation.causal.extract import extract_death
+from corebehrt.functional.preparation.causal.outcomes import (
+    get_binary_exposure,
+    get_binary_outcome,
 )
 from corebehrt.functional.preparation.filter import (
     censor_patient,
@@ -42,280 +39,292 @@ from corebehrt.functional.preparation.utils import (
     get_concept_id_to_delay,
     get_non_priority_tokens,
 )
-from corebehrt.functional.utils.time import (
-    get_hours_since_epoch,
-)
+from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
 from corebehrt.modules.features.loader import ShardLoader
 from corebehrt.modules.monitoring.logger import TqdmToLogger
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.preparation.prepare_data import DatasetPreparer
+from corebehrt.modules.setup.config import Config
 
 logger = logging.getLogger(__name__)  # Get the logger for this module
 
 
-# TODO: Add option to load test set only!
-class CausalDatasetPreparer(DatasetPreparer):
+@dataclass
+class Artifacts:
+    """A container for the output artifacts of the data preparation process."""
+
+    data: CausalPatientDataset
+    exposures: pd.DataFrame
+    binary_outcomes: pd.DataFrame
+    binary_exposure: pd.Series
+    index_dates: pd.DataFrame
+    follow_ups: pd.DataFrame
+    vocabulary: dict
+
+
+class CausalDatasetPreparer:
     """
     Prepares and processes patient data for causal inference.
-    The major difference to the DatasetPreparer is that it also assigns exposures to the patients.
+    Differs from DatasetPreparer by also assigning exposures to patients.
     """
 
-    def prepare_finetune_data(self, mode="tuning") -> CausalPatientDataset:
-        """
-        Prepares and processes patient data for fine-tuning, including censoring, truncation, and outcome assignment.
+    def __init__(self, cfg: Config):
+        self.ds_preparer = DatasetPreparer(cfg)
+        self.exposure_cfg = cfg.exposure
+        self.outcome_cfg = cfg.outcome
+        self.paths_cfg = cfg.paths
+        self.data_cfg = cfg.data
+        self.cohort_cfg = load_config(join(self.paths_cfg.cohort, COHORT_CFG))
+        self.vocabulary = self.ds_preparer.vocab
 
-        Loads patient data, exposures, outcomes, applies cohort and cutoff filtering, assigns binary exposures and outcomes,
-            computes and validates censoring dates, applies censoring (optionally with concept-specific delays),
-            excludes short sequences, truncates and normalizes patient records,
-            and saves the processed dataset for downstream modeling.
+    def prepare_finetune_data(self, mode: str = "tuning") -> CausalPatientDataset:
+        """
+        Prepares and processes patient data for fine-tuning.
+
+        This method orchestrates the loading, filtering, labeling, censoring,
+        and truncation of patient data to create a dataset ready for causal modeling.
 
         Args:
-            mode: Specifies which data split to use for fine-tuning (default is "tuning").
+            mode: The data split to use (e.g., "tuning", "validation").
 
         Returns:
-            A PatientDataset object containing the processed and labeled patient data ready for fine-tuning.
+            A CausalPatientDataset object ready for fine-tuning.
         """
-        exposure_cfg = self.cfg.exposure
-        outcome_cfg = self.cfg.outcome
-        paths_cfg = self.cfg.paths
-        data_cfg = self.cfg.data
+        # 1. Load and filter initial data
+        pids = self.ds_preparer.load_cohort(self.paths_cfg)
+        data = self.load_shards_into_patient_data(pids, mode)
+        pids = data.get_pids()  # Use PIDs actually present in the data
 
-        pids = self.load_cohort(paths_cfg)
-        cohort_cfg = load_config(join(paths_cfg.cohort, COHORT_CFG))
-        # Load index dates and convert to abspos
-        index_dates = pd.read_csv(
-            join(paths_cfg.cohort, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
+        exposures, index_date_matching, index_dates = self.load_cohort_data(
+            self.paths_cfg.cohort
         )
-        index_dates[PID_COL] = index_dates[PID_COL].astype(int)
+        outcomes = self._load_outcomes()
+
+        exposures, index_dates, outcomes = self._filter_dataframes_by_pids(
+            pids, exposures, index_dates, outcomes
+        )
+
+        # 2. Compute labels and outcomes
         index_dates[ABSPOS_COL] = get_hours_since_epoch(index_dates[TIMESTAMP_COL])
+        deaths = self._extract_deaths(data)
 
-        # Load tokenized data
-        loader = ShardLoader(
-            data_dir=paths_cfg.tokenized,
-            splits=[f"features_{mode}"],
-            patient_info_path=None,
+        binary_exposure, binary_outcomes, follow_ups = self._compute_binary_labels(
+            exposures, outcomes, index_dates, index_date_matching, deaths
         )
-        patient_list = []
-        for df, _ in tqdm(
-            loader(), desc="Batch Process Data", file=TqdmToLogger(logger)
-        ):
-            if pids is not None:
-                df = filter_df_by_pids(df, pids)
-            if data_cfg.get("cutoff_date"):
-                df = self._cutoff_data(df, data_cfg.cutoff_date)
-            # !TODO: if index date is the same for all patients, then we can censor here.
-            self._check_sorted(df)
-            batch_patient_list = dataframe_to_causal_patient_list(df)
-            patient_list.extend(batch_patient_list)
-        logger.info(f"Number of patients: {len(patient_list)}")
-        data = CausalPatientDataset(patients=patient_list)
 
-        exposures = pd.read_csv(join(paths_cfg.cohort, EXPOSURES_FILE))
-        index_date_matching = pd.read_csv(
-            join(paths_cfg.cohort, INDEX_DATE_MATCHING_FILE)
+        # 3. Assign labels to patient data
+        self._assign_labels(data, binary_exposure, binary_outcomes)
+
+        # 4. Censor, truncate, and normalize sequences
+        self._censor_and_truncate_sequences(data, index_dates)
+        data.patients = data.process_in_parallel(normalize_segments_for_patient)
+
+        logger.info(
+            f"Max segment length: {max(max(p.segments, default=0) for p in data.patients)}"
         )
-        outcomes = pd.read_csv(paths_cfg.outcome)
 
-        index_dates[PID_COL] = index_dates[PID_COL].astype(int)
-        outcomes[PID_COL] = outcomes[PID_COL].astype(int)
-
-        index_dates = filter_df_by_pids(index_dates, data.get_pids())
-        exposures = filter_df_by_pids(exposures, data.get_pids())
-        outcomes = filter_df_by_pids(outcomes, data.get_pids())
-
-        deaths = data.process_in_parallel(
-            extract_death, death_token=self.vocab[DEATH_CODE]
+        # 5. Save all generated artifacts
+        artifacts = Artifacts(
+            data=data,
+            exposures=exposures,
+            binary_outcomes=binary_outcomes,
+            binary_exposure=binary_exposure,
+            index_dates=index_dates,
+            follow_ups=follow_ups,
+            vocabulary=self.vocabulary,
         )
-        deaths = {patient.pid: death for patient, death in zip(data.patients, deaths)}
+        self._save_artifacts(artifacts, self.paths_cfg.prepared_data)
 
+        return data
+
+    def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
+        """Loads single or multiple outcome files into a dictionary."""
+        outcomes = {}
+        for name, outcome_file in self.paths_cfg.outcome_files.items():
+            df = pd.read_csv(outcome_file)
+            df[PID_COL] = df[PID_COL].astype(int)
+            outcomes[name] = df
+        return outcomes
+
+    def _filter_dataframes_by_pids(
+        self,
+        pids: List[int],
+        exposures: pd.DataFrame,
+        index_dates: pd.DataFrame,
+        outcomes: Dict[str, pd.DataFrame],
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame]]:
+        """Filters all relevant dataframes by the provided list of patient IDs."""
+        logger.info(f"Filtering dataframes for {len(pids)} patients.")
+        index_dates = filter_df_by_pids(index_dates, pids)
+        exposures = filter_df_by_pids(exposures, pids)
+        filtered_outcomes = {
+            name: filter_df_by_pids(df, pids) for name, df in outcomes.items()
+        }
+        return exposures, index_dates, filtered_outcomes
+
+    def _extract_deaths(self, data: CausalPatientDataset) -> Dict[int, Any]:
+        """Extracts death information for each patient."""
+        deaths_list = data.process_in_parallel(
+            extract_death, death_token=self.vocabulary[DEATH_CODE]
+        )
+        return {
+            patient.pid: death for patient, death in zip(data.patients, deaths_list)
+        }
+
+    def _compute_binary_labels(
+        self,
+        exposures: pd.DataFrame,
+        outcomes: Dict[str, pd.DataFrame],
+        index_dates: pd.DataFrame,
+        index_date_matching: pd.DataFrame,
+        deaths: Dict[int, Any],
+    ) -> Tuple[pd.Series, pd.DataFrame, pd.DataFrame]:
+        """Computes binary exposure and outcome labels."""
         logger.info("Handling exposures and outcomes")
-        # Get data end time from cohort configuration
-        if hasattr(cohort_cfg, "time_windows") and hasattr(
-            cohort_cfg.time_windows, "data_end"
-        ):
-            data_end = pd.to_datetime(cohort_cfg.time_windows.data_end)
-        else:
-            logger.warning(
-                "No data end time found in cohort configuration. Setting to today."
-            )
-            data_end = pd.to_datetime("today")
-        # Outcome Handler now only needs to do 1 thing: if outcome is in follow up window 1 else 0
-        binary_exposure = self._get_binary_exposure(
+        data_end = self.get_data_end(self.cohort_cfg)
+
+        binary_exposure = get_binary_exposure(
             exposures,
             index_dates,
-            exposure_cfg.get("n_hours_start_follow_up", -1),
-            exposure_cfg.get("n_hours_end_follow_up"),
+            self.exposure_cfg.get("n_hours_start_follow_up", -1),
+            self.exposure_cfg.get("n_hours_end_follow_up"),
             data_end,
         )
 
-        binary_outcome, follow_ups = self._get_binary_outcome(
-            index_dates,
-            outcomes,
-            outcome_cfg.get("n_hours_start_follow_up", 0),
-            outcome_cfg.get("n_hours_end_follow_up", np.inf),
-            outcome_cfg.get("n_hours_compliance", np.inf),
-            index_date_matching=index_date_matching,
-            deaths=deaths,
-            exposures=exposures,
-            data_end=data_end,  # Pass the actual data end time
-        )
+        binary_outcomes = {}
+        follow_ups = None
+        for outcome_name, outcome_df in outcomes.items():
+            binary_outcomes[outcome_name], follow_ups = get_binary_outcome(
+                index_dates,
+                outcome_df,
+                self.outcome_cfg.get("n_hours_start_follow_up", 0),
+                self.outcome_cfg.get("n_hours_end_follow_up", np.inf),
+                self.outcome_cfg.get("n_hours_compliance", np.inf),
+                index_date_matching=index_date_matching,
+                deaths=deaths,
+                exposures=exposures,
+                data_end=data_end,
+            )
+        return binary_exposure, pd.DataFrame(binary_outcomes), follow_ups
 
+    def _assign_labels(
+        self,
+        data: CausalPatientDataset,
+        binary_exposure: pd.Series,
+        binary_outcomes: pd.DataFrame,
+    ):
+        """Assigns computed labels to the CausalPatientDataset."""
         logger.info("Assigning exposures and outcomes")
-        data = data.assign_attributes(EXPOSURE, binary_exposure)
-        data = data.assign_attributes(OUTCOME, binary_outcome)
+        data.assign_attributes(EXPOSURE, binary_exposure)
+        data.assign_outcomes(binary_outcomes)
 
+    def _censor_and_truncate_sequences(
+        self, data: CausalPatientDataset, index_dates: pd.DataFrame
+    ):
+        """Applies censoring, filters short sequences, and truncates."""
+        # Censor sequences based on index dates
         censor_dates = (
-            index_dates.set_index(PID_COL)[ABSPOS_COL] + exposure_cfg.n_hours_censoring
+            index_dates.set_index(PID_COL)[ABSPOS_COL]
+            + self.exposure_cfg.n_hours_censoring
         )
-        self._validate_censoring(data.patients, censor_dates, logger)
-        if "concept_pattern_hours_delay" in self.cfg:
+        self.ds_preparer._validate_censoring(data.patients, censor_dates, logger)
+
+        if "concept_pattern_hours_delay" in self.ds_preparer.cfg:
             concept_id_to_delay = get_concept_id_to_delay(
-                self.cfg.concept_pattern_hours_delay, self.vocab
+                self.ds_preparer.cfg.concept_pattern_hours_delay,
+                self.vocabulary,
             )
             data.patients = data.process_in_parallel(
                 censor_patient_with_delays,
                 censor_dates=censor_dates,
-                predict_token_id=self.predict_token,
+                predict_token_id=self.ds_preparer.predict_token,
                 concept_id_to_delay=concept_id_to_delay,
             )
         else:
             data.patients = data.process_in_parallel(
                 censor_patient,
                 censor_dates=censor_dates,
-                predict_token_id=self.predict_token,
+                predict_token_id=self.ds_preparer.predict_token,
             )
-        background_length = get_background_length(data, self.vocab)
+
         # Exclude short sequences
         logger.info("Excluding short sequences")
-        data.patients = exclude_short_sequences(
-            data.patients,
-            data_cfg.get("min_len", 1) + background_length,
-        )
+        background_length = get_background_length(data, self.vocabulary)
+        min_len = self.data_cfg.get("min_len", 1) + background_length
+        data.patients = exclude_short_sequences(data.patients, min_len)
 
-        # Truncation
+        # Truncate sequences
         non_priority_tokens = (
-            None
-            if data_cfg.get("low_priority_prefixes", None) is None
-            else get_non_priority_tokens(self.vocab, data_cfg.low_priority_prefixes)
+            get_non_priority_tokens(
+                self.vocabulary, self.data_cfg.low_priority_prefixes
+            )
+            if self.data_cfg.get("low_priority_prefixes")
+            else None
         )
         data.patients = data.process_in_parallel(
             truncate_patient,
-            max_len=data_cfg.truncation_len,
+            max_len=self.data_cfg.truncation_len,
             background_length=background_length,
-            sep_token=self.vocab["[SEP]"],
+            sep_token=self.vocabulary["[SEP]"],
             non_priority_tokens=non_priority_tokens,
         )
 
-        data.patients = data.process_in_parallel(normalize_segments_for_patient)
-        # Check if max segment is larger than type_vocab b_size
-        # TODO: pass pt_model_config and perform this check
-        # max_segment(data, model_cfg.type_vocab_size)
-        # Previously had issue with it
-        logger.info(
-            f"Max segment length: {max(max(patient.segments) for patient in data.patients)}"
+    def load_shards_into_patient_data(
+        self, pids: List[int] = None, mode: str = "tuning"
+    ) -> CausalPatientDataset:
+        """Loads and processes data shards into a CausalPatientDataset."""
+        loader = ShardLoader(
+            data_dir=self.paths_cfg.tokenized,
+            splits=[f"features_{mode}"],
+            patient_info_path=None,
         )
-        # save
-        os.makedirs(self.processed_dir, exist_ok=True)
-        save_vocabulary(self.vocab, self.processed_dir)
-        data.save(self.processed_dir)
-        exposures.to_csv(join(self.processed_dir, EXPOSURES_FILE), index=False)
-        outcomes.to_csv(join(self.processed_dir, OUTCOMES_FILE), index=False)
-        index_dates.to_csv(join(self.processed_dir, INDEX_DATES_FILE), index=False)
+        patient_list = []
+        desc = f"Loading and processing '{mode}' shards"
+        for df, _ in tqdm(loader(), desc=desc, file=TqdmToLogger(logger)):
+            if pids is not None:
+                df = filter_df_by_pids(df, pids)
+            if self.data_cfg.get("cutoff_date"):
+                df = self.ds_preparer._cutoff_data(df, self.data_cfg.cutoff_date)
 
-        follow_ups.to_csv(join(self.processed_dir, FOLLOW_UPS_FILE), index=False)
-        return data
+            self.ds_preparer._check_sorted(df)
+            patient_list.extend(dataframe_to_causal_patient_list(df))
+
+        logger.info(f"Loaded {len(patient_list)} patients.")
+        return CausalPatientDataset(patients=patient_list)
 
     @staticmethod
-    def _get_binary_exposure(
-        exposures: pd.DataFrame,
-        index_dates: pd.DataFrame,
-        n_hours_start_follow_up: int,
-        n_hours_end_follow_up: int,
-        data_end: pd.Timestamp,
-    ) -> pd.Series:
-        """
-        Create binary exposure indicators for patients based on exposure events within follow-up periods.
-
-        Since index dates were determined using exposure criteria, this method uses simple
-        follow-up windows without additional adjustments for compliance or deaths.
-
-        Args:
-            exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
-            index_dates: DataFrame with columns 'subject_id', 'abspos' (index dates)
-            n_hours_start_follow_up: Hours after index date to start follow-up
-            n_hours_end_follow_up: Hours after index date to end follow-up
-
-        Returns:
-            pd.Series: Binary exposure indicator (1 if exposed during follow-up, 0 otherwise)
-        """
-        follow_ups = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
+    def load_cohort_data(
+        cohort_path: str,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """Loads exposure and index date files."""
+        exposures = pd.read_csv(join(cohort_path, EXPOSURES_FILE))
+        index_date_matching = pd.read_csv(join(cohort_path, INDEX_DATE_MATCHING_FILE))
+        index_dates = pd.read_csv(
+            join(cohort_path, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
         )
-        return abspos_to_binary_outcome(follow_ups, exposures)
+        return exposures, index_date_matching, index_dates
 
     @staticmethod
-    def _get_binary_outcome(
-        index_dates: pd.DataFrame,
-        outcomes: pd.DataFrame,
-        n_hours_start_follow_up: int,
-        n_hours_end_follow_up: int,
-        n_hours_compliance: int,
-        index_date_matching: pd.DataFrame,
-        deaths: pd.Series,
-        exposures: pd.DataFrame,
-        data_end: pd.Timestamp,
-    ) -> tuple[pd.Series, pd.DataFrame]:
-        """
-        Create binary outcome indicators for patients using adjusted follow-up periods.
-
-        This method accounts for multiple censoring events:
-        1. Death events (from deaths parameter)
-        2. Non-compliance periods (last exposure + n_hours_compliance)
-        3. End of follow-up periods
-
-        The final follow-up period for each patient is the minimum of these three values.
-        Within matched groups, all patients receive the minimum follow-up period of the group.
-
-        Args:
-            index_dates: DataFrame with columns 'subject_id', 'abspos' (index dates)
-            outcomes: DataFrame with columns 'subject_id', 'abspos' (outcome events)
-            n_hours_start_follow_up: Hours after index date to start follow-up
-            n_hours_end_follow_up: Hours after index date to end follow-up
-            n_hours_compliance: Hours to add to last exposure for non-compliance cutoff
-            index_date_matching: DataFrame defining matched groups (control_subject_id, exposed_subject_id)
-            deaths: Series mapping patient IDs to death times (NaN if no death)
-            exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
-
-        Returns:
-            tuple: (binary_outcomes, adjusted_follow_ups)
-                - binary_outcomes: pd.Series with binary outcome indicators
-                - adjusted_follow_ups: pd.DataFrame with final follow-up periods
-        """
-
-        index_date_matching = CausalDatasetPreparer._filter_index_date_matching(
-            index_date_matching, index_dates
-        )
-        group_dict = get_group_dict(index_date_matching)
-        non_compliance_abspos = get_non_compliance_abspos(exposures, n_hours_compliance)
-        follow_ups = prepare_follow_ups_simple(
-            index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
-        )
-        follow_ups = prepare_follow_ups_adjusted(
-            follow_ups,
-            non_compliance_abspos,
-            deaths,
-            group_dict,
-        )
-        return abspos_to_binary_outcome(follow_ups, outcomes), follow_ups
+    def get_data_end(cohort_cfg: Config) -> pd.Timestamp:
+        """Retrieves the data end timestamp from the configuration."""
+        try:
+            return pd.to_datetime(cohort_cfg.time_windows.data_end)
+        except AttributeError:
+            logger.warning(
+                "No data_end found in cohort_cfg.time_windows. Defaulting to today."
+            )
+            return pd.to_datetime("today")
 
     @staticmethod
-    def _filter_index_date_matching(
-        index_date_matching: pd.DataFrame, index_dates: pd.DataFrame
-    ) -> pd.DataFrame:
-        """
-        Filter index date matching to only include patients in index dates
-        """
-        return index_date_matching[
-            index_date_matching[CONTROL_PID_COL].isin(index_dates[PID_COL].unique())
-        ]
+    def _save_artifacts(artifacts: Artifacts, out_dir: str):
+        """Saves all processed data and artifacts to disk."""
+        os.makedirs(out_dir, exist_ok=True)
+        logger.info(f"Saving artifacts to {out_dir}")
+        save_vocabulary(artifacts.vocabulary, out_dir)
+        artifacts.data.save(out_dir)
+        artifacts.exposures.to_csv(join(out_dir, EXPOSURES_FILE), index=False)
+        artifacts.index_dates.to_csv(join(out_dir, INDEX_DATES_FILE), index=False)
+        artifacts.follow_ups.to_csv(join(out_dir, FOLLOW_UPS_FILE), index=False)
+        artifacts.binary_outcomes.to_csv(join(out_dir, BINARY_OUTCOMES_FILE))
+        artifacts.binary_exposure.to_csv(join(out_dir, BINARY_EXPOSURE_FILE))

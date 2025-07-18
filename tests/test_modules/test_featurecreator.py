@@ -103,15 +103,28 @@ class TestFeatureCreator(unittest.TestCase):
         )
 
     def test_create_background_wo_dob(self):
+        """
+        If only a subset of patients are missing DOB information, the
+        feature-creation pipeline should proceed without raising an error,
+        silently filtering those patients out.
+        """
         # Remove DOB rows for only patient 1
         concepts_wo_dob = self.concepts.copy()
         patient_1_dob_mask = (concepts_wo_dob[PID_COL] == 1) & (
             concepts_wo_dob[CONCEPT_COL] == "DOB"
         )
         concepts_wo_dob = concepts_wo_dob[~patient_1_dob_mask].copy()
-        with self.assertRaises(ValueError) as context:
-            self.feature_creator(concepts_wo_dob)
-        self.assertIn("Some patients have no DOB", str(context.exception))
+
+        # Run feature-creator – should NOT raise
+        processed_concepts, patient_info = self.feature_creator(concepts_wo_dob)
+
+        # Patient 1 should have been filtered out
+        self.assertNotIn(1, processed_concepts[PID_COL].unique())
+        self.assertNotIn(1, patient_info[PID_COL].unique())
+
+        # All other patients should remain
+        remaining_pids = set(self.concepts[PID_COL].unique()) - {1}
+        self.assertEqual(set(processed_concepts[PID_COL].unique()), remaining_pids)
 
     def test_create_abspos(self):
         result, _ = self.feature_creator(self.concepts)

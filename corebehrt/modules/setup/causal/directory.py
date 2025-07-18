@@ -1,4 +1,5 @@
 import logging
+import os
 from os.path import join
 
 from corebehrt.constants.causal.paths import (
@@ -168,22 +169,29 @@ class CausalDirectoryPreparer(DirectoryPreparer):
 
         self.write_config("stats", name=GET_STATS_CFG)
 
-    def setup_prepare_finetune_exposure_outcome(self, name=None) -> None:
+    def setup_prepare_finetune_exposure_multitarget(self, name=None) -> None:
         """
-        Validates path config and sets up directories for preparing finetune data.
+        Validates path config and sets up directories for preparing finetune data with multiple outcomes.
         """
+        self.setup_prepare_finetune_exposure_outcome_shared(name)
+
+        # Outcomes directory must be set for multi-outcome handling
+        if not (outcomes_dir := self.cfg.paths.get("outcomes", False)):
+            raise ValueError(
+                "'outcomes' directory must be set when using multi-outcome setup"
+            )
+
+        # Get outcome file paths as dictionary based on configuration
+        outcome_file_dict = self._get_outcome_file_dict(outcomes_dir)
+
+        # Set the final outcome paths dictionary
+        self.cfg.paths.outcome_files = outcome_file_dict
+
+    def setup_prepare_finetune_exposure_outcome_shared(self, name=None):
         self.setup_logging("prepare finetune data")
         self.check_directory("features")
         self.check_directory("tokenized")
         self.check_directory("cohort")
-
-        # If "outcome" is set, check that it exists.
-        if outcome := self.cfg.paths.get("outcome", False):
-            # If "outcomes" is also set, use as prefix
-            if outcomes := self.cfg.paths.get("outcomes", False):
-                self.cfg.paths.outcome = join(outcomes, outcome)
-
-            self.check_file("outcome")
 
         if exposure := self.cfg.paths.get("exposure", False):
             if exposures := self.cfg.paths.get("exposures", False):
@@ -198,3 +206,73 @@ class CausalDirectoryPreparer(DirectoryPreparer):
             # If name is given, use it as config name
             self.write_config("prepared_data", name=name)
         self.write_config("prepared_data", source="features", name=DATA_CFG)
+
+    def _get_outcome_file_dict(self, outcomes_dir: str) -> dict[str, str]:
+        """
+        Get dictionary of outcome file paths based on configuration.
+
+        Args:
+            outcomes_dir: Directory containing outcome files
+
+        Returns:
+            Dictionary mapping outcome names to full file paths
+        """
+        outcome_files = self.cfg.paths.get("outcome_files", None)
+
+        if outcome_files is None:
+            logger.warning(
+                "No outcome names found, discovering all CSV files in outcomes directory"
+            )
+            return self._discover_csv_files_dict(outcomes_dir)
+        elif isinstance(outcome_files, list):
+            logger.info(f"Creating outcome dictionary for {outcome_files}")
+            outcome_paths = self._create_outcome_dict(outcomes_dir, outcome_files)
+            for file_path in outcome_paths.values():
+                if not os.path.exists(file_path):
+                    raise FileNotFoundError(f"Outcome file not found: {file_path}")
+            return outcome_paths
+        else:
+            raise ValueError(
+                f"Invalid outcome configuration: {outcome_files}. Should be list or None"
+            )
+
+    @staticmethod
+    def _create_outcome_dict(
+        outcomes_dir: str,
+        outcome_files: list[str],
+    ) -> dict[str, str]:
+        """
+        Create dictionary mapping outcome names to full file paths.
+        Args:
+            outcomes_dir: Directory containing outcome files
+            outcome_names: Dictionary mapping outcome names to file paths
+        """
+        return {
+            file.removesuffix(".csv"): join(outcomes_dir, file)
+            for file in outcome_files
+        }
+
+    @staticmethod
+    def _discover_csv_files_dict(outcomes_dir: str) -> dict[str, str]:
+        """
+        Auto-discover all CSV files in outcomes directory and return as dictionary.
+        """
+        try:
+            all_files = os.listdir(outcomes_dir)
+            csv_files = [f for f in all_files if f.endswith(".csv")]
+
+            if not csv_files:
+                raise ValueError(
+                    f"No CSV files found in outcomes directory: {outcomes_dir}"
+                )
+
+            result = {}
+            for csv_file in csv_files:
+                name = csv_file.removesuffix(".csv")
+                path = join(outcomes_dir, csv_file)
+                result[name] = path
+
+            return result
+
+        except OSError as e:
+            raise ValueError(f"Could not read outcomes directory {outcomes_dir}: {e}")
