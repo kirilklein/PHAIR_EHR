@@ -67,7 +67,7 @@ echo ==== Checking estimate... ====
 python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
 if errorlevel 1 goto :error
 
-:: Run Criteria and Stats
+
 echo ==== Running extract_criteria... ====
 python -m corebehrt.main_causal.helper_scripts.extract_criteria --config_path corebehrt\configs\causal\helper\extract_criteria.yaml
 if errorlevel 1 goto :error
