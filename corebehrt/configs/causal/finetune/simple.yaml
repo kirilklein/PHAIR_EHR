@@ -34,8 +34,9 @@ trainer_args:
   early_stopping: 3
   stopping_criterion: roc_auc
   n_layers_to_freeze: 2
-  unfreeze_on_plateau: false # unfreeze all layers if the performance is less than plateau_threshold
-  unfreeze_at_epoch: 20 # if unfrezze_on_plateau is true, whichever condition is met first
+  freeze_encoder_on_plateau: true
+  freeze_encoder_on_plateau_threshold: 0.01
+  freeze_encoder_on_plateau_patience: 4
   use_pcgrad: true
   plot_histograms: true
 

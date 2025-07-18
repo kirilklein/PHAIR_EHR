@@ -24,7 +24,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 8
+  epochs: 6
   info: true
   # gradient_clip:
   # clip_value: 1.0
@@ -32,13 +32,12 @@ trainer_args:
   checkpoint_frequency: 1
   early_stopping: 3
   stopping_criterion: roc_auc
-  n_layers_to_freeze: 2
-  unfreeze_on_plateau: false # unfreeze all layers if the performance is less than plateau_threshold
-  unfreeze_at_epoch: 20 # if unfrezze_on_plateau is true, whichever condition is met first
+  n_layers_to_freeze: 0
+  freeze_encoder_on_plateau: false
   use_pcgrad: true
 
 optimizer:
-  lr: 8e-3
+  lr: 7e-3
   eps: 1e-6
 
 scheduler:
