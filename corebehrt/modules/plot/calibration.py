@@ -10,7 +10,6 @@ from corebehrt.constants.causal.data import (
     PROBAS,
     PS_COL,
 )
-from corebehrt.constants.causal.paths import OUTCOMES_DIR
 from corebehrt.functional.visualize.calibrate import (
     produce_calibration_plots,
     plot_probas_hist,
@@ -52,12 +51,11 @@ class PlottingManager:
         )
 
         # Plot calibration for each outcome
-        outcomes_fig_dir = self.paths.get_figure_dir(OUTCOMES_DIR)
         for name in data.outcome_names:
             produce_calibration_plots(
                 data.calibrated_outcomes[name],
                 data.outcomes[name],
-                outcomes_fig_dir,
+                fig_dir,
                 "Outcome Probability Calibration",
                 name,
             )
