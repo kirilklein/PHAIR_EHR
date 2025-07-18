@@ -216,9 +216,6 @@ class CausalEHRTrainer(EHRTrainer):
     def _clip_gradients(self):
         """Clip gradients with PCGrad support"""
         if self.args.get("gradient_clip", False):
-            # PCGrad exposes param_groups, so scaler can unscale it directly
-            self.scaler.unscale_(self.optimizer)
-
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
                 max_norm=self.args.get("gradient_clip", {}).get("clip_value", 1.0),

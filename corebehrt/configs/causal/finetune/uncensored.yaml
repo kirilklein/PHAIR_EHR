@@ -26,8 +26,8 @@ trainer_args:
   effective_batch_size: 128
   epochs: 8
   info: true
-  gradient_clip:
-    clip_value: 1.0
+  # gradient_clip:
+  # clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
   early_stopping: 3
