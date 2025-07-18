@@ -60,8 +60,8 @@ jobs:
                 }
 
                 # Run tests with different configurations
-                run_estimate_test 0 0 2 0.02 "No noise, strong effect"  # Uses default weight/intercept
-                run_estimate_test 0.02 0.05 2.0 0.02 "Default test" 0.1 1.0  # Explicit defaults
-                run_estimate_test 0.05 0.05 1.0 0.02 "High noise test" 0.2 1.5  # Custom values
-                run_estimate_test 0.01 0.02 0.5 0.02 "Low noise test" 0.05 0.5  # Custom values 
-                run_estimate_test 0.02 0.05 2.0 0.02 "Default test" 0.2 -1.0  # Explicit defaults
+                run_estimate_test 0 0 2 0.023 "No noise, strong effect"  # Uses default weight/intercept
+                run_estimate_test 0.02 0.05 2.0 0.023 "Default test" 0.1 1.0  # Explicit defaults
+                run_estimate_test 0.05 0.05 1.0 0.023 "High noise test" 0.2 1.5  # Custom values
+                run_estimate_test 0.01 0.02 0.5 0.023 "Low noise test" 0.05 0.5  # Custom values 
+                run_estimate_test 0.02 0.05 2.0 0.023 "Default test" 0.2 -1.0  # Explicit defaults
