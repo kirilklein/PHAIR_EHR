@@ -101,7 +101,10 @@ def setup(
         cmd += f" --test {test_cfg_file}"
 
     # Description = config as yaml in code block
-    description = "```\n" + to_yaml_str(config) + "```"
+    config_str = to_yaml_str(config)
+    if len(config_str) > 4500:
+        config_str = config_str[:4500] + "\n... (truncated)"
+    description = "```\n" + config_str + "```"
 
     # Create job
     from azure.ai.ml import command
