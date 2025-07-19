@@ -62,11 +62,18 @@ class OutcomeMaker:
                 types = attrs["type"]
                 matches = attrs["match"]
                 timestamps = self.match_concepts(concepts_plus, types, matches, attrs)
+
+            if "exclusion" in attrs and not timestamps.empty:
+                timestamps = self._apply_exclusion_filter(
+                    concepts_plus, timestamps, attrs["exclusion"]
+                )
+
             # Only process if we have data
             if len(timestamps) > 0:
-                timestamps[ABSPOS_COL] = get_hours_since_epoch(
-                    timestamps[TIMESTAMP_COL]
-                )
+                if ABSPOS_COL not in timestamps.columns:
+                    timestamps[ABSPOS_COL] = get_hours_since_epoch(
+                        timestamps[TIMESTAMP_COL]
+                    )
                 timestamps[ABSPOS_COL] = timestamps[ABSPOS_COL].astype(int)
                 timestamps[PID_COL] = timestamps[PID_COL].astype(int)
             outcome_tables[outcome] = timestamps
@@ -172,3 +179,44 @@ class OutcomeMaker:
         return self.match_concepts(
             concepts_plus, config["type"], config["match"], extra_params
         )
+
+    def _apply_exclusion_filter(
+        self,
+        concepts_plus: pd.DataFrame,
+        target_events: pd.DataFrame,
+        exclusion_config: Dict,
+    ) -> pd.DataFrame:
+        """Filter out target events that co-occur with exclusion events within a specified time window."""
+        exclusion_events = self.get_events(concepts_plus, exclusion_config["events"])
+
+        if exclusion_events.empty or target_events.empty:
+            return target_events
+
+        target_events = target_events.copy()
+        if ABSPOS_COL not in target_events.columns:
+            target_events[ABSPOS_COL] = get_hours_since_epoch(
+                target_events[TIMESTAMP_COL]
+            )
+
+        exclusion_events[ABSPOS_COL] = get_hours_since_epoch(
+            exclusion_events[TIMESTAMP_COL]
+        )
+        exclusion_events = exclusion_events.rename(
+            columns={ABSPOS_COL: f"{ABSPOS_COL}_exclusion"}
+        )
+
+        target_events_with_index = target_events.reset_index()
+        merged = pd.merge(
+            target_events_with_index,
+            exclusion_events[[PID_COL, f"{ABSPOS_COL}_exclusion"]],
+            on=PID_COL,
+        )
+
+        time_diff = merged[f"{ABSPOS_COL}_exclusion"] - merged[ABSPOS_COL]
+        window_min = exclusion_config["window_hours_min"]
+        window_max = exclusion_config["window_hours_max"]
+
+        mask = (time_diff >= window_min) & (time_diff <= window_max)
+        indices_to_drop = merged.loc[mask, "index"].unique()
+
+        return target_events.drop(index=indices_to_drop)
