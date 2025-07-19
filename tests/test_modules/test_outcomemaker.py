@@ -95,15 +95,37 @@ class TestOutcomeMaker(unittest.TestCase):
             [self.concepts_plus, combination_data], ignore_index=True
         )
 
+        # Add patients for exclusion testing
+        exclusion_data = pd.DataFrame(
+            {
+                PID_COL: [8, 8, 9, 9],
+                CONCEPT_COL: ["DI20", "DOD", "DI20", "DOD"],
+                VALUE_COL: ["yes", "yes", "yes", "yes"],
+                TIMESTAMP_COL: [
+                    datetime.datetime(2020, 3, 1, 10, 0),  # Patient 8: MI
+                    datetime.datetime(
+                        2020, 3, 7, 10, 0
+                    ),  # Patient 8: Death (6 days after MI)
+                    datetime.datetime(2020, 3, 1, 10, 0),  # Patient 9: MI
+                    datetime.datetime(
+                        2020, 3, 9, 10, 0
+                    ),  # Patient 9: Death (8 days after MI)
+                ],
+            }
+        )
+        self.concepts_plus = pd.concat(
+            [self.concepts_plus, exclusion_data], ignore_index=True
+        )
+
         # Create patient info data
         self.patients_info = pd.DataFrame(
             {
-                PID_COL: [1, 2, 3, 4, 5, 6, 7],
+                PID_COL: [1, 2, 3, 4, 5, 6, 7, 8, 9],
             }
         )
 
         # Patient set for testing
-        self.patient_set = [1, 2, 3, 4, 5, 6, 7]
+        self.patient_set = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     def test_basic_outcome_creation(self):
         """Test basic outcome creation"""
@@ -430,6 +452,38 @@ class TestOutcomeMaker(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertIn("BASIC_OUTCOME", result)
         self.assertIn("COMBINATION_OUTCOME", result)
+
+    def test_exclusion_non_fatal_mi(self):
+        """Test exclusion of events that are followed by death within a week."""
+        # Patient 4: MI then death 19 hours later (should be excluded)
+        # Patient 8: MI then death 6 days later (should be excluded)
+        # Patient 9: MI then death 8 days later (should NOT be excluded)
+        outcomes = {
+            "NON_FATAL_MI": {
+                "type": ["code"],
+                "match": [["DI20"]],
+                "match_how": "startswith",
+                "exclusion": {
+                    "events": {
+                        "type": ["code"],
+                        "match": [["DOD"]],
+                        "match_how": "startswith",
+                    },
+                    "window_hours_min": 0,
+                    "window_hours_max": 7 * 24,  # 7 days
+                },
+            }
+        }
+
+        outcome_maker = OutcomeMaker(outcomes)
+        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+
+        self.assertIn("NON_FATAL_MI", result)
+        non_fatal_mi_outcome = result["NON_FATAL_MI"]
+
+        # Only patient 9 should remain
+        self.assertEqual(len(non_fatal_mi_outcome), 1)
+        self.assertEqual(non_fatal_mi_outcome.iloc[0][PID_COL], 9)
 
 
 if __name__ == "__main__":
