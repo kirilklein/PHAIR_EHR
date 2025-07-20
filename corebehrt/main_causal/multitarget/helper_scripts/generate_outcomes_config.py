@@ -94,11 +94,13 @@ def generate_outcomes_config(
     }
 
     for code, _ in tree_dict.items():
-        codes = []
         outcome_name = code
         if prepends:
+            codes = []
             for prepend in prepends:
                 codes.append(f"{prepend}{code}")
+        else:
+            codes = [code]
         outcomes_config["outcomes"][outcome_name] = {
             "type": ["code"],
             "match": [codes],
