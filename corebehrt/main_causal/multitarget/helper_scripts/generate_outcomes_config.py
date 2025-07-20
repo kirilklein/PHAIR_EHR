@@ -2,13 +2,21 @@
 Helper script to generate an outcomes config YAML file from a tree dictionary.
 Takes a tree dictionary created by build_tree.py and generates a corresponding outcomes.yaml
 with an outcome for each key in the dictionary.
+Example command:
+
+python corebehrt/main_causal/multitarget/helper_scripts/generate_outcomes_config.py \
+    --input corebehrt/main_causal/helper_data/sks_trees/medication_tree_4.pkl \
+    --output corebehrt/configs/causal/multitarget/outcomes/atc_4.yaml \
+    --match_how startswith \
+    --prepends M/ RM/
+
 """
 
 import argparse
 import os
 import pickle
 import yaml
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -29,10 +37,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Path to save the generated outcomes config",
     )
     parser.add_argument(
-        "--prepend",
+        "--prepends",
         type=str,
-        default="",
-        help="Optional string to prepend to outcome names. Default: empty string",
+        nargs="+",
+        default=None,
+        help="Optional list of strings to prepend to outcome names. Default: empty list",
     )
     parser.add_argument(
         "--match_how",
@@ -58,7 +67,7 @@ def load_tree_dict(file_path: str) -> Dict[str, Any]:
 
 def generate_outcomes_config(
     tree_dict: Dict[str, Any],
-    prepend: str = "",
+    prepends: List[str] = [],
     match_how: str = "startswith",
     case_sensitive: bool = False,
 ) -> Dict[str, Any]:
@@ -85,10 +94,16 @@ def generate_outcomes_config(
     }
 
     for code, _ in tree_dict.items():
-        outcome_name = f"{prepend}{code}" if prepend else code
+        outcome_name = code
+        if prepends:
+            codes = []
+            for prepend in prepends:
+                codes.append(f"{prepend}{code}")
+        else:
+            codes = [code]
         outcomes_config["outcomes"][outcome_name] = {
             "type": ["code"],
-            "match": [[code]],
+            "match": [codes],
             "match_how": match_how,
             "case_sensitive": case_sensitive,
         }
@@ -111,7 +126,7 @@ def main() -> None:
     tree_dict = load_tree_dict(args.input)
     outcomes_config = generate_outcomes_config(
         tree_dict,
-        prepend=args.prepend,
+        prepends=args.prepends,
         match_how=args.match_how,
         case_sensitive=args.case_sensitive,
     )
