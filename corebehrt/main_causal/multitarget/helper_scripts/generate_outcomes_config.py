@@ -9,6 +9,7 @@ python corebehrt/main_causal/multitarget/helper_scripts/generate_outcomes_config
     --output corebehrt/configs/causal/multitarget/outcomes/atc_4.yaml \
     --match_how startswith \
     --prepends M/ RM/
+    --remove_prefix M
 
 """
 
@@ -44,6 +45,12 @@ def parse_arguments() -> argparse.Namespace:
         help="Optional list of strings to prepend to outcome names. Default: empty list",
     )
     parser.add_argument(
+        "--remove_prefix",
+        type=str,
+        default=None,
+        help="Optional string to remove from initial outcome names. Default: empty string",
+    )
+    parser.add_argument(
         "--match_how",
         type=str,
         default="startswith",
@@ -68,6 +75,7 @@ def load_tree_dict(file_path: str) -> Dict[str, Any]:
 def generate_outcomes_config(
     tree_dict: Dict[str, Any],
     prepends: List[str] = [],
+    remove_prefix: str = "",
     match_how: str = "startswith",
     case_sensitive: bool = False,
 ) -> Dict[str, Any]:
@@ -94,7 +102,10 @@ def generate_outcomes_config(
     }
 
     for code, _ in tree_dict.items():
+        if remove_prefix:  # relevant for meds (on azure which do not have the M prefix)
+            code = code.replace(remove_prefix, "", 1)
         outcome_name = code
+
         if prepends:
             codes = []
             for prepend in prepends:
@@ -127,6 +138,7 @@ def main() -> None:
     outcomes_config = generate_outcomes_config(
         tree_dict,
         prepends=args.prepends,
+        remove_prefix=args.remove_prefix,
         match_how=args.match_how,
         case_sensitive=args.case_sensitive,
     )
