@@ -1,4 +1,5 @@
 import os
+import time
 from collections import defaultdict, namedtuple
 from typing import Dict
 
@@ -117,8 +118,9 @@ class CausalEHRTrainer(EHRTrainer):
         if self.scheduler is not None:
             self.scheduler.step()
 
-    def _evaluate(self, mode="val") -> tuple:
+    def _evaluate(self, mode="val", compute_counterfactuals: bool = True) -> tuple:
         """Returns the validation/test loss and metrics for exposure and all outcomes."""
+        eval_start_time = time.time()
         if mode == "val":
             if self.val_dataset is None:
                 self.log("No validation dataset provided")
@@ -138,6 +140,9 @@ class CausalEHRTrainer(EHRTrainer):
         loss = 0
         exposure_loss_total = 0
         outcome_losses_total = defaultdict(float)
+        forward_pass_time = 0
+        cf_forward_pass_time = 0
+        batch_metric_time = 0
 
         prediction_data = {
             EXPOSURE: CausalPredictionData(
@@ -163,8 +168,14 @@ class CausalEHRTrainer(EHRTrainer):
             for batch in loop:
                 self.batch_to_device(batch)
                 with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+                    start_time = time.time()
                     outputs = self.model(batch)
-                    cf_outputs = self.model(batch, cf=True)
+                    forward_pass_time += time.time() - start_time
+                    cf_outputs = None
+                    if compute_counterfactuals and self.accumulate_logits:
+                        start_time = time.time()
+                        cf_outputs = self.model(batch, cf=True)
+                        cf_forward_pass_time += time.time() - start_time
 
                 if hasattr(outputs, "loss"):
                     loss += outputs.loss.item()
@@ -174,13 +185,16 @@ class CausalEHRTrainer(EHRTrainer):
                     for outcome_name, outcome_loss in outputs.outcome_losses.items():
                         outcome_losses_total[outcome_name] += outcome_loss.item()
 
+                start_time = time.time()
                 if self.accumulate_logits:
                     self._accumulate_predictions(
                         batch, outputs, cf_outputs, prediction_data
                     )
                 else:
                     self._calculate_batch_metrics(batch, outputs, prediction_data)
+                batch_metric_time += time.time() - start_time
 
+        processing_start_time = time.time()
         if self.accumulate_logits:
             metrics = self.process_causal_classification_results(
                 prediction_data, mode, save_results=False
@@ -211,7 +225,7 @@ class CausalEHRTrainer(EHRTrainer):
                     simple_metrics[name] = sum(all_values) / len(all_values)
 
             metrics = {**exposure_metrics, **all_outcome_metrics, **simple_metrics}
-
+        processing_time = time.time() - processing_start_time
         self.model.train()
 
         avg_loss = loss / len(loop)
@@ -221,6 +235,13 @@ class CausalEHRTrainer(EHRTrainer):
             for outcome_name, total_loss in outcome_losses_total.items()
         }
 
+        eval_time = time.time() - eval_start_time
+        self.log(f"[{mode}] Evaluation time: {eval_time:.4f}s")
+        self.log(f"[{mode}] Forward pass time: {forward_pass_time:.4f}s")
+        if self.accumulate_logits:
+            self.log(f"[{mode}] CF Forward pass time: {cf_forward_pass_time:.4f}s")
+        self.log(f"[{mode}] Batch metric/accumulation time: {batch_metric_time:.4f}s")
+        self.log(f"[{mode}] Post-loop processing time: {processing_time:.4f}s")
         return avg_loss, metrics, avg_exposure_loss, avg_outcome_losses, prediction_data
 
     def _clip_gradients(self):
@@ -340,9 +361,10 @@ class CausalEHRTrainer(EHRTrainer):
             prediction_data[outcome_name].targets_list.append(batch[outcome_name].cpu())
 
             # Store counterfactual outcome predictions
-            prediction_data[f"{CF_OUTCOME}_{outcome_name}"].logits_list.append(
-                cf_outputs.outcome_logits[outcome_name].float().cpu()
-            )
+            if cf_outputs is not None and hasattr(cf_outputs, "outcome_logits"):
+                prediction_data[f"{CF_OUTCOME}_{outcome_name}"].logits_list.append(
+                    cf_outputs.outcome_logits[outcome_name].float().cpu()
+                )
 
     def _calculate_batch_metrics(
         self,
@@ -416,10 +438,21 @@ class CausalEHRTrainer(EHRTrainer):
             val_exposure_loss,
             val_outcome_loss,
             val_prediction_data,
-        ) = self._evaluate(mode="val")
-        _, test_metrics, test_exposure_loss, test_outcome_loss, test_prediction_data = (
-            self._evaluate(mode="test")
+        ) = self._evaluate(mode="val", compute_counterfactuals=False)
+        test_metrics, test_exposure_loss, test_outcome_loss, test_prediction_data = (
+            None,
+            None,
+            None,
+            None,
         )
+        if epoch % self.eval_test_every_n_epochs == 0:
+            (
+                _,
+                test_metrics,
+                test_exposure_loss,
+                test_outcome_loss,
+                test_prediction_data,
+            ) = self._evaluate(mode="test", compute_counterfactuals=False)
 
         current_metric_value = val_metrics.get(
             self.stopping_metric, val_loss
@@ -431,10 +464,16 @@ class CausalEHRTrainer(EHRTrainer):
             )
             # If it's the best, save all the detailed artifacts
             if self.accumulate_logits:
+                val_prediction_data = self._compute_and_add_counterfactuals(
+                    val_prediction_data, mode="val"
+                )
                 self.process_causal_classification_results(
                     val_prediction_data, mode="val", save_results=True
                 )
                 if test_prediction_data:
+                    test_prediction_data = self._compute_and_add_counterfactuals(
+                        test_prediction_data, mode="test"
+                    )
                     self.process_causal_classification_results(
                         test_prediction_data, mode="test", save_results=True
                     )
@@ -506,6 +545,47 @@ class CausalEHRTrainer(EHRTrainer):
             return
 
         self._check_and_freeze_encoder(val_metrics)
+
+    def _compute_and_add_counterfactuals(
+        self, prediction_data: Dict[str, CausalPredictionData], mode: str
+    ) -> Dict[str, CausalPredictionData]:
+        """
+        Computes counterfactuals and adds them to the prediction_data object.
+        This is done as a separate pass to avoid slowing down every validation epoch.
+        """
+        self.log(f"Computing counterfactuals for {mode} set...")
+        start_time = time.time()
+
+        if mode == "val":
+            dataloader = self.get_dataloader(self.val_dataset, mode="val")
+        elif mode == "test":
+            dataloader = self.get_dataloader(self.test_dataset, mode="test")
+        else:
+            return prediction_data
+
+        # Reset counterfactual logits lists
+        for outcome_name in self.outcome_names:
+            cf_key = f"{CF_OUTCOME}_{outcome_name}"
+            if cf_key in prediction_data:
+                prediction_data[cf_key].logits_list = []
+
+        self.model.eval()
+        with torch.no_grad():
+            for batch in get_tqdm(dataloader, desc=f"CF pass ({mode})"):
+                self.batch_to_device(batch)
+                with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+                    cf_outputs = self.model(batch, cf=True)
+
+                if hasattr(cf_outputs, "outcome_logits"):
+                    for outcome_name in self.outcome_names:
+                        cf_key = f"{CF_OUTCOME}_{outcome_name}"
+                        prediction_data[cf_key].logits_list.append(
+                            cf_outputs.outcome_logits[outcome_name].float().cpu()
+                        )
+
+        self.model.train()
+        self.log(f"Counterfactual computation took {time.time() - start_time:.2f}s")
+        return prediction_data
 
     def _update_metric_history(self, metrics: EpochMetrics):
         """Update the metric history for plotting"""
