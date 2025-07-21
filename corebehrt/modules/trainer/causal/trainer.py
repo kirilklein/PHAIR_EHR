@@ -235,7 +235,7 @@ class CausalEHRTrainer(EHRTrainer):
         self,
         prediction_data: Dict[str, CausalPredictionData],
         mode="val",
-        save_results=True,
+        save_results=False,
     ) -> dict:
         """Process results for exposure and all outcome predictions."""
 
@@ -432,11 +432,11 @@ class CausalEHRTrainer(EHRTrainer):
             # If it's the best, save all the detailed artifacts
             if self.accumulate_logits:
                 self.process_causal_classification_results(
-                    val_prediction_data, mode="val", save_results=True
+                    val_prediction_data, mode="val", save_results=False
                 )
                 if test_prediction_data:
                     self.process_causal_classification_results(
-                        test_prediction_data, mode="test", save_results=True
+                        test_prediction_data, mode="test", save_results=False
                     )
         # Add debugging to see what metrics are being returned
         self.log(
