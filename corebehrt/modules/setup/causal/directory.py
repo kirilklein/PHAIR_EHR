@@ -68,6 +68,15 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.write_config("simulated_outcome", source="encoded_data", name=ENCODE_CFG)
         self.write_config("simulated_outcome", name=SIMULATE_CFG)
 
+    def setup_simulate_from_sequence(self) -> None:
+        """
+        Validates path config and sets up directories for simulate_from_sequence.
+        """
+        self.setup_logging("simulate_from_sequence")
+        self.check_directory("data")
+        self.create_directory("outcomes")
+        self.write_config("outcomes", name=SIMULATE_CFG)
+
     def setup_calibrate(self) -> None:
         """
         Validates path config and sets up directories for calibrate.
