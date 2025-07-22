@@ -1,0 +1,88 @@
+name: 'Causal Pipeline with simulated outcomes test'
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      # ─── Setup ───────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Clean outputs & create venv
+        run: |
+          rm -rf ./outputs/causal
+          python -m venv .venv
+          echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements.txt
+      - name: Set Python path
+        run: |
+          echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
+
+      # ─── Pipeline & Tests ────────────────────────────────────
+      - name: Data prep & pretrain
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main.create_data                         prepare_and_pretrain/create_data.yaml
+          run_step main.prepare_training_data               prepare_and_pretrain/prepare_pretrain.yaml
+          run_step main.pretrain                            prepare_and_pretrain/pretrain.yaml
+
+      - name: Outcomes & cohort selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main_causal.simulate_outcomes_from_sequence            simulate_outcomes.yaml
+          run_step main_causal.select_cohort_full           select_cohort_full/extract_simulated.yaml
+
+      - name: Prepare Finetune Data
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare/simulated.yaml
+          
+      - name: Finetune Exposure & Outcome
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main_causal.finetune_exp_y         finetune/simulated.yaml
+
+      - name: Calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main_causal.calibrate_exp_y        finetune/calibrate_simulated.yaml
+
+      - name: Estimate
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main_causal.estimate        estimate_with_simulated_outcomes.yaml
+      
+      
