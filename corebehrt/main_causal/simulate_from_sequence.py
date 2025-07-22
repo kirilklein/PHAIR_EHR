@@ -26,7 +26,7 @@ def main_simulate(config_path):
 
     shard_loader = ShardLoader(cfg.paths.data, cfg.paths.splits)
     simulation_config = SimulationConfig(cfg)
-    simulator = CausalSimulator(simulation_config, logger=logger)
+    simulator = CausalSimulator(simulation_config)
     simulate(shard_loader, simulator, cfg)
 
 
