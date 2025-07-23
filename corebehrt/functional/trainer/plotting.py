@@ -185,7 +185,7 @@ def _create_metric_plot(
                 outcome: colors[i] for i, outcome in enumerate(unique_outcomes)
             }
 
-        linewidth = 1 if num_unique_outcomes > 100 else 2 
+        linewidth = 1 if num_unique_outcomes > 100 else 2
 
     # --- Plotting loop ---
     for line_label, values in data.items():
