@@ -123,7 +123,12 @@ class CausalDatasetPreparer:
         logger.info(
             f"Max segment length: {max(max(p.segments, default=0) for p in data.patients)}"
         )
-
+        class_counts = binary_outcomes.drop(columns=PID_COL, errors="ignore").apply(
+            pd.Series.value_counts
+        )
+        logger.info(
+            "\nClass counts:\n" + class_counts.fillna(0).astype(int).to_string()
+        )
         # 5. Save all generated artifacts
         artifacts = Artifacts(
             data=data,
