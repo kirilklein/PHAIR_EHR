@@ -40,6 +40,10 @@ trainer_args:
   use_pcgrad: true
   plot_histograms: true
 
+  plot_all_targets: false
+  num_targets_to_log: 3
+  save_curves: false
+
 optimizer:
   lr: 7e-3
   eps: 1e-6

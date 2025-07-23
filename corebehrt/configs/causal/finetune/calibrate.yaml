@@ -8,3 +8,7 @@ paths:
 
   ## OUTPUTS
   calibrated_predictions: ./outputs/causal/finetune/models/simple/calibrated
+
+plotting:
+  plot_all_outcomes: True
+  # num_outcomes_to_plot: 5
