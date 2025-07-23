@@ -14,6 +14,7 @@ from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
 from corebehrt.modules.model.model import CorebehrtForFineTuning
+from corebehrt.modules.trainer.utils import dict_to_log_string
 
 logger = logging.getLogger(__name__)
 
@@ -99,21 +100,26 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         exposure_pos_weight = self._get_pos_weight_tensor(
             getattr(config, "pos_weight_exposures", None)
         )
-        logger.info(f"pos_weight_exposures (loss): {exposure_pos_weight}")
+        logger.info(
+            f"pos_weight_exposures (loss): {round(float(exposure_pos_weight), 3)}"
+        )
         self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=exposure_pos_weight)
 
         # Setup outcome losses
         self.outcome_loss_fcts = nn.ModuleDict()
         pos_weight_outcomes = getattr(config, "pos_weight_outcomes", {})
 
+        pos_weights_for_log = {}
         for outcome_name in self.outcome_names:
             outcome_pos_weight = self._get_pos_weight_tensor(
                 pos_weight_outcomes.get(outcome_name)
             )
-            logger.info(f"pos_weight_{outcome_name} (loss): {outcome_pos_weight}")
             self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
                 pos_weight=outcome_pos_weight
             )
+            pos_weights_for_log[outcome_name] = round(float(outcome_pos_weight), 3)
+
+        logger.info(f"pos_weights_for_log: \n{dict_to_log_string(pos_weights_for_log)}")
 
     def _get_pos_weight_tensor(self, pos_weight_value):
         """Helper method to convert pos_weight value to tensor if not None."""
