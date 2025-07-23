@@ -42,25 +42,23 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         self.bidirectional = self.head_config.get("bidirectional", True)
         self.bottleneck_dim = self.head_config.get("bottleneck_dim", 128)
         self.l1_lambda = self.head_config.get("l1_lambda", 0.0)
+        if self.l1_lambda > 0:
+            logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
+        # Get outcome names from config
+        self.outcome_names = config.outcome_names
 
+        self._setup_pooling_layers(config)
+        self._setup_bottleneck(config)
+        self._setup_mlp_heads(config)
+        self._setup_loss_functions(config)
+
+    def _setup_bottleneck(self, config):
         if self.shared_representation:
-            logger.info(
-                f"Using a shared bottleneck layer with dimension {self.bottleneck_dim}"
-            )
-            if self.l1_lambda > 0:
-                logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
             self.encoder_bottleneck = nn.Sequential(
                 nn.Linear(config.hidden_size, self.bottleneck_dim),
                 nn.GELU(),
                 nn.Dropout(0.1),
             )
-
-        # Get outcome names from config
-        self.outcome_names = config.outcome_names
-
-        self._setup_pooling_layers(config)
-        self._setup_mlp_heads(config)
-        self._setup_loss_functions(config)
 
     def _setup_pooling_layers(self, config):
         if self.shared_representation:
