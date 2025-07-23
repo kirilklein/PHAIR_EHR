@@ -26,7 +26,15 @@ def main_calibrate(config_path):
     # 1. Setup managers
     path_manager = CalibrationPathManager(finetune_dir, write_dir)
     prediction_processor = CalibrationProcessor(path_manager, finetune_dir)
-    plotting_manager = PlottingManager(path_manager)
+    plotting_config = cfg.get("plotting", {})
+    plot_all_outcomes = plotting_config.get("plot_all_outcomes", False)
+    num_outcomes_to_plot = plotting_config.get("num_outcomes_to_plot", 1)
+
+    plotting_manager = PlottingManager(
+        path_manager,
+        plot_all_outcomes=plot_all_outcomes,
+        num_outcomes_to_plot=num_outcomes_to_plot,
+    )
 
     # 2. Collect raw predictions
     logger.info("Collecting and saving predictions...")

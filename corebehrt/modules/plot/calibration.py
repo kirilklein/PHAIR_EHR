@@ -25,15 +25,31 @@ class PlottingManager:
     Manages the generation and saving of all plots for the causal inference pipeline.
     """
 
-    def __init__(self, path_manager: CalibrationPathManager):
+    def __init__(
+        self,
+        path_manager: CalibrationPathManager,
+        plot_all_outcomes: bool = False,
+        num_outcomes_to_plot: int = 5,
+    ):
         """Initializes the PlottingManager with a path manager instance."""
         self.paths = path_manager
+        self.plot_all_outcomes = plot_all_outcomes
+        self.num_outcomes_to_plot = num_outcomes_to_plot
+        self.outcomes_to_plot: list[str] = []
 
     def generate_all_plots(self, data: CalibrationArtifacts):
         """
         Generates and saves all calibration and distribution plots.
         This is the main entry point for the class.
         """
+        if (
+            not self.plot_all_outcomes
+            and len(data.outcome_names) > self.num_outcomes_to_plot
+        ):
+            self.outcomes_to_plot = data.outcome_names[: self.num_outcomes_to_plot]  # type: ignore
+        else:
+            self.outcomes_to_plot = data.outcome_names
+
         self._generate_calibration_plots(data)
         self._generate_distribution_plots(data)
 
@@ -51,7 +67,7 @@ class PlottingManager:
         )
 
         # Plot calibration for each outcome
-        for name in data.outcome_names:
+        for name in self.outcomes_to_plot:
             produce_calibration_plots(
                 data.calibrated_outcomes[name],
                 data.outcomes[name],
@@ -78,7 +94,7 @@ class PlottingManager:
             ps_hist_fig_dir,
         )
 
-        for name in data.outcome_names:
+        for name in self.outcomes_to_plot:
             # Create outcome-specific directories
             hist_fig_dir = self.paths.get_figure_dir(f"histograms/{name}")
             cf_fig_dir = self.paths.get_figure_dir(f"cf_probas/{name}")
