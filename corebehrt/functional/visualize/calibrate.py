@@ -1,11 +1,8 @@
-import os
-from os.path import join
 from typing import Tuple
 
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 import pandas as pd
-from CausalEstimate.vis.plotting import plot_hist_by_groups
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
@@ -24,36 +21,44 @@ def plot_probas_hist(
     group_labels: Tuple[str, str],
     title: str,
     xlabel: str,
-    name: str,
-    save_dir: str,
+    ax: mpl.axes.Axes,
 ) -> None:
     """
     Plot the histogram of a value column grouped by a group column.
-    Wrapper around CausalEstimate.vis.plotting.plot_hist_by_groups.
     """
     bin_edges = np.linspace(
         df[value_col].quantile(0.01), df[value_col].quantile(0.99), 51
     )
-    fig, ax = plot_hist_by_groups(
-        df=df,
-        value_col=value_col,
-        group_col=group_col,
-        group_values=(0, 1),
-        group_labels=group_labels,
-        bin_edges=bin_edges,
-        normalize=True,
-        title=title,
-        xlabel=xlabel,
-    )
+
+    group0_data = df[df[group_col] == 0][value_col]
+    group1_data = df[df[group_col] == 1][value_col]
+
+    ax.hist(
+        group0_data,
+        bins=bin_edges,
+        label=group_labels[0],
+        density=True,
+        alpha=0.7,
+        color="#3498db",
+    )  # blue
+    ax.hist(
+        group1_data,
+        bins=bin_edges,
+        label=group_labels[1],
+        density=True,
+        alpha=0.7,
+        color="#e74c3c",
+    )  # red
+
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
     ax.legend(title=group_col)
-    fig.savefig(join(save_dir, f"{name}_hist.png"), bbox_inches="tight")
-    plt.close(fig)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
 
 
 def plot_cf_probas_diff_vs_certainty_in_exposure(
-    df: pd.DataFrame, save_dir: str, y_col: str
+    df: pd.DataFrame, y_col: str, ax: mpl.axes.Axes
 ) -> None:
     """
     Plot the difference between counterfactual and factual probabilities vs certainty in actual exposure.
@@ -63,7 +68,6 @@ def plot_cf_probas_diff_vs_certainty_in_exposure(
     df["x"] = np.where(group_mask, df[PS_COL] - 0.5, (1 - df[PS_COL]) - 0.5)
 
     # Create the plot
-    fig, ax = plt.subplots(figsize=(8, 6))
     ax.scatter(
         df.loc[group_mask, "x"],
         df.loc[group_mask, y_col],
@@ -92,20 +96,14 @@ def plot_cf_probas_diff_vs_certainty_in_exposure(
     # Add legend without frame
     ax.legend(frameon=False, loc=0, title="Exposure")
 
-    fig.savefig(
-        join(save_dir, "vs_certainty_in_exposure_by_exposure.png"),
-        bbox_inches="tight",
-    )
-    plt.close(fig)
-
 
 def plot_cf_diff_vs_probas_by_group(
     df: pd.DataFrame,
-    save_dir: str,
     group_col: str,
     proba_col: str,
     group_labels: Tuple[str, str],
     y_col: str,
+    ax: mpl.axes.Axes,
 ) -> None:
     """
     Plot the difference between counterfactual and factual probabilities vs outcome probability.
@@ -114,8 +112,6 @@ def plot_cf_diff_vs_probas_by_group(
     """
     group_mask = df[group_col] == 1
     # Create the plot
-    fig, ax = plt.subplots(figsize=(8, 6))
-
     ax.scatter(
         df.loc[group_mask, proba_col],
         df.loc[group_mask, y_col],
@@ -145,15 +141,9 @@ def plot_cf_diff_vs_probas_by_group(
     # Add legend without frame
     ax.legend(frameon=False)
 
-    fig.savefig(
-        join(save_dir, f"vs_{proba_col}_by_{group_col}.png"),
-        bbox_inches="tight",
-    )
-    plt.close(fig)
-
 
 def produce_calibration_plots(
-    df_calibrated: pd.DataFrame, df: pd.DataFrame, fig_dir: str, title: str, name: str
+    df_calibrated: pd.DataFrame, df: pd.DataFrame, name: str, ax: mpl.axes.Axes
 ) -> None:
     """
     Produce calibration plots for the original and calibrated probabilities.
@@ -163,10 +153,6 @@ def produce_calibration_plots(
         - probas
         - targets
     """
-
-    cal_fig_dir = join(fig_dir, "calibration")
-    os.makedirs(cal_fig_dir, exist_ok=True)
-
     n_bins = 20
     prob_true_orig, prob_pred_orig = calibration_curve(
         df[TARGETS],
@@ -180,7 +166,6 @@ def produce_calibration_plots(
         n_bins=n_bins,
         strategy="quantile",
     )
-    fig, ax = plt.subplots(figsize=(6, 6))
 
     cal_error_orig = brier_score_loss(df[TARGETS], df[PROBAS])
     cal_error_calibrated = brier_score_loss(
@@ -191,14 +176,14 @@ def produce_calibration_plots(
     ax.plot(
         prob_pred_orig,
         prob_true_orig,
-        label=f"Before Calibration (BS: {cal_error_orig:.3f}, AUC: {roc_auc_orig:.3f})",
+        label=f"Before (BS: {cal_error_orig:.3f}, AUC: {roc_auc_orig:.3f})",
         marker="o",
         color="tab:blue",
     )
     ax.plot(
         prob_pred_calibrated,
         prob_true_calibrated,
-        label=f"After Calibration (BS: {cal_error_calibrated:.3f}, AUC: {roc_auc_calibrated:.3f})",
+        label=f"After (BS: {cal_error_calibrated:.3f}, AUC: {roc_auc_calibrated:.3f})",
         marker="o",
         color="tab:orange",
     )
@@ -206,10 +191,8 @@ def produce_calibration_plots(
     ax.plot([0, 1], [0, 1], linestyle="--", label="Ideal", color="black")
     ax.set_xlabel("Mean Predicted Probability")
     ax.set_ylabel("Fraction of Positives")
-    ax.set_title(title)
+    ax.set_title(name)
     ax.set_xlim((0, 1))
     ax.set_ylim((0, 1))
     ax.set_aspect("equal")
     ax.legend()
-    fig.savefig(join(cal_fig_dir, f"{name}.png"), bbox_inches="tight")
-    plt.close(fig)

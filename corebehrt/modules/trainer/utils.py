@@ -25,7 +25,6 @@ def compute_labels(outcomes: List[int]) -> Dict[int, int]:
     """Compute the labels for the outcomes."""
     labels = pd.Series(outcomes)
     counts = labels.value_counts()
-    print(f"Class counts:\n{counts.to_string()}")
 
     if len(counts) < 2:
         raise ValueError(
@@ -173,3 +172,8 @@ def is_plateau(
 
     # We consider it a plateau if the relative improvement is less than the threshold
     return relative_improvement < plateau_threshold
+
+
+def limit_dict_for_logging(metrics: dict, max_items: int = 10) -> dict:
+    """Log metrics in a nice format"""
+    return {k: round(v, 3) for i, (k, v) in enumerate(metrics.items()) if i < max_items}

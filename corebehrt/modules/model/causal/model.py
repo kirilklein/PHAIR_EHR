@@ -14,6 +14,7 @@ from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
 from corebehrt.modules.model.model import CorebehrtForFineTuning
+from corebehrt.modules.trainer.utils import limit_dict_for_logging
 
 logger = logging.getLogger(__name__)
 
@@ -94,26 +95,36 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             self.outcome_heads[outcome_name] = MLPHead(input_size=head_input_size + 1)
 
     def _setup_loss_functions(self, config):
-        """Helper method to initialize BCE loss functions with position weights."""
+        """Helper method to initialize BCE loss functions with positive weights."""
         # Setup exposure loss
         exposure_pos_weight = self._get_pos_weight_tensor(
             getattr(config, "pos_weight_exposures", None)
         )
-        logger.info(f"pos_weight_exposures (loss): {exposure_pos_weight}")
+        if exposure_pos_weight is not None:
+            logger.info(
+                f"pos_weight_exposures (loss): {round(float(exposure_pos_weight), 3)}"
+            )
         self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=exposure_pos_weight)
 
         # Setup outcome losses
         self.outcome_loss_fcts = nn.ModuleDict()
         pos_weight_outcomes = getattr(config, "pos_weight_outcomes", {})
 
+        pos_weights_for_log = {}
         for outcome_name in self.outcome_names:
             outcome_pos_weight = self._get_pos_weight_tensor(
                 pos_weight_outcomes.get(outcome_name)
             )
-            logger.info(f"pos_weight_{outcome_name} (loss): {outcome_pos_weight}")
             self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
                 pos_weight=outcome_pos_weight
             )
+            pos_weights_for_log[outcome_name] = (
+                float(outcome_pos_weight) if outcome_pos_weight is not None else 0
+            )
+
+        logger.info(
+            f"pos_weights_for_log: \n{limit_dict_for_logging(pos_weights_for_log)}"
+        )
 
     def _get_pos_weight_tensor(self, pos_weight_value):
         """Helper method to convert pos_weight value to tensor if not None."""
