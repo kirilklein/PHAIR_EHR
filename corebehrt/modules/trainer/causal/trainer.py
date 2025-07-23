@@ -5,6 +5,7 @@ from typing import Dict
 import torch
 import yaml
 
+from corebehrt import azure
 from corebehrt.constants.causal.data import (
     CF_OUTCOME,
     EXPOSURE,
@@ -27,7 +28,7 @@ from corebehrt.modules.setup.config import Config
 from corebehrt.modules.trainer.causal.utils import CausalPredictionData, EpochMetrics
 from corebehrt.modules.trainer.pcgrad import PCGrad
 from corebehrt.modules.trainer.trainer import EHRTrainer
-from corebehrt.modules.trainer.utils import dict_to_log_string
+from corebehrt.modules.trainer.utils import limit_dict_for_logging
 
 yaml.add_representer(Config, lambda dumper, data: data.yaml_repr(dumper))
 
@@ -127,6 +128,13 @@ class CausalEHRTrainer(EHRTrainer):
                 self.scaler.scale(loss).backward()
             return loss
 
+    def _log_batch(self, metrics: list):
+        if azure.is_mlflow_available():
+            metrics_for_log = limit_dict_for_logging(metrics, self.num_targets_to_log)
+            azure.log_batch(metrics=metrics_for_log)
+        else:
+            self.log(metrics)
+
     def _update(self):
         """Updates the model (optimizer and scheduler) with PCGrad support"""
         # PCGrad optimizer exposes param_groups, so scaler can work with it directly
@@ -147,7 +155,7 @@ class CausalEHRTrainer(EHRTrainer):
     ) -> None:
         self.log(f"Epoch {epoch} val loss: {val_loss}")
         self.log(
-            f"Epoch {epoch} metrics: {dict_to_log_string(val_metrics, self.num_targets_to_log)}\n"
+            f"Epoch {epoch} metrics: {limit_dict_for_logging(val_metrics, self.num_targets_to_log)}\n"
         )
 
     def _evaluate(self, mode="val") -> tuple:
@@ -499,7 +507,7 @@ class CausalEHRTrainer(EHRTrainer):
             if self.log_all_targets:
                 self.log(
                     f"Outcome metrics in validation: \
-                    \n{dict_to_log_string(all_outcome_metrics, self.num_targets_to_log)}"
+                    \n{limit_dict_for_logging(all_outcome_metrics, self.num_targets_to_log)}"
                 )
             else:
                 outcome_metrics_to_log = {
@@ -512,7 +520,7 @@ class CausalEHRTrainer(EHRTrainer):
                 if outcome_metrics_to_log:
                     self.log(
                         f"Outcome metrics in validation (subset): \
-                            \n{dict_to_log_string(outcome_metrics_to_log, self.num_targets_to_log)}"
+                            \n{limit_dict_for_logging(outcome_metrics_to_log, self.num_targets_to_log)}"
                     )
 
         # Calculate average train loss for this epoch
@@ -599,7 +607,7 @@ class CausalEHRTrainer(EHRTrainer):
         """Store metrics with a given prefix"""
         if metrics:
             self.log(
-                f"Storing metrics: {dict_to_log_string(metrics, self.num_targets_to_log)}"
+                f"Storing metrics: {limit_dict_for_logging(metrics, self.num_targets_to_log)}"
             )
             for metric_name, value in metrics.items():
                 is_outcome_metric = any(

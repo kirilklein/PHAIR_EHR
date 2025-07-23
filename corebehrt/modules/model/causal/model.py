@@ -14,7 +14,7 @@ from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
 from corebehrt.modules.model.model import CorebehrtForFineTuning
-from corebehrt.modules.trainer.utils import dict_to_log_string
+from corebehrt.modules.trainer.utils import limit_dict_for_logging
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,9 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
                 float(outcome_pos_weight) if outcome_pos_weight is not None else 0
             )
 
-        logger.info(f"pos_weights_for_log: \n{dict_to_log_string(pos_weights_for_log)}")
+        logger.info(
+            f"pos_weights_for_log: \n{limit_dict_for_logging(pos_weights_for_log)}"
+        )
 
     def _get_pos_weight_tensor(self, pos_weight_value):
         """Helper method to convert pos_weight value to tensor if not None."""

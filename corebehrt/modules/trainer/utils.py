@@ -174,12 +174,6 @@ def is_plateau(
     return relative_improvement < plateau_threshold
 
 
-def dict_to_log_string(metrics: dict, max_items: int = 10) -> str:
+def limit_dict_for_logging(metrics: dict, max_items: int = 10) -> dict:
     """Log metrics in a nice format"""
-    return ", ".join(
-        [
-            f"{k}: {round(v, 3)}"
-            for i, (k, v) in enumerate(metrics.items())
-            if i < max_items
-        ]
-    )
+    return {k: round(v, 3) for i, (k, v) in enumerate(metrics.items()) if i < max_items}
