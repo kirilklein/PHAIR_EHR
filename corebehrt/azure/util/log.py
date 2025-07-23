@@ -80,7 +80,9 @@ def get_run_and_prefix():
     # Check if run has valid info before accessing it
     if run and hasattr(run, "info") and run.info:
         while (parent := mlflow.get_parent_run(run.info.run_id)) is not None:
-            prefix = parent.info.run_name + "/" + prefix
+            run_name = parent.info.run_name
+            if run_name:
+                prefix = run_name + "/" + prefix
             run = parent
 
     return run, prefix
@@ -172,6 +174,8 @@ def log_image(key: str, *args, **kwargs):
         if run is None:
             # Skip logging if no run is active
             return
+        if "artifact_file" in kwargs and prefix:
+            kwargs["artifact_file"] = f"{prefix}/{kwargs['artifact_file']}"
         mlflow.log_image(prefix + key, *args, run_id=run.info.run_id, **kwargs)
 
 
@@ -187,6 +191,8 @@ def log_figure(key: str, *args, **kwargs):
         if run is None:
             # Skip logging if no run is active
             return
+        if "artifact_file" in kwargs and prefix:
+            kwargs["artifact_file"] = f"{prefix}/{kwargs['artifact_file']}"
         mlflow.log_figure(prefix + key, *args, run_id=run.info.run_id, **kwargs)
 
 

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from corebehrt.azure.util import log as azure_log
 from corebehrt.constants.causal.data import EXPOSURE
 from corebehrt.functional.visualize.calibrate import plot_probas_hist
 from corebehrt.modules.trainer.causal.utils import CausalPredictionData
@@ -243,6 +244,13 @@ def _create_metric_plot(
     # --- Saving and Closing ---
     try:
         fig.savefig(fig_path, dpi=STYLE_CONFIG["dpi"], bbox_inches="tight")
+        azure_log.log_figure(
+            key=base_metric,
+            figure=fig,
+            artifact_file=f"figs/{group}/{base_metric}.png"
+            if group
+            else f"figs/{base_metric}.png",
+        )
         log_func(f"✅ Plot saved to '{fig_path}'")
     except Exception as e:
         log_func(f"❌ Failed to save plot '{fig_path}'. Error: {e}")
