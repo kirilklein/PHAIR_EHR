@@ -129,11 +129,13 @@ class CausalEHRTrainer(EHRTrainer):
             return loss
 
     def _log_batch(self, metrics: list):
+        metrics_for_log = [
+            m for i, m in enumerate(metrics) if i < self.num_targets_to_log
+        ]
         if azure.is_mlflow_available():
-            metrics_for_log = limit_dict_for_logging(metrics, self.num_targets_to_log)
             azure.log_batch(metrics=metrics_for_log)
         else:
-            self.log(metrics)
+            self.log(metrics_for_log)
 
     def _update(self):
         """Updates the model (optimizer and scheduler) with PCGrad support"""
