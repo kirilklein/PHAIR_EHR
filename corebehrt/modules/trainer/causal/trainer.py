@@ -550,6 +550,7 @@ class CausalEHRTrainer(EHRTrainer):
                 os.path.join(self.run_folder, "figs"),
                 self.outcome_names,
                 self.log,
+                max_legend_items=self.num_targets_to_log,
             )
 
         if (is_best and epoch > 0) or (

@@ -36,6 +36,7 @@ def plot_training_curves(
     output_dir: Path | str,
     outcome_names: Optional[List[str]] = None,
     log_func: Callable[[str], None] = print,
+    max_legend_items: int = 10,
 ):
     """
     Groups, plots, and saves training curves with clear directory organization.
@@ -52,6 +53,7 @@ def plot_training_curves(
         output_dir: The root directory where figure directories will be created.
         outcome_names: A list of outcome names to identify and group metrics.
         log_func: A logging function (e.g., logger.info) to report progress.
+        max_legend_items: The threshold for showing the legend.
     """
     if not epoch_history:
         log_func("⚠️ Skipping plotting; epoch history is empty.")
@@ -74,6 +76,7 @@ def plot_training_curves(
             epochs=epoch_history,
             output_dir=output_dir,
             log_func=log_func,
+            max_legend_items=max_legend_items,
         )
 
 
@@ -154,6 +157,7 @@ def _create_metric_plot(
     epochs: List[int],
     output_dir: Path,
     log_func: Callable[[str], None],
+    max_legend_items: int,
 ):
     """Creates, styles, and saves a single plot for a group of metrics."""
     # Determine plot directory: 'output_dir/outcomes', 'output_dir/exposure', or 'output_dir'
@@ -165,6 +169,7 @@ def _create_metric_plot(
 
     # --- Color mapping for outcomes ---
     color_map = {}
+    linewidth = 2
     if group == "outcomes":
         # Extract unique outcomes to assign a consistent color to each
         unique_outcomes = sorted(
@@ -179,6 +184,8 @@ def _create_metric_plot(
             color_map = {
                 outcome: colors[i] for i, outcome in enumerate(unique_outcomes)
             }
+
+        linewidth = 1 if num_unique_outcomes > 100 else 2 
 
     # --- Plotting loop ---
     for line_label, values in data.items():
@@ -210,6 +217,7 @@ def _create_metric_plot(
                 linestyle=linestyle,
                 markersize=4,
                 alpha=0.8,
+                linewidth=linewidth,
             )
         except (ValueError, TypeError):
             log_func(f"⚠️ Non-numeric data for '{line_label}'. Skipping plot line.")
@@ -232,9 +240,9 @@ def _create_metric_plot(
 
     # --- Legend Handling ---
     num_lines = len(data)
-    if num_lines > 100:
+    if num_lines > max_legend_items:
         log_func(
-            f"ℹ️ Omitting legend for '{base_metric}' plot as it has {num_lines} lines (>100)."
+            f"ℹ️ Omitting legend for '{base_metric}' plot as it has {num_lines} lines (>{max_legend_items})."
         )
     else:
         legend_title = "Split / Outcome" if group == "outcomes" else "Split"
