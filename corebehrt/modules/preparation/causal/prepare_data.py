@@ -77,6 +77,7 @@ class CausalDatasetPreparer:
         self.data_cfg = cfg.data
         self.cohort_cfg = load_config(join(self.paths_cfg.cohort, COHORT_CFG))
         self.vocabulary = self.ds_preparer.vocab
+        self.min_instances_per_class = self.data_cfg.get("min_instances_per_class", 10)
 
     def prepare_finetune_data(self, mode: str = "tuning") -> CausalPatientDataset:
         """
@@ -199,6 +200,7 @@ class CausalDatasetPreparer:
 
         binary_outcomes = {}
         follow_ups = None
+        min_instances_per_class = self.outcome_cfg.get("min_instances_per_class", 10)
         for outcome_name, outcome_df in outcomes.items():
             if outcome_df.empty:
                 logger.warning(f"Outcome {outcome_name} has no data. Skipping.")
@@ -214,13 +216,12 @@ class CausalDatasetPreparer:
                 exposures=exposures,
                 data_end=data_end,
             )
-            if binary_outcome.sum() == 0:
+            counts = binary_outcome.value_counts()
+            if len(counts) < 2 or counts.min() < min_instances_per_class:
                 logger.warning(
-                    f"Outcome {outcome_name} has no events in follow up. Skipping."
+                    f"Outcome {outcome_name} has a class with fewer than "
+                    f"{min_instances_per_class} instances. Value counts: {counts.to_dict()}. Skipping."
                 )
-                continue
-            if binary_outcome.sum() == len(index_dates):
-                logger.warning(f"All patients have {outcome_name}. Skipping.")
                 continue
             binary_outcomes[outcome_name] = binary_outcome
         return binary_exposure, pd.DataFrame(binary_outcomes), follow_ups
