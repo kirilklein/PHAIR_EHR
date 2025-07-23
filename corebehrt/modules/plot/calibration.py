@@ -1,7 +1,6 @@
 import os
-from pathlib import Path
 
-import pandas as pd
+import matplotlib.pyplot as plt
 
 from corebehrt.constants.causal.data import (
     CF_PROBAS,
@@ -11,10 +10,10 @@ from corebehrt.constants.causal.data import (
     PS_COL,
 )
 from corebehrt.functional.visualize.calibrate import (
-    produce_calibration_plots,
-    plot_probas_hist,
-    plot_cf_probas_diff_vs_certainty_in_exposure,
     plot_cf_diff_vs_probas_by_group,
+    plot_cf_probas_diff_vs_certainty_in_exposure,
+    plot_probas_hist,
+    produce_calibration_plots,
 )
 from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
@@ -25,48 +24,90 @@ class PlottingManager:
     Manages the generation and saving of all plots for the causal inference pipeline.
     """
 
-    def __init__(self, path_manager: CalibrationPathManager):
+    def __init__(
+        self,
+        path_manager: CalibrationPathManager,
+        plot_all_outcomes: bool = False,
+        num_outcomes_to_plot: int = 5,
+    ):
         """Initializes the PlottingManager with a path manager instance."""
         self.paths = path_manager
+        self.plot_all_outcomes = plot_all_outcomes
+        self.num_outcomes_to_plot = num_outcomes_to_plot
+        self.outcomes_to_plot: list[str] = []
 
     def generate_all_plots(self, data: CalibrationArtifacts):
         """
         Generates and saves all calibration and distribution plots.
         This is the main entry point for the class.
         """
+        if (
+            not self.plot_all_outcomes
+            and len(data.outcome_names) > self.num_outcomes_to_plot
+        ):
+            self.outcomes_to_plot = data.outcome_names[: self.num_outcomes_to_plot]  # type: ignore
+        else:
+            self.outcomes_to_plot = data.outcome_names
+
         self._generate_calibration_plots(data)
         self._generate_distribution_plots(data)
 
     def _generate_calibration_plots(self, data: CalibrationArtifacts):
         """Generates and saves calibration reliability plots."""
         fig_dir = self.paths.get_figure_dir()
+        cal_fig_dir = fig_dir / "calibration"
+        os.makedirs(cal_fig_dir, exist_ok=True)
 
         # Plot calibration for propensity scores (exposure)
+        fig, ax = plt.subplots(figsize=(6, 6))
         produce_calibration_plots(
             data.calibrated_exposure_df,
             data.exposure_df,
-            fig_dir,
             "Propensity Score Calibration",
-            PS_COL,
+            ax=ax,
         )
+        fig.savefig(cal_fig_dir / f"{PS_COL}.png", bbox_inches="tight")
+        plt.close(fig)
 
-        # Plot calibration for each outcome
-        for name in data.outcome_names:
+        if not self.outcomes_to_plot:
+            return
+
+        # Plot calibration for each outcome in subplots
+        num_outcomes = len(self.outcomes_to_plot)
+        cols = min(3, num_outcomes)
+        rows = (num_outcomes + cols - 1) // cols
+        fig, axes = plt.subplots(
+            rows, cols, figsize=(6 * cols, 6 * rows), squeeze=False
+        )
+        axes = axes.flatten()
+
+        for i, name in enumerate(self.outcomes_to_plot):
             produce_calibration_plots(
-                data.calibrated_outcomes[name],
-                data.outcomes[name],
-                fig_dir,
-                "Outcome Probability Calibration",
-                name,
+                data.calibrated_outcomes[name], data.outcomes[name], name, ax=axes[i]
             )
+
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
+
+        fig.suptitle("Outcome Probability Calibration", fontsize=16)
+        fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+        fig.savefig(cal_fig_dir / "outcomes_calibration.png", bbox_inches="tight")
+        plt.close(fig)
 
     def _generate_distribution_plots(self, data: CalibrationArtifacts):
         """Generates and saves histogram and scatter plots for model outputs."""
-        df = data.combined_df
+        df = data.combined_df.copy()
+        num_outcomes = len(self.outcomes_to_plot)
+        if num_outcomes == 0:
+            return
 
-        # --- Plot propensity score distribution ---
-        ps_hist_fig_dir = self.paths.get_figure_dir("histograms/exposure")
-        os.makedirs(ps_hist_fig_dir, exist_ok=True)
+        hist_fig_dir = self.paths.get_figure_dir("histograms")
+        cf_fig_dir = self.paths.get_figure_dir("cf_probas")
+        os.makedirs(hist_fig_dir, exist_ok=True)
+        os.makedirs(cf_fig_dir, exist_ok=True)
+
+        # Plot standalone propensity score distribution
+        fig, ax = plt.subplots()
         plot_probas_hist(
             df,
             PS_COL,
@@ -74,130 +115,144 @@ class PlottingManager:
             ("Control", "Exposed"),
             "Propensity Score: Control vs Exposed",
             "Propensity Score",
-            f"{PS_COL}_by_exposure",
-            ps_hist_fig_dir,
+            ax,
         )
+        fig.savefig(
+            hist_fig_dir / f"{PS_COL}_by_exposure_hist.png", bbox_inches="tight"
+        )
+        plt.close(fig)
 
-        for name in data.outcome_names:
-            # Create outcome-specific directories
-            hist_fig_dir = self.paths.get_figure_dir(f"histograms/{name}")
-            cf_fig_dir = self.paths.get_figure_dir(f"cf_probas/{name}")
+        # Pre-calculate diff columns
+        for name in self.outcomes_to_plot:
+            df[f"diff_{name}"] = df[f"{CF_PROBAS}_{name}"] - df[f"{PROBAS}_{name}"]
 
-            # Define column names for the current outcome
-            outcome_probas_col = f"{PROBAS}_{name}"
-            cf_probas_col = f"{CF_PROBAS}_{name}"
-            outcome_col = f"{OUTCOME_COL}_{name}"
-            diff_col = f"diff_{name}"
-            df[diff_col] = df[cf_probas_col] - df[outcome_probas_col]
+        # --- Subplot Grid Helpers ---
+        cols = min(3, num_outcomes)
+        rows = (num_outcomes + cols - 1) // cols
 
-            # --- Plot Histograms ---
-            self._plot_histogram_group(
-                df,
-                outcome_probas_col,
-                outcome_col,
+        def create_grid(title, figsize=(6, 5)):
+            fig, axes = plt.subplots(
+                rows,
+                cols,
+                figsize=(figsize[0] * cols, figsize[1] * rows),
+                squeeze=False,
+            )
+            fig.suptitle(title, fontsize=16)
+            return fig, axes.flatten()
+
+        def save_grid(fig, axes, filename):
+            for i in range(num_outcomes, len(axes)):
+                axes[i].set_visible(False)
+            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+            fig.savefig(filename, bbox_inches="tight")
+            plt.close(fig)
+
+        # --- Plot Histograms ---
+        plot_configs = [
+            (
+                "Outcome Probability by Exposure",
                 PROBAS,
+                EXPOSURE_COL,
+                ("Control", "Exposed"),
                 "Outcome Probability",
-                hist_fig_dir,
-            )
-            self._plot_histogram_group(
-                df,
-                cf_probas_col,
-                outcome_col,
-                CF_PROBAS,
-                "CF Outcome Probability",
-                hist_fig_dir,
-            )
-            self._plot_histogram_group(
-                df,
-                diff_col,
-                outcome_col,
-                diff_col,
-                "Counterfactual - Factual",
-                hist_fig_dir,
-            )
-            plot_probas_hist(
-                df,
-                PS_COL,
-                outcome_col,
+                "outcome_probas_by_exposure.png",
+            ),
+            (
+                "Outcome Probability by Outcome",
+                PROBAS,
+                OUTCOME_COL,
                 ("Negative", "Positive"),
-                f"Propensity Score: Negative vs Positive",
-                "Propensity Score",
-                f"{PS_COL}_by_outcome",
-                hist_fig_dir,
-            )
-
-            # --- Plot Scatter Plots ---
-            plot_cf_probas_diff_vs_certainty_in_exposure(df, cf_fig_dir, diff_col)
-
-            # Plot difference vs. factual probability, grouped by exposure/outcome
-            plot_cf_diff_vs_probas_by_group(
-                df,
-                cf_fig_dir,
+                "Outcome Probability",
+                "outcome_probas_by_outcome.png",
+            ),
+            (
+                "CF Probability by Exposure",
+                CF_PROBAS,
                 EXPOSURE_COL,
-                outcome_probas_col,
-                ("Exposed", "Control"),
-                diff_col,
-            )
-            # plot_cf_diff_vs_probas_by_group(
-            #     df,
-            #     cf_fig_dir,
-            #     outcome_col,
-            #     outcome_probas_col,
-            #     ("Positive", "Negative"),
-            #     diff_col,
-            # )
+                ("Control", "Exposed"),
+                "CF Probability",
+                "cf_probas_by_exposure.png",
+            ),
+            (
+                "CF Probability by Outcome",
+                CF_PROBAS,
+                OUTCOME_COL,
+                ("Negative", "Positive"),
+                "CF Probability",
+                "cf_probas_by_outcome.png",
+            ),
+            (
+                "Difference (CF - Factual) by Exposure",
+                "diff",
+                EXPOSURE_COL,
+                ("Control", "Exposed"),
+                "Difference",
+                "diff_by_exposure.png",
+            ),
+            (
+                "Difference (CF - Factual) by Outcome",
+                "diff",
+                OUTCOME_COL,
+                ("Negative", "Positive"),
+                "Difference",
+                "diff_by_outcome.png",
+            ),
+            (
+                "Propensity Score by Outcome",
+                PS_COL,
+                OUTCOME_COL,
+                ("Negative", "Positive"),
+                "Propensity Score",
+                "ps_by_outcome.png",
+            ),
+        ]
+        for title, val_prefix, group_prefix, labels, xlabel, fname in plot_configs:
+            fig, axes = create_grid(title)
+            for i, name in enumerate(self.outcomes_to_plot):
+                val_col = (
+                    f"{val_prefix}_{name}"
+                    if val_prefix not in [PS_COL, "diff"]
+                    else val_prefix
+                    if val_prefix == PS_COL
+                    else f"{val_prefix}_{name}"
+                )
+                group_col = (
+                    f"{group_prefix}_{name}"
+                    if group_prefix == OUTCOME_COL
+                    else group_prefix
+                )
+                plot_probas_hist(df, val_col, group_col, labels, name, xlabel, axes[i])
+            save_grid(fig, axes, hist_fig_dir / fname)
 
-            # Plot difference vs. propensity score, grouped by exposure/outcome
+        # --- Plot Scatter Plots ---
+        fig, axes = create_grid("CF-Factual Diff vs. Certainty", figsize=(8, 6))
+        for i, name in enumerate(self.outcomes_to_plot):
+            plot_cf_probas_diff_vs_certainty_in_exposure(df, f"diff_{name}", axes[i])
+            axes[i].set_title(name)
+        save_grid(fig, axes, cf_fig_dir / "diff_vs_certainty.png")
+
+        fig, axes = create_grid("CF-Factual Diff vs. Factual Probas", figsize=(8, 6))
+        for i, name in enumerate(self.outcomes_to_plot):
             plot_cf_diff_vs_probas_by_group(
                 df,
-                cf_fig_dir,
+                EXPOSURE_COL,
+                f"{PROBAS}_{name}",
+                ("Exposed", "Control"),
+                f"diff_{name}",
+                axes[i],
+            )
+            axes[i].set_title(name)
+        save_grid(fig, axes, cf_fig_dir / "diff_vs_probas_by_exposure.png")
+
+        fig, axes = create_grid("CF-Factual Diff vs. Propensity Score", figsize=(8, 6))
+        for i, name in enumerate(self.outcomes_to_plot):
+            plot_cf_diff_vs_probas_by_group(
+                df,
                 EXPOSURE_COL,
                 PS_COL,
                 ("Exposed", "Control"),
-                diff_col,
+                f"diff_{name}",
+                axes[i],
             )
-            # plot_cf_diff_vs_probas_by_group(
-            #     df,
-            #     cf_fig_dir,
-            #     outcome_col,
-            #     PS_COL,
-            #     ("Positive", "Negative"),
-            #     diff_col,
-            # )
-
-    def _plot_histogram_group(
-        self,
-        df: pd.DataFrame,
-        value_col: str,
-        outcome_col: str,
-        group_name: str,
-        x_label: str,
-        base_dir: Path,
-    ):
-        """Helper to reduce repetition in plotting histograms, now more robust."""
-        save_dir = base_dir / group_name  # Use Path operator instead of join
-        os.makedirs(save_dir, exist_ok=True)
-
-        # Plot histogram grouped by exposure status
-        plot_probas_hist(
-            df,
-            value_col,
-            EXPOSURE_COL,
-            ("Control", "Exposed"),
-            f"{x_label}: Control vs Exposed",
-            x_label,
-            f"{group_name}_by_exposure",
-            save_dir,
-        )
-
-        # Plot histogram grouped by outcome status
-        plot_probas_hist(
-            df,
-            value_col,
-            outcome_col,
-            ("Negative", "Positive"),
-            f"{x_label}: Negative vs Positive",
-            x_label,
-            f"{group_name}_by_outcome",
-            save_dir,
-        )
+            axes[i].set_title(name)
+        save_grid(fig, axes, cf_fig_dir / "diff_vs_ps_by_exposure.png")

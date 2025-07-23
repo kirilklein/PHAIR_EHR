@@ -13,6 +13,7 @@ paths:
     - OUTCOME.csv
     - OUTCOME_2.csv
     - OUTCOME_3.csv
+    - OUTCOME_empty.csv
 
   exposures: ./outputs/causal/finetune/outcomes
   exposure: EXPOSURE.csv
@@ -26,6 +27,7 @@ data:
   truncation_len: 64
   min_len: 2 # 0 by default
   cv_folds: 2
+  min_instances_per_class: 10
 
 exposure:
   # we will convert outcomes to binary based on whether at least one outcome is in the follow up window

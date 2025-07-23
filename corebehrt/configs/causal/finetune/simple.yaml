@@ -31,14 +31,19 @@ trainer_args:
   # clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
+  use_pcgrad: false
+
   early_stopping: 3
   stopping_criterion: roc_auc
   n_layers_to_freeze: 2
   freeze_encoder_on_plateau: true
   freeze_encoder_on_plateau_threshold: 0.01
   freeze_encoder_on_plateau_patience: 4
-  use_pcgrad: true
+
   plot_histograms: true
+  plot_all_targets: false
+  num_targets_to_log: 3
+  save_curves: false
 
 optimizer:
   lr: 7e-3
