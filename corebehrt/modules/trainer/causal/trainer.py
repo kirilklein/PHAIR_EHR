@@ -485,7 +485,7 @@ class CausalEHRTrainer(EHRTrainer):
             plot_prediction_histograms(
                 val_prediction_data,
                 self.run_folder,
-                self.outcome_names,
+                self.outcome_names_to_log,
                 self.accumulate_logits,
             )
 
