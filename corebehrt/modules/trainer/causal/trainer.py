@@ -68,7 +68,7 @@ class CausalEHRTrainer(EHRTrainer):
     def _set_logging_parameters(self):
         self.log_all_targets = self.args.get("log_all_targets", False)
         self.save_curves = self.args.get("save_curves", False)
-        self.num_targets_to_log = self.args.get("num_targets_to_log", 1)
+        self.num_targets_to_log = self.args.get("num_targets_to_log", 3)
         self.outcome_names_to_log = self.outcome_names
         if (
             not self.log_all_targets
@@ -271,7 +271,7 @@ class CausalEHRTrainer(EHRTrainer):
         for name, func in self.metrics.items():
             value = func(outputs, batch)
             key = f"{EXPOSURE}_{name}"
-            self.log(f"{key}: {value}")
+            self.log(f"{key}: {round(value, 3)}")
             metrics[key] = value
 
         if save_results:
@@ -295,8 +295,6 @@ class CausalEHRTrainer(EHRTrainer):
             for name, func in self.metrics.items():
                 value = func(outputs, batch)
                 key = f"{outcome_name}_{name}"
-                if outcome_name in self.outcome_names_to_log:
-                    self.log(f"{key}: {value}")
                 metrics[key] = value
 
             if save_results and outcome_name in self.outcome_names_to_log:
@@ -334,7 +332,7 @@ class CausalEHRTrainer(EHRTrainer):
                 all_values = [metrics[f"{EXPOSURE}_{name}"]] + outcome_values
                 avg_value = sum(all_values) / len(all_values)
                 metrics[name] = avg_value
-                self.log(f"{name} (avg): {avg_value}")
+                self.log(f"{name} (avg): {round(avg_value, 3)}")
 
         return metrics
 
@@ -448,7 +446,8 @@ class CausalEHRTrainer(EHRTrainer):
         is_best = self._is_improvement(current_metric_value)
         if is_best:
             self.log(
-                f"New best model found at epoch {epoch} with {self.stopping_metric}: {current_metric_value:.4f}. Saving results."
+                f"New best model found at epoch {epoch} with {self.stopping_metric}: \
+                    {round(current_metric_value, 3)}. Saving results."
             )
             # If it's the best, save all the detailed artifacts
             if self.accumulate_logits:
@@ -484,7 +483,10 @@ class CausalEHRTrainer(EHRTrainer):
                 if any(outcome in k for outcome in self.outcome_names)
             }
             if self.log_all_targets:
-                self.log(f"Outcome metrics in validation: {all_outcome_metrics}")
+                self.log(
+                    f"Outcome metrics in validation: \
+                    \n{self._nice_metric_string(all_outcome_metrics)}"
+                )
             else:
                 outcome_metrics_to_log = {
                     k: v
@@ -495,7 +497,8 @@ class CausalEHRTrainer(EHRTrainer):
                 }
                 if outcome_metrics_to_log:
                     self.log(
-                        f"Outcome metrics in validation (subset): {outcome_metrics_to_log}"
+                        f"Outcome metrics in validation (subset): \
+                            \n{self._nice_metric_string(outcome_metrics_to_log)}"
                     )
 
         # Calculate average train loss for this epoch
@@ -578,7 +581,7 @@ class CausalEHRTrainer(EHRTrainer):
     def _store_metrics(self, prefix: str, metrics: dict):
         """Store metrics with a given prefix"""
         if metrics:
-            self.log(f"Storing metrics: {[(k,round(v,3)) for i, (k,v) in enumerate(metrics.items()) if i < self.num_targets_to_log]}...")
+            self.log(f"Storing metrics: {self._nice_metric_string(metrics)}")
             for metric_name, value in metrics.items():
                 is_outcome_metric = any(
                     outcome_name in metric_name for outcome_name in self.outcome_names
@@ -595,8 +598,6 @@ class CausalEHRTrainer(EHRTrainer):
                 if should_log:
                     key = f"{prefix}_{metric_name}"
                     self.metric_history[key].append(float(value))
-                    
-
 
     def _check_and_freeze_encoder(self, metrics: dict):
         """
@@ -630,7 +631,8 @@ class CausalEHRTrainer(EHRTrainer):
         if exp_plateau or any(outcome_plateaus):
             self.plateau_counter += 1
             self.log(
-                f"Plateau detected. Counter: {self.plateau_counter}/{self.freeze_encoder_on_plateau_patience}"
+                f"Plateau detected. Counter: \
+                    {self.plateau_counter}/{self.freeze_encoder_on_plateau_patience}"
             )
         else:
             if self.plateau_counter > 0:
@@ -640,7 +642,9 @@ class CausalEHRTrainer(EHRTrainer):
         if self.plateau_counter >= self.freeze_encoder_on_plateau_patience:
             self._freeze_encoder()
             self.log(
-                f"Encoder frozen due to plateau for {self.freeze_encoder_on_plateau_patience} epochs (exp_plateau={exp_plateau}, outcome_plateaus={outcome_plateaus})"
+                f"Encoder frozen due to plateau for {self.freeze_encoder_on_plateau_patience} \
+                    epochs (exp_plateau={exp_plateau}, \
+                        outcome_plateaus={outcome_plateaus})"
             )
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] *= 0.5
@@ -681,4 +685,14 @@ class CausalEHRTrainer(EHRTrainer):
                 **kwargs,
             },
             checkpoint_name,
+        )
+
+    def _nice_metric_string(self, metrics: dict) -> str:
+        """Log metrics in a nice format"""
+        return ", ".join(
+            [
+                f"{k}: {round(v, 3)}"
+                for i, (k, v) in enumerate(metrics.items())
+                if i < self.num_targets_to_log
+            ]
         )
