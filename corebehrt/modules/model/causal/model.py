@@ -48,7 +48,7 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             )
             if self.l1_lambda > 0:
                 logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
-            self.bottleneck = nn.Sequential(
+            self.encoder_bottleneck = nn.Sequential(
                 nn.Linear(config.hidden_size, self.bottleneck_dim),
                 nn.GELU(),
                 nn.Dropout(0.1),
@@ -130,7 +130,7 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         # --- Get Patient Representations ---
         if self.shared_representation:
             shared_repr = self.pooler(sequence_output, attention_mask)
-            bottleneck_repr = self.bottleneck(shared_repr)
+            bottleneck_repr = self.encoder_bottleneck(shared_repr)
             outputs.bottleneck_repr = bottleneck_repr  # Store for L1 loss
             exposure_repr = bottleneck_repr
             outcome_reprs = {
