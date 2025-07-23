@@ -256,7 +256,7 @@ def plot_prediction_histograms(
     outcome_names: List[str],
     accumulate_logits: bool,
 ):
-    """Plots prediction histograms for exposure and outcomes."""
+    """Plots prediction histograms for exposure and outcomes using subplots."""
     if not accumulate_logits:
         return
 
@@ -265,46 +265,66 @@ def plot_prediction_histograms(
 
     # Plot for exposure
     if EXPOSURE in prediction_data and prediction_data[EXPOSURE].logits_list:
-        create_and_save_hist(
-            logits=torch.cat(prediction_data[EXPOSURE].logits_list),
-            targets=torch.cat(prediction_data[EXPOSURE].targets_list),
+        logits = torch.cat(prediction_data[EXPOSURE].logits_list)
+        targets = torch.cat(prediction_data[EXPOSURE].targets_list)
+        probas = torch.sigmoid(logits).squeeze().numpy()
+        targets_np = targets.squeeze().numpy()
+        df = pd.DataFrame({"probas": probas, "targets": targets_np})
+
+        fig, ax = plt.subplots(figsize=(6, 5))
+        plot_probas_hist(
+            df,
+            value_col="probas",
+            group_col="targets",
+            group_labels=("Negative", "Positive"),
             title="Exposure Prediction Distribution",
-            filename="exposure_predictions",
-            save_dir=hist_dir,
+            xlabel="Predicted Probability",
+            ax=ax,
+        )
+        fig.savefig(
+            os.path.join(hist_dir, "exposure_predictions_hist.png"), bbox_inches="tight"
+        )
+        plt.close(fig)
+
+    # Plot for outcomes in a grid
+    outcomes_to_plot = [
+        name
+        for name in outcome_names
+        if name in prediction_data and prediction_data[name].logits_list
+    ]
+    if not outcomes_to_plot:
+        return
+
+    num_outcomes = len(outcomes_to_plot)
+    cols = min(3, num_outcomes)
+    rows = (num_outcomes + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 5 * rows), squeeze=False)
+    axes = axes.flatten()
+
+    i = 0  # To keep track of the last used axis
+    for i, outcome_name in enumerate(outcomes_to_plot):
+        logits = torch.cat(prediction_data[outcome_name].logits_list)
+        targets = torch.cat(prediction_data[outcome_name].targets_list)
+        probas = torch.sigmoid(logits).squeeze().numpy()
+        targets_np = targets.squeeze().numpy()
+        df = pd.DataFrame({"probas": probas, "targets": targets_np})
+
+        plot_probas_hist(
+            df,
+            value_col="probas",
+            group_col="targets",
+            group_labels=("Negative", "Positive"),
+            title=outcome_name,
+            xlabel="Predicted Probability",
+            ax=axes[i],
         )
 
-    # Plot for outcomes
-    for outcome_name in outcome_names:
-        if (
-            outcome_name in prediction_data
-            and prediction_data[outcome_name].logits_list
-        ):
-            create_and_save_hist(
-                logits=torch.cat(prediction_data[outcome_name].logits_list),
-                targets=torch.cat(prediction_data[outcome_name].targets_list),
-                title=f"{outcome_name} Prediction Distribution",
-                filename=f"{outcome_name}_predictions",
-                save_dir=hist_dir,
-            )
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
 
-
-def create_and_save_hist(
-    logits: torch.Tensor,
-    targets: torch.Tensor,
-    title: str,
-    filename: str,
-    save_dir: str,
-):
-    probas = torch.sigmoid(logits).squeeze().numpy()
-    targets = targets.squeeze().numpy()
-    df = pd.DataFrame({"probas": probas, "targets": targets})
-    plot_probas_hist(
-        df,
-        value_col="probas",
-        group_col="targets",
-        group_labels=("Negative", "Positive"),
-        title=title,
-        xlabel="Predicted Probability",
-        name=filename,
-        save_dir=save_dir,
+    fig.suptitle("Outcome Prediction Distributions", fontsize=16)
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    fig.savefig(
+        os.path.join(hist_dir, "outcomes_predictions_hist.png"), bbox_inches="tight"
     )
+    plt.close(fig)
