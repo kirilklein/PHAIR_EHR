@@ -13,12 +13,12 @@ import torch.nn as nn
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
-from corebehrt.modules.model.model import CorebehrtForFineTuning
+from corebehrt.modules.model.model import CorebehrtEncoder
 
 logger = logging.getLogger(__name__)
 
 
-class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
+class CorebehrtForCausalFineTuning(CorebehrtEncoder):
     """
     A unified causal fine-tuning model for predicting exposure and multiple outcomes.
 
