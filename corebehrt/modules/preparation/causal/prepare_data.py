@@ -200,7 +200,10 @@ class CausalDatasetPreparer:
         binary_outcomes = {}
         follow_ups = None
         for outcome_name, outcome_df in outcomes.items():
-            binary_outcomes[outcome_name], follow_ups = get_binary_outcome(
+            if outcome_df.empty:
+                logger.warning(f"Outcome {outcome_name} has no data. Skipping.")
+                continue
+            binary_outcome, follow_ups = get_binary_outcome(
                 index_dates,
                 outcome_df,
                 self.outcome_cfg.get("n_hours_start_follow_up", 0),
@@ -211,6 +214,15 @@ class CausalDatasetPreparer:
                 exposures=exposures,
                 data_end=data_end,
             )
+            if binary_outcome.sum() == 0:
+                logger.warning(
+                    f"Outcome {outcome_name} has no events in follow up. Skipping."
+                )
+                continue
+            if binary_outcome.sum() == len(index_dates):
+                logger.warning(f"All patients have {outcome_name}. Skipping.")
+                continue
+            binary_outcomes[outcome_name] = binary_outcome
         return binary_exposure, pd.DataFrame(binary_outcomes), follow_ups
 
     def _assign_labels(

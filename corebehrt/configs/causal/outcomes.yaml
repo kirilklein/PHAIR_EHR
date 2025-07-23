@@ -33,6 +33,12 @@ outcomes:
     match_how: exact
     case_sensitive: false
 
+  OUTCOME_empty:
+    type: [code]
+    match: [["000000000"]]
+    match_how: exact
+    case_sensitive: false
+
   TEST_EXCLUSION:
     type: [code]
     match: [["D/73438004"]]
