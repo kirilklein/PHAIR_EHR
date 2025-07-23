@@ -321,7 +321,7 @@ class CausalEHRTrainer(EHRTrainer):
                 key = f"{outcome_name}_{name}"
                 metrics[key] = value
 
-            if save_results and outcome_name in self.outcome_names_to_log:
+            if save_results:
                 self._save_target_results(
                     outcome_name,
                     logits,
