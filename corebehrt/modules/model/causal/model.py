@@ -95,14 +95,15 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             self.outcome_heads[outcome_name] = MLPHead(input_size=head_input_size + 1)
 
     def _setup_loss_functions(self, config):
-        """Helper method to initialize BCE loss functions with position weights."""
+        """Helper method to initialize BCE loss functions with positive weights."""
         # Setup exposure loss
         exposure_pos_weight = self._get_pos_weight_tensor(
             getattr(config, "pos_weight_exposures", None)
         )
-        logger.info(
-            f"pos_weight_exposures (loss): {round(float(exposure_pos_weight), 3)}"
-        )
+        if exposure_pos_weight is not None:
+            logger.info(
+                f"pos_weight_exposures (loss): {round(float(exposure_pos_weight), 3)}"
+            )
         self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=exposure_pos_weight)
 
         # Setup outcome losses
@@ -117,7 +118,9 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
             self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
                 pos_weight=outcome_pos_weight
             )
-            pos_weights_for_log[outcome_name] = round(float(outcome_pos_weight), 3)
+            pos_weights_for_log[outcome_name] = (
+                float(outcome_pos_weight) if outcome_pos_weight is not None else 0
+            )
 
         logger.info(f"pos_weights_for_log: \n{dict_to_log_string(pos_weights_for_log)}")
 
