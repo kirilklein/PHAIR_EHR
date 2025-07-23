@@ -27,6 +27,7 @@ from corebehrt.modules.setup.config import Config
 from corebehrt.modules.trainer.causal.utils import CausalPredictionData, EpochMetrics
 from corebehrt.modules.trainer.pcgrad import PCGrad
 from corebehrt.modules.trainer.trainer import EHRTrainer
+from corebehrt.modules.trainer.utils import dict_to_log_string
 
 yaml.add_representer(Config, lambda dumper, data: data.yaml_repr(dumper))
 
@@ -485,7 +486,7 @@ class CausalEHRTrainer(EHRTrainer):
             if self.log_all_targets:
                 self.log(
                     f"Outcome metrics in validation: \
-                    \n{self._nice_metric_string(all_outcome_metrics)}"
+                    \n{dict_to_log_string(all_outcome_metrics, self.num_targets_to_log)}"
                 )
             else:
                 outcome_metrics_to_log = {
@@ -498,7 +499,7 @@ class CausalEHRTrainer(EHRTrainer):
                 if outcome_metrics_to_log:
                     self.log(
                         f"Outcome metrics in validation (subset): \
-                            \n{self._nice_metric_string(outcome_metrics_to_log)}"
+                            \n{dict_to_log_string(outcome_metrics_to_log, self.num_targets_to_log)}"
                     )
 
         # Calculate average train loss for this epoch
@@ -581,7 +582,9 @@ class CausalEHRTrainer(EHRTrainer):
     def _store_metrics(self, prefix: str, metrics: dict):
         """Store metrics with a given prefix"""
         if metrics:
-            self.log(f"Storing metrics: {self._nice_metric_string(metrics)}")
+            self.log(
+                f"Storing metrics: {dict_to_log_string(metrics, self.num_targets_to_log)}"
+            )
             for metric_name, value in metrics.items():
                 is_outcome_metric = any(
                     outcome_name in metric_name for outcome_name in self.outcome_names
@@ -685,14 +688,4 @@ class CausalEHRTrainer(EHRTrainer):
                 **kwargs,
             },
             checkpoint_name,
-        )
-
-    def _nice_metric_string(self, metrics: dict) -> str:
-        """Log metrics in a nice format"""
-        return ", ".join(
-            [
-                f"{k}: {round(v, 3)}"
-                for i, (k, v) in enumerate(metrics.items())
-                if i < self.num_targets_to_log
-            ]
         )
