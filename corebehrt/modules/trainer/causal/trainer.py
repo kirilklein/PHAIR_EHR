@@ -69,7 +69,7 @@ class CausalEHRTrainer(EHRTrainer):
     def _set_logging_parameters(self):
         self.log_all_targets = self.args.get("log_all_targets", False)
         self.save_curves = self.args.get("save_curves", False)
-        self.num_targets_to_log = self.args.get("num_targets_to_log", 3)
+        self.num_targets_to_log = self.args.get("num_targets_to_log", 10)
         self.outcome_names_to_log = self.outcome_names
         if (
             not self.log_all_targets
@@ -136,6 +136,19 @@ class CausalEHRTrainer(EHRTrainer):
 
         if self.scheduler is not None:
             self.scheduler.step()
+
+    def _self_log_results(
+        self,
+        epoch: int,
+        val_loss: float,
+        val_metrics: dict,
+        epoch_loss: float,
+        len_train_loop: int,
+    ) -> None:
+        self.log(f"Epoch {epoch} val loss: {val_loss}")
+        self.log(
+            f"Epoch {epoch} metrics: {dict_to_log_string(val_metrics, self.num_targets_to_log)}\n"
+        )
 
     def _evaluate(self, mode="val") -> tuple:
         """Returns the validation/test loss and metrics for exposure and all outcomes."""
@@ -445,7 +458,7 @@ class CausalEHRTrainer(EHRTrainer):
             self.stopping_metric, val_loss
         )  # get the metric we monitor. Same as early stopping
         is_best = self._is_improvement(current_metric_value)
-        if is_best:
+        if is_best and epoch > 0:
             self.log(
                 f"New best model found at epoch {epoch} with {self.stopping_metric}: \
                     {round(current_metric_value, 3)}. Saving results."
@@ -505,30 +518,33 @@ class CausalEHRTrainer(EHRTrainer):
         # Calculate average train loss for this epoch
         avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)  # type: ignore
 
-        # Store metrics for plotting
-        epoch_metrics = EpochMetrics(
-            epoch=epoch,
-            train_loss=avg_train_loss,
-            val_loss=val_loss,
-            val_metrics=val_metrics,
-            test_metrics=test_metrics,
-            val_exposure_loss=val_exposure_loss,
-            val_outcome_losses=val_outcome_loss,
-            test_exposure_loss=test_exposure_loss,
-            test_outcome_losses=test_outcome_loss,
-        )
-        self._update_metric_history(epoch_metrics)
+        # Store metrics for plotting, but not for epoch 0
+        if epoch > 0:
+            epoch_metrics = EpochMetrics(
+                epoch=epoch,
+                train_loss=avg_train_loss,
+                val_loss=val_loss,
+                val_metrics=val_metrics,
+                test_metrics=test_metrics,
+                val_exposure_loss=val_exposure_loss,
+                val_outcome_losses=val_outcome_loss,
+                test_exposure_loss=test_exposure_loss,
+                test_outcome_losses=test_outcome_loss,
+            )
+            self._update_metric_history(epoch_metrics)
 
-        # Plot metrics
-        plot_training_curves(
-            self.metric_history,
-            self.epoch_history,
-            os.path.join(self.run_folder, "figs"),
-            self.outcome_names,
-            self.log,
-        )
+            # Plot metrics
+            plot_training_curves(
+                self.metric_history,
+                self.epoch_history,
+                os.path.join(self.run_folder, "figs"),
+                self.outcome_names,
+                self.log,
+            )
 
-        if is_best or (epoch == 1):  # for testing purposes/if first epoch is best
+        if (is_best and epoch > 0) or (
+            epoch == 1
+        ):  # for testing purposes/if first epoch is best
             self._save_checkpoint(
                 BEST_MODEL_ID,
                 best_model=True,
