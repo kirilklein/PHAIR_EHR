@@ -45,8 +45,15 @@ class CausalEHRTrainer(EHRTrainer):
         self.outcome_names = self.model.config.outcome_names
         self.best_outcome_aucs = {name: None for name in self.outcome_names}
         self.best_exposure_auc = None
-        self.use_pcgrad = self.args.get("use_pcgrad", True)
+        self.use_pcgrad = self.args.get("use_pcgrad", False)
         self.plot_histograms = self.args.get("plot_histograms", False)
+        self._set_plateau_parameters()
+        self._set_logging_parameters()
+
+        if self.use_pcgrad:
+            self.optimizer = PCGrad(self.optimizer)
+
+    def _set_plateau_parameters(self):
         self.freeze_encoder_on_plateau = self.args.get(
             "freeze_encoder_on_plateau", False
         )
@@ -57,8 +64,20 @@ class CausalEHRTrainer(EHRTrainer):
             "freeze_encoder_on_plateau_patience", 3
         )
         self.plateau_counter = 0
-        if self.use_pcgrad:
-            self.optimizer = PCGrad(self.optimizer)
+
+    def _set_logging_parameters(self):
+        self.log_all_targets = self.args.get("log_all_targets", False)
+        self.save_curves = self.args.get("save_curves", False)
+        self.num_targets_to_log = self.args.get("num_targets_to_log", 1)
+        self.outcome_names_to_log = self.outcome_names
+        if (
+            not self.log_all_targets
+            and len(self.outcome_names) > self.num_targets_to_log
+        ):
+            self.outcome_names_to_log = self.outcome_names[: self.num_targets_to_log]
+            self.log(
+                f"Logging metrics for a subset of {self.num_targets_to_log} outcomes: {self.outcome_names_to_log}"
+            )
 
     def _train_step(self, batch: dict):
         self.optimizer.zero_grad()
@@ -276,10 +295,11 @@ class CausalEHRTrainer(EHRTrainer):
             for name, func in self.metrics.items():
                 value = func(outputs, batch)
                 key = f"{outcome_name}_{name}"
-                self.log(f"{key}: {value}")
+                if outcome_name in self.outcome_names_to_log:
+                    self.log(f"{key}: {value}")
                 metrics[key] = value
 
-            if save_results:
+            if save_results and outcome_name in self.outcome_names_to_log:
                 self._save_target_results(
                     outcome_name,
                     logits,
@@ -388,13 +408,14 @@ class CausalEHRTrainer(EHRTrainer):
         }
 
         # Save for best model ID (for backwards compatibility)
-        save_curves(
-            self.run_folder,
-            logits,
-            targets,
-            BEST_MODEL_ID,
-            f"{mode}_{target_type}",
-        )
+        if self.save_curves:
+            save_curves(
+                self.run_folder,
+                logits,
+                targets,
+                BEST_MODEL_ID,
+                f"{mode}_{target_type}",
+            )
         save_metrics_to_csv(
             self.run_folder,
             target_metrics,
@@ -438,13 +459,13 @@ class CausalEHRTrainer(EHRTrainer):
                     self.process_causal_classification_results(
                         test_prediction_data, mode="test", save_results=False
                     )
-        # Add debugging to see what metrics are being returned
-        self.log(
-            f"Validation metrics keys: {list(val_metrics.keys()) if val_metrics else 'None'}"
-        )
-        self.log(
-            f"Test metrics keys: {list(test_metrics.keys()) if test_metrics else 'None'}"
-        )
+        # # Add debugging to see what metrics are being returned
+        # self.log(
+        #     f"Validation metrics keys: {list(val_metrics.keys()) if val_metrics else 'None'}"
+        # )
+        # self.log(
+        #     f"Test metrics keys: {list(test_metrics.keys()) if test_metrics else 'None'}"
+        # )
 
         # Plot prediction histograms
         if self.plot_histograms and val_prediction_data:
@@ -457,12 +478,25 @@ class CausalEHRTrainer(EHRTrainer):
 
         # Check outcome-specific metrics
         if val_metrics:
-            outcome_metrics = {
+            all_outcome_metrics = {
                 k: v
                 for k, v in val_metrics.items()
                 if any(outcome in k for outcome in self.outcome_names)
             }
-            self.log(f"Outcome metrics in validation: {outcome_metrics}")
+            if self.log_all_targets:
+                self.log(f"Outcome metrics in validation: {all_outcome_metrics}")
+            else:
+                outcome_metrics_to_log = {
+                    k: v
+                    for k, v in all_outcome_metrics.items()
+                    if any(
+                        outcome_log in k for outcome_log in self.outcome_names_to_log
+                    )
+                }
+                if outcome_metrics_to_log:
+                    self.log(
+                        f"Outcome metrics in validation (subset): {outcome_metrics_to_log}"
+                    )
 
         # Calculate average train loss for this epoch
         avg_train_loss = sum(epoch_loss) / (len(train_loop) / self.accumulation_steps)  # type: ignore
@@ -544,12 +578,25 @@ class CausalEHRTrainer(EHRTrainer):
     def _store_metrics(self, prefix: str, metrics: dict):
         """Store metrics with a given prefix"""
         if metrics:
+            self.log(f"Storing metrics: {[(k,round(v,3)) for i, (k,v) in enumerate(metrics.items()) if i < self.num_targets_to_log]}...")
             for metric_name, value in metrics.items():
-                key = f"{prefix}_{metric_name}"
-                self.metric_history[key].append(float(value))
-                # Add debugging to see what metrics are being stored
-                if "outcome" in metric_name.lower():
-                    self.log(f"Storing outcome metric: {key} = {value}")
+                is_outcome_metric = any(
+                    outcome_name in metric_name for outcome_name in self.outcome_names
+                )
+                # For outcome metrics, only store if they are in the log subset or if all are logged
+                should_log = not is_outcome_metric or (
+                    is_outcome_metric
+                    and any(
+                        outcome_log in metric_name
+                        for outcome_log in self.outcome_names_to_log
+                    )
+                )
+
+                if should_log:
+                    key = f"{prefix}_{metric_name}"
+                    self.metric_history[key].append(float(value))
+                    
+
 
     def _check_and_freeze_encoder(self, metrics: dict):
         """
