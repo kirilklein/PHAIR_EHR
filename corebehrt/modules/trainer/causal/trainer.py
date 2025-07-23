@@ -77,7 +77,9 @@ class CausalEHRTrainer(EHRTrainer):
             not self.log_all_targets
             and len(self.outcome_names) > self.num_targets_to_log
         ):
-            self.outcome_names_to_log = random.sample(self.outcome_names, self.num_targets_to_log)
+            self.outcome_names_to_log = random.sample(
+                self.outcome_names, self.num_targets_to_log
+            )
             self.log(
                 f"Logging metrics for a subset of {self.num_targets_to_log} \n outcomes: {self.outcome_names_to_log}"
             )
