@@ -28,7 +28,7 @@ def main_calibrate(config_path):
     prediction_processor = CalibrationProcessor(path_manager, finetune_dir)
     plotting_config = cfg.get("plotting", {})
     plot_all_outcomes = plotting_config.get("plot_all_outcomes", False)
-    num_outcomes_to_plot = plotting_config.get("num_outcomes_to_plot", 1)
+    num_outcomes_to_plot = plotting_config.get("num_outcomes_to_plot", 15)
 
     plotting_manager = PlottingManager(
         path_manager,
