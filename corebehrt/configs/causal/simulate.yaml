@@ -57,13 +57,11 @@ outcomes:
     run_in_days: 30 # after exposure/non-exposure
     p_base: 0.12
     trigger_codes: [
-        D/80583007,
-        D/105531004,
-        D/65363002,
-        D/65363002,
-        D/384709000, # confounders
+        D/80583007, # confounder
+        D/105531004, # confounder
+        D/65363002, # confounder
+        D/384709000, # prognostic
       ]
-    # The confounders still have an effect on this outcome.
-    trigger_weights: [2.0, 1.0, -1.0, 0.5, 1.5] # logits
+    trigger_weights: [2.0, 1.0, -1.0, 1.5] # logits
     # ZERO direct causal effect from exposure.
     exposure_effect: 0

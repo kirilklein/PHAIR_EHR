@@ -2,10 +2,8 @@ from corebehrt.functional.setup.args import get_args
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.features.loader import ShardLoader
-from corebehrt.main_causal.helper.causal_simulation import (
-    CausalSimulator,
-    SimulationConfig,
-)
+from corebehrt.modules.simulation.simulator import CausalSimulator
+from corebehrt.modules.simulation.config import SimulationConfig
 from collections import defaultdict
 import pandas as pd
 from os.path import join
@@ -27,11 +25,11 @@ def main_simulate(config_path):
     shard_loader = ShardLoader(cfg.paths.data, cfg.paths.splits)
     simulation_config = SimulationConfig(cfg)
     simulator = CausalSimulator(simulation_config)
-    simulate(shard_loader, simulator, cfg)
+    simulate(shard_loader, simulator, cfg.paths.outcomes, cfg.get("seed", 42))
 
 
 def simulate(
-    shard_loader: ShardLoader, simulator: CausalSimulator, cfg: SimulationConfig
+    shard_loader: ShardLoader, simulator: CausalSimulator, outcomes_dir: str, seed: int
 ):
     """
     Simulates outcomes by processing data shards.
@@ -41,12 +39,12 @@ def simulate(
     """
     simulated_outcomes = defaultdict(list)
     for shard, _ in tqdm(shard_loader(), desc="loop shards"):
-        simulated_temp = simulator.simulate_dataset(shard, cfg.get("seed", 42))
+        simulated_temp = simulator.simulate_dataset(shard, seed)
         for k, df in simulated_temp.items():
             simulated_outcomes[k].append(df)
     for k, df_list in simulated_outcomes.items():
         df = pd.concat(df_list)
-        df.to_csv(join(cfg.paths.outcomes, f"{k}.csv"), index=False)
+        df.to_csv(join(outcomes_dir, f"{k}.csv"), index=False)
 
 
 if __name__ == "__main__":
