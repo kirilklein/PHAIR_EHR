@@ -16,7 +16,7 @@ model:
   head:
     shared_representation: true # whether to share the bigru representation for exposure and outcome
     bidirectional: true
-    bottleneck_dim: 64
+    bottleneck_dim: 32
     l1_lambda: 0
 
 trainer_args:
@@ -37,8 +37,10 @@ trainer_args:
   freeze_encoder_on_plateau: true
   freeze_encoder_on_plateau_threshold: 0.01
   freeze_encoder_on_plateau_patience: 4
-  use_pcgrad: true
-  plot_histograms: true
+
+  use_pcgrad: false
+  plot_histograms: false
+  save_curves: false
 
 optimizer:
   lr: 7e-3
