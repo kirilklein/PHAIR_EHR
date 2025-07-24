@@ -44,6 +44,7 @@ from corebehrt.functional.io_operations.estimate import (
     save_all_results,
     save_tmle_analysis,
 )
+from corebehrt.functional.visualize.estimate import create_annotated_heatmap_matplotlib
 from corebehrt.modules.setup.config import Config
 
 
@@ -126,8 +127,35 @@ class EffectEstimator:
             all_effects.append(effect_df_clean)
 
         self._process_and_save_results(all_effects, all_stats, initial_estimates)
-
+        self._visualize_effects(pd.concat(all_effects, ignore_index=True))
         self.logger.info("Effect estimation complete for all outcomes.")
+
+    def _visualize_effects(self, effects: pd.DataFrame):
+        fig_dir = join(self.exp_dir, "figures")
+        os.makedirs(fig_dir, exist_ok=True)
+        methods = self.estimator_cfg.methods
+        create_annotated_heatmap_matplotlib(
+            effects,
+            methods + ["RD"],
+            EffectColumns.effect,
+            join(fig_dir, "effects.png"),
+        )
+        if EffectColumns.true_effect in effects.columns:
+            # show true effects, only show one of the methods (theyre all the same for true effect)
+            create_annotated_heatmap_matplotlib(
+                effects,
+                methods[:1],
+                EffectColumns.true_effect,
+                join(fig_dir, "true_effects.png"),
+            )
+
+            # show diff
+            effects["diff"] = (
+                effects[EffectColumns.true_effect] - effects[EffectColumns.effect]
+            )
+            create_annotated_heatmap_matplotlib(
+                effects, methods, "diff", join(fig_dir, "diff.png")
+            )
 
     def _process_and_save_results(
         self,
