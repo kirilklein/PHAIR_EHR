@@ -105,6 +105,7 @@ class EffectEstimator:
                     self.counterfactual_df,
                     outcome_name,
                     self.effect_type,
+                    self.estimation_args["common_support_threshold"],
                 )
 
             effect_df = append_unadjusted_effect(analysis_df, effect_df)
