@@ -18,9 +18,11 @@ from corebehrt.constants.causal.data import (
     PROBAS_CONTROL,
     PROBAS_EXPOSED,
     PS_COL,
+    EffectColumns,
 )
 from corebehrt.constants.causal.paths import (
     COMBINED_CALIBRATED_PREDICTIONS_FILE,
+    COUNTEFACTUALS_FILE,
     PATIENTS_FILE,
 )
 from corebehrt.constants.data import PID_COL
@@ -51,17 +53,7 @@ class EffectEstimator:
     for multiple outcomes, with options for filtering and bootstrapping.
     """
 
-    RELEVANT_COLUMNS = [
-        "method",
-        "effect",
-        "std_err",
-        "CI95_lower",
-        "CI95_upper",
-        "effect_1",
-        "effect_0",
-        "outcome",
-        "true_effect",
-    ]
+    RELEVANT_COLUMNS = EffectColumns.get_columns()
 
     def __init__(self, cfg: Config, logger: Any):
         self.cfg = cfg
@@ -121,14 +113,15 @@ class EffectEstimator:
             all_stats.append(outcome_stats)
 
             # 6. Tag results with the outcome name and collect
-            effect_df["outcome"] = outcome_name
+            effect_df[OUTCOME] = outcome_name
 
             current_columns = effect_df.columns.tolist()
             filter_columns = [
                 col for col in self.RELEVANT_COLUMNS if col in current_columns
             ]
-            effect_df_clean = effect_df[filter_columns]
 
+            effect_df_clean = effect_df[filter_columns]
+            effect_df_clean = effect_df_clean.round(5)
             initial_estimates.append(effect_df)
             all_effects.append(effect_df_clean)
 
@@ -275,9 +268,7 @@ class EffectEstimator:
             return None
 
         # Try to load combined counterfactual file first
-        combined_cf_file = join(
-            self.counterfactual_outcomes_dir, "combined_simulation_results.csv"
-        )
+        combined_cf_file = join(self.counterfactual_outcomes_dir, COUNTEFACTUALS_FILE)
         if os.path.exists(combined_cf_file):
             self.logger.info(
                 f"Loading combined counterfactual outcomes from {combined_cf_file}"

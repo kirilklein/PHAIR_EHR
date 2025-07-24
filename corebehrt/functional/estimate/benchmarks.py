@@ -8,7 +8,7 @@ from corebehrt.constants.causal.data import (
     SIMULATED_OUTCOME_EXPOSED,
     SIMULATED_PROBAS_CONTROL,
     SIMULATED_PROBAS_EXPOSED,
-    TRUE_EFFECT_COL,
+    EffectColumns,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.effect import compute_effect_from_counterfactuals
@@ -56,7 +56,7 @@ def append_true_effect(
         counterfactual_df, outcome_name
     )
     true_effect = compute_true_effect_from_counterfactuals(df, cf_outcomes, effect_type)
-    effect_df[TRUE_EFFECT_COL] = true_effect
+    effect_df[EffectColumns.true_effect] = true_effect
     return effect_df
 
 
@@ -96,6 +96,5 @@ def prepare_counterfactual_data_for_outcome(
             f"{SIMULATED_PROBAS_EXPOSED}_{outcome_name}"
         ],
         EXPOSURE_COL: counterfactual_df[EXPOSURE_COL],
-        PS_COL: counterfactual_df[PS_COL],
     }
     return pd.DataFrame(cf_data)

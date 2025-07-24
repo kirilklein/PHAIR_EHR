@@ -5,7 +5,7 @@ logging:
 paths:
   ## INPUTS
   calibrated_predictions: ./outputs/causal/finetune/models/simulated/calibrated/
-  # counterfactual_outcomes: ./outputs/causal/counterfactual_outcomes # optional
+  counterfactual_outcomes: ./outputs/causal/finetune/simulated_outcomes # optional
 
   ## OUTPUTS
   estimate: ./outputs/causal/estimate/simulated

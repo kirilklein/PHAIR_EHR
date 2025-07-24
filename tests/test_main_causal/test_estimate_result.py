@@ -9,6 +9,7 @@ import os
 import pandas as pd
 
 from corebehrt.constants.causal.paths import ESTIMATE_RESULTS_FILE
+from corebehrt.constants.causal.data import EffectColumns, OUTCOME
 
 ESTIMATE_RESULT_DIR = "./outputs/causal/generated/estimate_with_generated_data"
 MARGIN = 0.02
@@ -25,11 +26,11 @@ def compare_estimate_result(margin, estimate_results_dir):
     df = pd.read_csv(os.path.join(estimate_results_dir, ESTIMATE_RESULTS_FILE))
 
     # Filter out unadjusted methods for true effect comparison
-    causal_methods_df = df[~df["method"].isin(UNADJUSTED_METHODS)].copy()
-    unadjusted_methods_df = df[df["method"].isin(UNADJUSTED_METHODS)].copy()
+    causal_methods_df = df[~df[EffectColumns.method].isin(UNADJUSTED_METHODS)].copy()
+    unadjusted_methods_df = df[df[EffectColumns.method].isin(UNADJUSTED_METHODS)].copy()
 
     # Group by outcome for better organization
-    outcomes = df["outcome"].unique() if "outcome" in df.columns else ["default"]
+    outcomes = df[OUTCOME].unique() if OUTCOME in df.columns else ["default"]
 
     print("\n" + "=" * 80)
     print("CAUSAL EFFECT ESTIMATION RESULTS")
@@ -40,13 +41,13 @@ def compare_estimate_result(margin, estimate_results_dir):
 
     for outcome in outcomes:
         outcome_causal_df = (
-            causal_methods_df[causal_methods_df["outcome"] == outcome]
-            if "outcome" in causal_methods_df.columns
+            causal_methods_df[causal_methods_df[OUTCOME] == outcome]
+            if OUTCOME in causal_methods_df.columns
             else causal_methods_df
         )
         outcome_unadjusted_df = (
-            unadjusted_methods_df[unadjusted_methods_df["outcome"] == outcome]
-            if "outcome" in unadjusted_methods_df.columns
+            unadjusted_methods_df[unadjusted_methods_df[OUTCOME] == outcome]
+            if OUTCOME in unadjusted_methods_df.columns
             else unadjusted_methods_df
         )
 
@@ -56,24 +57,26 @@ def compare_estimate_result(margin, estimate_results_dir):
         # Check causal methods against true effects
         outcome_passed = True
         for _, row in outcome_causal_df.iterrows():
-            diff = abs(row["effect"] - row["true_effect"])
+            diff = abs(row[EffectColumns.effect] - row[EffectColumns.true_effect])
             passed = diff <= abs(margin)
             status = "✓" if passed else "✗"
 
             print(
-                f"{status} {row['method']:>6}: {row['effect']:7.4f} (true: {row['true_effect']:7.4f}, diff: {diff:.4f})"
+                f"{status} {row[EffectColumns.method]:>6}: {row[EffectColumns.effect]:7.4f} (true: {row[EffectColumns.true_effect]:7.4f}, diff: {diff:.4f})"
             )
 
             if not passed:
                 outcome_passed = False
                 all_passed = False
-                failed_methods.append(f"{outcome}-{row['method']}")
+                failed_methods.append(f"{outcome}-{row[EffectColumns.method]}")
 
         # Show unadjusted methods (no true effect comparison)
         if not outcome_unadjusted_df.empty:
             print("\n  📈 Unadjusted estimates (no ground truth comparison):")
             for _, row in outcome_unadjusted_df.iterrows():
-                print(f"    {row['method']:>6}: {row['effect']:7.4f}")
+                print(
+                    f"    {row[EffectColumns.method]:>6}: {row[EffectColumns.effect]:7.4f}"
+                )
 
         print(
             f"\n  Outcome {outcome}: {'✅ PASSED' if outcome_passed else '❌ FAILED'}"
@@ -94,16 +97,16 @@ def compare_estimate_result(margin, estimate_results_dir):
         failed_details = []
         for outcome in outcomes:
             outcome_df = (
-                causal_methods_df[causal_methods_df["outcome"] == outcome]
-                if "outcome" in causal_methods_df.columns
+                causal_methods_df[causal_methods_df[OUTCOME] == outcome]
+                if OUTCOME in causal_methods_df.columns
                 else causal_methods_df
             )
             for _, row in outcome_df.iterrows():
-                diff = abs(row["effect"] - row["true_effect"])
+                diff = abs(row[EffectColumns.effect] - row[EffectColumns.true_effect])
                 if diff > abs(margin):
                     failed_details.append(
-                        f"{outcome}-{row['method']}: estimated={row['effect']:.4f}, "
-                        f"true={row['true_effect']:.4f}, diff={diff:.4f}"
+                        f"{outcome}-{row[EffectColumns.method]}: estimated={row[EffectColumns.effect]:.4f}, "
+                        f"true={row[EffectColumns.true_effect]:.4f}, diff={diff:.4f}"
                     )
 
         raise AssertionError(
