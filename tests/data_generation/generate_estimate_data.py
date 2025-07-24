@@ -101,7 +101,7 @@ def generate_combined_predictions(
         np.random.seed(outcome_seed)
 
         # Vary the effect sizes slightly for different outcomes
-        outcome_specific_effect = exposure_effect * (0.8 + 0.4 * np.random.random())
+        outcome_specific_effect = exposure_effect * (1 + 0.05 * np.random.random())
         outcome_specific_intercept = intercept + np.random.normal(0, 0.2)
 
         # p0: probability of outcome if subject was in control group
