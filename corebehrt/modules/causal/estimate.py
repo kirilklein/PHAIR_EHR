@@ -22,7 +22,7 @@ from corebehrt.constants.causal.data import (
 )
 from corebehrt.constants.causal.paths import (
     COMBINED_CALIBRATED_PREDICTIONS_FILE,
-    COUNTEFACTUALS_FILE,
+    COUNTERFACTUALS_FILE,
     PATIENTS_FILE,
 )
 from corebehrt.constants.data import PID_COL
@@ -296,7 +296,7 @@ class EffectEstimator:
             return None
 
         # Try to load combined counterfactual file first
-        combined_cf_file = join(self.counterfactual_outcomes_dir, COUNTEFACTUALS_FILE)
+        combined_cf_file = join(self.counterfactual_outcomes_dir, COUNTERFACTUALS_FILE)
         if os.path.exists(combined_cf_file):
             self.logger.info(
                 f"Loading combined counterfactual outcomes from {combined_cf_file}"

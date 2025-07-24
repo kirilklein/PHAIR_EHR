@@ -52,4 +52,4 @@ PATIENTS_FILE = "patients.pt"
 
 COMBINED_CALIBRATED_PREDICTIONS_FILE = "combined_calibrated_predictions.csv"
 
-COUNTEFACTUALS_FILE = "counterfactuals.csv"
+COUNTERFACTUALS_FILE = "counterfactuals.csv"

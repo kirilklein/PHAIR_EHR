@@ -13,7 +13,7 @@ from corebehrt.constants.causal.data import (
     SIMULATED_PROBAS_CONTROL,
     SIMULATED_PROBAS_EXPOSED,
 )
-from corebehrt.constants.causal.paths import COUNTEFACTUALS_FILE
+from corebehrt.constants.causal.paths import COUNTERFACTUALS_FILE
 
 from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.utils.time import get_hours_since_epoch
@@ -69,7 +69,7 @@ class CausalSimulator:
             output_dfs[str(code)] = group[[PID_COL, TIMESTAMP_COL, ABSPOS_COL]].copy()
 
         output_dfs["ite"] = pd.DataFrame(ite_records)
-        output_dfs[COUNTEFACTUALS_FILE.split(".")[0]] = pd.DataFrame(cf_records)
+        output_dfs[COUNTERFACTUALS_FILE.split(".")[0]] = pd.DataFrame(cf_records)
 
         return output_dfs
 

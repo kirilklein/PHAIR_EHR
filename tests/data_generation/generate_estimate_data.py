@@ -15,14 +15,14 @@ from corebehrt.constants.causal.data import (
 )
 from corebehrt.constants.causal.paths import (
     SIMULATION_RESULTS_FILE,
+    COUNTERFACTUALS_FILE,
+    COMBINED_CALIBRATED_PREDICTIONS_FILE,
 )
 from corebehrt.constants.data import PID_COL
 
 # Updated paths to match new structure
 OUTPUT_DIR = "./outputs/causal/generated/calibrated_predictions"
 COUNTERFACTUAL_DIR = "./outputs/causal/generated/simulated_outcome"
-COMBINED_PREDICTIONS_FILE = "combined_calibrated_predictions.csv"
-COMBINED_COUNTERFACTUAL_FILE = "combined_simulation_results.csv"
 
 # Optional: Add different noise scales for different components
 EXPOSURE_NOISE = 0.03  # For propensity scores
@@ -152,11 +152,11 @@ def generate_combined_predictions(
     counterfactual_df = pd.DataFrame(counterfactual_data)
 
     # Save to the combined files
-    output_path = os.path.join(OUTPUT_DIR, COMBINED_PREDICTIONS_FILE)
+    output_path = os.path.join(OUTPUT_DIR, COMBINED_CALIBRATED_PREDICTIONS_FILE)
     df.to_csv(output_path, index=False)
     print(f"Combined calibrated predictions saved to {output_path}")
 
-    counterfactual_path = os.path.join(COUNTERFACTUAL_DIR, COMBINED_COUNTERFACTUAL_FILE)
+    counterfactual_path = os.path.join(COUNTERFACTUAL_DIR, COUNTERFACTUALS_FILE)
     counterfactual_df.to_csv(counterfactual_path, index=False)
     print(f"Combined counterfactual outcomes saved to {counterfactual_path}")
 
