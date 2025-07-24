@@ -58,9 +58,9 @@ def compare_estimate_result(ci_stretch_factor, estimate_results_dir):
         # Check causal methods against true effects
         outcome_passed = True
         for _, row in outcome_causal_df.iterrows():
-            true_effect = row["true_effect"]
-            lower_ci = row["CI95_lower"]
-            upper_ci = row["CI95_upper"]
+            true_effect = row[EffectColumns.true_effect]
+            lower_ci = row[EffectColumns.CI95_lower]
+            upper_ci = row[EffectColumns.CI95_upper]
 
             # Stretch the CI
             center = (upper_ci + lower_ci) / 2
@@ -75,7 +75,7 @@ def compare_estimate_result(ci_stretch_factor, estimate_results_dir):
             status = "✓" if passed else "✗"
 
             print(
-                f"{status} {row['method']:>6}: {row['effect']:7.4f} (true: {true_effect:7.4f}). "
+                f"{status} {row[EffectColumns.method]:>6}: {row[EffectColumns.effect]:7.4f} (true: {true_effect:7.4f}). "
                 f"Stretched CI ({ci_stretch_factor:.2f}x): [{stretched_lower:.4f}, {stretched_upper:.4f}]"
             )
 
@@ -118,9 +118,9 @@ def compare_estimate_result(ci_stretch_factor, estimate_results_dir):
                 else causal_methods_df
             )
             for _, row in outcome_df.iterrows():
-                true_effect = row["true_effect"]
-                lower_ci = row["CI95_lower"]
-                upper_ci = row["CI95_upper"]
+                true_effect = row[EffectColumns.true_effect]
+                lower_ci = row[EffectColumns.CI95_lower]
+                upper_ci = row[EffectColumns.CI95_upper]
 
                 center = (upper_ci + lower_ci) / 2
                 half_width = (upper_ci - lower_ci) / 2
@@ -133,7 +133,7 @@ def compare_estimate_result(ci_stretch_factor, estimate_results_dir):
                     and (true_effect <= stretched_upper)
                 ):
                     failed_details.append(
-                        f"{outcome}-{row['method']}: true effect {true_effect:.4f} is outside of "
+                        f"{outcome}-{row[EffectColumns.method]}: true effect {true_effect:.4f} is outside of "
                         f"the stretched CI [{stretched_lower:.4f}, {stretched_upper:.4f}]"
                     )
 
