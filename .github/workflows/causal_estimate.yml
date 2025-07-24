@@ -29,7 +29,7 @@ jobs:
                   local exposure_noise=$1
                   local outcome_noise=$2
                   local exposure_effect=$3
-                  local margin=$4
+                  local ci_stretch_factor=$4
                   local test_name=$5
                   local weight=${6:-0.1}    # Default to 0.1 if not provided
                   local intercept=${7:-1.0}  # Default to 1.0 if not provided
@@ -39,7 +39,7 @@ jobs:
                   echo "  exposure_noise=$exposure_noise"
                   echo "  outcome_noise=$outcome_noise"
                   echo "  exposure_effect=$exposure_effect"
-                  echo "  margin=$margin"
+                  echo "  ci_stretch_factor=$ci_stretch_factor"
                   echo "  weight=$weight"
                   echo "  intercept=$intercept"
                   
@@ -56,7 +56,7 @@ jobs:
                     --config_path ./corebehrt/configs/causal/estimate_generated_data.yaml
 
                   # Test results
-                  python -m tests.test_main_causal.test_estimate_result --margin $margin
+                  python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor $ci_stretch_factor
                 }
 
                 # Run tests with different configurations
