@@ -101,12 +101,16 @@ def generate_combined_predictions(
         np.random.seed(outcome_seed)
 
         # Vary the effect sizes slightly for different outcomes
-        outcome_specific_effect = exposure_effect * (0.8 + 0.4 * np.random.random())
-        outcome_specific_intercept = intercept + np.random.normal(0, 0.2)
+        outcome_specific_effect = exposure_effect + np.random.normal(0, 0.01)
+        outcome_specific_intercept = intercept + np.random.normal(0, 0.01)
+        outcome_specific_weight = weight + np.random.normal(0, 0.01)
 
         # p0: probability of outcome if subject was in control group
         # p1: probability of outcome if subject was in treatment group
-        p0 = expit(logit(exposure_probas) * weight + outcome_specific_intercept)
+        p0 = expit(
+            logit(exposure_probas) * outcome_specific_weight
+            + outcome_specific_intercept
+        )
         p0 = np.clip(p0, CLIP_EPS, 1 - CLIP_EPS)
         p1 = expit(logit(p0) + outcome_specific_effect)
         p1 = np.clip(p1, CLIP_EPS, 1 - CLIP_EPS)

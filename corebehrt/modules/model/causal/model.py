@@ -13,13 +13,13 @@ import torch.nn as nn
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
-from corebehrt.modules.model.model import CorebehrtForFineTuning
+from corebehrt.modules.model.model import CorebehrtEncoder
 from corebehrt.modules.trainer.utils import limit_dict_for_logging
 
 logger = logging.getLogger(__name__)
 
 
-class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
+class CorebehrtForCausalFineTuning(CorebehrtEncoder):
     """
     A unified causal fine-tuning model for predicting exposure and multiple outcomes.
 
@@ -42,25 +42,23 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         self.bidirectional = self.head_config.get("bidirectional", True)
         self.bottleneck_dim = self.head_config.get("bottleneck_dim", 128)
         self.l1_lambda = self.head_config.get("l1_lambda", 0.0)
-
-        if self.shared_representation:
-            logger.info(
-                f"Using a shared bottleneck layer with dimension {self.bottleneck_dim}"
-            )
-            if self.l1_lambda > 0:
-                logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
-            self.bottleneck = nn.Sequential(
-                nn.Linear(config.hidden_size, self.bottleneck_dim),
-                nn.GELU(),
-                nn.Dropout(0.1),
-            )
-
+        if self.l1_lambda > 0:
+            logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
         # Get outcome names from config
         self.outcome_names = config.outcome_names
 
         self._setup_pooling_layers(config)
+        self._setup_bottleneck(config)
         self._setup_mlp_heads(config)
         self._setup_loss_functions(config)
+
+    def _setup_bottleneck(self, config):
+        if self.shared_representation:
+            self.encoder_bottleneck = nn.Sequential(
+                nn.Linear(config.hidden_size, self.bottleneck_dim),
+                nn.GELU(),
+                nn.Dropout(0.1),
+            )
 
     def _setup_pooling_layers(self, config):
         if self.shared_representation:
@@ -141,7 +139,7 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         # --- Get Patient Representations ---
         if self.shared_representation:
             shared_repr = self.pooler(sequence_output, attention_mask)
-            bottleneck_repr = self.bottleneck(shared_repr)
+            bottleneck_repr = self.encoder_bottleneck(shared_repr)
             outputs.bottleneck_repr = bottleneck_repr  # Store for L1 loss
             exposure_repr = bottleneck_repr
             outcome_reprs = {

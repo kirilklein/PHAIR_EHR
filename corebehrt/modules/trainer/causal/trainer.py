@@ -3,6 +3,7 @@ from collections import defaultdict, namedtuple
 from typing import Dict
 
 import torch
+import random
 import yaml
 
 from corebehrt import azure
@@ -76,9 +77,11 @@ class CausalEHRTrainer(EHRTrainer):
             not self.log_all_targets
             and len(self.outcome_names) > self.num_targets_to_log
         ):
-            self.outcome_names_to_log = self.outcome_names[: self.num_targets_to_log]
+            self.outcome_names_to_log = random.sample(
+                self.outcome_names, self.num_targets_to_log
+            )
             self.log(
-                f"Logging metrics for a subset of {self.num_targets_to_log} outcomes: {self.outcome_names_to_log}"
+                f"Logging metrics for a subset of {self.num_targets_to_log} \n outcomes: {self.outcome_names_to_log}"
             )
 
     def _train_step(self, batch: dict):
@@ -321,7 +324,7 @@ class CausalEHRTrainer(EHRTrainer):
                 key = f"{outcome_name}_{name}"
                 metrics[key] = value
 
-            if save_results and outcome_name in self.outcome_names_to_log:
+            if save_results:
                 self._save_target_results(
                     outcome_name,
                     logits,
@@ -550,6 +553,7 @@ class CausalEHRTrainer(EHRTrainer):
                 os.path.join(self.run_folder, "figs"),
                 self.outcome_names,
                 self.log,
+                max_legend_items=self.num_targets_to_log,
             )
 
         if (is_best and epoch > 0) or (

@@ -11,15 +11,16 @@ import pandas as pd
 from corebehrt.constants.causal.paths import ESTIMATE_RESULTS_FILE
 
 ESTIMATE_RESULT_DIR = "./outputs/causal/generated/estimate_with_generated_data"
-MARGIN = 0.02
+CI_STRETCH_FACTOR = 1.0
 
 # Methods that should be excluded from true effect comparison (unadjusted methods)
 UNADJUSTED_METHODS = {"RD", "RR"}
 
 
-def compare_estimate_result(margin, estimate_results_dir):
+def compare_estimate_result(ci_stretch_factor, estimate_results_dir):
     """
     This function compares the estimated effect on generated data with the simulated effect.
+    It checks if the true effect lies within the estimated (and possibly stretched) 95% CI.
     """
     # Read the results
     df = pd.read_csv(os.path.join(estimate_results_dir, ESTIMATE_RESULTS_FILE))
@@ -56,12 +57,25 @@ def compare_estimate_result(margin, estimate_results_dir):
         # Check causal methods against true effects
         outcome_passed = True
         for _, row in outcome_causal_df.iterrows():
-            diff = abs(row["effect"] - row["true_effect"])
-            passed = diff <= abs(margin)
+            true_effect = row["true_effect"]
+            lower_ci = row["CI95_lower"]
+            upper_ci = row["CI95_upper"]
+
+            # Stretch the CI
+            center = (upper_ci + lower_ci) / 2
+            half_width = (upper_ci - lower_ci) / 2
+            stretched_half_width = half_width * ci_stretch_factor
+            stretched_lower = center - stretched_half_width
+            stretched_upper = center + stretched_half_width
+
+            passed = (stretched_lower <= true_effect) and (
+                true_effect <= stretched_upper
+            )
             status = "✓" if passed else "✗"
 
             print(
-                f"{status} {row['method']:>6}: {row['effect']:7.4f} (true: {row['true_effect']:7.4f}, diff: {diff:.4f})"
+                f"{status} {row['method']:>6}: {row['effect']:7.4f} (true: {true_effect:7.4f}). "
+                f"Stretched CI ({ci_stretch_factor:.2f}x): [{stretched_lower:.4f}, {stretched_upper:.4f}]"
             )
 
             if not passed:
@@ -81,12 +95,14 @@ def compare_estimate_result(margin, estimate_results_dir):
 
     print("\n" + "=" * 80)
     if all_passed:
-        print("🎉 ALL METHODS PASSED - Effects within acceptable margin!")
-        print(f"   Margin threshold: ±{margin:.4f}")
+        print(
+            "🎉 ALL METHODS PASSED - True effects are within the (stretched) 95% CIs!"
+        )
+        print(f"   CI Stretch Factor: {ci_stretch_factor:.2f}x")
     else:
         print("❌ SOME METHODS FAILED")
         print(f"   Failed: {', '.join(failed_methods)}")
-        print(f"   Margin threshold: ±{margin:.4f}")
+        print(f"   CI Stretch Factor: {ci_stretch_factor:.2f}x")
     print("=" * 80)
 
     # Assert for test failure
@@ -99,15 +115,27 @@ def compare_estimate_result(margin, estimate_results_dir):
                 else causal_methods_df
             )
             for _, row in outcome_df.iterrows():
-                diff = abs(row["effect"] - row["true_effect"])
-                if diff > abs(margin):
+                true_effect = row["true_effect"]
+                lower_ci = row["CI95_lower"]
+                upper_ci = row["CI95_upper"]
+
+                center = (upper_ci + lower_ci) / 2
+                half_width = (upper_ci - lower_ci) / 2
+                stretched_half_width = half_width * ci_stretch_factor
+                stretched_lower = center - stretched_half_width
+                stretched_upper = center + stretched_half_width
+
+                if not (
+                    (stretched_lower <= true_effect)
+                    and (true_effect <= stretched_upper)
+                ):
                     failed_details.append(
-                        f"{outcome}-{row['method']}: estimated={row['effect']:.4f}, "
-                        f"true={row['true_effect']:.4f}, diff={diff:.4f}"
+                        f"{outcome}-{row['method']}: true effect {true_effect:.4f} is outside of "
+                        f"the stretched CI [{stretched_lower:.4f}, {stretched_upper:.4f}]"
                     )
 
         raise AssertionError(
-            f"\n❌ {len(failed_methods)} method(s) exceeded the acceptable margin of ±{margin:.4f}:\n"
+            f"\n❌ {len(failed_methods)} method(s) failed the CI check (stretch factor: {ci_stretch_factor:.2f}x):\n"
             + "\n".join(failed_details)
         )
 
@@ -117,10 +145,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--margin",
+        "--ci_stretch_factor",
         type=float,
-        default=MARGIN,
-        help="Acceptable margin of error for comparing estimated vs true effect",
+        default=CI_STRETCH_FACTOR,
+        help="Factor to stretch the 95% CI. 1.0 means no stretch.",
     )
     parser.add_argument(
         "--dir",
@@ -130,4 +158,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    compare_estimate_result(args.margin, args.dir)
+    compare_estimate_result(args.ci_stretch_factor, args.dir)
