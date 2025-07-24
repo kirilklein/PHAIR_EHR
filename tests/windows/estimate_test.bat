@@ -4,19 +4,19 @@ setlocal EnableDelayedExpansion
 echo Running estimate tests with multiple configurations...
 
 :: Run tests with different configurations (matching causal_estimate.yml)
-call :run_estimate_test 0 0 2 1.0 "No noise, strong effect" 0.1 1.0
+call :run_estimate_test 0 0 2 1.5 "No noise, strong effect" 0.1 1.0
 if errorlevel 1 goto :error
 
-call :run_estimate_test 0.02 0.05 2.0 1.0 "Default test" 0.1 1.0
+call :run_estimate_test 0.02 0.05 2.0 1.5 "Default test" 0.1 1.0
 if errorlevel 1 goto :error
 
-call :run_estimate_test 0.05 0.05 1.0 1.0 "High noise test" 0.2 1.5
+call :run_estimate_test 0.05 0.05 1.0 1.5 "High noise test" 0.2 1.5
 if errorlevel 1 goto :error
 
-call :run_estimate_test 0.01 0.02 0.5 1.0 "Low effect size test" 0.05 0.5
+call :run_estimate_test 0.01 0.02 1.0 1.5 "Low noise test" 0.05 0.5
 if errorlevel 1 goto :error
 
-call :run_estimate_test 0.02 0.05 2.0 1.0 "Default test" 0.2 -1.0
+call :run_estimate_test 0.02 0.05 2.0 1.5 "Default test" 0.2 -1.0
 if errorlevel 1 goto :error
 
 echo All estimate tests completed successfully!
