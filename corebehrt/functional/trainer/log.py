@@ -100,6 +100,14 @@ def log_number_of_trainable_parameters(model: nn.Module) -> None:
         elif name.startswith("layers."):
             layer_idx = int(name.split(".")[1])
             component = f"encoder_layer_{layer_idx}"
+        elif name.startswith("encoder_bottleneck"):
+            component = "encoder_bottleneck"
+        elif name.startswith("pooler"):
+            component = "pooler"
+        elif name.startswith("exposure_head"):
+            component = "exposure_head"
+        elif name.startswith("outcome_heads"):
+            component = "outcome_heads"
         else:
             component = "other"
 

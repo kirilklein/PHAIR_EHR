@@ -4,19 +4,19 @@ setlocal EnableDelayedExpansion
 echo Running estimate tests with multiple configurations...
 
 :: Run tests with different configurations (matching causal_estimate.yml)
-call :run_estimate_test 0 0 2 0.02 "No noise, strong effect" 0.1 1.0
+call :run_estimate_test 0 0 2 1.5 "No noise, strong effect" 0.1 1.0
 if errorlevel 1 goto :error
 
-call :run_estimate_test 0.02 0.05 2.0 0.02 "Default test" 0.1 1.0
+call :run_estimate_test 0.02 0.05 2.0 1.5 "Default test" 0.1 1.0
 if errorlevel 1 goto :error
 
-call :run_estimate_test 0.05 0.05 1.0 0.02 "High noise test" 0.2 1.5
+call :run_estimate_test 0.05 0.05 1.0 1.5 "High noise test" 0.2 1.5
 if errorlevel 1 goto :error
 
-call :run_estimate_test 0.01 0.02 0.5 0.02 "Low noise test" 0.05 0.5
+call :run_estimate_test 0.01 0.02 1.0 1.5 "Low noise test" 0.05 0.5
 if errorlevel 1 goto :error
 
-call :run_estimate_test 0.02 0.05 2.0 0.02 "Default test" 0.2 -1.0
+call :run_estimate_test 0.02 0.05 2.0 1.5 "Default test" 0.2 -1.0
 if errorlevel 1 goto :error
 
 echo All estimate tests completed successfully!
@@ -27,7 +27,7 @@ goto :eof
 set "exposure_noise=%~1"
 set "outcome_noise=%~2"
 set "exposure_effect=%~3"
-set "margin=%~4"
+set "ci_stretch_factor=%~4"
 set "test_name=%~5"
 set "weight=%~6"
 set "intercept=%~7"
@@ -38,7 +38,7 @@ echo Parameters:
 echo   exposure_noise=%exposure_noise%
 echo   outcome_noise=%outcome_noise%
 echo   exposure_effect=%exposure_effect%
-echo   margin=%margin%
+echo   ci_stretch_factor=%ci_stretch_factor%
 echo   weight=%weight%
 echo   intercept=%intercept%
 echo.
@@ -55,7 +55,7 @@ if errorlevel 1 exit /b 1
 
 :: Test results
 echo Testing results...
-python -m tests.test_main_causal.test_estimate_result --margin %margin%
+python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor %ci_stretch_factor%
 if errorlevel 1 exit /b 1
 
 echo Test "%test_name%" completed successfully!
