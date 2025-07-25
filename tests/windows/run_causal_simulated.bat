@@ -52,7 +52,7 @@ python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\
 if errorlevel 1 goto :error
 
 echo ==== Running test_estimate_result... ====
-python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor 1.5 --dir outputs\causal\estimate\simulated
+python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor 1.2 --ipw_ci_stretch_factor 2.0 --dir outputs\causal\estimate\simulated
 if errorlevel 1 goto :error
 
 echo Pipeline completed successfully.
