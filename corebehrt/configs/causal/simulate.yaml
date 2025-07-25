@@ -11,11 +11,11 @@ paths:
 seed: 42
 
 exposure:
-  p_base: 0.3 # Base 30% chance of exposure over the patient's timeline
+  p_base: 0.15 # Base 15% chance of exposure over the patient's timeline
   trigger_codes:
     [D/312608009, D/431856006, D/55822004, D/267020005, D/157141000119108]
   # Even stronger effects for higher AUROC
-  trigger_weights: [2, 2, 2, 2, 2] # [1.5, 2.0, -1.5, 1.0, 0.5] # logits
+  trigger_weights: [1.5, 1.5, 1.5, 1.5, 1.5]
 
 outcomes:
   OUTCOME:
@@ -29,7 +29,7 @@ outcomes:
         D/44465007, # prognostic
       ]
     # Confounders have a different effect on the outcome than on the exposure.
-    trigger_weights: [2.0, 1.0, -1.0, 0.5, 1.5] # logits
+    trigger_weights: [2.0, 1.0, -1.0, 0.3, -0.3] # logits
     # STRONG positive effect from exposure.
     exposure_effect: 2 # logits
 
@@ -43,7 +43,7 @@ outcomes:
         D/433144002, # prognostic
         D/224295006, # prognostic
       ]
-    trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
+    trigger_weights: [0.5, 1, -1, 0.2, 0.3] # logits
     # WEAKER positive effect from exposure.
     exposure_effect: 1 # logits
 
@@ -56,6 +56,6 @@ outcomes:
         D/157141000119108, # confounder
         D/840544004, # prognostic
       ]
-    trigger_weights: [2.0, 1.0, -1.0, 1.5] # logits
+    trigger_weights: [2.0, 1.0, -1.0, 0.8] # logits
     # ZERO direct causal effect from exposure.
     exposure_effect: 0
