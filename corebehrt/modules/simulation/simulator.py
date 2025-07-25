@@ -16,14 +16,16 @@ from corebehrt.constants.causal.data import (
     CONTROL_PID_COL,
     EXPOSED_PID_COL,
 )
-from corebehrt.constants.causal.paths import COUNTERFACTUALS_FILE, INDEX_DATE_MATCHING_FILE
+from corebehrt.constants.causal.paths import (
+    COUNTERFACTUALS_FILE,
+    INDEX_DATE_MATCHING_FILE,
+)
 
 from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.simulation.config import SimulationConfig
 
 logger = logging.getLogger("simulate")
-
 
 
 class CausalSimulator:
@@ -76,7 +78,11 @@ class CausalSimulator:
         output_dfs["ite"] = pd.DataFrame(ite_records)
         output_dfs[COUNTERFACTUALS_FILE.split(".")[0]] = pd.DataFrame(cf_records)
         if EXPOSURE_COL in output_dfs:
-            output_dfs[INDEX_DATE_MATCHING_FILE.split(".")[0]] = self._create_index_date_matching_df(output_dfs[EXPOSURE_COL], df[PID_COL].unique())
+            output_dfs[INDEX_DATE_MATCHING_FILE.split(".")[0]] = (
+                self._create_index_date_matching_df(
+                    output_dfs[EXPOSURE_COL], df[PID_COL].unique()
+                )
+            )
         return output_dfs
 
     def _simulate_for_subject(self, subj_df: pd.DataFrame) -> dict:
@@ -112,7 +118,9 @@ class CausalSimulator:
         cf_record = {PID_COL: subject_id, EXPOSURE_COL: int(is_exposed)}
 
         for outcome_name, outcome_cfg in self.config.outcomes.items():
-            assessment_time = self.index_date + pd.Timedelta(days=outcome_cfg.run_in_days)
+            assessment_time = self.index_date + pd.Timedelta(
+                days=outcome_cfg.run_in_days
+            )
             if assessment_time >= end_date:
                 continue
 
@@ -175,32 +183,52 @@ class CausalSimulator:
             logit_p += event_cfg.exposure_effect
 
         return expit(logit_p)
-        
-    def _create_index_date_matching_df(self, exposure_df: pd.DataFrame, all_pids: list) -> pd.DataFrame:
-        """Creates a dataframe of index date matching."""
-        
+
+    def _create_index_date_matching_df(
+        self, exposure_df: pd.DataFrame, all_pids: list
+    ) -> pd.DataFrame:
+        """
+        Creates a DataFrame matching control subjects to exposed subjects for index date analysis.
+
+        Args:
+            exposure_df: DataFrame containing exposure events with PID, timestamp, and abspos
+            all_pids: List of all patient IDs in the dataset
+
+        Returns:
+            DataFrame with columns: control_pid, exposed_pid, timestamp, abspos
+        """
+
         exposed_pids = exposure_df[PID_COL].unique()
-        
+
         if len(exposed_pids) == 0:
-            return pd.DataFrame(columns=[CONTROL_PID_COL, EXPOSED_PID_COL, TIMESTAMP_COL, ABSPOS_COL])
+            return pd.DataFrame(
+                columns=[CONTROL_PID_COL, EXPOSED_PID_COL, TIMESTAMP_COL, ABSPOS_COL]
+            )
 
         control_pids = list(set(all_pids) - set(exposed_pids))
         if not control_pids:
-            return pd.DataFrame(columns=[CONTROL_PID_COL, EXPOSED_PID_COL, TIMESTAMP_COL, ABSPOS_COL])
+            return pd.DataFrame(
+                columns=[CONTROL_PID_COL, EXPOSED_PID_COL, TIMESTAMP_COL, ABSPOS_COL]
+            )
 
-        matched_exposed_pids = np.random.choice(exposed_pids, size=len(control_pids), replace=True)
+        # Set random seed for reproducible matching
+        np.random.seed(42)
+        matched_exposed_pids = np.random.choice(
+            exposed_pids, size=len(control_pids), replace=True
+        )
 
-        match_df = pd.DataFrame({
-            CONTROL_PID_COL: control_pids,
-            EXPOSED_PID_COL: matched_exposed_pids
-        })
-        
-        exposure_info = exposure_df[[PID_COL, TIMESTAMP_COL, ABSPOS_COL]].drop_duplicates(subset=[PID_COL]).set_index(PID_COL)
+        match_df = pd.DataFrame(
+            {CONTROL_PID_COL: control_pids, EXPOSED_PID_COL: matched_exposed_pids}
+        )
+
+        exposure_info = (
+            exposure_df[[PID_COL, TIMESTAMP_COL, ABSPOS_COL]]
+            .drop_duplicates(subset=[PID_COL])
+            .set_index(PID_COL)
+        )
 
         match_df = match_df.merge(
-            exposure_info,
-            left_on=EXPOSED_PID_COL,
-            right_index=True
-        ).rename(columns={TIMESTAMP_COL: TIMESTAMP_COL, ABSPOS_COL: ABSPOS_COL})
-        
+            exposure_info, left_on=EXPOSED_PID_COL, right_index=True
+        )
+
         return match_df[[CONTROL_PID_COL, EXPOSED_PID_COL, TIMESTAMP_COL, ABSPOS_COL]]

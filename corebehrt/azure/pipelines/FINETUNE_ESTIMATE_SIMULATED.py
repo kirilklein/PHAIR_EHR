@@ -53,17 +53,17 @@ def create(component: callable):
     ) -> dict:
         """Helper function containing common pipeline implementation steps"""
         # Get cohort from input or generate it
-        
+
         select_cohort = component(
-                "select_cohort_full",
-            )(
-                meds=meds,
-                features=features,
-                exposures=exposures,
-                index_date_matching=index_date_matching,
-            )
+            "select_cohort_full",
+        )(
+            meds=meds,
+            features=features,
+            exposures=exposures,
+            index_date_matching=index_date_matching,
+        )
         resolved_cohort = select_cohort.outputs.cohort
-        
+
         prepare_finetune_exp_y = component(
             "prepare_ft_exp_y",
             name="prepare_finetune_exp_y",
@@ -111,7 +111,13 @@ def create(component: callable):
         index_date_matching: Input,
     ) -> dict:
         return _common_pipeline_steps(
-            meds, features, tokenized, pretrain_model, exposures, outcomes, index_date_matching
+            meds,
+            features,
+            tokenized,
+            pretrain_model,
+            exposures,
+            outcomes,
+            index_date_matching,
         )
 
     # Factory function to select the appropriate pipeline

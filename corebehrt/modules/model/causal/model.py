@@ -99,7 +99,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         """Returns the loss function instance based on the name."""
         if loss_name == "focal":
             logger.info("Using FocalLossWithLogits")
-            if pos_weight := loss_params.get("pos_weight", None) is not None:
+            if (pos_weight := loss_params.get("pos_weight", None)) is not None:
                 alpha = pos_weight_to_alpha(pos_weight=pos_weight)
             else:
                 alpha = None
