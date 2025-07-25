@@ -8,14 +8,14 @@ paths:
   tokenized: ./outputs/causal/data/tokenized
   cohort: ./outputs/causal/finetune/cohorts/full_simulated # path to cohort directory
 
-  outcomes: ./outputs/causal/finetune/simulated_outcomes
+  outcomes: ./outputs/causal/simulated_outcomes
   outcome_files: # should correspond to the file names in the outcomes directory
     - OUTCOME.csv
     - OUTCOME_2.csv
     - OUTCOME_3.csv
 
-  exposures: ./outputs/causal/finetune/simulated_outcomes
-  exposure: EXPOSURE.csv
+  exposures: ./outputs/causal/simulated_outcomes
+  exposure: exposure.csv
 
   ## OUTPUTS
   prepared_data: ./outputs/causal/finetune/prepared_data_simulated # Save model/outputs to this folder

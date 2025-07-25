@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Dict, List
+import pandas as pd
 
+COMMON_INDEX_DATE = pd.Timestamp("2010-01-01") # for simplicity pick the same index_date for all
 
 @dataclass
 class PathsConfig:
@@ -14,8 +16,6 @@ class PathsConfig:
 @dataclass
 class ExposureConfig:
     """Configuration for exposure simulation."""
-
-    code: str
     p_base: float
     trigger_codes: List[str]
     trigger_weights: List[float]
@@ -27,8 +27,6 @@ class ExposureConfig:
 @dataclass
 class OutcomeConfig:
     """Configuration for a single outcome simulation."""
-
-    code: str
     run_in_days: int
     p_base: float
     trigger_codes: List[str]
@@ -43,6 +41,7 @@ class SimulationConfig:
     paths: PathsConfig
     exposure: ExposureConfig
     outcomes: Dict[str, OutcomeConfig]
+    index_date: pd.Timestamp = COMMON_INDEX_DATE
 
     def __init__(self, config: dict):
         # Parse paths

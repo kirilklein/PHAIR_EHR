@@ -7,12 +7,10 @@ paths:
   data: ./example_data/synthea_meds_causal
   splits: ["tuning"]
   # output dir
-  outcomes: ./outputs/causal/finetune/simulated_outcomes
+  outcomes: ./outputs/causal/simulated_outcomes
 seed: 42
 
 exposure:
-  code: "EXPOSURE"
-  run_in_days: 9000 # when do we start drawing probabilities from the exposure
   p_base: 0.3 # Base 30% chance of exposure over the patient's timeline
   trigger_codes:
     [D/312608009, D/431856006, D/55822004, D/267020005, D/157141000119108]
@@ -21,8 +19,7 @@ exposure:
 
 outcomes:
   OUTCOME:
-    code: "OUTCOME"
-    run_in_days: 30 # after exposure/non-exposure
+    run_in_days: 1 # after exposure/non-exposure
     p_base: 0.1
     trigger_codes: [
         D/312608009, # confounder
@@ -37,8 +34,7 @@ outcomes:
     exposure_effect: 2 # logits
 
   OUTCOME_2:
-    code: "OUTCOME_2"
-    run_in_days: 30 # after exposure/non-exposure
+    run_in_days: 1 # after exposure/non-exposure
     p_base: 0.08
     trigger_codes: [
         D/431856006, # confounder
@@ -52,8 +48,7 @@ outcomes:
     exposure_effect: 1 # logits
 
   OUTCOME_3:
-    code: "OUTCOME_3"
-    run_in_days: 30 # after exposure/non-exposure
+    run_in_days: 1 # after exposure/non-exposure
     p_base: 0.12
     trigger_codes: [
         D/55822004, # confounder
