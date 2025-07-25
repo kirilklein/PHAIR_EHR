@@ -14,7 +14,8 @@ exposure:
   code: "EXPOSURE"
   run_in_days: 9000 # when do we start drawing probabilities from the exposure
   p_base: 0.3 # Base 30% chance of exposure over the patient's timeline
-  trigger_codes: [D/25675004, D/431855005, D/80583007, D/105531004, D/65363002]
+  trigger_codes:
+    [D/312608009, D/431856006, D/55822004, D/267020005, D/157141000119108]
   # Even stronger effects for higher AUROC
   trigger_weights: [2, 2, 2, 2, 2] # [1.5, 2.0, -1.5, 1.0, 0.5] # logits
 
@@ -24,11 +25,11 @@ outcomes:
     run_in_days: 30 # after exposure/non-exposure
     p_base: 0.1
     trigger_codes: [
-        D/25675004, # confounder
-        D/431855005, # confounder
-        D/80583007, # confounder
-        D/125605004, # prognostic
-        D/384709000, # prognostic
+        D/312608009, # confounder
+        D/431856006, # confounder
+        D/55822004, # confounder
+        D/713458007, # prognostic
+        D/44465007, # prognostic
       ]
     # Confounders have a different effect on the outcome than on the exposure.
     trigger_weights: [2.0, 1.0, -1.0, 0.5, 1.5] # logits
@@ -40,11 +41,11 @@ outcomes:
     run_in_days: 30 # after exposure/non-exposure
     p_base: 0.08
     trigger_codes: [
-        D/431855005, # confounder
-        D/80583007, # confounder
-        D/105531004, # confounder
-        D/65363002, # prognostic
-        D/384709000, # prognostic
+        D/431856006, # confounder
+        D/55822004, # confounder
+        D/267020005, # confounder
+        D/433144002, # prognostic
+        D/224295006, # prognostic
       ]
     trigger_weights: [0.5, 1, -1, 0.5, 1.5] # logits
     # WEAKER positive effect from exposure.
@@ -55,10 +56,10 @@ outcomes:
     run_in_days: 30 # after exposure/non-exposure
     p_base: 0.12
     trigger_codes: [
-        D/80583007, # confounder
-        D/105531004, # confounder
-        D/65363002, # confounder
-        D/384709000, # prognostic
+        D/55822004, # confounder
+        D/267020005, # confounder
+        D/157141000119108, # confounder
+        D/840544004, # prognostic
       ]
     trigger_weights: [2.0, 1.0, -1.0, 1.5] # logits
     # ZERO direct causal effect from exposure.
