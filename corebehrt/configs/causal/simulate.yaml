@@ -12,7 +12,7 @@ seed: 42
 
 exposure:
   code: "EXPOSURE"
-  run_in_days: 3650 # when do we start drawing probabilities from the exposure
+  run_in_days: 9000 # when do we start drawing probabilities from the exposure
   p_base: 0.3 # Base 30% chance of exposure over the patient's timeline
   trigger_codes: [D/25675004, D/431855005, D/80583007, D/105531004, D/65363002]
   # Even stronger effects for higher AUROC
@@ -22,7 +22,7 @@ outcomes:
   OUTCOME:
     code: "OUTCOME"
     run_in_days: 30 # after exposure/non-exposure
-    p_base: 0.3
+    p_base: 0.1
     trigger_codes: [
         D/25675004, # confounder
         D/431855005, # confounder
@@ -38,7 +38,7 @@ outcomes:
   OUTCOME_2:
     code: "OUTCOME_2"
     run_in_days: 30 # after exposure/non-exposure
-    p_base: 0.3
+    p_base: 0.08
     trigger_codes: [
         D/431855005, # confounder
         D/80583007, # confounder
@@ -53,7 +53,7 @@ outcomes:
   OUTCOME_3:
     code: "OUTCOME_3"
     run_in_days: 30 # after exposure/non-exposure
-    p_base: 0.3
+    p_base: 0.12
     trigger_codes: [
         D/80583007, # confounder
         D/105531004, # confounder

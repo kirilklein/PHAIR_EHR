@@ -18,6 +18,10 @@ model:
     bidirectional: true
     bottleneck_dim: 32
     l1_lambda: 0
+  loss:
+    name: bce # bce by default
+    #params: # alpha is computed from pos_weight
+    # gamma: 2.0
 
 trainer_args:
   loss_weight_function:

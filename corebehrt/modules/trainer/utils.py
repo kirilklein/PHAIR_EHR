@@ -177,3 +177,26 @@ def is_plateau(
 def limit_dict_for_logging(metrics: dict, max_items: int = 10) -> dict:
     """Log metrics in a nice format"""
     return {k: round(v, 3) for i, (k, v) in enumerate(metrics.items()) if i < max_items}
+
+
+def pos_weight_to_alpha(pos_weight: float) -> float:
+    """Converts a `pos_weight` ratio into a normalized `alpha` for Focal Loss.
+
+    This function normalizes the class weights to ensure they sum to 1.
+    The formula is derived from $\alpha = w_{pos} / (w_{neg} + w_{pos})$,
+    by setting the negative class weight $w_{neg}$ to 1.
+
+    Example:
+        If a dataset has 10 positive and 100 negative samples, a linear
+        `pos_weight` is $100 / 10 = 10$.
+        The corresponding alpha is $10 / (1 + 10) \approx 0.909$. The weight
+        for the negative class becomes $1 - \alpha \approx 0.091$.
+
+    Args:
+        pos_weight: The weight for the positive class, typically
+            calculated as (num_negative_samples / num_positive_samples).
+
+    Returns:
+        The normalized alpha value for the positive class.
+    """
+    return pos_weight / (1 + pos_weight)

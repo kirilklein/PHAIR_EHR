@@ -2,6 +2,7 @@ import torch.nn.functional as F
 from torch import nn
 import torch
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class FocalLossWithLogits(nn.Module):
 
     def __init__(
         self,
-        alpha: float = 0.5,  # same as no weighing
+        alpha: Optional[float] = None,  # same as no weighing
         gamma: float = 2.0,
     ):
         super().__init__()
@@ -33,9 +34,12 @@ class FocalLossWithLogits(nn.Module):
         )  # This exactly recovers the needed probability: probs * targets + (1 - probs) * (1 - targets)
 
         # Calculate alpha_t for each sample
-        alpha_t = self.alpha * targets.float() + (1 - self.alpha) * (
-            1 - targets.float()
-        )  # alpha_t is the class weight for each sample
+        if self.alpha is not None:
+            alpha_t = self.alpha * targets.float() + (1 - self.alpha) * (
+                1 - targets.float()
+            )  # alpha_t is the class weight for each sample
+        else:
+            alpha_t = 1.0
 
         # calculate weight
         difficulty_weight = (1 - p_t) ** self.gamma  # difficulty weight
