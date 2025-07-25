@@ -15,27 +15,23 @@ def create_annotated_heatmap_matplotlib(
     Creates an annotated heatmap using Matplotlib from a list of effect dictionaries.
 
     Args:
-        all_effects: A list of dictionaries, where each dictionary represents an effect
-                     and should contain 'method', 'outcome', and the specified 'effect_name' key.
+        df: A pandas DataFrame containing effect data with 'method', 'outcome',
+            and the specified 'effect_name' columns.
         method_names: A list of method names to be displayed on the y-axis, maintaining their order.
         effect_name: The key in the effect dictionaries to visualize (e.g., 'effect', 'std_err').
         save_path: Optional. A string representing the file path where the plot should be saved
                    (e.g., 'heatmap.png', 'plots/my_heatmap.pdf'). If None, the plot is displayed.
-    """
-    # Ensure 'method' and 'outcome' columns exist
+    """  # Ensure 'method' and 'outcome' columns exist
     if (
         EffectColumns.method not in df.columns
         or EffectColumns.outcome not in df.columns
     ):
-        raise ValueError(
-            "The 'all_effects' dictionaries must contain 'method' and 'outcome' keys."
-        )
+        raise ValueError("The DataFrame must contain 'method' and 'outcome' columns.")
     if effect_name not in df.columns:
         raise ValueError(
-            f"'{effect_name}' not found in the effect dictionaries. "
-            f"Please ensure the dictionaries contain this key."
+            f"'{effect_name}' column not found in the DataFrame. "
+            f"Please ensure the DataFrame contains this column."
         )
-
     # Pivot the DataFrame
     heatmap_data = df.pivot_table(
         index=EffectColumns.method, columns=EffectColumns.outcome, values=effect_name

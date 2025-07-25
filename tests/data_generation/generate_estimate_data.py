@@ -30,7 +30,7 @@ OUTCOME_NOISE = 0.05  # For outcome predictions
 NUM_SAMPLES = 10_000
 OUTCOME_PS_WEIGHT = 0.1  # in logit space
 OUTCOME_INTERCEPT = -1  # in logit space
-EXPOSURE_EFFECT = 0.5  # in logit space
+EXPOSURE_EFFECT = 1  # in logit space
 
 CLIP_EPS = 0.001
 PS_BETA_A = 2
@@ -326,7 +326,10 @@ if __name__ == "__main__":
         help="Intercept in the counterfactual outcome model",
     )
     parser.add_argument(
-        "--exposure-effect", type=float, default=1, help="Effect of exposure on outcome"
+        "--exposure-effect",
+        type=float,
+        default=EXPOSURE_EFFECT,
+        help="Effect of exposure on outcome",
     )
     parser.add_argument(
         "--generate-figures",
