@@ -54,9 +54,14 @@ def append_true_effect(
 
     Adds the true effect to the effect_df. (TRUE_EFFECT_COL)
     """
-    combined = pd.merge(
-        analysis_df[[PID_COL, PS_COL]], counterfactual_df, on=PID_COL, how="inner"
-    )
+    if PS_COL not in counterfactual_df.columns:
+        combined = pd.merge(
+            analysis_df[[PID_COL, PS_COL]], counterfactual_df, on=PID_COL, how="inner"
+        )
+    else:
+        combined = counterfactual_df[
+            counterfactual_df[PID_COL].isin(analysis_df[PID_COL].unique())
+        ]
     combined = filter_common_support(
         combined, PS_COL, EXPOSURE_COL, common_support_threshold
     )
