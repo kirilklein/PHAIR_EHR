@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.simulate_outcomes_from_sequence            simulate_outcomes.yaml
+          run_step main_causal.simulate_from_sequence            simulate.yaml
           run_step main_causal.select_cohort_full           select_cohort_full/extract_simulated.yaml
 
       - name: Prepare Finetune Data
