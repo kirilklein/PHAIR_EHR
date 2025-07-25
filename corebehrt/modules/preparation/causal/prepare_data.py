@@ -317,7 +317,11 @@ class CausalDatasetPreparer:
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Loads exposure and index date files."""
         exposures = pd.read_csv(join(cohort_path, EXPOSURES_FILE))
-        index_date_matching = pd.read_csv(join(cohort_path, INDEX_DATE_MATCHING_FILE))
+        index_date_matching = None
+        if os.path.exists(join(cohort_path, INDEX_DATE_MATCHING_FILE)):
+            index_date_matching = pd.read_csv(
+                join(cohort_path, INDEX_DATE_MATCHING_FILE)
+            )
         index_dates = pd.read_csv(
             join(cohort_path, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
         )
