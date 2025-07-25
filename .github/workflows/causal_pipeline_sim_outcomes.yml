@@ -85,8 +85,8 @@ jobs:
           
           run_step main_causal.estimate        estimate_with_simulated_outcomes.yaml
       
-      # - name: Test Estimate Result
-      #   shell: bash
-      #   run: |
-      #     set -euo pipefail
-      #     python -m tests.test_main_causal.test_estimate_result --dir outputs/causal/estimate/simulated
+      - name: Test Estimate Result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m tests.test_main_causal.test_estimate_result --dir outputs/causal/estimate/simulated --ci_stretch_factor 1.2 --ipw_ci_stretch_factor 1.8
