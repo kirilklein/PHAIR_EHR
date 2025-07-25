@@ -117,7 +117,7 @@ def select_cohort(
         Final patient IDs after all filtering steps
     """
     check_time_windows(time_windows)
-    patients_info, exposures, index_dates = _load_data(
+    patients_info, exposures, index_dates, index_date_matching = _load_data(
         features_path, exposures_path, exposure, logger
     )
     control_patients_info = exclude_pids_from_df(
@@ -144,6 +144,7 @@ def select_cohort(
         meds_path,
         splits,
         save_path,
+        index_date_matching=index_date_matching,
     )
 
     # Create combined visualization
@@ -181,6 +182,7 @@ def _prepare_control(
     meds_path: str,
     splits: List[str],
     save_path: str,
+    index_date_matching: pd.DataFrame = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare control patients for cohort selection.
@@ -189,15 +191,24 @@ def _prepare_control(
     Return control criteria and index dates and index dates for controls.
     """
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
-    control_index_dates, exposure_matching = draw_index_dates_for_control_with_redraw(
-        control_patients_info[PID_COL].unique(),
-        index_dates,
-        control_patients_info,
-    )
-    exposure_matching[ABSPOS_COL] = get_hours_since_epoch(
-        exposure_matching[TIMESTAMP_COL]
-    )
-    exposure_matching.to_csv(join(save_path, INDEX_DATE_MATCHING_FILE), index=False)
+    if index_date_matching is None:
+        control_index_dates, index_date_matching = (
+            draw_index_dates_for_control_with_redraw(
+                control_patients_info[PID_COL].unique(),
+                index_dates,
+                control_patients_info,
+            )
+        )
+        index_date_matching[ABSPOS_COL] = get_hours_since_epoch(
+            index_date_matching[TIMESTAMP_COL]
+        )
+    else:
+        control_index_dates = index_date_matching.rename(
+            columns={"control_subject_id": PID_COL}
+        )
+        control_index_dates = control_index_dates[[PID_COL, TIMESTAMP_COL]]
+    index_date_matching.to_csv(join(save_path, INDEX_DATE_MATCHING_FILE), index=False)
+
     log_patient_num(logger, control_index_dates, "control_index_dates")
 
     criteria_control, included_pids_control, control_stats = filter_by_criteria(
@@ -342,7 +353,15 @@ def _load_data(
     exposures = ConceptLoader.read_file(join(exposures_path, exposure))
     log_patient_num(logger, exposures, "exposures")
     index_dates = select_first_event(exposures, PID_COL, TIMESTAMP_COL)
-    return patients_info, exposures, index_dates
+
+    index_date_matching = None
+    if os.path.exists(join(exposures_path, INDEX_DATE_MATCHING_FILE)):
+        logger.info("Loading index date matching file")
+        index_date_matching = pd.read_csv(
+            join(exposures_path, INDEX_DATE_MATCHING_FILE), parse_dates=[TIMESTAMP_COL]
+        )
+
+    return patients_info, exposures, index_dates, index_date_matching
 
 
 def _ensure_stats_format(stats: dict) -> dict:
