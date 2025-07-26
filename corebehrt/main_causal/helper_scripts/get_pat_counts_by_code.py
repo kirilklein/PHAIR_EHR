@@ -1,11 +1,15 @@
 """
-Input: Formatted Data
-- Load concepts
-- Handle wrong data
-- Exclude patients with <k concepts
-- Split data
-- Tokenize
-- truncate train and val
+Helper script to compute patient counts by medical code from formatted patient data shards.
+
+Input: Formatted Data (sharded)
+Output: CSV file with patient counts aggregated by medical code
+
+Process:
+ Load configuration and prepare directories
+ Iterate through data shards
+ Count unique patients per medical code
+ Aggregate counts across all shards
+ Save results as CSV
 """
 
 import logging
