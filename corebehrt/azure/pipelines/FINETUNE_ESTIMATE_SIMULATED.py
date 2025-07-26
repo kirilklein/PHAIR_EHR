@@ -83,6 +83,7 @@ def create(component: callable):
             "estimate",
         )(
             calibrated_predictions=calibrate_exp_y.outputs.calibrated_predictions,
+            counterfactual_outcomes=simulate_from_sequence.outputs.outcomes,
         )
 
         return {
