@@ -83,7 +83,7 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.estimate        estimate_with_simulated_outcomes.yaml
+          run_step main_causal.estimate        estimate_simulated.yaml
       
       - name: Test Estimate Result
         shell: bash
