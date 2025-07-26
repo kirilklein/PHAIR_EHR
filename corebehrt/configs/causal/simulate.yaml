@@ -75,3 +75,12 @@ outcomes:
         weight: 0.2 # if both present, add to logit
     # ZERO direct causal effect from exposure.
     exposure_effect: 0
+
+unobserved_confounder:
+  p_occurrence: 0.3
+  exposure_effect: 1.5
+  outcome_effects:
+    OUTCOME: 0.1
+    OUTCOME_2: 0.2
+    OUTCOME_3: 0.0
+    OUTCOME_4: 1.0

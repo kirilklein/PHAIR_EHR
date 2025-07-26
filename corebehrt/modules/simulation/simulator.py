@@ -101,8 +101,25 @@ class CausalSimulator:
         if (self.index_date >= end_date) or (self.index_date < start_date):
             return {}
         history_at_index = self._get_history_codes(subj_df, self.index_date)
+
+        unobserved_confounder_exposure_effect = 0
+        unobserved_confounder_outcome_effects = {}
+        if self.config.unobserved_confounder is not None:
+            p_occurrence = self.config.unobserved_confounder.p_occurrence
+            if np.random.binomial(1, p_occurrence) == 1:
+                unobserved_confounder_exposure_effect = (
+                    self.config.unobserved_confounder.exposure_effect
+                )
+                unobserved_confounder_outcome_effects = (
+                    self.config.unobserved_confounder.outcome_effects
+                )
+
         exposure_cfg = self.config.exposure
-        p_exposure = self._calculate_probability(exposure_cfg, history_at_index)
+        p_exposure = self._calculate_probability(
+            exposure_cfg,
+            history_at_index,
+            additional_logit_effect=unobserved_confounder_exposure_effect,
+        )
         is_exposed = np.random.binomial(1, p_exposure) == 1
 
         factual_events = []
@@ -127,11 +144,21 @@ class CausalSimulator:
             if assessment_time >= end_date:
                 continue
 
+            unobserved_confounder_outcome_effect = (
+                unobserved_confounder_outcome_effects.get(outcome_name, 0.0)
+            )
+
             p_if_treated = self._calculate_probability(
-                outcome_cfg, history_for_outcomes, is_exposed=True
+                outcome_cfg,
+                history_for_outcomes,
+                is_exposed=True,
+                additional_logit_effect=unobserved_confounder_outcome_effect,
             )
             p_if_control = self._calculate_probability(
-                outcome_cfg, history_for_outcomes, is_exposed=False
+                outcome_cfg,
+                history_for_outcomes,
+                is_exposed=False,
+                additional_logit_effect=unobserved_confounder_outcome_effect,
             )
 
             ite_record[f"ite_{outcome_name}"] = p_if_treated - p_if_control
@@ -169,7 +196,11 @@ class CausalSimulator:
         return set(subj_df.loc[history_mask, CONCEPT_COL])
 
     def _calculate_probability(
-        self, event_cfg, history_codes: set, is_exposed: bool = False
+        self,
+        event_cfg,
+        history_codes: set,
+        is_exposed: bool = False,
+        additional_logit_effect: float = 0.0,
     ) -> float:
         """
         Calculates event probability based on history and, for outcomes, exposure status.
@@ -190,6 +221,8 @@ class CausalSimulator:
 
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p += event_cfg.exposure_effect
+
+        logit_p += additional_logit_effect
 
         return expit(logit_p)
 

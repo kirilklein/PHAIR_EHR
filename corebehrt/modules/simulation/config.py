@@ -17,6 +17,15 @@ class PathsConfig:
 
 
 @dataclass
+class UnobservedConfounderConfig:
+    """Configuration for unobserved confounder."""
+
+    p_occurrence: float
+    exposure_effect: float
+    outcome_effects: Dict[str, float]
+
+
+@dataclass
 class ExposureConfig:
     """Configuration for simulating exposure probability.
 
@@ -88,6 +97,7 @@ class SimulationConfig:
     exposure: ExposureConfig
     outcomes: Dict[str, OutcomeConfig]
     index_date: pd.Timestamp = COMMON_INDEX_DATE
+    unobserved_confounder: Optional[UnobservedConfounderConfig] = None
 
     def __init__(self, config: dict):
         # Parse paths
@@ -101,6 +111,10 @@ class SimulationConfig:
         for outcome_key, outcome_data in config.get("outcomes", {}).items():
             self.outcomes[outcome_key] = OutcomeConfig(**outcome_data)
 
+        if "unobserved_confounder" in config:
+            self.unobserved_confounder = UnobservedConfounderConfig(
+                **config["unobserved_confounder"]
+            )
         # Validate configuration
         self._validate_config()
 
