@@ -69,6 +69,8 @@ class EffectColumns:
     method = "method"
     effect = "effect"
     true_effect = "true_effect"
+    ps_bias = "ps_bias"
+    y_bias = "y_bias"
     std_err = "std_err"
     CI95_lower = "CI95_lower"
     CI95_upper = "CI95_upper"

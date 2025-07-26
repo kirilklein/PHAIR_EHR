@@ -1,0 +1,22 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  calibrated_predictions: ./outputs/causal/finetune/models/simulated/calibrated/
+  counterfactual_outcomes: ./outputs/causal/simulated_outcomes # optional
+
+  ## OUTPUTS
+  estimate: ./outputs/causal/estimate/simulated_with_bias
+
+estimator:
+  methods: ["IPW", "TMLE"]
+  effect_type: "ATE"
+  n_bootstrap: 30
+  common_support_threshold: 0.001
+  bias:
+    ps_bias_type: additive
+    y_bias_type: additive
+    ps_values: [0.0, 0.5, 1.0]
+    y_values: [0.0, 0.5, 1.0]

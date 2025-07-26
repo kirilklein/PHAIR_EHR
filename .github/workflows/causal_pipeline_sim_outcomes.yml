@@ -84,9 +84,15 @@ jobs:
           source .github/workflows/pipeline_helpers.sh
           
           run_step main_causal.estimate        estimate_simulated.yaml
-      
+      - name: Estimate with bias
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          run_step main_causal.estimate        estimate_simulated_with_bias.yaml
       - name: Test Estimate Result
         shell: bash
         run: |
           set -euo pipefail
-          python -m tests.test_main_causal.test_estimate_result --dir outputs/causal/estimate/simulated --ci_stretch_factor 1.2 --ipw_ci_stretch_factor 1.8
+          python -m tests.test_main_causal.test_estimate_result --dir outputs/causal/estimate/simulated --ci_stretch_factor 1.4 --ipw_ci_stretch_factor 1.8

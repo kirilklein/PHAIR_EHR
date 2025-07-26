@@ -7,7 +7,7 @@ import torch
 from CausalEstimate import MultiEstimator
 from CausalEstimate.estimators import AIPW, IPW, TMLE
 from CausalEstimate.filter.propensity import filter_common_support
-
+from corebehrt.modules.causal.bias import BiasConfig, BiasIntroducer
 from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     OUTCOME,
@@ -73,8 +73,25 @@ class EffectEstimator:
         self.counterfactual_outcomes_dir = self.cfg.paths.get("counterfactual_outcomes")
         self.counterfactual_df = self._load_counterfactual_outcomes()
         self.estimation_args = self._get_estimation_args()
+        self._init_bias_introducer()
+
+    def _init_bias_introducer(self) -> BiasIntroducer:
+        self.bias_introducer = None
+        if (bias_cfg := self.estimator_cfg.get("bias")) is not None:
+            bias_config = BiasConfig(
+                **bias_cfg,
+            )
+            self.bias_introducer = BiasIntroducer(bias_config)
 
     def run(self) -> None:
+        if self.bias_introducer is not None:
+            print("Run bias simulation")
+            self._run_bias_simulation()
+        else:
+            print("Run standard estimation")
+            self.run_standard_estimation()
+
+    def run_standard_estimation(self) -> None:
         """
         Main pipeline: Loops through each outcome to prepare data, estimate effects,
         add benchmarks, and save all results together.
@@ -308,3 +325,69 @@ class EffectEstimator:
             "No combined counterfactual outcomes file found, will try individual files"
         )
         return None
+
+    def _run_bias_simulation(self) -> None:
+        """Runs the effect estimation across a grid of biases for each outcome."""
+        self.logger.info("Starting bias simulation.")
+        if self.counterfactual_df is None:
+            self.logger.error(
+                "Bias simulation requires counterfactual outcomes to calculate true effects. Aborting."
+            )
+            return
+
+        all_biased_effects = []
+        bias_grid = self.bias_introducer.get_bias_grid()
+
+        for outcome_name in self.outcome_names:
+            self.logger.info(
+                f"--- Processing outcome: {outcome_name} for bias simulation ---"
+            )
+
+            df_for_outcome = prepare_data_for_outcome(self.df, outcome_name)
+            estimator = self._build_multi_estimator()
+
+            # Get unbiased cohort and calculate true effect once as a reference
+            analysis_df_unbiased = self._get_analysis_cohort(df_for_outcome.copy())
+            dummy_effect_df = pd.DataFrame([{"estimator": "placeholder"}])
+            true_effect_df = append_true_effect(
+                analysis_df_unbiased,
+                dummy_effect_df,
+                self.counterfactual_df,
+                outcome_name,
+                self.effect_type,
+                self.estimation_args["common_support_threshold"],
+            )
+            true_effect_value = true_effect_df[EffectColumns.true_effect].iloc[0]
+
+            for ps_bias, y_bias in bias_grid:
+                self.logger.debug(f"Applying bias: ps_bias={ps_bias}, y_bias={y_bias}")
+                df_biased = self.bias_introducer.apply_bias(
+                    df_for_outcome.copy(), ps_bias, y_bias
+                )
+
+                effect_df = self._estimate_effects(df_biased, estimator)
+
+                effect_df[EffectColumns.ps_bias] = ps_bias
+                effect_df[EffectColumns.y_bias] = y_bias
+                effect_df[OUTCOME] = outcome_name
+                effect_df[EffectColumns.true_effect] = true_effect_value
+
+                all_biased_effects.append(effect_df)
+
+        if not all_biased_effects:
+            self.logger.warning("Bias simulation finished with no results.")
+            return
+
+        final_results_df = pd.concat(all_biased_effects, ignore_index=True)
+        self._save_bias_results(final_results_df)
+        self.logger.info("Bias simulation complete.")
+
+    def _save_bias_results(self, results_df: pd.DataFrame) -> None:
+        """Saves the results of the bias simulation."""
+        results_path = join(self.exp_dir, "bias_simulation_results.csv")
+        results_df = results_df.round(5)
+        results_df = results_df[
+            [col for col in self.RELEVANT_COLUMNS if col in results_df.columns]
+        ]
+        results_df.to_csv(results_path, index=False)
+        self.logger.info(f"Bias simulation results saved to {results_path}")
