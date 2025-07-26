@@ -10,7 +10,6 @@ paths:
   exposures: ./outputs/causal/simulated_outcomes/
   exposure: exposure.csv # Exposure, optional, set to outcome if not provided. For multiple exposures, create a joint exposure file.
   criteria_config: ./corebehrt/configs/causal/select_cohort_full/definitions.yaml
-  index_date_matching: ./outputs/causal/simulated_outcomes/index_date_matching.csv # optional
 
   ### Outputs
   cohort: ./outputs/causal/finetune/cohorts/full_simulated/ # Data directory

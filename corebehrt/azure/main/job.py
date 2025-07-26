@@ -44,7 +44,7 @@ def add_parser(subparsers) -> None:
             "select_cohort",
             "finetune_cv",
             "prepare_training_data",
-            "simulate",
+            "simulate_from_sequence",
             "train_mlp",
             "train_xgb",
             "estimate",

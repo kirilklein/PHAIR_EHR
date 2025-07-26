@@ -22,11 +22,6 @@ FINETUNE_ESTIMATE_SIMULATED = PipelineMeta(
         PipelineArg(
             name="exposures", help="Path to the exposures data.", required=True
         ),
-        PipelineArg(
-            name="index_date_matching",
-            help="Path to the index date matching data. (used in simulation only)",
-            required=True,
-        ),
     ],
 )
 
@@ -41,26 +36,28 @@ def create(component: callable):
     """
     from azure.ai.ml import Input, dsl
 
-    # Core implementation of pipeline steps - not a pipeline itself
-    def _common_pipeline_steps(
+    @dsl.pipeline(
+        name="ft_estimate_simulated",
+        description="Pipeline with simulated cohort",
+    )
+    def _pipeline(
         meds: Input,
         features: Input,
         tokenized: Input,
         pretrain_model: Input,
-        exposures: Input,
-        outcomes: Input,
-        index_date_matching: Input,
     ) -> dict:
         """Helper function containing common pipeline implementation steps"""
         # Get cohort from input or generate it
+        simulate_from_sequence = component(
+            "simulate_from_sequence",
+        )(data=meds)
 
         select_cohort = component(
             "select_cohort_full",
         )(
             meds=meds,
             features=features,
-            exposures=exposures,
-            index_date_matching=index_date_matching,
+            exposures=simulate_from_sequence.outputs.outcomes,
         )
         resolved_cohort = select_cohort.outputs.cohort
 
@@ -71,8 +68,8 @@ def create(component: callable):
             features=features,
             tokenized=tokenized,
             cohort=resolved_cohort,
-            exposures=exposures,
-            outcomes=outcomes,
+            exposures=simulate_from_sequence.outputs.outcomes,
+            outcomes=simulate_from_sequence.outputs.outcomes,
         )
 
         finetune_exp_y = component(
@@ -97,28 +94,6 @@ def create(component: callable):
             "calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
         }
 
-    @dsl.pipeline(
-        name="ft_estimate_simulated",
-        description="Pipeline with simulated cohort",
-    )
-    def _pipeline_without_cohort(
-        meds: Input,
-        features: Input,
-        tokenized: Input,
-        pretrain_model: Input,
-        exposures: Input,
-        outcomes: Input,
-        index_date_matching: Input,
-    ) -> dict:
-        return _common_pipeline_steps(
-            meds,
-            features,
-            tokenized,
-            pretrain_model,
-            exposures,
-            outcomes,
-            index_date_matching,
-        )
 
     # Factory function to select the appropriate pipeline
     def pipeline_factory(**kwargs: Dict[str, Any]):
@@ -130,6 +105,6 @@ def create(component: callable):
         Returns:
             Configured pipeline instance
         """
-        return _pipeline_without_cohort(**kwargs)
+        return _pipeline(**kwargs)
 
     return pipeline_factory

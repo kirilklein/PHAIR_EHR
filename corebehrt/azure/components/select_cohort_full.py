@@ -4,7 +4,6 @@ INPUTS = {
     "features": {"type": "uri_folder"},
     "meds": {"type": "uri_folder"},
     "exposures": {"type": "uri_folder"},
-    "index_date_matching": {"type": "uri_file", "optional": True},
 }
 OUTPUTS = {"cohort": {"type": "uri_folder"}}
 
