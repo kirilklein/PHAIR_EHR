@@ -60,6 +60,7 @@ def add_parser(subparsers) -> None:
             "calibrate_exp_y",
             "xgboost_cv",
             "evaluate_xgboost",
+            "get_pat_counts_by_code",
         },
         help="Job to run.",
     )
