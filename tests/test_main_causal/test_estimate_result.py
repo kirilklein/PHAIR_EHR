@@ -63,21 +63,22 @@ def compare_estimate_result(
         # Check causal methods against true effects
         outcome_passed = True
         for _, row in outcome_causal_df.iterrows():
-            if row[EffectColumns.method] == "IPW":
+            method = row[EffectColumns.method]
+            if method == "IPW":
                 current_ci_stretch_factor = ipw_ci_stretch_factor
             else:
                 current_ci_stretch_factor = ci_stretch_factor
 
             true_effect = row[EffectColumns.true_effect]
+            estimated_effect = row[EffectColumns.effect]
             lower_ci = row[EffectColumns.CI95_lower]
             upper_ci = row[EffectColumns.CI95_upper]
 
             # Stretch the CI
-            center = (upper_ci + lower_ci) / 2
-            half_width = (upper_ci - lower_ci) / 2
-            stretched_half_width = half_width * current_ci_stretch_factor
-            stretched_lower = center - stretched_half_width
-            stretched_upper = center + stretched_half_width
+            dist_upper = upper_ci - estimated_effect
+            stretched_upper = estimated_effect + dist_upper * current_ci_stretch_factor
+            dist_lower = estimated_effect - lower_ci
+            stretched_lower = estimated_effect - dist_lower * current_ci_stretch_factor
 
             passed = (stretched_lower <= true_effect) and (
                 true_effect <= stretched_upper
@@ -85,7 +86,7 @@ def compare_estimate_result(
             status = "✓" if passed else "✗"
 
             print(
-                f"{status} {row[EffectColumns.method]:>6}: {row[EffectColumns.effect]:7.3f} ({lower_ci:.3f}, {upper_ci:.3f}) (true: {true_effect:7.3f}). "
+                f"{status} {method:>6}: {estimated_effect:7.3f} ({lower_ci:.3f}, {upper_ci:.3f}) (true: {true_effect:7.3f}). "
                 f"Stretched CI ({current_ci_stretch_factor:.1f}x): [{stretched_lower:.3f}, {stretched_upper:.3f}]"
             )
 
@@ -95,7 +96,7 @@ def compare_estimate_result(
                 failed_checks.append(
                     {
                         "outcome": outcome,
-                        "method": row[EffectColumns.method],
+                        "method": method,
                         "true_effect": true_effect,
                         "stretched_lower": stretched_lower,
                         "stretched_upper": stretched_upper,
@@ -106,9 +107,7 @@ def compare_estimate_result(
         if not outcome_unadjusted_df.empty:
             print("\n  📈 Unadjusted estimates (no ground truth comparison):")
             for _, row in outcome_unadjusted_df.iterrows():
-                print(
-                    f"    {row[EffectColumns.method]:>6}: {row[EffectColumns.effect]:7.3f}"
-                )
+                print(f"    {method:>6}: {estimated_effect:7.3f}")
 
         print(
             f"\n  Outcome {outcome}: {'✅ PASSED' if outcome_passed else '❌ FAILED'}"
