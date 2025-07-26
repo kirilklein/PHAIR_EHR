@@ -38,14 +38,13 @@ from corebehrt.constants.causal.paths import (
     EXPOSURES_FILE,
     INDEX_DATE_MATCHING_FILE,
     STATS_PATH,
+    CRITERIA_FLAGS_FILE,
+    CRITERIA_DEFINITIONS_FILE,
 )
 from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
 from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE, TEST_PIDS_FILE
-from corebehrt.constants.causal.paths import (
-    CRITERIA_FLAGS_FILE,
-    CRITERIA_DEFINITIONS_FILE,
-)
+from corebehrt.constants.causal.data import CONTROL_PID_COL
 from corebehrt.functional.causal.checks import check_time_windows
 from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
@@ -203,14 +202,26 @@ def _prepare_control(
             index_date_matching[TIMESTAMP_COL]
         )
     else:
+        # Validate required columns exist
+        required_cols = [CONTROL_PID_COL, TIMESTAMP_COL]
+        missing_cols = [
+            col for col in required_cols if col not in index_date_matching.columns
+        ]
+        if missing_cols:
+            raise ValueError(
+                f"Index date matching file missing required columns: {missing_cols}"
+            )
+
         control_index_dates = index_date_matching.rename(
-            columns={"control_subject_id": PID_COL}
+            columns={CONTROL_PID_COL: PID_COL}
         )
         control_index_dates = control_index_dates[[PID_COL, TIMESTAMP_COL]]
+        # Add ABSPOS_COL for consistency with the other branch
+        control_index_dates[ABSPOS_COL] = get_hours_since_epoch(
+            control_index_dates[TIMESTAMP_COL]
+        )
     index_date_matching.to_csv(join(save_path, INDEX_DATE_MATCHING_FILE), index=False)
-
     log_patient_num(logger, control_index_dates, "control_index_dates")
-
     criteria_control, included_pids_control, control_stats = filter_by_criteria(
         criteria_config,
         meds_path,
