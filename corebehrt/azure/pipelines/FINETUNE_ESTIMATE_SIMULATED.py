@@ -18,10 +18,6 @@ FINETUNE_ESTIMATE_SIMULATED = PipelineMeta(
         PipelineArg(
             name="pretrain_model", help="Path to the pretrained model.", required=True
         ),
-        PipelineArg(name="outcomes", help="Path to the outcomes data.", required=True),
-        PipelineArg(
-            name="exposures", help="Path to the exposures data.", required=True
-        ),
     ],
 )
 
