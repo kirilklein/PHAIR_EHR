@@ -59,3 +59,19 @@ outcomes:
     trigger_weights: [2.0, 1.0, -1.0, 0.8] # logits
     # ZERO direct causal effect from exposure.
     exposure_effect: 0
+  OUTCOME_4:
+    run_in_days: 1 # after exposure/non-exposure
+    p_base: 0.12
+    trigger_codes: [
+        D/55822004, # confounder
+        D/267020005, # confounder
+        D/157141000119108, # confounder
+        D/840544004, # prognostic
+      ]
+    trigger_weights: [2.0, 1.0, -1.0, 0.8] # logits
+    quadratic_weights: [0, 0, 0, 0.1] # logits, example quadratic weights
+    combinations: # example combination weights
+      - codes: ["D/312608009", "D/431856006"]
+        weight: 0.2 # if both present, add 0.5 to logit
+    # ZERO direct causal effect from exposure.
+    exposure_effect: 0

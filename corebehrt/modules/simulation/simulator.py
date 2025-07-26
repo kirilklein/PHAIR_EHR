@@ -1,5 +1,5 @@
 import logging
-from typing import Dict
+from typing import Dict, Union
 
 import numpy as np
 import pandas as pd
@@ -23,7 +23,11 @@ from corebehrt.constants.causal.paths import (
 
 from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.utils.time import get_hours_since_epoch
-from corebehrt.modules.simulation.config import SimulationConfig
+from corebehrt.modules.simulation.config import (
+    SimulationConfig,
+    ExposureConfig,
+    OutcomeConfig,
+)
 
 logger = logging.getLogger("simulate")
 
@@ -170,6 +174,7 @@ class CausalSimulator:
     ) -> float:
         """
         Calculates event probability based on history and, for outcomes, exposure status.
+        Handles linear, quadratic, and interaction effects.
         """
         trigger_codes_array = np.array(list(event_cfg.trigger_codes))
         trigger_weights_array = np.array(list(event_cfg.trigger_weights))
@@ -179,10 +184,49 @@ class CausalSimulator:
 
         logit_p = logit(event_cfg.p_base) + trigger_effect_sum
 
+        logit_p = self._handle_quadratic_weights(
+            logit_p, trigger_codes_array, codes_present_mask, event_cfg
+        )
+        logit_p = self._handle_combination(logit_p, history_codes, event_cfg)
+
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p += event_cfg.exposure_effect
 
         return expit(logit_p)
+
+    @staticmethod
+    def _handle_quadratic_weights(
+        logit_p: float,
+        trigger_codes_array: np.array,
+        codes_present_mask: np.array,
+        event_cfg: Union[OutcomeConfig, ExposureConfig],
+    ) -> float:
+        if event_cfg.quadratic_weights is not None:
+            quad_weights = event_cfg.quadratic_weights
+            if len(quad_weights) > len(trigger_codes_array):
+                raise ValueError(
+                    f"Quadratic weights length ({len(quad_weights)}) must be less than or equal to trigger codes length ({len(trigger_codes_array)})"
+                )
+            if len(quad_weights) < len(trigger_codes_array):
+                quad_weights.extend(
+                    [0] * (len(trigger_codes_array) - len(quad_weights))
+                )
+            quadratic_weights_array = np.array(quad_weights)
+            quadratic_effect_sum = np.sum(quadratic_weights_array[codes_present_mask])
+            logit_p += quadratic_effect_sum
+        return logit_p
+
+    @staticmethod
+    def _handle_combination(
+        logit_p: float,
+        history_codes: set,
+        event_cfg: Union[OutcomeConfig, ExposureConfig],
+    ) -> float:
+        if event_cfg.combinations is not None:
+            for combination in event_cfg.combinations:
+                if all(code in history_codes for code in combination["codes"]):
+                    logit_p += combination["weight"]
+        return logit_p
 
     def _create_index_date_matching_df(
         self, exposure_df: pd.DataFrame, all_pids: list

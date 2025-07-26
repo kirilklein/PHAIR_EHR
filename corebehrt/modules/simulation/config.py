@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 import pandas as pd
 
 COMMON_INDEX_DATE = pd.Timestamp(
@@ -18,25 +18,66 @@ class PathsConfig:
 
 @dataclass
 class ExposureConfig:
-    """Configuration for exposure simulation."""
+    """Configuration for simulating a single outcome.
+
+    The probability of an outcome is determined by a combination of a base
+    probability, linear effects from historical codes, non-linear effects
+    (quadratic and combination effects), and a direct effect from exposure.
+
+    Attributes:
+        p_base: The base probability of the outcome.
+        trigger_codes: A list of medical codes that can influence the outcome probability.
+        trigger_weights: A list of weights (logits) corresponding to each code in `trigger_codes`.
+                         A code's presence adds its weight to the logit probability.
+        quadratic_weights: An optional list of weights (logits) for non-linear effects.
+                           These are applied in the same way as `trigger_weights`. If shorter
+                           than `trigger_codes`, it will be padded with zeros. Defaults to None.
+        combinations: An optional list of dictionaries to specify interaction effects.
+                      Each dictionary should have two keys:
+                      - `codes`: A list of code strings.
+                      - `weight`: A float (logit) to be added if all `codes` are present
+    """
 
     p_base: float
     trigger_codes: List[str]
     trigger_weights: List[float]
-    run_in_days: int = 365
-    compliance_interval_days: int = 30
-    min_compliance_days: int = 365
+    quadratic_weights: Optional[List[float]] = None
+    combinations: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass
 class OutcomeConfig:
-    """Configuration for a single outcome simulation."""
+    """Configuration for simulating a single outcome.
+
+    The probability of an outcome is determined by a combination of a base
+    probability, linear effects from historical codes, non-linear effects
+    (quadratic and combination effects), and a direct effect from exposure.
+
+    Attributes:
+        run_in_days: Time in days after the index date to assess for the outcome.
+        p_base: The base probability of the outcome.
+        trigger_codes: A list of medical codes that can influence the outcome probability.
+        trigger_weights: A list of weights (logits) corresponding to each code in `trigger_codes`.
+                         A code's presence adds its weight to the logit probability.
+        exposure_effect: The direct causal effect (logit) of the exposure on the outcome.
+        quadratic_weights: An optional list of weights (logits) for non-linear effects.
+                           These are applied in the same way as `trigger_weights`. If shorter
+                           than `trigger_codes`, it will be padded with zeros. Defaults to None.
+        combinations: An optional list of dictionaries to specify interaction effects.
+                      Each dictionary should have two keys:
+                      - `codes`: A list of code strings.
+                      - `weight`: A float (logit) to be added if all `codes` are present
+                                in the patient's history.
+                      Example: `[{"codes": ["D/CODE1", "D/CODE2"], "weight": 0.5}]`. Defaults to None.
+    """
 
     run_in_days: int
     p_base: float
     trigger_codes: List[str]
     trigger_weights: List[float]
     exposure_effect: float
+    quadratic_weights: Optional[List[float]] = None
+    combinations: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass
