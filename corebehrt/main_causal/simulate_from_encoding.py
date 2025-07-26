@@ -34,7 +34,11 @@ def main_simulate(config_path):
 
     exposure = load_exposure_from_predictions(cfg.paths.calibrated_predictions, pids)
 
-    logger.info("Simulate")
+    # Defensive check
+    if len(exposure) != len(pids):
+        raise ValueError(
+            f"Exposure rows ({len(exposure)}) do not match patient ids ({len(pids)})"
+        )
     result_df, timestamp_df = simulate(
         logger, pids, encodings, exposure, cfg.simulation
     )

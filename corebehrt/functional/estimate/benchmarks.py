@@ -8,7 +8,7 @@ from corebehrt.constants.causal.data import (
     SIMULATED_OUTCOME_EXPOSED,
     SIMULATED_PROBAS_CONTROL,
     SIMULATED_PROBAS_EXPOSED,
-    TRUE_EFFECT_COL,
+    EffectColumns,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.effect import compute_effect_from_counterfactuals
@@ -16,6 +16,7 @@ from corebehrt.functional.causal.estimate import (
     calculate_risk_difference,
     calculate_risk_ratio,
 )
+from CausalEstimate.filter.propensity import filter_common_support
 
 
 def append_unadjusted_effect(df: pd.DataFrame, effect_df: pd.DataFrame) -> pd.DataFrame:
@@ -38,11 +39,12 @@ def append_unadjusted_effect(df: pd.DataFrame, effect_df: pd.DataFrame) -> pd.Da
 
 
 def append_true_effect(
-    df: pd.DataFrame,
+    analysis_df: pd.DataFrame,
     effect_df: pd.DataFrame,
     counterfactual_df: pd.DataFrame,
     outcome_name: str,
     effect_type: str,
+    common_support_threshold: float = 0.01,
 ) -> pd.DataFrame:
     """
     Add ground truth effect estimates from simulated counterfactual outcomes.
@@ -52,27 +54,21 @@ def append_true_effect(
 
     Adds the true effect to the effect_df. (TRUE_EFFECT_COL)
     """
-    cf_outcomes = prepare_counterfactual_data_for_outcome(
-        counterfactual_df, outcome_name
+    if PS_COL not in counterfactual_df.columns:
+        combined = pd.merge(
+            analysis_df[[PID_COL, PS_COL]], counterfactual_df, on=PID_COL, how="inner"
+        )
+    else:
+        combined = counterfactual_df[
+            counterfactual_df[PID_COL].isin(analysis_df[PID_COL].unique())
+        ]
+    combined = filter_common_support(
+        combined, PS_COL, EXPOSURE_COL, common_support_threshold
     )
-    true_effect = compute_true_effect_from_counterfactuals(df, cf_outcomes, effect_type)
-    effect_df[TRUE_EFFECT_COL] = true_effect
+    cf_outcomes = prepare_counterfactual_data_for_outcome(combined, outcome_name)
+    true_effect = compute_effect_from_counterfactuals(cf_outcomes, effect_type)
+    effect_df[EffectColumns.true_effect] = true_effect
     return effect_df
-
-
-def compute_true_effect_from_counterfactuals(
-    df: pd.DataFrame, cf_outcomes: pd.DataFrame, effect_type: str
-) -> pd.Series:
-    """
-    Compute ground truth effects from simulated counterfactual outcomes.
-
-    Uses the analysis cohort to ensure consistency with other estimators.
-    """
-    # Merge with the analysis cohort to get the same subjects
-    cf_outcomes = pd.merge(
-        cf_outcomes, df[[PID_COL, PS_COL]], on=PID_COL, validate="1:1"
-    )
-    return compute_effect_from_counterfactuals(cf_outcomes, effect_type)
 
 
 def prepare_counterfactual_data_for_outcome(
@@ -96,6 +92,5 @@ def prepare_counterfactual_data_for_outcome(
             f"{SIMULATED_PROBAS_EXPOSED}_{outcome_name}"
         ],
         EXPOSURE_COL: counterfactual_df[EXPOSURE_COL],
-        PS_COL: counterfactual_df[PS_COL],
     }
     return pd.DataFrame(cf_data)

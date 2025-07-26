@@ -1,0 +1,8 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  data: ./example_data/synthea_meds_causal
+  splits: [tuning]
+  counts: ./outputs/causal/counts

@@ -30,9 +30,10 @@ jobs:
                   local outcome_noise=$2
                   local exposure_effect=$3
                   local ci_stretch_factor=$4
-                  local test_name=$5
-                  local weight=${6:-0.1}    # Default to 0.1 if not provided
-                  local intercept=${7:-1.0}  # Default to 1.0 if not provided
+                  local ipw_ci_stretch_factor=$5
+                  local test_name=$6
+                  local weight=${7:-0.1}    # Default to 0.1 if not provided
+                  local intercept=${8:-1.0}  # Default to 1.0 if not provided
 
                   echo "Running estimate test: $test_name"
                   echo "Parameters:"
@@ -40,6 +41,7 @@ jobs:
                   echo "  outcome_noise=$outcome_noise"
                   echo "  exposure_effect=$exposure_effect"
                   echo "  ci_stretch_factor=$ci_stretch_factor"
+                  echo "  ipw_ci_stretch_factor=$ipw_ci_stretch_factor"
                   echo "  weight=$weight"
                   echo "  intercept=$intercept"
                   
@@ -56,12 +58,12 @@ jobs:
                     --config_path ./corebehrt/configs/causal/estimate_generated_data.yaml
 
                   # Test results
-                  python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor $ci_stretch_factor
+                  python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor $ci_stretch_factor --ipw_ci_stretch_factor $ipw_ci_stretch_factor
                 }
 
                 # Run tests with different configurations
-                run_estimate_test 0 0 2 1.5 "No noise, strong effect"  # Uses default weight/intercept
-                run_estimate_test 0.02 0.05 2.0 1.5 "Default test" 0.1 1.0  # Explicit defaults
-                run_estimate_test 0.05 0.05 1.0 1.5 "High noise test" 0.2 1.5  # Custom values
-                run_estimate_test 0.01 0.02 1.0 1.5 "Low noise test" 0.2 1.5  # Custom values 
-                run_estimate_test 0.02 0.05 2.0 1.5 "Default test" 0.2 -1.0  # Explicit defaults
+                run_estimate_test 0 0 2 2 2 "No noise, strong effect"  # Uses default weight/intercept
+                run_estimate_test 0.02 0.05 2.0 2 2 "Default test" 0.1 1.0  # Explicit defaults
+                run_estimate_test 0.05 0.05 1.0 2 2 "High noise test" 0.2 1.5  # Custom values
+                run_estimate_test 0.01 0.02 1.0 2 2 "Low noise test" 0.2 1.5  # Custom values 
+                run_estimate_test 0.02 0.05 2.0 2 2 "Default test" 0.2 -1.0  # Explicit defaults

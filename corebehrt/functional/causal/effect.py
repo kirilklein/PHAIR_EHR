@@ -12,7 +12,7 @@ def compute_effect_from_counterfactuals(df: pd.DataFrame, effect_type: str) -> f
     Computes the effect from counterfactual outcomes.
 
     Args:
-        df (pd.DataFrame): DataFrame containing columns 'Y1', 'Y0', and 'treatment'.
+        df (pd.DataFrame): DataFrame containing columns 'P1', 'P0', and 'treatment'.
         effect_type (str): The type of effect to compute. Options are 'ATE', 'ATT', 'ATC', 'RR', 'OR'.
 
     Returns:
