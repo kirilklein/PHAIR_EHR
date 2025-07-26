@@ -9,6 +9,7 @@ from corebehrt.constants.causal.paths import (
     EXTRACT_CRITERIA_CFG,
     GET_STATS_CFG,
     SIMULATE_CFG,
+    GET_PAT_COUNTS_BY_CODE_CFG,
 )
 from corebehrt.constants.paths import (
     COHORT_CFG,
@@ -215,6 +216,12 @@ class CausalDirectoryPreparer(DirectoryPreparer):
             # If name is given, use it as config name
             self.write_config("prepared_data", name=name)
         self.write_config("prepared_data", source="features", name=DATA_CFG)
+
+    def setup_get_pat_counts_by_code(self) -> None:
+        self.setup_logging("get_pat_counts_by_code")
+        self.check_directory("data")
+        self.create_directory("counts")
+        self.write_config("counts", name=GET_PAT_COUNTS_BY_CODE_CFG)
 
     def _get_outcome_file_dict(self, outcomes_dir: str) -> dict[str, str]:
         """
