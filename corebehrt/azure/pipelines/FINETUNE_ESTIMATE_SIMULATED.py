@@ -94,7 +94,6 @@ def create(component: callable):
             "calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
         }
 
-
     # Factory function to select the appropriate pipeline
     def pipeline_factory(**kwargs: Dict[str, Any]):
         """
