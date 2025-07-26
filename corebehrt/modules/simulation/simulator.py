@@ -98,9 +98,8 @@ class CausalSimulator:
         start_date = subj_df[TIMESTAMP_COL].min()
         end_date = subj_df[TIMESTAMP_COL].max()
 
-        if (self.index_date >= end_date) | (self.index_date < start_date):
+        if (self.index_date >= end_date) or (self.index_date < start_date):
             return {}
-
         history_at_index = self._get_history_codes(subj_df, self.index_date)
         exposure_cfg = self.config.exposure
         p_exposure = self._calculate_probability(exposure_cfg, history_at_index)
@@ -202,7 +201,7 @@ class CausalSimulator:
         event_cfg: Union[OutcomeConfig, ExposureConfig],
     ) -> float:
         if event_cfg.quadratic_weights is not None:
-            quad_weights = event_cfg.quadratic_weights
+            quad_weights = list(event_cfg.quadratic_weights)  # Create a copy
             if len(quad_weights) > len(trigger_codes_array):
                 raise ValueError(
                     f"Quadratic weights length ({len(quad_weights)}) must be less than or equal to trigger codes length ({len(trigger_codes_array)})"
