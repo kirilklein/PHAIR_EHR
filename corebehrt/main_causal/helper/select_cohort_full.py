@@ -24,7 +24,7 @@ import json
 import logging
 import os
 from os.path import join
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -351,7 +351,7 @@ def _save_stats(stats: dict, save_path: str, description: str, logger: logging.L
 
 def _load_data(
     features_path: str, exposures_path: str, exposure: str, logger: logging.Logger
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Optional[pd.DataFrame]]:
     """
     Load data from features and exposures.
     Return patients info, exposures, and index dates.
