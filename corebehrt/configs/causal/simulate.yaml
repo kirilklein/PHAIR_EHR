@@ -72,6 +72,6 @@ outcomes:
     quadratic_weights: [0, 0, 0, 0.1] # logits, example quadratic weights
     combinations: # example combination weights
       - codes: ["D/312608009", "D/431856006"]
-        weight: 0.2 # if both present, add 0.5 to logit
+        weight: 0.2 # if both present, add to logit
     # ZERO direct causal effect from exposure.
     exposure_effect: 0

@@ -18,15 +18,15 @@ class PathsConfig:
 
 @dataclass
 class ExposureConfig:
-    """Configuration for simulating a single outcome.
+    """Configuration for simulating exposure probability.
 
-    The probability of an outcome is determined by a combination of a base
+    The probability of exposure is determined by a combination of a base
     probability, linear effects from historical codes, non-linear effects
     (quadratic and combination effects), and a direct effect from exposure.
 
     Attributes:
-        p_base: The base probability of the outcome.
-        trigger_codes: A list of medical codes that can influence the outcome probability.
+        p_base: The base probability of exposure.
+        trigger_codes: A list of medical codes that can influence the exposure probability.
         trigger_weights: A list of weights (logits) corresponding to each code in `trigger_codes`.
                          A code's presence adds its weight to the logit probability.
         quadratic_weights: An optional list of weights (logits) for non-linear effects.
