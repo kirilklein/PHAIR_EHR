@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Union
+from typing import Dict, Union, Tuple
 
 import numpy as np
 import pandas as pd
@@ -102,17 +102,10 @@ class CausalSimulator:
             return {}
         history_at_index = self._get_history_codes(subj_df, self.index_date)
 
-        unobserved_confounder_exposure_effect = 0
-        unobserved_confounder_outcome_effects = {}
-        if self.config.unobserved_confounder is not None:
-            p_occurrence = self.config.unobserved_confounder.p_occurrence
-            if np.random.binomial(1, p_occurrence) == 1:
-                unobserved_confounder_exposure_effect = (
-                    self.config.unobserved_confounder.exposure_effect
-                )
-                unobserved_confounder_outcome_effects = (
-                    self.config.unobserved_confounder.outcome_effects
-                )
+        (
+            unobserved_confounder_exposure_effect,
+            unobserved_confounder_outcome_effects,
+        ) = self._simulate_unobserved_confounder_effects()
 
         exposure_cfg = self.config.exposure
         p_exposure = self._calculate_probability(
@@ -187,6 +180,17 @@ class CausalSimulator:
             "ite_record": ite_record,
             "cf_record": cf_record,
         }
+
+    def _simulate_unobserved_confounder_effects(self) -> Tuple[float, Dict[str, float]]:
+        """Simulates the presence of an unobserved confounder and returns its effects."""
+        confounder_cfg = self.config.unobserved_confounder
+        if confounder_cfg and np.random.binomial(1, confounder_cfg.p_occurrence) == 1:
+            return (
+                confounder_cfg.exposure_effect,
+                confounder_cfg.outcome_effects or {},
+            )
+
+        return 0.0, {}
 
     def _get_history_codes(
         self, subj_df: pd.DataFrame, assessment_time: pd.Timestamp
