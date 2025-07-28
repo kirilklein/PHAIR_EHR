@@ -16,10 +16,10 @@ trigger_codes:
 simulation_model: # use laplace distribution
   linear:
     mean: 0
-    std: 0.5
+    scale: 0.5
   interaction:
     mean: 0
-    std: 0.5
+    scale: 0.5
 
 exposure:
   p_base: 0.15 # Base 15% chance of exposure over the patient's timeline

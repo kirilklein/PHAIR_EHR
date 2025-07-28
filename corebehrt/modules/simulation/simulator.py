@@ -47,11 +47,9 @@ class CausalSimulator:
     def _initialize_weights(self):
         """Samples and stores weights for all simulation events."""
 
-        def sample_laplace(config, size):
+        def sample_laplace(cfg, size):
             """Sample from Laplace distribution using mean and std."""
-            # For a Laplace distribution, scale = std / sqrt(2)
-            scale = config.std / np.sqrt(2)
-            return self.rng.laplace(config.mean, scale, size)
+            return self.rng.laplace(cfg.mean, cfg.scale, size)
 
         self.weights = {}
         self.code_to_idx = {code: i for i, code in enumerate(self.config.trigger_codes)}
@@ -63,30 +61,18 @@ class CausalSimulator:
         # Sample weights for exposure
         self.weights["exposure"] = {
             "linear": sample_laplace(linear_config, n_codes),
-            "interaction_joint": sample_laplace(
-                interaction_config.mean,
-                interaction_config.std,
-                (n_codes, n_codes),
-            ),
+            "interaction_joint": sample_laplace(interaction_config, (n_codes, n_codes)),
             "interaction_exclusive": sample_laplace(
-                interaction_config.mean,
-                interaction_config.std,
-                (n_codes, n_codes),
+                interaction_config, (n_codes, n_codes)
             ),
         }
 
         # Sample one set of weights for all outcomes
         outcome_weights = {
             "linear": sample_laplace(linear_config, n_codes),
-            "interaction_joint": sample_laplace(
-                interaction_config.mean,
-                interaction_config.std,
-                (n_codes, n_codes),
-            ),
+            "interaction_joint": sample_laplace(interaction_config, (n_codes, n_codes)),
             "interaction_exclusive": sample_laplace(
-                interaction_config.mean,
-                interaction_config.std,
-                (n_codes, n_codes),
+                interaction_config, (n_codes, n_codes)
             ),
         }
 

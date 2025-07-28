@@ -30,7 +30,7 @@ class ModelWeightsConfig:
     """Configuration for sampling model weights."""
 
     mean: float
-    std: float
+    scale: float
 
 
 @dataclass
