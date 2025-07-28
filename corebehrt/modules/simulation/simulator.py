@@ -307,40 +307,6 @@ class CausalSimulator:
 
         return expit(logit_p)
 
-    @staticmethod
-    def _handle_quadratic_weights(
-        logit_p: float,
-        trigger_codes_array: np.array,
-        codes_present_mask: np.array,
-        event_cfg: Union[OutcomeConfig, ExposureConfig],
-    ) -> float:
-        if event_cfg.quadratic_weights is not None:
-            quad_weights = list(event_cfg.quadratic_weights)  # Create a copy
-            if len(quad_weights) > len(trigger_codes_array):
-                raise ValueError(
-                    f"Quadratic weights length ({len(quad_weights)}) must be less than or equal to trigger codes length ({len(trigger_codes_array)})"
-                )
-            if len(quad_weights) < len(trigger_codes_array):
-                quad_weights.extend(
-                    [0] * (len(trigger_codes_array) - len(quad_weights))
-                )
-            quadratic_weights_array = np.array(quad_weights)
-            quadratic_effect_sum = np.sum(quadratic_weights_array[codes_present_mask])
-            logit_p += quadratic_effect_sum
-        return logit_p
-
-    @staticmethod
-    def _handle_combination(
-        logit_p: float,
-        history_codes: set,
-        event_cfg: Union[OutcomeConfig, ExposureConfig],
-    ) -> float:
-        if event_cfg.combinations is not None:
-            for combination in event_cfg.combinations:
-                if all(code in history_codes for code in combination["codes"]):
-                    logit_p += combination["weight"]
-        return logit_p
-
     def _create_index_date_matching_df(
         self, exposure_df: pd.DataFrame, all_pids: list
     ) -> pd.DataFrame:
