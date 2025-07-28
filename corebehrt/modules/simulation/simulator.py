@@ -1,5 +1,7 @@
+import json
 import logging
-from typing import Dict, Union, Tuple
+from os.path import join
+from typing import Dict, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -7,26 +9,25 @@ from scipy.special import expit, logit
 from tqdm import tqdm
 
 from corebehrt.constants.causal.data import (
+    CONTROL_PID_COL,
+    EXPOSED_PID_COL,
+    EXPOSURE_COL,
     OUTCOME_COL,
     SIMULATED_OUTCOME_CONTROL,
     SIMULATED_OUTCOME_EXPOSED,
     SIMULATED_PROBAS_CONTROL,
     SIMULATED_PROBAS_EXPOSED,
-    EXPOSURE_COL,
-    CONTROL_PID_COL,
-    EXPOSED_PID_COL,
 )
 from corebehrt.constants.causal.paths import (
     COUNTERFACTUALS_FILE,
     INDEX_DATE_MATCHING_FILE,
 )
-
 from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.simulation.config import (
-    SimulationConfig,
     ExposureConfig,
     OutcomeConfig,
+    SimulationConfig,
 )
 
 logger = logging.getLogger("simulate")
@@ -37,9 +38,78 @@ class CausalSimulator:
     Simulates exposure and outcome events based on a patient's history.
     """
 
-    def __init__(self, config: SimulationConfig):
+    def __init__(self, config: SimulationConfig, seed: int = 42):
         self.config = config
         self.index_date = config.index_date
+        self.rng = np.random.default_rng(seed)
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        """Samples and stores weights for all simulation events."""
+
+        def sample_laplace(config, size):
+            """Sample from Laplace distribution using mean and std."""
+            # For a Laplace distribution, scale = std / sqrt(2)
+            scale = config.std / np.sqrt(2)
+            return self.rng.laplace(config.mean, scale, size)
+
+        self.weights = {}
+        self.code_to_idx = {code: i for i, code in enumerate(self.config.trigger_codes)}
+        n_codes = len(self.config.trigger_codes)
+
+        linear_config = self.config.simulation_model.linear
+        interaction_config = self.config.simulation_model.interaction
+
+        # Sample weights for exposure
+        self.weights["exposure"] = {
+            "linear": sample_laplace(linear_config, n_codes),
+            "interaction_joint": sample_laplace(
+                interaction_config.mean,
+                interaction_config.std,
+                (n_codes, n_codes),
+            ),
+            "interaction_exclusive": sample_laplace(
+                interaction_config.mean,
+                interaction_config.std,
+                (n_codes, n_codes),
+            ),
+        }
+
+        # Sample one set of weights for all outcomes
+        outcome_weights = {
+            "linear": sample_laplace(linear_config, n_codes),
+            "interaction_joint": sample_laplace(
+                interaction_config.mean,
+                interaction_config.std,
+                (n_codes, n_codes),
+            ),
+            "interaction_exclusive": sample_laplace(
+                interaction_config.mean,
+                interaction_config.std,
+                (n_codes, n_codes),
+            ),
+        }
+
+        for outcome_name in self.config.outcomes:
+            self.weights[outcome_name] = outcome_weights
+
+        self.save_weights()
+
+    def save_weights(self) -> None:
+        """Saves the weights to a file."""
+
+        def to_serializable(obj):
+            if isinstance(obj, np.ndarray):
+                return np.round(obj, 4).tolist()
+            if isinstance(obj, dict):
+                return {k: to_serializable(v) for k, v in obj.items()}
+            return obj
+
+        serializable_weights = to_serializable(self.weights)
+        with open(
+            join(self.config.paths.outcomes, "simulation_weights.json"), "w"
+        ) as f:
+            json.dump(serializable_weights, f)
 
     def simulate_dataset(
         self, df: pd.DataFrame, seed: int = 42
@@ -56,6 +126,7 @@ class CausalSimulator:
             and counterfactual outcomes.
         """
         np.random.seed(seed)
+        self.rng = np.random.default_rng(seed)
 
         factual_events, ite_records, cf_records = [], [], []
         subjects_as_dfs = [group for _, group in df.groupby(PID_COL)]
@@ -109,11 +180,12 @@ class CausalSimulator:
 
         exposure_cfg = self.config.exposure
         p_exposure = self._calculate_probability(
+            "exposure",
             exposure_cfg,
             history_at_index,
             additional_logit_effect=unobserved_confounder_exposure_effect,
         )
-        is_exposed = np.random.binomial(1, p_exposure) == 1
+        is_exposed = self.rng.binomial(1, p_exposure) == 1
 
         factual_events = []
         if is_exposed:
@@ -142,12 +214,14 @@ class CausalSimulator:
             )
 
             p_if_treated = self._calculate_probability(
+                outcome_name,
                 outcome_cfg,
                 history_for_outcomes,
                 is_exposed=True,
                 additional_logit_effect=unobserved_confounder_outcome_effect,
             )
             p_if_control = self._calculate_probability(
+                outcome_name,
                 outcome_cfg,
                 history_for_outcomes,
                 is_exposed=False,
@@ -156,8 +230,8 @@ class CausalSimulator:
 
             ite_record[f"ite_{outcome_name}"] = p_if_treated - p_if_control
 
-            outcome_exposed = np.random.binomial(1, p_if_treated)
-            outcome_control = np.random.binomial(1, p_if_control)
+            outcome_exposed = self.rng.binomial(1, p_if_treated)
+            outcome_control = self.rng.binomial(1, p_if_control)
             factual_outcome = outcome_exposed if is_exposed else outcome_control
 
             if factual_outcome:
@@ -184,7 +258,7 @@ class CausalSimulator:
     def _simulate_unobserved_confounder_effects(self) -> Tuple[float, Dict[str, float]]:
         """Simulates the presence of an unobserved confounder and returns its effects."""
         confounder_cfg = self.config.unobserved_confounder
-        if confounder_cfg and np.random.binomial(1, confounder_cfg.p_occurrence) == 1:
+        if confounder_cfg and self.rng.binomial(1, confounder_cfg.p_occurrence) == 1:
             return (
                 confounder_cfg.exposure_effect,
                 confounder_cfg.outcome_effects or {},
@@ -201,27 +275,44 @@ class CausalSimulator:
 
     def _calculate_probability(
         self,
-        event_cfg,
+        event_name: str,
+        event_cfg: Union[OutcomeConfig, ExposureConfig],
         history_codes: set,
         is_exposed: bool = False,
         additional_logit_effect: float = 0.0,
     ) -> float:
-        """
-        Calculates event probability based on history and, for outcomes, exposure status.
-        Handles linear, quadratic, and interaction effects.
-        """
-        trigger_codes_array = np.array(list(event_cfg.trigger_codes))
-        trigger_weights_array = np.array(list(event_cfg.trigger_weights))
+        """Calculates event probability based on history and, for outcomes, exposure status."""
+        logit_p = logit(event_cfg.p_base)
 
-        codes_present_mask = np.isin(trigger_codes_array, list(history_codes))
-        trigger_effect_sum = np.sum(trigger_weights_array[codes_present_mask])
+        present_indices = {
+            self.code_to_idx[c] for c in history_codes if c in self.code_to_idx
+        }
+        n_codes = len(self.config.trigger_codes)
 
-        logit_p = logit(event_cfg.p_base) + trigger_effect_sum
+        weights = self.weights[event_name]
+        linear_weights = weights["linear"]
+        joint_weights = weights["interaction_joint"]
+        exclusive_weights = weights["interaction_exclusive"]
 
-        logit_p = self._handle_quadratic_weights(
-            logit_p, trigger_codes_array, codes_present_mask, event_cfg
-        )
-        logit_p = self._handle_combination(logit_p, history_codes, event_cfg)
+        # Linear effects
+        for i in present_indices:
+            logit_p += linear_weights[i]
+
+        # Interaction effects
+        for i in range(n_codes):
+            for j in range(i + 1, n_codes):
+                i_present = i in present_indices
+                j_present = j in present_indices
+
+                # Joint presence
+                if i_present and j_present:
+                    logit_p += joint_weights[i, j]
+
+                # Exclusive presence
+                if i_present and not j_present:
+                    logit_p += exclusive_weights[i, j]
+                if j_present and not i_present:
+                    logit_p += exclusive_weights[j, i]
 
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p += event_cfg.exposure_effect
@@ -292,8 +383,8 @@ class CausalSimulator:
             )
 
         # Set random seed for reproducible matching
-        np.random.seed(42)
-        matched_exposed_pids = np.random.choice(
+        rng = np.random.default_rng(42)
+        matched_exposed_pids = rng.choice(
             exposed_pids, size=len(control_pids), replace=True
         )
 
