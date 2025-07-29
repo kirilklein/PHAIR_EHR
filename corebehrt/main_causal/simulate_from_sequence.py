@@ -2,8 +2,8 @@ from corebehrt.functional.setup.args import get_args
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.features.loader import ShardLoader
-from corebehrt.modules.simulation.simulator import CausalSimulator
-from corebehrt.modules.simulation.config import SimulationConfig
+from corebehrt.modules.simulation.simulator_all import CausalSimulator
+from corebehrt.modules.simulation.config_all import SimulationConfig
 from collections import defaultdict
 import pandas as pd
 from os.path import join
@@ -39,7 +39,7 @@ def simulate(
     """
     simulated_outcomes = defaultdict(list)
     for shard, _ in tqdm(shard_loader(), desc="loop shards"):
-        simulated_temp = simulator.simulate_dataset(shard, seed)
+        simulated_temp = simulator.simulate_dataset(shard)
         for k, df in simulated_temp.items():
             simulated_outcomes[k].append(df)
     for k, df_list in simulated_outcomes.items():

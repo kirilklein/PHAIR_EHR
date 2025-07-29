@@ -49,7 +49,7 @@ class CausalSimulator:
 
         def sample_laplace(cfg, size):
             """Sample from Laplace distribution using mean and std."""
-            return self.rng.laplace(cfg.mean, cfg.scale, size)
+            return self.rng.normal(cfg.mean, cfg.scale, size)
 
         self.weights = {}
         self.code_to_idx = {code: i for i, code in enumerate(self.config.trigger_codes)}
@@ -62,18 +62,12 @@ class CausalSimulator:
         self.weights["exposure"] = {
             "linear": sample_laplace(linear_config, n_codes),
             "interaction_joint": sample_laplace(interaction_config, (n_codes, n_codes)),
-            "interaction_exclusive": sample_laplace(
-                interaction_config, (n_codes, n_codes)
-            ),
         }
 
         # Sample one set of weights for all outcomes
         outcome_weights = {
             "linear": sample_laplace(linear_config, n_codes),
             "interaction_joint": sample_laplace(interaction_config, (n_codes, n_codes)),
-            "interaction_exclusive": sample_laplace(
-                interaction_config, (n_codes, n_codes)
-            ),
         }
 
         for outcome_name in self.config.outcomes:
@@ -278,8 +272,6 @@ class CausalSimulator:
         weights = self.weights[event_name]
         linear_weights = weights["linear"]
         joint_weights = weights["interaction_joint"]
-        exclusive_weights = weights["interaction_exclusive"]
-
         # Linear effects
         for i in present_indices:
             logit_p += linear_weights[i]
@@ -293,12 +285,6 @@ class CausalSimulator:
                 # Joint presence
                 if i_present and j_present:
                     logit_p += joint_weights[i, j]
-
-                # Exclusive presence
-                if i_present and not j_present:
-                    logit_p += exclusive_weights[i, j]
-                if j_present and not i_present:
-                    logit_p += exclusive_weights[j, i]
 
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p += event_cfg.exposure_effect
