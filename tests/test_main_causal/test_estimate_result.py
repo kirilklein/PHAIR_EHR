@@ -107,7 +107,11 @@ def compare_estimate_result(
         if not outcome_unadjusted_df.empty:
             print("\n  📈 Unadjusted estimates (no ground truth comparison):")
             for _, row in outcome_unadjusted_df.iterrows():
-                print(f"    {method:>6}: {estimated_effect:7.3f}")
+                method = row[EffectColumns.method]
+                estimated_effect = row[EffectColumns.effect]
+                lower_ci = row[EffectColumns.CI95_lower]
+                upper_ci = row[EffectColumns.CI95_upper]
+                print(f"    {method:>6}: {estimated_effect:7.3f} ({lower_ci:.3f}, {upper_ci:.3f})")
 
         print(
             f"\n  Outcome {outcome}: {'✅ PASSED' if outcome_passed else '❌ FAILED'}"
