@@ -13,44 +13,44 @@ seed: 42
 trigger_codes:
   [D/312608009, D/431856006, D/55822004, D/267020005, D/157141000119108]
 
-simulation_model: # use laplace distribution
+simulation_model:
   linear:
     mean: 0
-    scale: 0.2
+    scale: 0.5
   interaction:
     mean: 0
-    scale: 1.0
-  linear_subset_size: 2
-  interaction_subset_size: 100
+    scale: 0.5
+  linear_subset_size: 20_000
+  interaction_subset_size: 1000
 
 exposure:
-  p_base: 0.15 # Base 15% chance of exposure over the patient's timeline
+  p_base: 0.3 # Base 15% chance of exposure over the patient's timeline
 
 outcomes:
   OUTCOME:
     run_in_days: 1 # after exposure/non-exposure
     p_base: 0.1
-    exposure_effect: 2 # logits
+    exposure_effect: 3 # logits
 
   OUTCOME_2:
     run_in_days: 1 # after exposure/non-exposure
-    p_base: 0.08
+    p_base: 0.1
     # WEAKER positive effect from exposure.
-    exposure_effect: 1 # logits
+    exposure_effect: 2 # logits
 
   OUTCOME_3:
     run_in_days: 1 # after exposure/non-exposure
-    p_base: 0.12
+    p_base: 0.1
     # ZERO direct causal effect from exposure.
-    exposure_effect: 0
+    exposure_effect: 1
+
   OUTCOME_4:
     run_in_days: 1 # after exposure/non-exposure
-    p_base: 0.12
+    p_base: 0.1
     # ZERO direct causal effect from exposure.
     exposure_effect: 0
-
-unobserved_confounder:
-  p_occurrence: 0.1
-  exposure_effect: 0.01
-  outcome_effects:
-    OUTCOME_4: 0.1
+# unobserved_confounder:
+#   p_occurrence: 0.1
+#   exposure_effect: 0.01
+#   outcome_effects:
+#     OUTCOME_4: 0.1

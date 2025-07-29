@@ -25,12 +25,10 @@ def main_simulate(config_path):
     shard_loader = ShardLoader(cfg.paths.data, cfg.paths.splits)
     simulation_config = SimulationConfig(cfg)
     simulator = CausalSimulator(simulation_config)
-    simulate(shard_loader, simulator, cfg.paths.outcomes, cfg.get("seed", 42))
+    simulate(shard_loader, simulator, cfg.paths.outcomes)
 
 
-def simulate(
-    shard_loader: ShardLoader, simulator: CausalSimulator, outcomes_dir: str, seed: int
-):
+def simulate(shard_loader: ShardLoader, simulator: CausalSimulator, outcomes_dir: str):
     """
     Simulates outcomes by processing data shards.
 

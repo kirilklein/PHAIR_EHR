@@ -47,6 +47,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         self.l1_lambda = self.head_config.get("l1_lambda", 0.0)
         if self.l1_lambda > 0:
             logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
+        self.temperature = self.head_config.get("temperature", 1.0)
         # Get outcome names from config
         self.outcome_names = config.outcome_names
 
@@ -230,7 +231,8 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         # Only compute exposure loss if label is available
         if EXPOSURE_TARGET in batch:
             exposure_loss = self.exposure_loss_fct(
-                outputs.exposure_logits.view(-1), batch[EXPOSURE_TARGET].view(-1)
+                outputs.exposure_logits.view(-1) / self.temperature,
+                batch[EXPOSURE_TARGET].view(-1),
             )
             outputs.exposure_loss = exposure_loss
             total_loss += exposure_loss
@@ -241,7 +243,9 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
                 continue
             predictions = outputs.outcome_logits[outcome_name].view(-1)
             targets = batch[outcome_name].view(-1)
-            outcome_loss = self.outcome_loss_fcts[outcome_name](predictions, targets)
+            outcome_loss = self.outcome_loss_fcts[outcome_name](
+                predictions / self.temperature, targets
+            )
 
             outputs.outcome_losses[outcome_name] = outcome_loss
             total_loss += outcome_loss

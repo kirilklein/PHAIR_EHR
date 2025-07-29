@@ -28,6 +28,7 @@ from corebehrt.modules.simulation.config_all import (
     OutcomeConfig,
     SimulationConfig,
 )
+from corebehrt.modules.simulation.plot import plot_probability_distributions, plot_hist
 
 logger = logging.getLogger("simulate")
 
@@ -75,10 +76,10 @@ class CausalSimulator:
         should_sample_non_zero = self.linear_code_indices is None
 
         if should_sample_non_zero:
-            new_exposure_linear = self.rng.normal(
+            new_exposure_linear = self.sampling_func(
                 linear_config.mean, linear_config.scale, n_new
             )
-            new_outcomes_linear = self.rng.normal(
+            new_outcomes_linear = self.sampling_func(
                 linear_config.mean, linear_config.scale, n_new
             )
         else:
@@ -152,8 +153,8 @@ class CausalSimulator:
                 (interaction_subset_size, interaction_subset_size),
             )
             self.weights["_outcomes_shared"]["interaction_joint"] = joint_out
-
-            self.save_weights()
+        print("vocabulary size: ", len(self.vocabulary))
+        self.save_weights()
 
     def save_weights(self) -> None:
         """Saves the current weights and vocabulary state to a file."""
@@ -189,19 +190,21 @@ class CausalSimulator:
         # Step 2: Prepare data using the full known vocabulary
         logger.info("Preparing patient history matrix...")
         history_df = df[df[TIMESTAMP_COL] <= self.index_date]
+        print("Number of patients: ", len(history_df[PID_COL].unique()))
         all_pids = df[PID_COL].unique()
 
         patient_history_matrix, pids = self._get_patient_history_matrix(
             history_df, all_pids
         )
+        print("number of 1s in patient history matrix: ", patient_history_matrix.sum())
+        print("Size of patient history matrix: ", patient_history_matrix.shape)
+
         n_patients = len(pids)
 
         if n_patients == 0:
             return {}
 
-        # The rest of the simulation logic remains the same as the previous vectorized version
         logger.info(f"Simulating for {n_patients} patients...")
-        # ... (The rest of this method is identical to the previous answer's simulate_dataset) ...
         confounder_exposure_effect, confounder_outcome_effects = (
             self._simulate_unobserved_confounder_effects(n_patients)
         )
@@ -212,11 +215,13 @@ class CausalSimulator:
             patient_history_matrix,
             additional_logit_effect=confounder_exposure_effect,
         )
+        plot_hist(p_exposure, self.config.paths.outcomes)
         is_exposed = self.rng.binomial(1, p_exposure).astype(bool)
 
         ite_records = {PID_COL: pids}
         cf_records = {PID_COL: pids, EXPOSURE_COL: is_exposed.astype(int)}
         all_factual_events = []
+        all_probas_for_plotting = {}
 
         for outcome_name, outcome_cfg in self.config.outcomes.items():
             confounder_effect = confounder_outcome_effects.get(
@@ -230,6 +235,7 @@ class CausalSimulator:
                 is_exposed=True,
                 additional_logit_effect=confounder_effect,
             )
+
             p_if_control = self._calculate_probabilities_vectorized(
                 outcome_name,
                 outcome_cfg,
@@ -237,7 +243,10 @@ class CausalSimulator:
                 is_exposed=False,
                 additional_logit_effect=confounder_effect,
             )
-
+            all_probas_for_plotting[outcome_name] = {
+                "P1": p_if_treated,
+                "P0": p_if_control,
+            }
             ite_records[f"ite_{outcome_name}"] = p_if_treated - p_if_control
             outcome_exposed = self.rng.binomial(1, p_if_treated)
             outcome_control = self.rng.binomial(1, p_if_control)
@@ -271,6 +280,10 @@ class CausalSimulator:
                 }
             )
             all_factual_events.append(events)
+
+        plot_probability_distributions(
+            all_probas_for_plotting, self.config.paths.outcomes
+        )
 
         output_dfs = {}
         if all_factual_events:
@@ -329,12 +342,9 @@ class CausalSimulator:
 
         # 4. Unobserved confounder effect
         logit_p_array += additional_logit_effect
+        logit_p_array += self.rng.normal(0, 0.05, n_patients)
 
         return expit(logit_p_array)
-
-    # _get_patient_history_matrix, _simulate_unobserved_confounder_effects,
-    # and _create_index_date_matching_df remain IDENTICAL to the previous answer.
-    # They are included here for completeness.
 
     def _get_patient_history_matrix(
         self, history_df: pd.DataFrame, all_pids: np.ndarray
@@ -353,7 +363,7 @@ class CausalSimulator:
         """Simulates unobserved confounder effects for a cohort."""
         confounder_cfg = self.config.unobserved_confounder
         if not confounder_cfg:
-            return 0.0, {}
+            return np.zeros(n_patients), {}
 
         has_confounder = self.rng.binomial(
             1, confounder_cfg.p_occurrence, n_patients

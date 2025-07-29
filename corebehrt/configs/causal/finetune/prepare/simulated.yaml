@@ -13,6 +13,7 @@ paths:
     - OUTCOME.csv
     - OUTCOME_2.csv
     - OUTCOME_3.csv
+    - OUTCOME_4.csv
 
   exposures: ./outputs/causal/simulated_outcomes
   exposure: exposure.csv
