@@ -14,7 +14,7 @@ paths:
 
 model:
   head:
-    shared_representation: true # whether to share the bigru representation for exposure and outcome
+    shared_representation: false # whether to share the bigru representation for exposure and outcome
     bidirectional: true
     bottleneck_dim: 128
 
@@ -34,10 +34,10 @@ trainer_args:
   stopping_criterion: roc_auc
   n_layers_to_freeze: 0
   freeze_encoder_on_plateau: false
-  use_pcgrad: false
+  use_pcgrad: true
 
 optimizer:
-  lr: 7e-3
+  lr: 6e-3
   eps: 1e-6
 
 scheduler:
