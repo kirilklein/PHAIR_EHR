@@ -172,6 +172,56 @@ class CausalSimulator:
         """
         Simulates exposures and outcomes for a cohort shard, updating vocabulary on the fly.
         """
+        history_df, initial_pids = self._filter_initial_history(df)
+        if history_df.empty:
+            return {}
+
+        ages = self._calculate_ages(history_df, initial_pids)
+        history_df = self._filter_by_codes(history_df)
+        if history_df.empty:
+            logger.info(
+                "No eligible patients remaining after code filtering. Skipping simulation."
+            )
+            return {}
+
+        patient_history_matrix, pids, final_ages = self._prepare_simulation_inputs(
+            history_df, ages
+        )
+        if len(pids) == 0:
+            return {}
+
+        n_patients = len(pids)
+        logger.info(f"Simulating effects for {n_patients} patients...")
+
+        confounder_exposure_effect, confounder_outcome_effects = (
+            self._simulate_unobserved_confounder_effects(n_patients)
+        )
+        is_exposed, p_exposure = self._simulate_exposure(
+            patient_history_matrix, final_ages, pids, confounder_exposure_effect
+        )
+
+        ite_records, cf_records, all_factual_events, all_probas_for_plotting = (
+            self._simulate_outcomes(
+                patient_history_matrix,
+                final_ages,
+                pids,
+                is_exposed,
+                confounder_outcome_effects,
+            )
+        )
+
+        if np.any(is_exposed):
+            all_factual_events.append(self._create_exposure_events(pids[is_exposed]))
+
+        output_dfs = self._package_results(
+            pids, ite_records, cf_records, all_factual_events, all_probas_for_plotting
+        )
+        return output_dfs
+
+    def _filter_initial_history(
+        self, df: pd.DataFrame
+    ) -> Tuple[pd.DataFrame, np.ndarray]:
+        """Filters the initial dataframe to get patients with history before the index date."""
         history_df = df[df[TIMESTAMP_COL] <= self.index_date].copy()
 
         all_pids_in_shard = df[PID_COL].unique()
@@ -183,7 +233,7 @@ class CausalSimulator:
 
         if len(pids_with_history) == 0:
             logger.info("No patients with history in this shard. Skipping simulation.")
-            return {}
+            return pd.DataFrame(), np.array([])
 
         dead_pids = history_df[history_df[CONCEPT_COL] == DEATH_CODE][PID_COL].unique()
         if len(dead_pids) > 0:
@@ -191,14 +241,18 @@ class CausalSimulator:
             history_df = history_df[~history_df[PID_COL].isin(dead_pids)]
 
         all_pids = history_df[PID_COL].unique()
-
         if len(all_pids) == 0:
             logger.info(
                 "No eligible patients remaining in this shard. Skipping simulation."
             )
-            return {}
+            return pd.DataFrame(), np.array([])
 
-        # Calculate age for each patient using DOB from unfiltered history
+        return history_df, all_pids
+
+    def _calculate_ages(
+        self, history_df: pd.DataFrame, all_pids: np.ndarray
+    ) -> pd.Series:
+        """Calculates age for each patient."""
         dob_events = history_df[history_df[CONCEPT_COL] == BIRTH_CODE]
         patient_dobs = dob_events.groupby(PID_COL)[TIMESTAMP_COL].first()
         ages = pd.Series(np.nan, index=all_pids, dtype=float)
@@ -216,10 +270,11 @@ class CausalSimulator:
             logger.info(
                 f"Mean age of cohort: {mean_age:.2f} years. Using this for patients without DOB."
             )
-        ages = ages.fillna(mean_age)
 
-        # Filter codes based on prefixes if specified.
-        # This is done *after* handling death and birth codes.
+        return ages.fillna(mean_age)
+
+    def _filter_by_codes(self, history_df: pd.DataFrame) -> pd.DataFrame:
+        """Filters patients by code prefixes and minimum number of codes."""
         if self.config.include_code_prefixes:
             logger.info(
                 f"Filtering codes based on prefixes: {self.config.include_code_prefixes}"
@@ -236,65 +291,66 @@ class CausalSimulator:
                 f"Filtering out patients with fewer than {min_codes} unique codes."
             )
 
-            # Count unique codes for each patient in the current history_df
             code_counts = history_df.groupby(PID_COL)[CONCEPT_COL].nunique()
-
-            # Get the list of patient IDs that meet the threshold
             pids_to_keep = code_counts[code_counts >= min_codes].index
 
-            current_pids = history_df[PID_COL].unique()
-            num_removed = len(current_pids) - len(pids_to_keep)
-
+            num_removed = len(history_df[PID_COL].unique()) - len(pids_to_keep)
             if num_removed > 0:
                 logger.info(
                     f"Removed {num_removed} patients with fewer than {min_codes} unique codes."
                 )
-                # Filter the main history dataframe to only include these patients
                 history_df = history_df[history_df[PID_COL].isin(pids_to_keep)].copy()
             else:
                 logger.info(
                     "No patients were removed by the minimum code count filter."
                 )
 
+        return history_df
+
+    def _prepare_simulation_inputs(
+        self, history_df: pd.DataFrame, ages: pd.Series
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Prepares the inputs required for the simulation, including the patient history matrix."""
         all_pids = history_df[PID_COL].unique()
         if len(all_pids) == 0:
-            logger.info(
-                "No eligible patients remaining in this shard. Skipping simulation."
-            )
-            return {}
+            return np.array([]), np.array([]), np.array([])
+
         logger.info(f"Number of patients with history remaining: {len(all_pids)}")
 
-        # Update vocabulary with codes from the (potentially filtered) history
         codes_in_shard = set(history_df[CONCEPT_COL].unique())
         self._update_vocabulary_and_weights(codes_in_shard)
 
-        # If after filtering there are no events left for any patient, we might have an issue
-        # but _get_patient_history_matrix should handle an empty history_df correctly.
         logger.info("Getting patient history matrix...")
         patient_history_matrix, pids = self._get_patient_history_matrix(
             history_df, all_pids
         )
         logger.info("Got patient history matrix.")
+
         final_ages = ages.loc[pids].values
         n_patients = len(pids)
 
-        if n_patients == 0:
-            return {}
+        if n_patients > 0:
+            logger.info(f"Number of patients with history: {n_patients}")
+            logger.info(
+                f"Size of patient history matrix: {patient_history_matrix.shape}"
+            )
+            logger.info(
+                f"Num of non-zero entries in patient history matrix: {patient_history_matrix.sum()}"
+            )
+            logger.info(
+                f"Average number of non-zero entries per patient: {patient_history_matrix.sum() / n_patients}"
+            )
 
-        logger.info(f"Number of patients with history: {n_patients}")
-        logger.info(f"Size of patient history matrix: {patient_history_matrix.shape}")
-        logger.info(
-            f"Num of non-zero entries in patient history matrix: {patient_history_matrix.sum()}"
-        )
-        logger.info(
-            f"Average number of non-zero entries per patient: {patient_history_matrix.sum() / n_patients}"
-        )
+        return patient_history_matrix, pids, final_ages
 
-        logger.info(f"Simulating effects for {n_patients} patients...")
-        logger.info("Simulating unobserved confounder effects...")
-        confounder_exposure_effect, confounder_outcome_effects = (
-            self._simulate_unobserved_confounder_effects(n_patients)
-        )
+    def _simulate_exposure(
+        self,
+        patient_history_matrix: np.ndarray,
+        final_ages: np.ndarray,
+        pids: np.ndarray,
+        confounder_exposure_effect: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Simulates exposure for the cohort."""
         logger.info("Simulating exposure probabilities...")
         p_exposure = self._calculate_probabilities_vectorized(
             "exposure",
@@ -306,11 +362,7 @@ class CausalSimulator:
 
         if self.debug:
             debug_patient_history(
-                pids,
-                patient_history_matrix,
-                self.weights,
-                self.vocabulary,
-                logger,
+                pids, patient_history_matrix, self.weights, self.vocabulary, logger
             )
             analyze_peak_patients(
                 p_exposure,
@@ -320,20 +372,35 @@ class CausalSimulator:
                 self.weights,
                 logger,
             )
+
         logger.info("Plotting histogram of exposure probabilities...")
         plot_hist(p_exposure, self.config.paths.outcomes)
         is_exposed = self.rng.binomial(1, p_exposure).astype(bool)
 
+        return is_exposed, p_exposure
+
+    def _simulate_outcomes(
+        self,
+        patient_history_matrix: np.ndarray,
+        final_ages: np.ndarray,
+        pids: np.ndarray,
+        is_exposed: np.ndarray,
+        confounder_outcome_effects: Dict[str, np.ndarray],
+    ) -> Tuple[Dict, Dict, list, Dict]:
+        """Simulates outcomes for the cohort."""
+        n_patients = len(pids)
         ite_records = {PID_COL: pids}
         cf_records = {PID_COL: pids, EXPOSURE_COL: is_exposed.astype(int)}
         all_factual_events = []
         all_probas_for_plotting = {}
+
         logger.info("Simulating outcome probabilities...")
         for outcome_name, outcome_cfg in self.config.outcomes.items():
             logger.info(f":Simulating outcome probabilities for {outcome_name}...")
             confounder_effect = confounder_outcome_effects.get(
                 outcome_name, np.zeros(n_patients)
             )
+
             logger.info("Calculating probabilities under exposure...")
             p_if_treated = self._calculate_probabilities_vectorized(
                 outcome_name,
@@ -343,6 +410,7 @@ class CausalSimulator:
                 is_exposed=True,
                 additional_logit_effect=confounder_effect,
             )
+
             logger.info("Calculating probabilities under control...")
             p_if_control = self._calculate_probabilities_vectorized(
                 outcome_name,
@@ -352,6 +420,7 @@ class CausalSimulator:
                 is_exposed=False,
                 additional_logit_effect=confounder_effect,
             )
+
             all_probas_for_plotting[outcome_name] = {
                 "P1": p_if_treated,
                 "P0": p_if_control,
@@ -379,16 +448,27 @@ class CausalSimulator:
                 )
                 all_factual_events.append(events)
 
-        patients_with_exposure = pids[is_exposed]
-        if len(patients_with_exposure) > 0:
-            events = pd.DataFrame(
-                {
-                    PID_COL: patients_with_exposure,
-                    TIMESTAMP_COL: self.index_date,
-                    CONCEPT_COL: EXPOSURE_COL,
-                }
-            )
-            all_factual_events.append(events)
+        return ite_records, cf_records, all_factual_events, all_probas_for_plotting
+
+    def _create_exposure_events(self, exposed_pids: np.ndarray) -> pd.DataFrame:
+        """Creates a DataFrame for exposure events."""
+        return pd.DataFrame(
+            {
+                PID_COL: exposed_pids,
+                TIMESTAMP_COL: self.index_date,
+                CONCEPT_COL: EXPOSURE_COL,
+            }
+        )
+
+    def _package_results(
+        self,
+        pids: np.ndarray,
+        ite_records: dict,
+        cf_records: dict,
+        all_factual_events: list,
+        all_probas_for_plotting: dict,
+    ) -> Dict[str, pd.DataFrame]:
+        """Packages simulation results into a dictionary of DataFrames."""
         logger.info("Plotting probability distributions...")
         plot_probability_distributions(
             all_probas_for_plotting, self.config.paths.outcomes
@@ -408,8 +488,9 @@ class CausalSimulator:
 
         if EXPOSURE_COL in output_dfs:
             output_dfs[INDEX_DATE_MATCHING_FILE.split(".")[0]] = (
-                self._create_index_date_matching_df(output_dfs[EXPOSURE_COL], all_pids)
+                self._create_index_date_matching_df(output_dfs[EXPOSURE_COL], pids)
             )
+
         return output_dfs
 
     def _calculate_probabilities_vectorized(
@@ -423,16 +504,6 @@ class CausalSimulator:
     ) -> np.ndarray:
         """Calculates event probabilities for the entire cohort in a vectorized manner."""
         n_patients = history_matrix.shape[0]
-
-        # Calculate the L2 norm (Euclidean length) for each patient vector (row).
-        # norms = np.linalg.norm(history_matrix, axis=1, keepdims=True)
-
-        # # Avoid division by zero for patients with an all-zero history vector.
-        # norms[norms == 0] = 1.0
-
-        # # Normalize the matrix. Each row will now have a length of 1.
-        # history_matrix = history_matrix / norms
-        # ----------------------------------------------------------------
 
         if event_name == "exposure":
             weights = self.weights["exposure"]
