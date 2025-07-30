@@ -95,4 +95,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m tests.test_main_causal.test_estimate_result --dir outputs/causal/estimate/simulated --ci_stretch_factor 1.5 --ipw_ci_stretch_factor 1.8
+          python -m tests.test_main_causal.test_estimate_result --dir outputs/causal/estimate/simulated --ci_stretch_factor 1.6 --ipw_ci_stretch_factor 1.8

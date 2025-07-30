@@ -26,23 +26,32 @@ def main_simulate(config_path):
     simulation_config = SimulationConfig(cfg)
     simulator = CausalSimulator(simulation_config)
     simulate(shard_loader, simulator, cfg.paths.outcomes)
+    if simulation_config.debug:
+        simulator.save_weights()
 
 
 def simulate(shard_loader: ShardLoader, simulator: CausalSimulator, outcomes_dir: str):
     """
-    Simulates outcomes by processing data shards.
+    Simulates outcomes by processing data shards in a single pass.
 
-    Iterates through each data shard, applies the simulator, aggregates
-    the results, and saves each outcome type to a separate CSV file.
+    Iterates through each data shard, dynamically builds vocabulary and weights,
+    simulates outcomes, aggregates the results, and saves each outcome type
+    to a separate CSV file.
     """
+    logger.info("--- Starting simulation ---")
     simulated_outcomes = defaultdict(list)
-    for shard, _ in tqdm(shard_loader(), desc="loop shards"):
+    for shard, _ in tqdm(shard_loader(), desc="Simulating from shards"):
         simulated_temp = simulator.simulate_dataset(shard)
         for k, df in simulated_temp.items():
-            simulated_outcomes[k].append(df)
+            if not df.empty:
+                simulated_outcomes[k].append(df)
+
+    logger.info("--- Simulation complete, saving results ---")
+
     for k, df_list in simulated_outcomes.items():
-        df = pd.concat(df_list)
-        df.to_csv(join(outcomes_dir, f"{k}.csv"), index=False)
+        if df_list:
+            df = pd.concat(df_list, ignore_index=True)
+            df.to_csv(join(outcomes_dir, f"{k}.csv"), index=False)
 
 
 if __name__ == "__main__":

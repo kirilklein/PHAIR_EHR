@@ -1,7 +1,5 @@
-import json
 import logging
-from os.path import join
-from typing import Dict, Tuple, Union, Set
+from typing import Dict, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -21,14 +19,24 @@ from corebehrt.constants.causal.paths import (
     COUNTERFACTUALS_FILE,
     INDEX_DATE_MATCHING_FILE,
 )
-from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
-from corebehrt.functional.utils.time import get_hours_since_epoch
+from corebehrt.constants.data import (
+    ABSPOS_COL,
+    BIRTH_CODE,
+    CONCEPT_COL,
+    DEATH_CODE,
+    PID_COL,
+    TIMESTAMP_COL,
+)
+from corebehrt.functional.utils.time import (
+    get_hours_since_epoch,
+)
 from corebehrt.modules.simulation.config import (
     ExposureConfig,
     OutcomeConfig,
     SimulationConfig,
 )
-from corebehrt.modules.simulation.plot import plot_probability_distributions, plot_hist
+from corebehrt.modules.simulation.debug import debug_patient_history, f_save_weights
+from corebehrt.modules.simulation.plot import plot_hist, plot_probability_distributions
 
 logger = logging.getLogger("simulate")
 
@@ -45,164 +53,199 @@ class CausalSimulator:
         self.rng = np.random.default_rng(config.seed)
         self._initialize_state()
         self.sampling_func = self.rng.normal
+        self.debug = config.debug
 
     def _initialize_state(self):
         """Initializes empty, stateful attributes for the simulator."""
         self.code_to_idx = {}
         self.vocabulary = []
         self.weights = {
-            "exposure": {"linear": np.array([])},
-            "_outcomes_shared": {"linear": np.array([])},
+            "exposure": {
+                "linear": np.array([]),
+                "interaction_joint": np.zeros((0, 0)),
+            },
+            "_outcomes_shared": {
+                "linear": np.array([]),
+                "interaction_joint": np.zeros((0, 0)),
+            },
         }
         self.linear_code_indices = None
         self.interaction_code_indices = None
         self.interaction_idx_map = None
+        self.finalized = False
 
     def _update_vocabulary_and_weights(self, codes_in_shard: Set[str]):
         """
-        Updates vocabulary and weights for new codes. Finalizes linear and
-        interaction subsets once the vocabulary is sufficiently large.
+        Updates vocabulary and weights for new codes. Weights are sampled on the fly.
         """
         new_codes = list(codes_in_shard - set(self.vocabulary))
         if not new_codes:
             return
 
-        logger.info(f"Discovered {len(new_codes)} new codes. Updating weights...")
-
+        logger.info(
+            f"Discovered {len(new_codes)} new codes. Updating vocabulary and weights."
+        )
         n_new = len(new_codes)
-        linear_config = self.config.simulation_model.linear
+        n_old = len(self.vocabulary)
+        n_total = n_old + n_new
 
-        # Determine if we should sample non-zero weights or just append zeros
-        should_sample_non_zero = self.linear_code_indices is None
-
-        if should_sample_non_zero:
-            new_exposure_linear = self.sampling_func(
-                linear_config.mean, linear_config.scale, n_new
-            )
-            new_outcomes_linear = self.sampling_func(
-                linear_config.mean, linear_config.scale, n_new
-            )
-        else:
-            new_exposure_linear = np.zeros(n_new)
-            new_outcomes_linear = np.zeros(n_new)
-
-        # Append the new weights (either sampled or zero)
-        self.weights["exposure"]["linear"] = np.concatenate(
-            [self.weights["exposure"]["linear"], new_exposure_linear]
-        )
-        self.weights["_outcomes_shared"]["linear"] = np.concatenate(
-            [self.weights["_outcomes_shared"]["linear"], new_outcomes_linear]
-        )
-
-        # Update vocabulary AFTER preparing weights
+        # Grow vocabulary
         for code in new_codes:
             self.code_to_idx[code] = len(self.vocabulary)
             self.vocabulary.append(code)
 
-        linear_subset_size = self.config.simulation_model.linear_subset_size
-        if (
-            self.linear_code_indices is None
-            and len(self.vocabulary) >= linear_subset_size
-        ):
-            logger.info(
-                f"Vocabulary size ({len(self.vocabulary)}) reached linear subset threshold ({linear_subset_size}). Finalizing linear weights."
+        # Grow and sample linear weights
+        linear_config = self.config.simulation_model.linear
+        for key in ["exposure", "_outcomes_shared"]:
+            new_weights = self.sampling_func(
+                linear_config.mean, linear_config.scale, n_new
+            )
+            is_zero = self.rng.random(n_new) < linear_config.sparsity_factor
+            new_weights[is_zero] = 0
+            if linear_config.max_weight is not None:
+                np.clip(
+                    new_weights,
+                    -linear_config.max_weight,
+                    linear_config.max_weight,
+                    out=new_weights,
+                )
+            self.weights[key]["linear"] = np.append(
+                self.weights[key]["linear"], new_weights
             )
 
-            # Choose the codes that will have non-zero linear effects
-            self.linear_code_indices = self.rng.choice(
-                len(self.vocabulary), size=linear_subset_size, replace=False
+        # Grow and sample interaction weights
+        interaction_config = self.config.simulation_model.interaction
+        for key in ["exposure", "_outcomes_shared"]:
+            old_matrix = self.weights[key]["interaction_joint"]
+            new_matrix = np.zeros((n_total, n_total))
+            new_matrix[:n_old, :n_old] = old_matrix
+
+            # New interactions with old codes
+            interactions_new_old = self.sampling_func(
+                interaction_config.mean, interaction_config.scale, (n_new, n_old)
             )
-
-            # Create a mask to zero-out weights for non-selected codes
-            mask = np.zeros(len(self.vocabulary), dtype=bool)
-            mask[self.linear_code_indices] = True
-
-            # Apply the mask to the existing weight vectors
-            self.weights["exposure"]["linear"] *= mask
-            self.weights["_outcomes_shared"]["linear"] *= mask
-
-        # Finalize interaction weights (logic is unchanged)
-        interaction_subset_size = self.config.simulation_model.interaction_subset_size
-        if (
-            self.interaction_code_indices is None
-            and len(self.vocabulary) >= interaction_subset_size
-        ):
-            logger.info(
-                f"Vocabulary size ({len(self.vocabulary)}) reached interaction subset threshold ({interaction_subset_size}). Finalizing interaction weights."
+            is_zero_no = (
+                self.rng.random((n_new, n_old)) < interaction_config.sparsity_factor
             )
+            interactions_new_old[is_zero_no] = 0
 
-            self.interaction_code_indices = self.rng.choice(
-                len(self.vocabulary), size=interaction_subset_size, replace=False
+            # New interactions with new codes
+            interactions_new_new = self.sampling_func(
+                interaction_config.mean, interaction_config.scale, (n_new, n_new)
             )
-            self.interaction_idx_map = {
-                original_idx: new_idx
-                for new_idx, original_idx in enumerate(self.interaction_code_indices)
-            }
-            interaction_config = self.config.simulation_model.interaction
-
-            joint_exp = self.sampling_func(
-                interaction_config.mean,
-                interaction_config.scale,
-                (interaction_subset_size, interaction_subset_size),
+            is_zero_nn = (
+                self.rng.random((n_new, n_new)) < interaction_config.sparsity_factor
             )
-            self.weights["exposure"]["interaction_joint"] = joint_exp
+            interactions_new_new[is_zero_nn] = 0
 
-            joint_out = self.sampling_func(
-                interaction_config.mean,
-                interaction_config.scale,
-                (interaction_subset_size, interaction_subset_size),
-            )
-            self.weights["_outcomes_shared"]["interaction_joint"] = joint_out
-        print("vocabulary size: ", len(self.vocabulary))
-        self.save_weights()
+            if interaction_config.max_weight is not None:
+                np.clip(
+                    interactions_new_old,
+                    -interaction_config.max_weight,
+                    interaction_config.max_weight,
+                    out=interactions_new_old,
+                )
+                np.clip(
+                    interactions_new_new,
+                    -interaction_config.max_weight,
+                    interaction_config.max_weight,
+                    out=interactions_new_new,
+                )
 
-    def save_weights(self) -> None:
-        """Saves the current weights and vocabulary state to a file."""
-
-        # This function is now more important for saving state
-        def to_serializable(obj):
-            if isinstance(obj, np.ndarray):
-                return np.round(obj, 4).tolist()
-            if isinstance(obj, dict):
-                return {k: to_serializable(v) for k, v in obj.items()}
-            return obj
-
-        serializable_weights = to_serializable(self.weights)
-        state_to_save = {"vocabulary": self.vocabulary, "weights": serializable_weights}
-        if self.interaction_code_indices is not None:
-            state_to_save["interaction_codes"] = [
-                self.vocabulary[i] for i in self.interaction_code_indices
-            ]
-
-        with open(
-            join(self.config.paths.outcomes, "simulation_weights.json"), "w"
-        ) as f:
-            json.dump(state_to_save, f, indent=4)
+            new_matrix[n_old:, :n_old] = interactions_new_old
+            new_matrix[:n_old, n_old:] = interactions_new_old.T
+            new_new_symmetric = np.triu(interactions_new_new, k=1)
+            new_matrix[n_old:, n_old:] = new_new_symmetric + new_new_symmetric.T
+            np.fill_diagonal(new_matrix, 0)  # Diagonal should still be zero
+            self.weights[key]["interaction_joint"] = new_matrix
 
     def simulate_dataset(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         """
         Simulates exposures and outcomes for a cohort shard, updating vocabulary on the fly.
         """
-        # Step 1: Update vocabulary and weights based on codes in the current shard
+        # Step 0: Filter codes based on prefixes if specified
+        if self.config.include_code_prefixes:
+            df = df[
+                df[CONCEPT_COL].str.startswith(tuple(self.config.include_code_prefixes))
+            ].copy()
+
+        # Step 1: Update vocabulary with codes from the current shard
         codes_in_shard = set(df[CONCEPT_COL].unique())
         self._update_vocabulary_and_weights(codes_in_shard)
 
         # Step 2: Prepare data using the full known vocabulary
         logger.info("Preparing patient history matrix...")
         history_df = df[df[TIMESTAMP_COL] <= self.index_date]
-        print("Number of patients: ", len(history_df[PID_COL].unique()))
-        all_pids = df[PID_COL].unique()
+
+        all_pids_in_shard = df[PID_COL].unique()
+        pids_with_history = history_df[PID_COL].unique()
+
+        removed_no_history = len(all_pids_in_shard) - len(pids_with_history)
+        if removed_no_history > 0:
+            logger.info(f"Removed {removed_no_history} patients without history.")
+
+        if len(pids_with_history) == 0:
+            logger.info("No patients with history in this shard. Skipping simulation.")
+            return {}
+
+        dead_pids = history_df[history_df[CONCEPT_COL] == DEATH_CODE][PID_COL].unique()
+        if len(dead_pids) > 0:
+            logger.info(f"Removing {len(dead_pids)} patients with DOD record.")
+            history_df = history_df[~history_df[PID_COL].isin(dead_pids)]
+
+        all_pids = history_df[PID_COL].unique()
+
+        if len(all_pids) == 0:
+            logger.info(
+                "No eligible patients remaining in this shard. Skipping simulation."
+            )
+            return {}
+
+        # Calculate age for each patient
+        dob_events = history_df[history_df[CONCEPT_COL] == BIRTH_CODE]
+        # Assuming one DOB per patient, take the first one if multiple exist
+        patient_dobs = dob_events.groupby(PID_COL)[TIMESTAMP_COL].first()
+
+        ages = pd.Series(np.nan, index=all_pids, dtype=float)
+        if not patient_dobs.empty:
+            calculated_ages = (self.index_date - patient_dobs).dt.days / 365.25
+            ages.update(calculated_ages)
+
+        mean_age = ages.mean()
+        # Fallback if no one has age. Using 40 as a typical age.
+        if np.isnan(mean_age):
+            logger.warning(
+                "No patients with DOB found. Age effect cannot be calculated accurately. Using default age 40 for all."
+            )
+            mean_age = 40
+        else:
+            logger.info(
+                f"Mean age of cohort: {mean_age:.2f} years. Using this for patients without DOB."
+            )
+        ages = ages.fillna(mean_age)
 
         patient_history_matrix, pids = self._get_patient_history_matrix(
             history_df, all_pids
         )
-        print("number of 1s in patient history matrix: ", patient_history_matrix.sum())
-        print("Size of patient history matrix: ", patient_history_matrix.shape)
 
+        final_ages = ages.loc[pids].values
         n_patients = len(pids)
 
         if n_patients == 0:
             return {}
+
+        logger.info(f"Number of patients with history: {n_patients}")
+        logger.info(f"Size of patient history matrix: {patient_history_matrix.shape}")
+        logger.info(f"Sum of patient history matrix: {patient_history_matrix.sum()}")
+        if self.debug:
+            debug_patient_history(
+                history_df,
+                pids,
+                patient_history_matrix,
+                self.weights,
+                self.vocabulary,
+                logger,
+            )
 
         logger.info(f"Simulating for {n_patients} patients...")
         confounder_exposure_effect, confounder_outcome_effects = (
@@ -213,6 +256,7 @@ class CausalSimulator:
             "exposure",
             self.config.exposure,
             patient_history_matrix,
+            ages=final_ages,
             additional_logit_effect=confounder_exposure_effect,
         )
         plot_hist(p_exposure, self.config.paths.outcomes)
@@ -232,6 +276,7 @@ class CausalSimulator:
                 outcome_name,
                 outcome_cfg,
                 patient_history_matrix,
+                ages=final_ages,
                 is_exposed=True,
                 additional_logit_effect=confounder_effect,
             )
@@ -240,6 +285,7 @@ class CausalSimulator:
                 outcome_name,
                 outcome_cfg,
                 patient_history_matrix,
+                ages=final_ages,
                 is_exposed=False,
                 additional_logit_effect=confounder_effect,
             )
@@ -308,6 +354,7 @@ class CausalSimulator:
         event_name: str,
         event_cfg: Union[OutcomeConfig, ExposureConfig],
         history_matrix: np.ndarray,
+        ages: np.ndarray,
         is_exposed: bool = False,
         additional_logit_effect: np.ndarray = 0.0,
     ) -> np.ndarray:
@@ -324,27 +371,35 @@ class CausalSimulator:
         # 1. Linear effects (always applied)
         logit_p_array += history_matrix @ weights["linear"]
 
-        # 2. Interaction effects (applied ONLY if they have been finalized)
-        if "interaction_joint" in weights:
-            interaction_history = history_matrix[:, self.interaction_code_indices]
-            joint_weights = weights["interaction_joint"]
+        # 2. Interaction effects
+        interaction_history = history_matrix
+        joint_weights = weights["interaction_joint"]
 
-            n_interactions = len(self.interaction_code_indices)
-            for i in range(n_interactions):
-                for j in range(i + 1, n_interactions):
-                    i_present = interaction_history[:, i]
-                    j_present = interaction_history[:, j]
+        # This is equivalent to (A * (A @ W)).sum(axis=1) / 2 for symmetric W with 0 diagonal
+        interaction_effect = (
+            np.einsum(
+                "ij,jk,ik->i", interaction_history, joint_weights, interaction_history
+            )
+            / 2
+        )
+        logit_p_array += interaction_effect
 
-                    logit_p_array += (i_present * j_present) * joint_weights[i, j]
         # 3. Exposure effect (for outcomes)
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p_array += event_cfg.exposure_effect
 
-        # 4. Unobserved confounder effect
+        # 4. Age effect
+        if hasattr(event_cfg, "age_effect") and event_cfg.age_effect is not None:
+            logit_p_array += event_cfg.age_effect * ages
+
+        # 5. Unobserved confounder effect
         logit_p_array += additional_logit_effect
-        logit_p_array += self.rng.normal(0, 0.05, n_patients)
+        logit_p_array += self.rng.normal(0, 0.01, n_patients)
 
         return expit(logit_p_array)
+
+    def save_weights(self):
+        f_save_weights(self.vocabulary, self.weights, self.config.paths.outcomes)
 
     def _get_patient_history_matrix(
         self, history_df: pd.DataFrame, all_pids: np.ndarray
@@ -424,8 +479,7 @@ class CausalSimulator:
                 columns=[CONTROL_PID_COL, EXPOSED_PID_COL, TIMESTAMP_COL, ABSPOS_COL]
             )
 
-        rng = np.random.default_rng(42)
-        matched_exposed_pids = rng.choice(
+        matched_exposed_pids = self.rng.choice(
             exposed_pids, size=len(control_pids), replace=True
         )
 

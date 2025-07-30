@@ -33,6 +33,8 @@ class ModelWeightsConfig:
 
     mean: float
     scale: float
+    sparsity_factor: float = 0.0
+    max_weight: Optional[float] = None
 
 
 @dataclass
@@ -41,8 +43,7 @@ class SimulationModelConfig:
 
     linear: ModelWeightsConfig
     interaction: ModelWeightsConfig
-    interaction_subset_size: int
-    linear_subset_size: int  # New parameter
+    time_decay_halflife_days: Optional[float] = None
 
 
 @dataclass
@@ -50,6 +51,7 @@ class ExposureConfig:
     """Configuration for simulating exposure probability."""
 
     p_base: float
+    age_effect: Optional[float] = None
 
 
 @dataclass
@@ -59,6 +61,7 @@ class OutcomeConfig:
     run_in_days: int
     p_base: float
     exposure_effect: float
+    age_effect: Optional[float] = None
 
 
 @dataclass
@@ -72,7 +75,9 @@ class SimulationConfig:
     # trigger_codes is no longer needed here, will be derived from vocabulary
     index_date: pd.Timestamp = COMMON_INDEX_DATE
     unobserved_confounder: Optional[UnobservedConfounderConfig] = None
+    include_code_prefixes: Optional[List[str]] = None
     seed: int = 42
+    debug: bool = False
 
     def __init__(self, config: dict):
         self.paths = PathsConfig(**config["paths"])
@@ -81,10 +86,9 @@ class SimulationConfig:
         self.simulation_model = SimulationModelConfig(
             linear=ModelWeightsConfig(**config["simulation_model"]["linear"]),
             interaction=ModelWeightsConfig(**config["simulation_model"]["interaction"]),
-            interaction_subset_size=config["simulation_model"][
-                "interaction_subset_size"
-            ],
-            linear_subset_size=config["simulation_model"]["linear_subset_size"],
+            time_decay_halflife_days=config["simulation_model"].get(
+                "time_decay_halflife_days", 365
+            ),
         )
 
         self.exposure = ExposureConfig(**config["exposure"])
@@ -101,6 +105,8 @@ class SimulationConfig:
         else:
             self.unobserved_confounder = None
 
+        self.include_code_prefixes = config.get("include_code_prefixes")
+
         self._validate_config()
 
     def _validate_config(self):
@@ -110,14 +116,6 @@ class SimulationConfig:
                 f"Exposure p_base must be between 0 and 1, got {self.exposure.p_base}"
             )
 
-        if self.simulation_model.interaction_subset_size <= 1:
-            raise ValueError(
-                f"interaction_subset_size must be greater than 1, got {self.simulation_model.interaction_subset_size}"
-            )
-        if self.simulation_model.linear_subset_size < 1:
-            raise ValueError(
-                f"linear_subset_size must be greater than 0, got {self.simulation_model.linear_subset_size}"
-            )
         for outcome_key, outcome in self.outcomes.items():
             if outcome.p_base < 0 or outcome.p_base > 1:
                 raise ValueError(
