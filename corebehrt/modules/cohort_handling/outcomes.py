@@ -40,7 +40,6 @@ class OutcomeMaker:
     def __call__(
         self,
         concepts_plus: pd.DataFrame,
-        patients_info: pd.DataFrame,
         patient_set: List[str],
         outcomes_path: str,
         header_written: Dict[str, bool],

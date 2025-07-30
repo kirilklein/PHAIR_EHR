@@ -1,7 +1,5 @@
 from collections import defaultdict
-from os.path import join
 
-import pandas as pd
 from tqdm import tqdm
 
 from corebehrt.constants.data import PID_COL
@@ -28,11 +26,11 @@ def process_data(loader, cfg, logger) -> None:
     outcomes_path = cfg.paths.outcomes
     outcome_maker = OutcomeMaker(cfg.outcomes)
 
-    for concept_batch, patient_batch in tqdm(
+    for concept_batch, _ in tqdm(
         loader(), desc="Batch Process Data", file=TqdmToLogger(logger)
     ):
         pids = concept_batch[PID_COL].unique()
-        outcome_maker(concept_batch, patient_batch, pids, outcomes_path, header_written)
+        outcome_maker(concept_batch, pids, outcomes_path, header_written)
 
     for key in cfg.outcomes:
         if not header_written[key]:
