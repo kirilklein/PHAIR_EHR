@@ -122,13 +122,6 @@ class TestOutcomeMaker(unittest.TestCase):
             [self.concepts_plus, exclusion_data], ignore_index=True
         )
 
-        # Create patient info data
-        self.patients_info = pd.DataFrame(
-            {
-                PID_COL: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-            }
-        )
-
         # Patient set for testing
         self.patient_set = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -154,7 +147,6 @@ class TestOutcomeMaker(unittest.TestCase):
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patients_info,
             self.patient_set,
             self.outcomes_path,
             header_written,
@@ -204,7 +196,6 @@ class TestOutcomeMaker(unittest.TestCase):
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patients_info,
             self.patient_set,
             self.outcomes_path,
             header_written,
@@ -246,7 +237,6 @@ class TestOutcomeMaker(unittest.TestCase):
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patients_info,
             self.patient_set,
             self.outcomes_path,
             header_written,
@@ -303,7 +293,6 @@ class TestOutcomeMaker(unittest.TestCase):
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patients_info,
             self.patient_set,
             self.outcomes_path,
             header_written,
@@ -354,7 +343,6 @@ class TestOutcomeMaker(unittest.TestCase):
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patients_info,
             self.patient_set,
             self.outcomes_path,
             header_written,
@@ -410,7 +398,6 @@ class TestOutcomeMaker(unittest.TestCase):
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patients_info,
             self.patient_set,
             self.outcomes_path,
             header_written,
@@ -460,7 +447,6 @@ class TestOutcomeMaker(unittest.TestCase):
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patients_info,
             self.patient_set,
             self.outcomes_path,
             header_written,
@@ -505,7 +491,6 @@ class TestOutcomeMaker(unittest.TestCase):
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patients_info,
             self.patient_set,
             self.outcomes_path,
             header_written,
@@ -547,7 +532,6 @@ class TestOutcomeMaker(unittest.TestCase):
         header_written = defaultdict(bool)
         outcome_maker(
             self.concepts_plus,
-            self.patients_info,
             self.patient_set,
             self.outcomes_path,
             header_written,
