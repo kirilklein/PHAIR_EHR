@@ -80,8 +80,11 @@ class CausalSimulator:
         """
         Updates vocabulary and weights for new codes. Weights are sampled on the fly.
         """
+        logger.info("Checking for new codes to update vocabulary and weights...")
         new_codes = list(codes_in_shard - set(self.vocabulary))
+
         if not new_codes:
+            logger.info("No new codes found. Vocabulary and weights are unchanged.")
             return
 
         logger.info(
@@ -214,6 +217,9 @@ class CausalSimulator:
         # Filter codes based on prefixes if specified.
         # This is done *after* handling death and birth codes.
         if self.config.include_code_prefixes:
+            logger.info(
+                f"Filtering codes based on prefixes: {self.config.include_code_prefixes}"
+            )
             history_df = history_df[
                 history_df[CONCEPT_COL].str.startswith(
                     tuple(self.config.include_code_prefixes)
@@ -226,11 +232,11 @@ class CausalSimulator:
 
         # If after filtering there are no events left for any patient, we might have an issue
         # but _get_patient_history_matrix should handle an empty history_df correctly.
-
+        logger.info("Getting patient history matrix...")
         patient_history_matrix, pids = self._get_patient_history_matrix(
             history_df, all_pids
         )
-
+        logger.info("Got patient history matrix.")
         final_ages = ages.loc[pids].values
         n_patients = len(pids)
 
@@ -255,11 +261,12 @@ class CausalSimulator:
                 logger,
             )
 
-        logger.info(f"Simulating for {n_patients} patients...")
+        logger.info(f"Simulating effects for {n_patients} patients...")
+        logger.info("Simulating unobserved confounder effects...")
         confounder_exposure_effect, confounder_outcome_effects = (
             self._simulate_unobserved_confounder_effects(n_patients)
         )
-
+        logger.info("Simulating exposure probabilities...")
         p_exposure = self._calculate_probabilities_vectorized(
             "exposure",
             self.config.exposure,
@@ -267,6 +274,7 @@ class CausalSimulator:
             ages=final_ages,
             additional_logit_effect=confounder_exposure_effect,
         )
+        logger.info("Plotting histogram of exposure probabilities...")
         plot_hist(p_exposure, self.config.paths.outcomes)
         is_exposed = self.rng.binomial(1, p_exposure).astype(bool)
 
@@ -274,12 +282,13 @@ class CausalSimulator:
         cf_records = {PID_COL: pids, EXPOSURE_COL: is_exposed.astype(int)}
         all_factual_events = []
         all_probas_for_plotting = {}
-
+        logger.info("Simulating outcome probabilities...")
         for outcome_name, outcome_cfg in self.config.outcomes.items():
+            logger.info(f":Simulating outcome probabilities for {outcome_name}...")
             confounder_effect = confounder_outcome_effects.get(
                 outcome_name, np.zeros(n_patients)
             )
-
+            logger.info("Calculating probabilities under exposure...")
             p_if_treated = self._calculate_probabilities_vectorized(
                 outcome_name,
                 outcome_cfg,
@@ -288,7 +297,7 @@ class CausalSimulator:
                 is_exposed=True,
                 additional_logit_effect=confounder_effect,
             )
-
+            logger.info("Calculating probabilities under control...")
             p_if_control = self._calculate_probabilities_vectorized(
                 outcome_name,
                 outcome_cfg,
@@ -334,7 +343,7 @@ class CausalSimulator:
                 }
             )
             all_factual_events.append(events)
-
+        logger.info("Plotting probability distributions...")
         plot_probability_distributions(
             all_probas_for_plotting, self.config.paths.outcomes
         )
@@ -393,6 +402,7 @@ class CausalSimulator:
         logit_p_array += interaction_effect
 
         # 3. Exposure effect (for outcomes)
+
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p_array += event_cfg.exposure_effect
 
