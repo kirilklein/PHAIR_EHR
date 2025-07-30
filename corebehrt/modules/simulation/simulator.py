@@ -23,7 +23,7 @@ from corebehrt.constants.causal.paths import (
 )
 from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.utils.time import get_hours_since_epoch
-from corebehrt.modules.simulation.config_all import (
+from corebehrt.modules.simulation.config import (
     ExposureConfig,
     OutcomeConfig,
     SimulationConfig,

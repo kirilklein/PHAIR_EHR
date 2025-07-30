@@ -2,8 +2,8 @@ from corebehrt.functional.setup.args import get_args
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.features.loader import ShardLoader
-from corebehrt.modules.simulation.simulator_all import CausalSimulator
-from corebehrt.modules.simulation.config_all import SimulationConfig
+from corebehrt.modules.simulation.simulator import CausalSimulator
+from corebehrt.modules.simulation.config import SimulationConfig
 from collections import defaultdict
 import pandas as pd
 from os.path import join
