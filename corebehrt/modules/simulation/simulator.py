@@ -163,19 +163,7 @@ class CausalSimulator:
         """
         Simulates exposures and outcomes for a cohort shard, updating vocabulary on the fly.
         """
-        # Step 0: Filter codes based on prefixes if specified
-        if self.config.include_code_prefixes:
-            df = df[
-                df[CONCEPT_COL].str.startswith(tuple(self.config.include_code_prefixes))
-            ].copy()
-
-        # Step 1: Update vocabulary with codes from the current shard
-        codes_in_shard = set(df[CONCEPT_COL].unique())
-        self._update_vocabulary_and_weights(codes_in_shard)
-
-        # Step 2: Prepare data using the full known vocabulary
-        logger.info("Preparing patient history matrix...")
-        history_df = df[df[TIMESTAMP_COL] <= self.index_date]
+        history_df = df[df[TIMESTAMP_COL] <= self.index_date].copy()
 
         all_pids_in_shard = df[PID_COL].unique()
         pids_with_history = history_df[PID_COL].unique()
@@ -201,18 +189,15 @@ class CausalSimulator:
             )
             return {}
 
-        # Calculate age for each patient
+        # Calculate age for each patient using DOB from unfiltered history
         dob_events = history_df[history_df[CONCEPT_COL] == BIRTH_CODE]
-        # Assuming one DOB per patient, take the first one if multiple exist
         patient_dobs = dob_events.groupby(PID_COL)[TIMESTAMP_COL].first()
-
         ages = pd.Series(np.nan, index=all_pids, dtype=float)
         if not patient_dobs.empty:
             calculated_ages = (self.index_date - patient_dobs).dt.days / 365.25
             ages.update(calculated_ages)
 
         mean_age = ages.mean()
-        # Fallback if no one has age. Using 40 as a typical age.
         if np.isnan(mean_age):
             logger.warning(
                 "No patients with DOB found. Age effect cannot be calculated accurately. Using default age 40 for all."
@@ -223,6 +208,22 @@ class CausalSimulator:
                 f"Mean age of cohort: {mean_age:.2f} years. Using this for patients without DOB."
             )
         ages = ages.fillna(mean_age)
+
+        # Filter codes based on prefixes if specified.
+        # This is done *after* handling death and birth codes.
+        if self.config.include_code_prefixes:
+            history_df = history_df[
+                history_df[CONCEPT_COL].str.startswith(
+                    tuple(self.config.include_code_prefixes)
+                )
+            ].copy()
+
+        # Update vocabulary with codes from the (potentially filtered) history
+        codes_in_shard = set(history_df[CONCEPT_COL].unique())
+        self._update_vocabulary_and_weights(codes_in_shard)
+
+        # If after filtering there are no events left for any patient, we might have an issue
+        # but _get_patient_history_matrix should handle an empty history_df correctly.
 
         patient_history_matrix, pids = self._get_patient_history_matrix(
             history_df, all_pids
