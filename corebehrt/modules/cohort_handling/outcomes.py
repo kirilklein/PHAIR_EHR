@@ -49,7 +49,6 @@ class OutcomeMaker:
         # Convert patient IDs to the right type for filtering
         patient_ids = [int(pid) for pid in patient_set]
         concepts_plus = filter_table_by_pids(concepts_plus, patient_ids)
-        _ = filter_table_by_pids(patients_info, patient_ids)
         concepts_plus = remove_missing_timestamps(concepts_plus)
         concepts_plus = concepts_plus[
             [PID_COL, TIMESTAMP_COL, CONCEPT_COL, VALUE_COL]
