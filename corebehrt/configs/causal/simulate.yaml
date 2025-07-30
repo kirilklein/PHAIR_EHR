@@ -10,9 +10,6 @@ paths:
   outcomes: ./outputs/causal/simulated_outcomes
 seed: 42
 
-trigger_codes:
-  [D/312608009, D/431856006, D/55822004, D/267020005, D/157141000119108]
-
 simulation_model:
   linear:
     mean: 0
