@@ -8,21 +8,24 @@ paths:
   splits: ["tuning"]
   # output dir
   outcomes: ./outputs/causal/simulated_outcomes
+
 seed: 42
-debug: false
+debug: true
+
+include_code_prefixes: ["D/"]
+
 simulation_model:
   time_decay_halflife_days: 9000
   linear:
     mean: 0
-    scale: 0.5
-    max_weight: 1.5
+    scale: 0.9
+    max_weight: 2.0
     sparsity_factor: 0
   interaction:
     mean: 0
-    scale: 0.5
-    max_weight: 1.5
+    scale: 0.9
+    max_weight: 2.0
     sparsity_factor: 0.6
-include_code_prefixes: ["D/"]
 
 exposure:
   p_base: 0.3 # Base 15% chance of exposure over the patient's timeline

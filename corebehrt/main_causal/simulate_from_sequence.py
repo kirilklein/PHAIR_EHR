@@ -27,6 +27,7 @@ def main_simulate(config_path):
     simulator = CausalSimulator(simulation_config)
     simulate(shard_loader, simulator, cfg.paths.outcomes)
     if simulation_config.debug:
+        logger.info("--- Saving weights ---")
         simulator.save_weights()
 
 

@@ -106,7 +106,7 @@ class SimulationConfig:
             self.unobserved_confounder = None
 
         self.include_code_prefixes = config.get("include_code_prefixes")
-
+        self.debug = config.get("debug", False)
         self._validate_config()
 
     def _validate_config(self):

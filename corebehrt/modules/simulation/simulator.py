@@ -226,6 +226,14 @@ class CausalSimulator:
                 )
             ].copy()
 
+        all_pids = history_df[PID_COL].unique()
+        if len(all_pids) == 0:
+            logger.info(
+                "No eligible patients remaining in this shard. Skipping simulation."
+            )
+            return {}
+        logger.info(f"Number of patients with history remaining: {len(all_pids)}")
+
         # Update vocabulary with codes from the (potentially filtered) history
         codes_in_shard = set(history_df[CONCEPT_COL].unique())
         self._update_vocabulary_and_weights(codes_in_shard)
@@ -253,7 +261,6 @@ class CausalSimulator:
         )
         if self.debug:
             debug_patient_history(
-                history_df,
                 pids,
                 patient_history_matrix,
                 self.weights,
@@ -455,7 +462,7 @@ class CausalSimulator:
         else:
             # If no halflife is defined, default to a weight of 1 (no decay)
             latest_events_df[WEIGHT_COL] = 1.0
-
+        logger.info(f"Recency weights: {latest_events_df[WEIGHT_COL].describe()}")
         # 4. Build the final weighted matrix using the efficient NumPy approach
         pid_to_row = {pid: i for i, pid in enumerate(all_pids)}
 

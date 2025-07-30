@@ -64,29 +64,24 @@ def f_save_weights(vocabulary: dict, weights, write_dir: str) -> None:
 
 
 def debug_patient_history(
-    history_df: pd.DataFrame,
     pids: np.ndarray,
     patient_history_matrix: np.ndarray,
-    weights,
-    vocabulary,
+    weights: dict,
+    vocabulary: list,
     logger,
 ):
     """
-    Identifies patients with no calculated history effect and prints their
-    history for debugging purposes.
+    Identifies patients with a near-zero history effect and prints a
+    detailed breakdown of their codes and associated weights for debugging.
     """
     logger.info("--- Debugging patient history effects ---")
-    n_patients = len(pids)
-    weights = weights["exposure"]
+    exposure_weights = weights["exposure"]
 
-    linear_effects = patient_history_matrix @ weights["linear"]
-
-    interaction_effects = np.zeros(n_patients)
-    joint_weights = weights["interaction_joint"]
-    interaction_history = patient_history_matrix
+    linear_effects = patient_history_matrix @ exposure_weights["linear"]
+    joint_weights = exposure_weights["interaction_joint"]
     interaction_effects = (
         np.einsum(
-            "ij,jk,ik->i", interaction_history, joint_weights, interaction_history
+            "ij,jk,ik->i", patient_history_matrix, joint_weights, patient_history_matrix
         )
         / 2
     )
@@ -98,52 +93,60 @@ def debug_patient_history(
 
     if len(problematic_patient_indices) > 0:
         logger.info(
-            f"Found {len(problematic_patient_indices)} patients with zero history effect."
+            f"Found {len(problematic_patient_indices)} patients with near-zero history effect."
         )
 
+        # Loop through the first few problematic patients for detailed analysis
         for i, pid_idx in enumerate(problematic_patient_indices[:5]):
             pid = pids[pid_idx]
-            logger.info(
-                f"--- History for patient {pid} (index {pid_idx}) with zero effect ---"
-            )
+            logger.info(f"\n--- Analysis for Patient {pid} (index {pid_idx}) ---")
 
             patient_vec = patient_history_matrix[pid_idx, :]
             present_code_indices = np.where(patient_vec > 0)[0]
 
-            if len(present_code_indices) == 0:
-                logger.info(
-                    "  Patient has no codes from the vocabulary in their history."
-                )
-            else:
-                present_codes = [vocabulary[i] for i in present_code_indices]
-                logger.info(f"  Patient has codes: {present_codes}")
+            if present_code_indices.size == 0:
+                logger.info("  Patient has no relevant codes in their history vector.")
+                continue
 
-                active_linear_indices = np.where(
-                    weights["linear"][present_code_indices] != 0
-                )[0]
-                if len(active_linear_indices) > 0:
-                    logger.info(
-                        f"  Of which, these have linear weights: {[present_codes[i] for i in active_linear_indices]}"
-                    )
-                else:
-                    logger.info("  None of these codes have linear weights.")
-
-                # Simplified check for interactions for brevity in logging
-                interaction_slice = joint_weights[
-                    np.ix_(present_code_indices, present_code_indices)
-                ]
-                if np.any(interaction_slice):
-                    logger.info("  Patient has codes with active interaction weights.")
-                else:
-                    logger.info(
-                        "  None of the patient's codes have interaction weights with each other."
-                    )
-
-            patient_history_df = history_df[history_df[PID_COL] == pid]
-            logger.info(
-                f"  Raw history for patient {pid} ({len(patient_history_df)} events) with total history effect {total_history_effect[pid_idx]:.4f}:\n"
-                f"{patient_history_df[[CONCEPT_COL, TIMESTAMP_COL]].to_string()}"
+            # ✅ START: Nicely formatted weight breakdown
+            # Create a DataFrame to display weights clearly
+            weights_df = pd.DataFrame(
+                {
+                    "Code": [vocabulary[i] for i in present_code_indices],
+                    "Temporal Weight": patient_vec[present_code_indices],
+                    "Linear Weight": exposure_weights["linear"][present_code_indices],
+                }
             )
+
+            # Calculate the final contribution of each code to the linear effect
+            weights_df["Effective Contribution"] = (
+                weights_df["Temporal Weight"] * weights_df["Linear Weight"]
+            )
+
+            # Filter for codes that actually have a linear weight to reduce noise
+            active_weights_df = weights_df[weights_df["Linear Weight"] != 0].copy()
+
+            if not active_weights_df.empty:
+                # Sort by the most impactful contribution for easy debugging
+                active_weights_df.sort_values(
+                    by="Effective Contribution", key=abs, ascending=False, inplace=True
+                )
+                logger.info(f"  Linear weight contributions for patient {pid}:")
+                # Use to_string() for nice table formatting in the log
+                # The extra newline improves readability in most log viewers
+                logger.info("\n" + active_weights_df.to_string(index=False))
+            else:
+                logger.info(
+                    "  None of this patient's codes have a non-zero linear weight."
+                )
+            # ✅ END: Nicely formatted weight breakdown
+
+            # Simplified check for interactions for brevity in logging
+            interaction_slice = joint_weights[
+                np.ix_(present_code_indices, present_code_indices)
+            ]
+            if np.any(interaction_slice):
+                logger.info("  Patient also has codes with active interaction weights.")
     else:
         logger.info("All patients have a non-zero history effect.")
     logger.info("--- End of debugging ---")
