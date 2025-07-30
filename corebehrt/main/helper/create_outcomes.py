@@ -1,40 +1,37 @@
 from collections import defaultdict
 
-import pandas as pd
 from tqdm import tqdm
 
+from corebehrt.constants.data import PID_COL
 from corebehrt.modules.cohort_handling.outcomes import OutcomeMaker
 from corebehrt.modules.monitoring.logger import TqdmToLogger
-from corebehrt.constants.data import PID_COL
 
 
-def process_data(loader, cfg, logger) -> dict:
+def process_data(loader, cfg, logger) -> None:
     """Process batches of concept and patient data to create outcome tables.
+    The outcomes are written to CSV files in an append mode to handle large datasets.
 
     Args:
         loader: A callable that yields tuples of (concept_batch, patient_batch) DataFrames.
-        cfg: Configuration object containing outcome settings.
+        cfg: Configuration object containing outcome settings and paths.
         logger: Logger object for tracking progress.
-
-    Returns:
-        dict: A dictionary mapping outcome names to their corresponding DataFrame tables.
-            Each DataFrame contains the processed outcome data for all patients.
 
     Note:
         The function processes data in batches to handle large datasets efficiently.
         It uses the OutcomeMaker class to generate outcome tables for each batch,
-        then concatenates the results across all batches.
+        then appends the results to CSV files. This avoids holding all outcomes
+        in memory.
     """
-    all_outcomes = defaultdict(list)
-    for concept_batch, patient_batch in tqdm(
+    header_written = defaultdict(bool)
+    outcomes_path = cfg.paths.outcomes
+    outcome_maker = OutcomeMaker(cfg.outcomes)
+
+    for concept_batch, _ in tqdm(
         loader(), desc="Batch Process Data", file=TqdmToLogger(logger)
     ):
         pids = concept_batch[PID_COL].unique()
-        outcome_tables = OutcomeMaker(cfg.outcomes)(concept_batch, patient_batch, pids)
-        # Concatenate the tables for each key
-        for key, df in outcome_tables.items():
-            if key in all_outcomes:
-                all_outcomes[key] = pd.concat([all_outcomes[key], df])
-            else:
-                all_outcomes[key] = df
-    return all_outcomes
+        outcome_maker(concept_batch, pids, outcomes_path, header_written)
+
+    for key in cfg.outcomes:
+        if not header_written[key]:
+            logger.warning(f"Outcomes table for {key} is empty. No file was created.")

@@ -1,4 +1,5 @@
 import logging
+from os.path import join
 from typing import Dict, List
 
 import numpy as np
@@ -39,19 +40,18 @@ class OutcomeMaker:
     def __call__(
         self,
         concepts_plus: pd.DataFrame,
-        patients_info: pd.DataFrame,
         patient_set: List[str],
-    ) -> dict:
-        """Create outcomes from concepts_plus and patients_info"""
+        outcomes_path: str,
+        header_written: Dict[str, bool],
+    ) -> None:
+        """Create outcomes from concepts_plus and patients_info and writes them to disk."""
         # Convert patient IDs to the right type for filtering
         patient_ids = [int(pid) for pid in patient_set]
         concepts_plus = filter_table_by_pids(concepts_plus, patient_ids)
-        patients_info = filter_table_by_pids(patients_info, patient_ids)
         concepts_plus = remove_missing_timestamps(concepts_plus)
         concepts_plus = concepts_plus[
             [PID_COL, TIMESTAMP_COL, CONCEPT_COL, VALUE_COL]
         ]  # get only relevant columns
-        outcome_tables = {}
         for outcome, attrs in self.outcomes.items():
             # Handle combination outcomes
             if COMBINATIONS in attrs:
@@ -68,16 +68,38 @@ class OutcomeMaker:
                     concepts_plus, timestamps, attrs["exclusion"]
                 )
 
-            # Only process if we have data
-            if len(timestamps) > 0:
-                if ABSPOS_COL not in timestamps.columns:
-                    timestamps[ABSPOS_COL] = get_hours_since_epoch(
-                        timestamps[TIMESTAMP_COL]
-                    )
-                timestamps[ABSPOS_COL] = timestamps[ABSPOS_COL].astype(int)
-                timestamps[PID_COL] = timestamps[PID_COL].astype(int)
-            outcome_tables[outcome] = timestamps
-        return outcome_tables
+            self._write_df(timestamps, outcomes_path, header_written, outcome)
+
+    def _write_df(
+        self,
+        timestamps: pd.DataFrame,
+        outcomes_path: str,
+        header_written: Dict[str, bool],
+        outcome: str,
+    ):
+        """
+        Write a dataframe to a csv file. If the file does not exist, create it and write the header.
+        If the file exists, append the data.
+        If the dataframe is empty, write only the header.
+        """
+        output_path = join(outcomes_path, f"{outcome}.csv")
+        if not timestamps.empty:
+            if ABSPOS_COL not in timestamps.columns:
+                timestamps[ABSPOS_COL] = get_hours_since_epoch(
+                    timestamps[TIMESTAMP_COL]
+                )
+            timestamps[ABSPOS_COL] = timestamps[ABSPOS_COL].astype(int)
+            timestamps[PID_COL] = timestamps[PID_COL].astype(int)
+
+            write_header = not header_written[outcome]
+            timestamps.to_csv(output_path, mode="a", header=write_header, index=False)
+            if write_header:
+                header_written[outcome] = True
+        elif not header_written[outcome]:
+            pd.DataFrame(columns=[PID_COL, TIMESTAMP_COL, ABSPOS_COL]).to_csv(
+                output_path, header=True, index=False
+            )
+            header_written[outcome] = True
 
     def match_concepts(
         self,
