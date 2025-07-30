@@ -335,7 +335,7 @@ class CausalSimulator:
                     i_present = interaction_history[:, i]
                     j_present = interaction_history[:, j]
 
-                    logit_p_array += (i_present & j_present) * joint_weights[i, j]
+                    logit_p_array += (i_present * j_present) * joint_weights[i, j]
         # 3. Exposure effect (for outcomes)
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p_array += event_cfg.exposure_effect
@@ -349,13 +349,43 @@ class CausalSimulator:
     def _get_patient_history_matrix(
         self, history_df: pd.DataFrame, all_pids: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Creates a multi-hot encoded matrix of patient histories against the full known vocabulary."""
-        history_crosstab = pd.crosstab(history_df[PID_COL], history_df[CONCEPT_COL])
-        # Reindex against the full, dynamically grown vocabulary
-        history_crosstab = history_crosstab.reindex(
-            index=all_pids, columns=self.vocabulary, fill_value=0
+        """
+        Creates a matrix of patient histories, with values decayed based on
+        the recency of the latest event. If time_decay_halflife_days is not
+        configured, it falls back to a multi-hot encoded boolean matrix.
+        """
+        if history_df.empty:
+            return np.zeros((len(all_pids), len(self.vocabulary))), all_pids
+
+        halflife = getattr(
+            self.config.simulation_model, "time_decay_halflife_days", None
         )
-        return history_crosstab.values.astype(bool), history_crosstab.index.to_numpy()
+
+        if halflife is None or halflife <= 0:
+            history_crosstab = pd.crosstab(history_df[PID_COL], history_df[CONCEPT_COL])
+            history_crosstab = history_crosstab.reindex(
+                index=all_pids, columns=self.vocabulary, fill_value=0
+            )
+            return (
+                history_crosstab.values.astype(bool),
+                history_crosstab.index.to_numpy(),
+            )
+
+        history_df = history_df.copy()
+        history_df["days_diff"] = (
+            self.index_date - history_df[TIMESTAMP_COL]
+        ).dt.days.astype(float)
+
+        recency_series = history_df.groupby([PID_COL, CONCEPT_COL])["days_diff"].min()
+        recency_pivot = recency_series.unstack(fill_value=np.inf)
+
+        recency_pivot = recency_pivot.reindex(
+            index=all_pids, columns=self.vocabulary, fill_value=np.inf
+        )
+
+        patient_history_matrix = 2 ** (-recency_pivot.values / halflife)
+
+        return patient_history_matrix, recency_pivot.index.to_numpy()
 
     def _simulate_unobserved_confounder_effects(
         self, n_patients: int
