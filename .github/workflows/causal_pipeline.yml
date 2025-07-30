@@ -106,7 +106,7 @@ jobs:
           python -m tests.pipeline.test_estimate \
           ./outputs/causal/estimate/simple \
           example_data/synthea_meds_causal/tuning \
-          --ci_expansion_factor 2.0 --ipw_ci_expansion_factor 2.0
+          --ci_expansion_factor 2.0 
       
       - name: Criteria and stats # this relies on calibrated predictions for weighing.
         shell: bash
