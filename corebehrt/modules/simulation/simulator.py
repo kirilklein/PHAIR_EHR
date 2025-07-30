@@ -40,6 +40,8 @@ from corebehrt.modules.simulation.plot import plot_hist, plot_probability_distri
 
 logger = logging.getLogger("simulate")
 
+WEIGHT_COL = "weight"
+
 
 class CausalSimulator:
     """
@@ -237,7 +239,12 @@ class CausalSimulator:
 
         logger.info(f"Number of patients with history: {n_patients}")
         logger.info(f"Size of patient history matrix: {patient_history_matrix.shape}")
-        logger.info(f"Sum of patient history matrix: {patient_history_matrix.sum()}")
+        logger.info(
+            f"Num of non-zero entries in patient history matrix: {patient_history_matrix.sum()}"
+        )
+        logger.info(
+            f"Average number of non-zero entries per patient: {patient_history_matrix.sum() / n_patients}"
+        )
         if self.debug:
             debug_patient_history(
                 history_df,
@@ -406,42 +413,73 @@ class CausalSimulator:
         self, history_df: pd.DataFrame, all_pids: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Creates a matrix of patient histories, with values decayed based on
-        the recency of the latest event. If time_decay_halflife_days is not
-        configured, it falls back to a multi-hot encoded boolean matrix.
+        Creates a patient history matrix with weights based on temporal decay.
+
+        For each patient, it finds the last occurrence of every unique code,
+        calculates a weight using a half-life decay function based on the
+        time difference to the index date, and populates the matrix with these weights.
         """
+        # If there's no history, return an empty matrix of the correct shape.
         if history_df.empty:
-            return np.zeros((len(all_pids), len(self.vocabulary))), all_pids
+            matrix_shape = (len(all_pids), len(self.vocabulary))
+            return np.zeros(matrix_shape, dtype=np.float32), all_pids
 
-        halflife = getattr(
-            self.config.simulation_model, "time_decay_halflife_days", None
+        # 1. Find the latest occurrence for each unique patient-code pair
+        latest_events_df = history_df.loc[
+            history_df.groupby([PID_COL, CONCEPT_COL])[TIMESTAMP_COL].idxmax()
+        ].copy()
+
+        # 2. Calculate the difference in days from the index date
+        # .clip(lower=0) ensures no negative days if data slips past the index_date
+        latest_events_df["diff_days"] = (
+            (self.index_date - latest_events_df[TIMESTAMP_COL]).dt.days
+        ).clip(lower=0)
+
+        # 3. Compute the weight using the half-life decay formula
+        # Assumes `temporal_halflife_days` is in your config.
+        halflife = self.config.simulation_model.time_decay_halflife_days
+        if halflife and halflife > 0:
+            latest_events_df[WEIGHT_COL] = 2 ** (
+                -latest_events_df["diff_days"] / halflife
+            )
+        else:
+            # If no halflife is defined, default to a weight of 1 (no decay)
+            latest_events_df[WEIGHT_COL] = 1.0
+
+        # 4. Build the final weighted matrix using the efficient NumPy approach
+        pid_to_row = {pid: i for i, pid in enumerate(all_pids)}
+
+        # Map dataframe columns to integer indices for the matrix
+        rows = (
+            latest_events_df[PID_COL]
+            .map(pid_to_row.get, na_action="ignore")
+            .to_numpy(na_value=-1, dtype=int)
+        )
+        # Use the class's code_to_idx map
+        cols = (
+            latest_events_df[CONCEPT_COL]
+            .map(self.code_to_idx.get, na_action="ignore")
+            .to_numpy(na_value=-1, dtype=int)
+        )
+        weights = latest_events_df[WEIGHT_COL].to_numpy(dtype=np.float32)
+
+        # Filter out any entries that couldn't be mapped
+        valid_indices = (rows != -1) & (cols != -1)
+        rows, cols, weights = (
+            rows[valid_indices],
+            cols[valid_indices],
+            weights[valid_indices],
         )
 
-        if halflife is None or halflife <= 0:
-            history_crosstab = pd.crosstab(history_df[PID_COL], history_df[CONCEPT_COL])
-            history_crosstab = history_crosstab.reindex(
-                index=all_pids, columns=self.vocabulary, fill_value=0
-            )
-            return (
-                history_crosstab.values.astype(bool),
-                history_crosstab.index.to_numpy(),
-            )
+        # Initialize the matrix with float dtype
+        matrix_shape = (len(all_pids), len(self.vocabulary))
+        patient_history_matrix = np.zeros(matrix_shape, dtype=np.float32)
 
-        history_df = history_df.copy()
-        history_df["days_diff"] = (
-            self.index_date - history_df[TIMESTAMP_COL]
-        ).dt.days.astype(float)
+        # Populate the matrix with weights. Using `np.add.at` is robust,
+        # though simple assignment would also work here since we've already taken the latest event.
+        np.add.at(patient_history_matrix, (rows, cols), weights)
 
-        recency_series = history_df.groupby([PID_COL, CONCEPT_COL])["days_diff"].min()
-        recency_pivot = recency_series.unstack(fill_value=np.inf)
-
-        recency_pivot = recency_pivot.reindex(
-            index=all_pids, columns=self.vocabulary, fill_value=np.inf
-        )
-
-        patient_history_matrix = 2 ** (-recency_pivot.values / halflife)
-
-        return patient_history_matrix, recency_pivot.index.to_numpy()
+        return patient_history_matrix, all_pids
 
     def _simulate_unobserved_confounder_effects(
         self, n_patients: int
