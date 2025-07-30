@@ -454,8 +454,16 @@ class TestOutcomeMaker(unittest.TestCase):
 
         # Check result
         output_file = os.path.join(self.outcomes_path, "IMPOSSIBLE_COMBINATION.csv")
-        # Should not create a file for empty results
-        self.assertFalse(os.path.exists(output_file))
+        # Should create a file even for empty results
+        self.assertTrue(os.path.exists(output_file))
+        empty_outcome = pd.read_csv(output_file)
+        self.assertEqual(len(empty_outcome), 0)
+        self.assertTrue(
+            all(
+                col in empty_outcome.columns
+                for col in [PID_COL, TIMESTAMP_COL, ABSPOS_COL]
+            )
+        )
 
     def test_multiple_outcomes_together(self):
         """Test handling multiple outcome types in the same call"""
@@ -496,15 +504,17 @@ class TestOutcomeMaker(unittest.TestCase):
             header_written,
         )
 
-        # Check result - only outcomes with matches should produce files
+        # Check result - all outcome types should produce files
         basic_file = os.path.join(self.outcomes_path, "BASIC_OUTCOME.csv")
         combo_file = os.path.join(self.outcomes_path, "COMBINATION_OUTCOME.csv")
 
         self.assertTrue(os.path.exists(basic_file))
-        self.assertFalse(os.path.exists(combo_file))
+        self.assertTrue(os.path.exists(combo_file))
 
         basic_outcome = pd.read_csv(basic_file)
         self.assertEqual(len(basic_outcome), 3)
+        combo_outcome = pd.read_csv(combo_file)
+        self.assertEqual(len(combo_outcome), 0)
 
     def test_exclusion_non_fatal_mi(self):
         """Test exclusion of events that are followed by death within a week."""

@@ -68,22 +68,38 @@ class OutcomeMaker:
                     concepts_plus, timestamps, attrs["exclusion"]
                 )
 
-            # Only process if we have data
-            if not timestamps.empty:
-                if ABSPOS_COL not in timestamps.columns:
-                    timestamps[ABSPOS_COL] = get_hours_since_epoch(
-                        timestamps[TIMESTAMP_COL]
-                    )
-                timestamps[ABSPOS_COL] = timestamps[ABSPOS_COL].astype(int)
-                timestamps[PID_COL] = timestamps[PID_COL].astype(int)
+            self._write_df(timestamps, outcomes_path, header_written, outcome)
 
-                output_path = join(outcomes_path, f"{outcome}.csv")
-                write_header = not header_written[outcome]
-                timestamps.to_csv(
-                    output_path, mode="a", header=write_header, index=False
+    def _write_df(
+        self,
+        timestamps: pd.DataFrame,
+        outcomes_path: str,
+        header_written: Dict[str, bool],
+        outcome: str,
+    ):
+        """
+        Write a dataframe to a csv file. If the file does not exist, create it and write the header.
+        If the file exists, append the data.
+        If the dataframe is empty, write only the header.
+        """
+        output_path = join(outcomes_path, f"{outcome}.csv")
+        if not timestamps.empty:
+            if ABSPOS_COL not in timestamps.columns:
+                timestamps[ABSPOS_COL] = get_hours_since_epoch(
+                    timestamps[TIMESTAMP_COL]
                 )
-                if write_header:
-                    header_written[outcome] = True
+            timestamps[ABSPOS_COL] = timestamps[ABSPOS_COL].astype(int)
+            timestamps[PID_COL] = timestamps[PID_COL].astype(int)
+
+            write_header = not header_written[outcome]
+            timestamps.to_csv(output_path, mode="a", header=write_header, index=False)
+            if write_header:
+                header_written[outcome] = True
+        elif not header_written[outcome]:
+            pd.DataFrame(columns=[PID_COL, TIMESTAMP_COL, ABSPOS_COL]).to_csv(
+                output_path, header=True, index=False
+            )
+            header_written[outcome] = True
 
     def match_concepts(
         self,
