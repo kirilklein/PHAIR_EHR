@@ -35,7 +35,11 @@ from corebehrt.modules.simulation.config import (
     OutcomeConfig,
     SimulationConfig,
 )
-from corebehrt.modules.simulation.debug import debug_patient_history, f_save_weights
+from corebehrt.modules.simulation.debug import (
+    debug_patient_history,
+    f_save_weights,
+    analyze_peak_patients,
+)
 from corebehrt.modules.simulation.plot import plot_hist, plot_probability_distributions
 
 logger = logging.getLogger("simulate")
@@ -226,6 +230,32 @@ class CausalSimulator:
                 )
             ].copy()
 
+        if self.config.min_num_codes > 1:
+            min_codes = self.config.min_num_codes
+            logger.info(
+                f"Filtering out patients with fewer than {min_codes} unique codes."
+            )
+
+            # Count unique codes for each patient in the current history_df
+            code_counts = history_df.groupby(PID_COL)[CONCEPT_COL].nunique()
+
+            # Get the list of patient IDs that meet the threshold
+            pids_to_keep = code_counts[code_counts >= min_codes].index
+
+            current_pids = history_df[PID_COL].unique()
+            num_removed = len(current_pids) - len(pids_to_keep)
+
+            if num_removed > 0:
+                logger.info(
+                    f"Removed {num_removed} patients with fewer than {min_codes} unique codes."
+                )
+                # Filter the main history dataframe to only include these patients
+                history_df = history_df[history_df[PID_COL].isin(pids_to_keep)].copy()
+            else:
+                logger.info(
+                    "No patients were removed by the minimum code count filter."
+                )
+
         all_pids = history_df[PID_COL].unique()
         if len(all_pids) == 0:
             logger.info(
@@ -259,14 +289,6 @@ class CausalSimulator:
         logger.info(
             f"Average number of non-zero entries per patient: {patient_history_matrix.sum() / n_patients}"
         )
-        if self.debug:
-            debug_patient_history(
-                pids,
-                patient_history_matrix,
-                self.weights,
-                self.vocabulary,
-                logger,
-            )
 
         logger.info(f"Simulating effects for {n_patients} patients...")
         logger.info("Simulating unobserved confounder effects...")
@@ -281,6 +303,23 @@ class CausalSimulator:
             ages=final_ages,
             additional_logit_effect=confounder_exposure_effect,
         )
+
+        if self.debug:
+            debug_patient_history(
+                pids,
+                patient_history_matrix,
+                self.weights,
+                self.vocabulary,
+                logger,
+            )
+            analyze_peak_patients(
+                p_exposure,
+                final_ages,
+                patient_history_matrix,
+                self.vocabulary,
+                self.weights,
+                logger,
+            )
         logger.info("Plotting histogram of exposure probabilities...")
         plot_hist(p_exposure, self.config.paths.outcomes)
         is_exposed = self.rng.binomial(1, p_exposure).astype(bool)
@@ -384,6 +423,16 @@ class CausalSimulator:
     ) -> np.ndarray:
         """Calculates event probabilities for the entire cohort in a vectorized manner."""
         n_patients = history_matrix.shape[0]
+
+        # Calculate the L2 norm (Euclidean length) for each patient vector (row).
+        # norms = np.linalg.norm(history_matrix, axis=1, keepdims=True)
+
+        # # Avoid division by zero for patients with an all-zero history vector.
+        # norms[norms == 0] = 1.0
+
+        # # Normalize the matrix. Each row will now have a length of 1.
+        # history_matrix = history_matrix / norms
+        # ----------------------------------------------------------------
 
         if event_name == "exposure":
             weights = self.weights["exposure"]

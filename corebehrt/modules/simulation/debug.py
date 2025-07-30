@@ -2,7 +2,6 @@ import numpy as np
 import json
 import pandas as pd
 from os.path import join
-from corebehrt.constants.data import PID_COL, CONCEPT_COL, TIMESTAMP_COL
 
 
 def f_save_weights(vocabulary: dict, weights, write_dir: str) -> None:
@@ -150,3 +149,100 @@ def debug_patient_history(
     else:
         logger.info("All patients have a non-zero history effect.")
     logger.info("--- End of debugging ---")
+
+
+def analyze_peak_patients(
+    p_exposure: np.ndarray,
+    ages: np.ndarray,
+    patient_history_matrix: np.ndarray,
+    vocabulary: list,
+    weights: dict,
+    logger,
+    peak_width: float = 0.02,
+    num_bins: int = 50,
+):
+    """
+    Automatically detects the main probability peak and analyzes the
+    characteristics, effect components, and code similarity for patients within it.
+    """
+    if p_exposure.size == 0:
+        logger.info("p_exposure array is empty, skipping peak analysis.")
+        return
+
+    # --- 1. Automatically Detect the Peak ---
+    counts, bin_edges = np.histogram(p_exposure, bins=num_bins, range=(0, 1))
+    peak_bin_index = np.argmax(counts)
+    peak_center = (bin_edges[peak_bin_index] + bin_edges[peak_bin_index + 1]) / 2
+
+    logger.info(
+        f"\n--- Analyzing characteristics in auto-detected peak at ~{peak_center:.3f} ---"
+    )
+
+    peak_min = peak_center - (peak_width / 2)
+    peak_max = peak_center + (peak_width / 2)
+    peak_indices = np.where((p_exposure >= peak_min) & (p_exposure <= peak_max))[0]
+
+    if peak_indices.size == 0:
+        logger.info(
+            f"  No patients found in the range [{peak_min:.3f}, {peak_max:.3f}]."
+        )
+        return
+
+    logger.info(f"  Found {peak_indices.size} patients in the peak.")
+
+    # --- 2. Analyze Ages and Effect Components ---
+    peak_ages = ages[peak_indices]
+    age_series = pd.Series(peak_ages)
+    logger.info("  Age distribution for patients in peak:")
+    logger.info("\n" + age_series.describe().to_string())
+
+    # (Effect component analysis from before...)
+
+    # --- 3. Analyze Common Medical Codes and Their Penetration ---
+    peak_vectors = patient_history_matrix[peak_indices, :]
+    code_prevalence = peak_vectors.sum(axis=0)
+    top_10_code_indices = np.argsort(code_prevalence)[-10:][::-1]
+
+    # Calculate penetration percentage for top codes
+    binary_peak_vectors = peak_vectors > 0
+    penetration_counts = binary_peak_vectors[:, top_10_code_indices].sum(axis=0)
+    penetration_percent = (penetration_counts / peak_indices.size) * 100
+
+    top_codes_df = pd.DataFrame(
+        {
+            "Rank": range(1, 11),
+            "Code": [vocabulary[i] for i in top_10_code_indices],
+            "Penetration": [f"{p:.1f}%" for p in penetration_percent],
+            "Prevalence Score": code_prevalence[top_10_code_indices],
+        }
+    )
+
+    logger.info("\n  Top 10 most common/impactful codes for patients in peak:")
+    logger.info("\n" + top_codes_df.to_string(index=False))
+
+    # --- ✅ NEW: 4. Display Code Combinations for a Sample of Patients ---
+    logger.info("\n  Code profiles for a sample of patients in the peak:")
+    num_samples = min(10, peak_indices.size)  # Sample up to 10 patients
+    # Use np.random.choice for a random sample, or slice for the first few
+    sample_patient_indices = np.random.choice(
+        peak_indices, size=num_samples, replace=False
+    )
+
+    for i, patient_idx in enumerate(sample_patient_indices):
+        # Get the patient's row from the main history matrix
+        patient_vector = patient_history_matrix[patient_idx, :]
+        # Find the indices of all codes present for this patient
+        non_zero_code_indices = np.where(patient_vector > 0)[0]
+
+        # Get the corresponding code names from the vocabulary
+        patient_codes = [vocabulary[code_idx] for code_idx in non_zero_code_indices]
+
+        # Log the patient's original index and their list of codes
+        log_message = (
+            f"    - Sample Patient #{i + 1} (Original Index: {patient_idx}):\n"
+            f"      Codes ({len(patient_codes)}): {patient_codes}"
+        )
+        logger.info(log_message)
+    # --- End of New Section ---
+
+    logger.info("--- End of peak analysis ---")

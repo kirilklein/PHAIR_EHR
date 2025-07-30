@@ -78,6 +78,7 @@ class SimulationConfig:
     include_code_prefixes: Optional[List[str]] = None
     seed: int = 42
     debug: bool = False
+    min_num_codes: int = 5
 
     def __init__(self, config: dict):
         self.paths = PathsConfig(**config["paths"])
@@ -107,6 +108,7 @@ class SimulationConfig:
 
         self.include_code_prefixes = config.get("include_code_prefixes")
         self.debug = config.get("debug", False)
+        self.min_num_codes = config.get("min_num_codes", 5)
         self._validate_config()
 
     def _validate_config(self):
