@@ -39,10 +39,10 @@ class CausalSimulator:
     operations and builds its vocabulary and weights dynamically as it sees new data shards.
     """
 
-    def __init__(self, config: SimulationConfig, seed: int = 42):
+    def __init__(self, config: SimulationConfig):
         self.config = config
         self.index_date = config.index_date
-        self.rng = np.random.default_rng(seed)
+        self.rng = np.random.default_rng(config.seed)
         self._initialize_state()
         self.sampling_func = self.rng.normal
 

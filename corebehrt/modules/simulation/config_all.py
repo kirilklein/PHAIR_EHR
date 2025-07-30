@@ -72,6 +72,7 @@ class SimulationConfig:
     # trigger_codes is no longer needed here, will be derived from vocabulary
     index_date: pd.Timestamp = COMMON_INDEX_DATE
     unobserved_confounder: Optional[UnobservedConfounderConfig] = None
+    seed: int = 42
 
     def __init__(self, config: dict):
         self.paths = PathsConfig(**config["paths"])
