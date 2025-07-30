@@ -15,16 +15,16 @@ min_num_codes: 3
 include_code_prefixes: ["D/"]
 
 simulation_model:
-  time_decay_halflife_days: 9000
+  time_decay_halflife_days: 5000
   linear:
     mean: 0
-    scale: 0.5
-    max_weight: 1.5
+    scale: 0.6
+    max_weight: 1.6
     sparsity_factor: 0
   interaction:
     mean: 0
-    scale: 0.5
-    max_weight: 1.5
+    scale: 0.6
+    max_weight: 1.6
     sparsity_factor: 0.5
 
 exposure:
