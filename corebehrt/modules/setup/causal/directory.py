@@ -118,9 +118,13 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         # Optional counterfactual outcomes check
         if self.cfg.paths.get("counterfactual_outcomes", False):
             self.check_directory("counterfactual_outcomes")
-            self.write_config(
-                "estimate", source="counterfactual_outcomes", name=SIMULATE_CFG
-            )
+            try:
+                self.write_config(
+                    "estimate", source="counterfactual_outcomes", name=SIMULATE_CFG
+                )
+            except Exception as e:
+                logger.warning(f"Error writing config: {e}")
+                pass
 
         # Write config in output directory
         self.write_config("estimate", name=ESTIMATE_CFG)
