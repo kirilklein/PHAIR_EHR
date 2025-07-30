@@ -112,15 +112,15 @@ class CausalDirectoryPreparer(DirectoryPreparer):
             self.check_directory("exposure_predictions")
             self.check_directory("outcome_predictions")
 
+        # Create estimate directory
+        self.create_run_directory("estimate", base="runs")
+
         # Optional counterfactual outcomes check
         if self.cfg.paths.get("counterfactual_outcomes", False):
             self.check_directory("counterfactual_outcomes")
             self.write_config(
                 "estimate", source="counterfactual_outcomes", name=SIMULATE_CFG
             )
-
-        # Create estimate directory
-        self.create_run_directory("estimate", base="runs")
 
         # Write config in output directory
         self.write_config("estimate", name=ESTIMATE_CFG)
