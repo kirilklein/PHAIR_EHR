@@ -20,7 +20,7 @@ def main_data(config_path):
 
     logger = logging.getLogger("create_outcomes")
     logger.info("Starting outcomes creation")
-    outcome_tables = process_data(
+    process_data(
         ShardLoader(
             data_dir=cfg.paths.data,
             splits=cfg.paths.get("splits", None),
@@ -29,11 +29,6 @@ def main_data(config_path):
         cfg,
         logger,
     )
-
-    for key, df in outcome_tables.items():
-        if df.empty:
-            logger.warning(f"Outcomes table for {key} is empty")
-        df.to_csv(join(cfg.paths.outcomes, f"{key}.csv"), index=False)
 
     logger.info("Finish outcomes creation")
     logger.info("Done")
