@@ -1,4 +1,4 @@
-name: 'Causal Pipeline test'
+name: 'Causal Pipeline with simulated outcomes test'
 
 on:
   workflow_dispatch:
@@ -50,8 +50,8 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main.create_outcomes                     outcomes.yaml
-          run_step main_causal.select_cohort_full           select_cohort_full/extract.yaml
+          run_step main_causal.simulate_from_sequence            simulate.yaml
+          run_step main_causal.select_cohort_full           select_cohort_full/extract_simulated.yaml
 
       - name: Prepare Finetune Data
         shell: bash
@@ -59,8 +59,7 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.prepare_ft_exp_y      finetune/prepare/simple.yaml
-          python tests/pipeline/prepare_data_ft_exp_y.py ./outputs/causal/finetune/prepared_data
+          run_step main_causal.prepare_ft_exp_y      finetune/prepare/simulated.yaml
           
       - name: Finetune Exposure & Outcome
         shell: bash
@@ -68,19 +67,7 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.finetune_exp_y         finetune/simple.yaml
-          python tests/pipeline/ft_exp_y.py ./outputs/causal/finetune/models/simple
-          
-      - name: Check performance
-        shell: bash
-        run: |
-          set -euo pipefail
-          
-          python -m tests.pipeline.test_performance_multitarget ./outputs/causal/finetune/models/simple \
-          --target-bounds "exposure:min:0.58,max:0.8" \
-          --target-bounds "OUTCOME:min:0.7,max:0.95" \
-          --target-bounds "OUTCOME_2:min:0.7,max:0.95" \
-          --target-bounds "OUTCOME_3:min:0.58,max:0.95"
+          run_step main_causal.finetune_exp_y         finetune/simulated.yaml
 
       - name: Calibration
         shell: bash
@@ -88,13 +75,7 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.calibrate_exp_y        finetune/calibrate.yaml
-          
-          # python -m tests.pipeline.test_cf_magnitude \
-          # ./outputs/causal/finetune/models/simple/calibrated \
-          # example_data/synthea_meds_causal/tuning \
-          # --top_n_percent 10 \
-          # --ate_tolerance 0.2
+          run_step main_causal.calibrate_exp_y        finetune/calibrate_simulated.yaml
 
       - name: Estimate
         shell: bash
@@ -102,18 +83,16 @@ jobs:
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
           
-          run_step main_causal.estimate        estimate.yaml
-          python -m tests.pipeline.test_estimate \
-          ./outputs/causal/estimate/simple \
-          example_data/synthea_meds_causal/tuning \
-          --ci_expansion_factor 2.1 
-      
-      - name: Criteria and stats # this relies on calibrated predictions for weighing.
+          run_step main_causal.estimate        estimate_simulated.yaml
+      - name: Estimate with bias
         shell: bash
         run: |
           set -euo pipefail
           source .github/workflows/pipeline_helpers.sh
-          run_step main_causal.helper_scripts.extract_criteria helper/extract_criteria.yaml
-          run_step main_causal.helper_scripts.get_stats helper/get_stats.yaml
-  
-      
+          
+          run_step main_causal.estimate        estimate_simulated_with_bias.yaml
+      - name: Test Estimate Result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m tests.test_main_causal.test_estimate_result --dir outputs/causal/estimate/simulated --ci_stretch_factor 1.9 --ipw_ci_stretch_factor 1.9

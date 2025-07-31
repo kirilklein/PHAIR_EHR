@@ -138,6 +138,6 @@ def prepare_tmle_analysis_df(initial_estimates_df: pd.DataFrame) -> pd.DataFrame
         tmle_df["initial_effect_1"] - tmle_df["initial_effect_0"]
     )
     tmle_df["adjustment"] = tmle_df["adjustment_1"] - tmle_df["adjustment_0"]
-
+    tmle_df = tmle_df.round(5)
     final_cols = required_cols + ["initial_effect", "adjustment"]
     return tmle_df[final_cols]

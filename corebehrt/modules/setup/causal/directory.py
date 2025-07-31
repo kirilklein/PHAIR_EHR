@@ -9,6 +9,7 @@ from corebehrt.constants.causal.paths import (
     EXTRACT_CRITERIA_CFG,
     GET_STATS_CFG,
     SIMULATE_CFG,
+    GET_PAT_COUNTS_BY_CODE_CFG,
 )
 from corebehrt.constants.paths import (
     COHORT_CFG,
@@ -68,6 +69,15 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.write_config("simulated_outcome", source="encoded_data", name=ENCODE_CFG)
         self.write_config("simulated_outcome", name=SIMULATE_CFG)
 
+    def setup_simulate_from_sequence(self) -> None:
+        """
+        Validates path config and sets up directories for simulate_from_sequence.
+        """
+        self.setup_logging("simulate_from_sequence")
+        self.check_directory("data")
+        self.create_directory("outcomes")
+        self.write_config("outcomes", name=SIMULATE_CFG)
+
     def setup_calibrate(self) -> None:
         """
         Validates path config and sets up directories for calibrate.
@@ -102,12 +112,19 @@ class CausalDirectoryPreparer(DirectoryPreparer):
             self.check_directory("exposure_predictions")
             self.check_directory("outcome_predictions")
 
+        # Create estimate directory
+        self.create_run_directory("estimate", base="runs")
+
         # Optional counterfactual outcomes check
         if self.cfg.paths.get("counterfactual_outcomes", False):
             self.check_directory("counterfactual_outcomes")
-
-        # Create estimate directory
-        self.create_run_directory("estimate", base="runs")
+            try:
+                self.write_config(
+                    "estimate", source="counterfactual_outcomes", name=SIMULATE_CFG
+                )
+            except Exception as e:
+                logger.warning(f"Error writing config: {e}")
+                pass
 
         # Write config in output directory
         self.write_config("estimate", name=ESTIMATE_CFG)
@@ -206,6 +223,12 @@ class CausalDirectoryPreparer(DirectoryPreparer):
             # If name is given, use it as config name
             self.write_config("prepared_data", name=name)
         self.write_config("prepared_data", source="features", name=DATA_CFG)
+
+    def setup_get_pat_counts_by_code(self) -> None:
+        self.setup_logging("get_pat_counts_by_code")
+        self.check_directory("data")
+        self.create_directory("counts")
+        self.write_config("counts", name=GET_PAT_COUNTS_BY_CODE_CFG)
 
     def _get_outcome_file_dict(self, outcomes_dir: str) -> dict[str, str]:
         """

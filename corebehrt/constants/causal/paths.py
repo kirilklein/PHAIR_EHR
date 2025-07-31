@@ -6,6 +6,7 @@ ESTIMATE_CFG = "estimate_config.yaml"
 EXTRACT_CRITERIA_CFG = "extract_criteria_config.yaml"
 CRITERIA_DEFINITIONS_CFG = "criteria_definitions_config.yaml"
 GET_STATS_CFG = "get_stats_config.yaml"
+GET_PAT_COUNTS_BY_CODE_CFG = "get_pat_counts_by_code_config.yaml"
 
 ENCODINGS_FILE = "encodings.pt"
 
@@ -51,3 +52,5 @@ STATS_PATH = "stats"
 PATIENTS_FILE = "patients.pt"
 
 COMBINED_CALIBRATED_PREDICTIONS_FILE = "combined_calibrated_predictions.csv"
+
+COUNTERFACTUALS_FILE = "counterfactuals.csv"

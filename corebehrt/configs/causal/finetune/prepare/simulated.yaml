@@ -6,20 +6,20 @@ paths:
   ## INPUTS
   features: ./outputs/causal/data/features
   tokenized: ./outputs/causal/data/tokenized
-  cohort: ./outputs/causal/finetune/cohorts/full # path to cohort directory
+  cohort: ./outputs/causal/finetune/cohorts/full_simulated # path to cohort directory
 
-  outcomes: ./outputs/causal/finetune/outcomes
+  outcomes: ./outputs/causal/simulated_outcomes
   outcome_files: # should correspond to the file names in the outcomes directory
     - OUTCOME.csv
     - OUTCOME_2.csv
     - OUTCOME_3.csv
-    - OUTCOME_empty.csv
+    - OUTCOME_4.csv
 
-  exposures: ./outputs/causal/finetune/outcomes
-  exposure: EXPOSURE.csv
+  exposures: ./outputs/causal/simulated_outcomes
+  exposure: exposure.csv
 
   ## OUTPUTS
-  prepared_data: ./outputs/causal/finetune/prepared_data # Save model/outputs to this folder
+  prepared_data: ./outputs/causal/finetune/prepared_data_simulated # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
 data:
@@ -27,14 +27,13 @@ data:
   truncation_len: 64
   min_len: 2 # 0 by default
   cv_folds: 2
-  min_instances_per_class: 10
 
 exposure:
   # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
-  n_hours_censoring: -1 # censor time after index date (negative means before)
-  n_hours_start_follow_up: -1 # start follow up (considering outcomes) time after index date (negative means before)
-  n_hours_end_follow_up: 10 # end follow up (considering outcomes) time after index date (negative means before)
+  n_hours_censoring: -10 # censor time after index date (negative means before)
+  n_hours_start_follow_up: -10 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: 1000 # end follow up (considering outcomes) time after index date (negative means before)
 outcome:
-  n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_start_follow_up: 0 # start follow up (considering outcomes) time after index date (negative means before)
   n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
   n_hours_compliance: null # follow up time is adjusted based on compliance

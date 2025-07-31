@@ -16,6 +16,7 @@ def test_ate_estimate(
     estimate_dir: str,
     data_dir: Optional[str] = None,
     outcome_names: Optional[List[str]] = None,
+    ci_expansion_factor: float = 1.0,
 ) -> bool:
     """
     Test whether ATE estimates contain true ATE within confidence interval for each outcome.
@@ -100,7 +101,9 @@ def test_ate_estimate(
         print(f"True ATE for {outcome}: {true_ate:.4f}")
 
         # Test estimates for this outcome
-        outcome_success = test_outcome_estimates(outcome_df, true_ate, outcome)
+        outcome_success = test_outcome_estimates(
+            outcome_df, true_ate, ci_expansion_factor
+        )
         outcome_results[outcome] = outcome_success
 
         if not outcome_success:
@@ -118,7 +121,7 @@ def test_ate_estimate(
 
 
 def test_outcome_estimates(
-    df: pd.DataFrame, true_ate: float, outcome_name: str
+    df: pd.DataFrame, true_ate: float, ci_expansion_factor: float
 ) -> bool:
     """
     Test estimates for a single outcome.
@@ -133,7 +136,7 @@ def test_outcome_estimates(
     """
     all_passed = True
 
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         method = row["method"]
         if method in ["RD", "RR"]:
             continue
@@ -147,35 +150,31 @@ def test_outcome_estimates(
         print(f"  Estimated effect: {effect:.4f}")
         print(f"  95% CI: [{ci_lower:.4f}, {ci_upper:.4f}] (width: {ci_width:.4f})")
 
-        # Use existing 95% CI and expand it for more lenient check
-        ci_95_lower = ci_lower
-        ci_95_upper = ci_upper
-
         # Expand the 95% CI by ~70% on each side to create a broader interval
-        ci_width = ci_95_upper - ci_95_lower
-        expansion_factor = 0.7
 
-        ci_expanded_lower = ci_95_lower - (ci_width * expansion_factor)
-        ci_expanded_upper = ci_95_upper + (ci_width * expansion_factor)
+        upper_dist = ci_upper - effect
+        lower_dist = effect - ci_lower
+        ci_expanded_lower = effect - lower_dist * ci_expansion_factor
+        ci_expanded_upper = effect + upper_dist * ci_expansion_factor
 
         # Check containment at different confidence levels
-        within_95_ci = ci_95_lower <= true_ate <= ci_95_upper
+        within_95_ci = ci_lower <= true_ate <= ci_upper
         within_expanded_ci = ci_expanded_lower <= true_ate <= ci_expanded_upper
 
         if within_95_ci:
             print(
-                f"  ✓ PASS: True ATE {true_ate:.4f} within 95% CI [{ci_95_lower:.4f}, {ci_95_upper:.4f}]"
+                f"  ✓ PASS: True ATE {true_ate:.3f} within 95% CI [{ci_lower:.3f}, {ci_upper:.3f}]"
             )
         elif within_expanded_ci:
             print(
-                f"  ! WARNING: True ATE {true_ate:.4f} outside 95% CI [{ci_95_lower:.4f}, {ci_95_upper:.4f}] "
-                f"but within expanded range [{ci_expanded_lower:.4f}, {ci_expanded_upper:.4f}]"
+                f"  ! WARNING: True ATE {true_ate:.3f} outside 95% CI [{ci_lower:.3f}, {ci_upper:.3f}] "
+                f"but within expanded range [{ci_expanded_lower:.3f}, {ci_expanded_upper:.3f}]"
             )
             # Don't set all_passed = False for warnings
         else:
             print(
-                f"  ❌ FAIL: True ATE {true_ate:.4f} outside expanded range "
-                f"[{ci_expanded_lower:.4f}, {ci_expanded_upper:.4f}]"
+                f"  ❌ FAIL: True ATE {true_ate:.3f} outside expanded range "
+                f"[{ci_expanded_lower:.3f}, {ci_expanded_upper:.3f}]"
             )
             all_passed = False
 
@@ -399,11 +398,19 @@ def main():
         help="Names of the outcomes to test (if not provided, will test all found outcomes)",
         default=None,
     )
+    parser.add_argument(
+        "--ci_expansion_factor",
+        type=float,
+        help="Factor to expand the CI by",
+        default=1.0,
+    )
 
     args = parser.parse_args()
 
     # Run the test
-    success = test_ate_estimate(args.estimate_dir, args.data_dir, args.outcome_names)
+    success = test_ate_estimate(
+        args.estimate_dir, args.data_dir, args.outcome_names, args.ci_expansion_factor
+    )
 
     # Exit with appropriate code
     sys.exit(0 if success else 1)

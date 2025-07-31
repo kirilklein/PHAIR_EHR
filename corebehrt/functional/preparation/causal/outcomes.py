@@ -77,10 +77,10 @@ def get_binary_outcome(
             - binary_outcomes: pd.Series with binary outcome indicators
             - adjusted_follow_ups: pd.DataFrame with final follow-up periods
     """
-
-    index_date_matching = filter_df_by_unique_values(
-        index_date_matching, index_dates, CONTROL_PID_COL, PID_COL
-    )
+    if index_date_matching is not None:
+        index_date_matching = filter_df_by_unique_values(
+            index_date_matching, index_dates, CONTROL_PID_COL, PID_COL
+        )
     non_compliance_abspos = get_non_compliance_abspos(exposures, n_hours_compliance)
     follow_ups = prepare_follow_ups_simple(
         index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end

@@ -555,6 +555,45 @@ class TestOutcomeMaker(unittest.TestCase):
         self.assertEqual(len(non_fatal_mi_outcome), 1)
         self.assertEqual(non_fatal_mi_outcome.iloc[0][PID_COL], 9)
 
+    def test_batch_processing_and_header_writing(self):
+        """Test that headers are written only once when processing multiple batches."""
+        outcomes = {
+            "BATCH_TEST": {
+                "type": ["code"],
+                "match": [["D10"]],
+                "match_how": "startswith",
+            }
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        header_written = defaultdict(bool)
+
+        # First batch of data
+        batch1_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([1, 2])]
+        patient_set1 = [1, 2]
+        outcome_maker(batch1_concepts, patient_set1, self.outcomes_path, header_written)
+
+        # Second batch of data
+        batch2_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([3])]
+        patient_set2 = [3]
+        outcome_maker(batch2_concepts, patient_set2, self.outcomes_path, header_written)
+
+        # Check the output file
+        output_file = os.path.join(self.outcomes_path, "BATCH_TEST.csv")
+        self.assertTrue(os.path.exists(output_file))
+
+        with open(output_file, "r") as f:
+            content = f.read()
+            # Check that header appears only once
+            self.assertEqual(content.count("subject_id,time,abspos"), 1)
+
+        # Check the content of the file
+        batch_test_outcome = pd.read_csv(output_file)
+        # Should contain 3 rows from both batches
+        self.assertEqual(len(batch_test_outcome), 3)
+        self.assertTrue(
+            all(pid in batch_test_outcome[PID_COL].values for pid in [1, 2, 3])
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
