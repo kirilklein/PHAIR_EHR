@@ -63,16 +63,21 @@ class CausalSimulator:
 
     def _initialize_state(self):
         """Initializes empty, stateful attributes for the simulator."""
+        # The latent dimension for low-rank factorization. Make this configurable.
+        self.latent_dim = 100
+
         self.code_to_idx = {}
         self.vocabulary = []
         self.weights = {
             "exposure": {
                 "linear": np.array([]),
-                "interaction_joint": np.zeros((0, 0)),
+                "interaction_U": np.zeros((0, self.latent_dim)),
+                "interaction_K": np.zeros((0, self.latent_dim)),
             },
             "_outcomes_shared": {
                 "linear": np.array([]),
-                "interaction_joint": np.zeros((0, 0)),
+                "interaction_U": np.zeros((0, self.latent_dim)),
+                "interaction_K": np.zeros((0, self.latent_dim)),
             },
         }
         self.linear_code_indices = None
@@ -82,7 +87,9 @@ class CausalSimulator:
 
     def _update_vocabulary_and_weights(self, codes_in_shard: Set[str]):
         """
-        Updates vocabulary and weights for new codes. Weights are sampled on the fly.
+        Updates vocabulary and weights using low-rank factorization for interactions.
+        Weights for new codes are sampled on the fly and appended, which is much
+        faster than resizing a full V x V matrix.
         """
         logger.info("Checking for new codes to update vocabulary and weights...")
         new_codes = list(codes_in_shard - set(self.vocabulary))
@@ -95,15 +102,13 @@ class CausalSimulator:
             f"Discovered {len(new_codes)} new codes. Updating vocabulary and weights."
         )
         n_new = len(new_codes)
-        n_old = len(self.vocabulary)
-        n_total = n_old + n_new
 
         # Grow vocabulary
         for code in new_codes:
             self.code_to_idx[code] = len(self.vocabulary)
             self.vocabulary.append(code)
 
-        # Grow and sample linear weights
+        # Grow and sample linear weights (no change here)
         linear_config = self.config.simulation_model.linear
         for key in ["exposure", "_outcomes_shared"]:
             new_weights = self.sampling_func(
@@ -122,51 +127,55 @@ class CausalSimulator:
                 self.weights[key]["linear"], new_weights
             )
 
-        # Grow and sample interaction weights
+        # Grow and sample interaction factor matrices (U and K)
         interaction_config = self.config.simulation_model.interaction
         for key in ["exposure", "_outcomes_shared"]:
-            old_matrix = self.weights[key]["interaction_joint"]
-            new_matrix = np.zeros((n_total, n_total))
-            new_matrix[:n_old, :n_old] = old_matrix
+            # Sample new rows for the U and K factor matrices
+            new_U_rows = self.sampling_func(
+                interaction_config.mean,
+                interaction_config.scale,
+                (n_new, self.latent_dim),
+            )
+            new_K_rows = self.sampling_func(
+                interaction_config.mean,
+                interaction_config.scale,
+                (n_new, self.latent_dim),
+            )
 
-            # New interactions with old codes
-            interactions_new_old = self.sampling_func(
-                interaction_config.mean, interaction_config.scale, (n_new, n_old)
+            # Apply sparsity
+            is_zero_U = (
+                self.rng.random((n_new, self.latent_dim))
+                < interaction_config.sparsity_factor
             )
-            is_zero_no = (
-                self.rng.random((n_new, n_old)) < interaction_config.sparsity_factor
+            is_zero_K = (
+                self.rng.random((n_new, self.latent_dim))
+                < interaction_config.sparsity_factor
             )
-            interactions_new_old[is_zero_no] = 0
+            new_U_rows[is_zero_U] = 0
+            new_K_rows[is_zero_K] = 0
 
-            # New interactions with new codes
-            interactions_new_new = self.sampling_func(
-                interaction_config.mean, interaction_config.scale, (n_new, n_new)
-            )
-            is_zero_nn = (
-                self.rng.random((n_new, n_new)) < interaction_config.sparsity_factor
-            )
-            interactions_new_new[is_zero_nn] = 0
-
+            # Apply clipping if configured
             if interaction_config.max_weight is not None:
                 np.clip(
-                    interactions_new_old,
+                    new_U_rows,
                     -interaction_config.max_weight,
                     interaction_config.max_weight,
-                    out=interactions_new_old,
+                    out=new_U_rows,
                 )
                 np.clip(
-                    interactions_new_new,
+                    new_K_rows,
                     -interaction_config.max_weight,
                     interaction_config.max_weight,
-                    out=interactions_new_new,
+                    out=new_K_rows,
                 )
 
-            new_matrix[n_old:, :n_old] = interactions_new_old
-            new_matrix[:n_old, n_old:] = interactions_new_old.T
-            new_new_symmetric = np.triu(interactions_new_new, k=1)
-            new_matrix[n_old:, n_old:] = new_new_symmetric + new_new_symmetric.T
-            np.fill_diagonal(new_matrix, 0)  # Diagonal should still be zero
-            self.weights[key]["interaction_joint"] = new_matrix
+            # Efficiently append new rows to the existing factor matrices
+            self.weights[key]["interaction_U"] = np.vstack(
+                [self.weights[key]["interaction_U"], new_U_rows]
+            )
+            self.weights[key]["interaction_K"] = np.vstack(
+                [self.weights[key]["interaction_K"], new_K_rows]
+            )
 
     def simulate_dataset(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         """
@@ -502,7 +511,10 @@ class CausalSimulator:
         is_exposed: bool = False,
         additional_logit_effect: np.ndarray = 0.0,
     ) -> np.ndarray:
-        """Calculates event probabilities for the entire cohort in a vectorized manner."""
+        """
+        Calculates event probabilities for the entire cohort in a vectorized manner,
+        using low-rank factorization for efficient interaction effect computation.
+        """
         n_patients = history_matrix.shape[0]
 
         if event_name == "exposure":
@@ -510,26 +522,26 @@ class CausalSimulator:
         else:  # It's an outcome
             weights = self.weights["_outcomes_shared"]
 
-        logit_p_array = np.full(n_patients, logit(event_cfg.p_base))
+        logit_p_array = np.full(n_patients, logit(event_cfg.p_base), dtype=np.float32)
 
         # 1. Linear effects (always applied)
+        # This operation is much faster if history_matrix is sparse
         logit_p_array += history_matrix @ weights["linear"]
 
-        # 2. Interaction effects
-        interaction_history = history_matrix
-        joint_weights = weights["interaction_joint"]
+        # 2. Interaction effects using Low-Rank Factorization (The key optimization) 🚀
+        W_U = weights["interaction_U"]
+        W_K = weights["interaction_K"]
 
-        # This is equivalent to (A * (A @ W)).sum(axis=1) / 2 for symmetric W with 0 diagonal
-        interaction_effect = (
-            np.einsum(
-                "ij,jk,ik->i", interaction_history, joint_weights, interaction_history
-            )
-            / 2
-        )
+        # Efficiently calculate (A @ U) * (A @ K) and sum over the latent dimension
+        # where A is the history_matrix. This is much faster than the old einsum.
+        left_term = history_matrix @ W_U  # Shape: (n_patients, latent_dim)
+        right_term = history_matrix @ W_K  # Shape: (n_patients, latent_dim)
+
+        # Element-wise product and sum is equivalent to the full quadratic form
+        interaction_effect = np.sum(left_term * right_term, axis=1)
         logit_p_array += interaction_effect
 
         # 3. Exposure effect (for outcomes)
-
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p_array += event_cfg.exposure_effect
 
@@ -539,6 +551,8 @@ class CausalSimulator:
 
         # 5. Unobserved confounder effect
         logit_p_array += additional_logit_effect
+
+        # Add random noise
         logit_p_array += self.rng.normal(0, 0.01, n_patients)
 
         return expit(logit_p_array)
