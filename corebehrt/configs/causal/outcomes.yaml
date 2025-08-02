@@ -39,18 +39,25 @@ outcomes:
     match_how: exact
     case_sensitive: false
 
-  TEST_EXCLUSION:
+  OUTCOME_case_sensitive:
     type: [code]
-    match: [["D/73438004"]]
+    match: [["OUTCOME"]]
     match_how: exact
     case_sensitive: true
-    exclusion:
-      events:
+
+  TEST_EXCLUSION:
+    combinations:
+      primary:
+        type: [code]
+        match: [["D/73438004"]]
+        match_how: exact
+      secondary:
         type: [code]
         match: [["D/72892002"]]
-        match_how: exact
       window_hours_min: -10
       window_hours_max: 10
+      exclude: true
+
   TEST_COMBINATION:
     combinations:
       primary:

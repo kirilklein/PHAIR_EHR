@@ -59,8 +59,12 @@ def contains_match(
 def exact_match(
     df: pd.DataFrame, column: str, patterns: List[str], case_sensitive: bool
 ) -> pd.Series:
-    """Match strings using exact match"""
+    """Match strings using exact match (optimized for categorical)"""
+    # Assumes df[column] is already a categorical dtype
     if not case_sensitive:
         patterns = [x.lower() for x in patterns]
-        return df[column].astype(str).str.lower().isin(patterns)
-    return df[column].astype(str).isin(patterns)
+        # Perform .lower() only if necessary. Note: This part is still slow.
+        return df[column].str.lower().isin(patterns)
+
+    # This is the highly optimized path for case-sensitive exact matches
+    return df[column].isin(patterns)

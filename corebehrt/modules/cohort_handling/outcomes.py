@@ -22,7 +22,6 @@ from corebehrt.constants.data import (
 from corebehrt.functional.cohort_handling.combined_outcomes import (
     check_combination_args,
     create_empty_results_df,
-    find_matches_within_window,
 )
 from corebehrt.functional.cohort_handling.matching import get_col_booleans
 from corebehrt.functional.preparation.filter import remove_missing_timestamps
@@ -49,19 +48,18 @@ class OutcomeMaker:
         total_time_start = time.time()
         for outcome, attrs in self.outcomes.items():
             start_time = time.time()
+            timestamps = create_empty_results_df()  # Default empty df
             # Handle combination outcomes
             if COMBINATIONS in attrs:
-                check_combination_args(attrs[COMBINATIONS])
-                timestamps = self.match_combinations(concepts_plus, attrs[COMBINATIONS])
-            # Handle traditional outcomes
+                combinations_config = attrs[COMBINATIONS]
+                check_combination_args(combinations_config)
+                is_exclusion = combinations_config.get("exclude", False)
+                timestamps = self.match_combinations(
+                    concepts_plus, combinations_config, exclude=is_exclusion
+                )
             else:
-                types = attrs["type"]
-                matches = attrs["match"]
-                timestamps = self.match_concepts(concepts_plus, types, matches, attrs)
-
-            if "exclusion" in attrs and not timestamps.empty:
-                timestamps = self._apply_exclusion_filter(
-                    concepts_plus, timestamps, attrs["exclusion"]
+                timestamps = self.match_concepts(
+                    concepts_plus, attrs["type"], attrs["match"], attrs
                 )
 
             self._write_df(timestamps, outcomes_path, outcome)
@@ -88,7 +86,7 @@ class OutcomeMaker:
         ]  # get only relevant columns
         concepts_plus[ABSPOS_COL] = get_hours_since_epoch(concepts_plus[TIMESTAMP_COL])
         concepts_plus[ABSPOS_COL] = concepts_plus[ABSPOS_COL].astype(int)
-        # concepts_plus[CONCEPT_COL] = pd.Categorical(concepts_plus[CONCEPT_COL])
+        concepts_plus[CONCEPT_COL] = pd.Categorical(concepts_plus[CONCEPT_COL])
         return concepts_plus
 
     def _write_df(
@@ -206,22 +204,42 @@ class OutcomeMaker:
         self,
         concepts_plus: pd.DataFrame,
         combinations: Dict,
+        exclude: bool = False,
     ) -> pd.DataFrame:
-        """Action: KEEPS matching events. Uses the shared matching engine."""
-        # ... (code is unchanged from the previous step, it already uses the fast engine)
-        primary_events = self.get_events(concepts_plus, combinations[PRIMARY])
-        secondary_events = self.get_events(concepts_plus, combinations[SECONDARY])
+        """
+        Finds combinations or exclusions based on the exclude flag.
 
-        if primary_events.empty or secondary_events.empty:
+        If exclude is False, it KEEPS the primary events that have a match.
+        If exclude is True, it DROPS the primary events that have a match.
+        """
+        primary_events = self.get_events(concepts_plus, combinations[PRIMARY])
+        if primary_events.empty:
             return create_empty_results_df()
 
-        return self._find_matches_fast(
+        secondary_events = self.get_events(concepts_plus, combinations[SECONDARY])
+
+        if secondary_events.empty:
+            # If we are excluding, no secondary events means nothing to drop, so return all primary events.
+            # If we are combining, no secondary events means no matches, so return empty.
+            return primary_events if exclude else create_empty_results_df()
+
+        # Find all primary events that have a valid secondary match
+        matching_events = self._find_matches_fast(
             primary_events,
             secondary_events,
             window_hours_min=combinations[WINDOW_HOURS_MIN],
             window_hours_max=combinations[WINDOW_HOURS_MAX],
             timestamp_source=combinations.get(TIMESTAMP_SOURCE, PRIMARY),
         )
+        if exclude:
+            # For exclusion, drop the matching events from the original primary set
+            if not matching_events.empty:
+                return primary_events.drop(index=matching_events.index)
+            else:
+                return primary_events  # No matches found, so nothing to exclude
+        else:
+            # For combination, simply return the events that were matched
+            return matching_events
 
     def get_events(self, concepts_plus: pd.DataFrame, config: Dict) -> pd.DataFrame:
         """Extract events from concepts based on configuration."""
@@ -229,33 +247,3 @@ class OutcomeMaker:
         return self.match_concepts(
             concepts_plus, config["type"], config["match"], extra_params
         )
-
-    def _apply_exclusion_filter(
-        self,
-        concepts_plus: pd.DataFrame,
-        target_events: pd.DataFrame,
-        exclusion_config: Dict,
-    ) -> pd.DataFrame:
-        """Action: DROPS matching events. Also uses the shared matching engine."""
-        if target_events.empty:
-            return target_events
-
-        # 1. Get the events that will trigger an exclusion.
-        exclusion_events = self.get_events(concepts_plus, exclusion_config["events"])
-
-        if exclusion_events.empty:
-            return target_events
-
-        # 2. Use the shared engine to find all target_events that have a matching exclusion_event.
-        events_to_drop = self._find_matches_fast(
-            primary_events=target_events,
-            secondary_events=exclusion_events,
-            window_hours_min=exclusion_config["window_hours_min"],
-            window_hours_max=exclusion_config["window_hours_max"],
-        )
-
-        # 3. If any such events were found, drop them from the original DataFrame.
-        if not events_to_drop.empty:
-            return target_events.drop(index=events_to_drop.index)
-
-        return target_events
