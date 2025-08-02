@@ -152,10 +152,12 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
         k2_deathdate = self.patients_info[self.patients_info[PID_COL] == self.k2_pid][
             DEATHDATE_COL
         ].iloc[0]
-        
+
         # The assigned index date is in the `index_dates` dataframe for the control pid
-        assigned_index_date = index_dates[index_dates[PID_COL] == self.k2_pid][TIMESTAMP_COL].iloc[0]
-        
+        assigned_index_date = index_dates[index_dates[PID_COL] == self.k2_pid][
+            TIMESTAMP_COL
+        ].iloc[0]
+
         self.assertLess(
             assigned_index_date,
             k2_deathdate,

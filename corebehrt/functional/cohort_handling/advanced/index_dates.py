@@ -190,8 +190,9 @@ def _construct_initial_matching_df(
 
     # Merge case info using the 'case_idx' column
     temp_df = temp_df.merge(
-        cases_info[[TIMESTAMP_COL, EXPOSED_PID_COL]].rename_axis("case_idx"),
-        on="case_idx",
+        cases_info[[TIMESTAMP_COL, EXPOSED_PID_COL]],
+        left_on="case_idx",
+        right_index=True,
         how="left",
     )
     return temp_df
