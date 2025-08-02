@@ -105,10 +105,11 @@ class OutcomeMaker:
         If the dataframe is empty, do nothing.
         """
         output_path = join(outcomes_path, f"{outcome}.csv")
+        write_columns = [PID_COL, TIMESTAMP_COL, ABSPOS_COL]
         if timestamps.empty:
             if self.write_header[outcome]:
                 logger.warning(f"Outcome {outcome} has no data. Write only header.")
-                pd.DataFrame(columns=[PID_COL, TIMESTAMP_COL, ABSPOS_COL]).to_csv(
+                pd.DataFrame(columns=write_columns).to_csv(
                     output_path, header=True, index=False
                 )
                 self.write_header[outcome] = False
@@ -116,7 +117,7 @@ class OutcomeMaker:
 
         write_header = self.write_header[outcome]
         mode = "w" if write_header else "a"
-        timestamps.to_csv(output_path, mode=mode, header=write_header, index=False)
+        timestamps[write_columns].to_csv(output_path, mode=mode, header=write_header, index=False)
         self.write_header[outcome] = False  # ! important for next iterations
 
     def match_concepts(
