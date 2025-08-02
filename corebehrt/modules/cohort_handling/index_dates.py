@@ -40,7 +40,7 @@ class IndexDateHandler:
     ) -> pd.Series:
         """Draw censor dates for patients not in censor_timestamps."""
         np.random.seed(42)
-        missing_pids = set(data_pids) - set(censoring_timestamps.index)  
+        missing_pids = set(data_pids) - set(censoring_timestamps.index)
         random_abspos = np.random.choice(
             censoring_timestamps.values, size=len(missing_pids)
         )

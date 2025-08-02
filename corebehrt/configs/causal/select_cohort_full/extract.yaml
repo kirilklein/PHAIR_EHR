@@ -31,3 +31,7 @@ time_windows: # if not provided we can use exposures to get the index dates
 cv_folds: 2 # can be set to 1 if only a simple train/val split is needed
 val_ratio: 0.1 # only used if cv_folds is set to 1
 test_ratio: 0 # can be set to 1 for test set creation only
+
+index_date_matching:
+  birth_year_tolerance: 3
+  redraw_attempts: 2
