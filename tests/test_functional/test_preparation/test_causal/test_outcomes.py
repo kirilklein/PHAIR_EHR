@@ -196,6 +196,7 @@ class TestGetBinaryOutcome(unittest.TestCase):
             deaths=self.deaths,
             exposures=self.exposures,
             data_end=self.data_end,
+            group_wise_follow_up=False,
         )
 
         # Verify mocks were called correctly
@@ -270,6 +271,7 @@ class TestGetBinaryOutcome(unittest.TestCase):
             deaths=self.deaths,
             exposures=self.exposures,
             data_end=self.data_end,
+            group_wise_follow_up=False,
         )
 
         pd.testing.assert_series_equal(binary_outcomes, expected_binary)
@@ -330,6 +332,7 @@ class TestGetBinaryOutcome(unittest.TestCase):
             deaths=self.deaths,
             exposures=self.exposures,
             data_end=self.data_end,
+            group_wise_follow_up=False,
         )
 
         mock_get_non_compliance.assert_called_once_with(self.exposures, np.inf)
@@ -395,6 +398,7 @@ class TestGetBinaryOutcome(unittest.TestCase):
             deaths=deaths_no_deaths,
             exposures=self.exposures,
             data_end=self.data_end,
+            group_wise_follow_up=False,
         )
 
         mock_prepare_adjusted.assert_called_once_with(
