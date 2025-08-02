@@ -13,20 +13,20 @@ seed: 42
 debug: false
 min_num_codes: 3
 include_code_prefixes: ["D/"]
-index_date: "2015-01-01"
+index_date: "2020-01-01"
 
 simulation_model:
-  time_decay_halflife_days: 5000
+  time_decay_halflife_days: 3000
   linear:
     mean: 0
-    scale: 1.0
-    max_weight: 2.0
-    sparsity_factor: 0.2
+    scale: 0.2
+    max_weight: 0.8
+    sparsity_factor: 0
   interaction:
     mean: 0
-    scale: 0.5
-    max_weight: 2.0
-    sparsity_factor: 0.5
+    scale: 0.2
+    max_weight: 1.0
+    sparsity_factor: 0.6
 
 exposure:
   p_base: 0.3 # Base 15% chance of exposure over the patient's timeline

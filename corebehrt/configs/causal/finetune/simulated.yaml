@@ -18,7 +18,7 @@ model:
     bidirectional: true
     bottleneck_dim: 64
     l1_lambda: 0
-    temperature: 1.2
+    temperature: 1
   loss:
     name: bce # bce by default
     #params: # alpha is computed from pos_weight
@@ -30,7 +30,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 12
+  epochs: 8
   info: true
   # gradient_clip:
   # clip_value: 1.0
@@ -48,7 +48,7 @@ trainer_args:
   save_curves: false
 
 optimizer:
-  lr: 3e-3
+  lr: 7e-3
   eps: 1e-6
 
 scheduler:
