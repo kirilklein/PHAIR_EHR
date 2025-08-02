@@ -54,6 +54,7 @@ def get_binary_outcome(
     exposures: pd.DataFrame,
     data_end: pd.Timestamp,
     group_wise_follow_up: bool,
+    delay_death_hours: int = 0,
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
     Create binary outcome indicators for patients using adjusted follow-up periods.
@@ -74,6 +75,9 @@ def get_binary_outcome(
         index_date_matching: DataFrame defining matched groups (control_subject_id, exposed_subject_id)
         deaths: Series with death times
         exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
+        data_end: Timestamp of the end of the data
+        group_wise_follow_up: Whether to group-wise follow-up
+        delay_death_hours: Hours to add to death time for outcomes that are coded with a delay
 
     Returns:
         tuple: (binary_outcomes, adjusted_follow_ups)
@@ -96,6 +100,7 @@ def get_binary_outcome(
         follow_ups,
         non_compliance_abspos,
         deaths,
+        delay_death_hours,
     )  # based on non-compliance, death, and group
 
     if group_wise_follow_up:  # make group-wise follow-up times shorter

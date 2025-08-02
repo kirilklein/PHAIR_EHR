@@ -44,7 +44,7 @@ def prepare_follow_ups_adjusted(
     follow_ups: pd.DataFrame,
     non_compliance_abspos: pd.Series,
     deaths: pd.Series,
-    delay_death_hours: int = 336,
+    delay_death_hours: int = 0,
 ) -> pd.DataFrame:
     """
     Prepare the follow-ups for the patients.
