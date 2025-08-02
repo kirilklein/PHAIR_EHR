@@ -1,5 +1,5 @@
 import logging
-from collections import defaultdict
+import time
 from os.path import join
 from typing import Dict, List
 
@@ -45,19 +45,13 @@ class OutcomeMaker:
     def __call__(
         self,
         concepts_plus: pd.DataFrame,
-        patient_set: List[str],
         outcomes_path: str,
-        header_written: Dict[str, bool],
     ) -> None:
         """Create outcomes from concepts_plus and patients_info and writes them to disk."""
-        # Convert patient IDs to the right type for filtering
-        patient_ids = [int(pid) for pid in patient_set]
-        concepts_plus = filter_table_by_pids(concepts_plus, patient_ids)
-        concepts_plus = remove_missing_timestamps(concepts_plus)
-        concepts_plus = concepts_plus[
-            [PID_COL, TIMESTAMP_COL, CONCEPT_COL, VALUE_COL]
-        ]  # get only relevant columns
+        concepts_plus = self._prepare_concepts_plus(concepts_plus)
+        total_time_start = time.time()
         for outcome, attrs in self.outcomes.items():
+            start_time = time.time()
             # Handle combination outcomes
             if COMBINATIONS in attrs:
                 check_combination_args(attrs[COMBINATIONS])
@@ -74,6 +68,29 @@ class OutcomeMaker:
                 )
 
             self._write_df(timestamps, outcomes_path, outcome)
+            end_time = time.time()
+            logger.info(f"Time taken for {outcome}: {end_time - start_time} seconds")
+        total_time_end = time.time()
+        logger.info(f"Total time taken for batch: {total_time_end - total_time_start} seconds")
+
+    @staticmethod
+    def _prepare_concepts_plus(concepts_plus: pd.DataFrame) -> pd.DataFrame:
+        """
+        Prepare concepts_plus for matching.
+        - Remove missing timestamps
+        - Get only relevant columns
+        - Add absolute positions
+        - Convert absolute positions to int
+        - Convert concept column to categorical
+        """
+        concepts_plus = remove_missing_timestamps(concepts_plus)
+        concepts_plus = concepts_plus[
+            [PID_COL, TIMESTAMP_COL, CONCEPT_COL, VALUE_COL]
+        ]  # get only relevant columns
+        concepts_plus[ABSPOS_COL] = get_hours_since_epoch(concepts_plus[TIMESTAMP_COL])
+        concepts_plus[ABSPOS_COL] = concepts_plus[ABSPOS_COL].astype(int)
+        # concepts_plus[CONCEPT_COL] = pd.Categorical(concepts_plus[CONCEPT_COL])
+        return concepts_plus
 
     def _write_df(
         self,
@@ -96,19 +113,10 @@ class OutcomeMaker:
                 self.write_header[outcome] = False
             return  # always return, but write only on first call
 
-        timestamps = self._prepare_timestamps(timestamps)
         write_header = self.write_header[outcome]
         mode = "w" if write_header else "a"
         timestamps.to_csv(output_path, mode=mode, header=write_header, index=False)
         self.write_header[outcome] = False  # ! important for next iterations
-
-    @staticmethod
-    def _prepare_timestamps(timestamps: pd.DataFrame) -> pd.DataFrame:
-        if ABSPOS_COL not in timestamps.columns:
-            timestamps[ABSPOS_COL] = get_hours_since_epoch(timestamps[TIMESTAMP_COL])
-        timestamps[ABSPOS_COL] = timestamps[ABSPOS_COL].astype(int)
-        timestamps[PID_COL] = timestamps[PID_COL].astype(int)
-        return timestamps
 
     def match_concepts(
         self,
@@ -187,14 +195,6 @@ class OutcomeMaker:
         if len(primary_events) == 0 or len(secondary_events) == 0:
             return create_empty_results_df()
 
-        # Add absolute positions for time window comparison
-        primary_events[ABSPOS_COL] = get_hours_since_epoch(
-            primary_events[TIMESTAMP_COL]
-        )
-        secondary_events[ABSPOS_COL] = get_hours_since_epoch(
-            secondary_events[TIMESTAMP_COL]
-        )
-
         # Find events within the time window
         return find_matches_within_window(
             primary_events,
@@ -224,14 +224,6 @@ class OutcomeMaker:
             return target_events
 
         target_events = target_events.copy()
-        if ABSPOS_COL not in target_events.columns:
-            target_events[ABSPOS_COL] = get_hours_since_epoch(
-                target_events[TIMESTAMP_COL]
-            )
-
-        exclusion_events[ABSPOS_COL] = get_hours_since_epoch(
-            exclusion_events[TIMESTAMP_COL]
-        )
         exclusion_events = exclusion_events.rename(
             columns={ABSPOS_COL: f"{ABSPOS_COL}_exclusion"}
         )
