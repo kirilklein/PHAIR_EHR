@@ -90,37 +90,36 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
         """
         Test that controls are matched only with cases from a similar birth year.
         """
-        # We need to call the REAL function here, not the placeholder
-        # For demonstration, we'll assume the real function is available
         index_dates, matching = draw_index_dates_for_control_with_redraw(
             control_pids=self.control_pids,
             cases_df=self.cases_df,
             patients_info=self.patients_info,
-            birth_year_tolerance=1,  # e.g., 1980 can match with 1979-1981
+            birth_year_tolerance=1,
             seed=42,
         )
 
-        # --- MOCKING THE EXPECTED RESULT for demonstration ---
-        # A real run would produce this dynamically
-        matching = pd.DataFrame(
-            {
-                CONTROL_PID_COL: [self.k1_pid, self.k2_pid],
-                EXPOSED_PID_COL: [
-                    self.c1_pid,
-                    self.c4_pid,
-                ],  # Assume this is the result
-            }
-        )
-
-        # Get the match for the control born in 1980
+        # Get the match for the control born in 1980 (k1)
         match_k1 = matching[matching[CONTROL_PID_COL] == self.k1_pid]
+        self.assertFalse(match_k1.empty, "Control k1 was not matched.")
         matched_case_for_k1 = match_k1[EXPOSED_PID_COL].iloc[0]
 
-        # Assert it was matched with a case from the 1980/1981 pool
+        # Assert k1 was matched with a case from the 1980/1981 pool
         self.assertIn(
             matched_case_for_k1,
             [self.c1_pid, self.c2_pid],
-            "Control from 1980 was matched outside its birth year stratum.",
+            "Control from 1980 (k1) was matched outside its birth year stratum.",
+        )
+
+        # Get the match for the control born in 1990 (k2)
+        match_k2 = matching[matching[CONTROL_PID_COL] == self.k2_pid]
+        self.assertFalse(match_k2.empty, "Control k2 was not matched.")
+        matched_case_for_k2 = match_k2[EXPOSED_PID_COL].iloc[0]
+
+        # Assert k2 was matched with a case from the 1990 pool
+        self.assertIn(
+            matched_case_for_k2,
+            [self.c3_pid, self.c4_pid],
+            "Control from 1990 (k2) was matched outside its birth year stratum.",
         )
 
     def test_death_date_validation(self):
@@ -130,22 +129,12 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
         """
         # The key is that k2 (born 1990, died 2008) can ONLY be matched with c4 (index 2005).
         # Matching with c3 (index 2015) is invalid. The redraw logic must enforce this.
-
         index_dates, matching = draw_index_dates_for_control_with_redraw(
             control_pids=self.control_pids,
             cases_df=self.cases_df,
             patients_info=self.patients_info,
             birth_year_tolerance=1,
             seed=42,  # Using a seed for reproducibility
-        )
-
-        # --- MOCKING THE EXPECTED RESULT ---
-        matching = pd.DataFrame(
-            {
-                CONTROL_PID_COL: [self.k1_pid, self.k2_pid],
-                EXPOSED_PID_COL: [self.c1_pid, self.c4_pid],
-                TIMESTAMP_COL: pd.to_datetime(["2010-01-01", "2005-01-01"]),
-            }
         )
 
         match_k2 = matching[matching[CONTROL_PID_COL] == self.k2_pid]
@@ -163,7 +152,10 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
         k2_deathdate = self.patients_info[self.patients_info[PID_COL] == self.k2_pid][
             DEATHDATE_COL
         ].iloc[0]
-        assigned_index_date = match_k2[TIMESTAMP_COL].iloc[0]
+        
+        # The assigned index date is in the `index_dates` dataframe for the control pid
+        assigned_index_date = index_dates[index_dates[PID_COL] == self.k2_pid][TIMESTAMP_COL].iloc[0]
+        
         self.assertLess(
             assigned_index_date,
             k2_deathdate,
@@ -183,11 +175,9 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
             seed=42,
         )
 
-        # --- MOCKING THE EXPECTED RESULT ---
-        index_dates = pd.DataFrame({PID_COL: [self.k1_pid, self.k2_pid]})
-
         # The total number of matched controls should be 2 (k1 and k2)
         self.assertEqual(len(index_dates), 2)
+        self.assertEqual(len(matching), 2)
 
         # Specifically check that the unmatchable control ID is not in the final list
         final_pids = index_dates[PID_COL].unique()
