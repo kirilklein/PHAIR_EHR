@@ -247,7 +247,7 @@ def _sample_stratified_indices(
     )
 
 
-def _prepare_controls_info(patients_info: pd.DataFrame, control_pids) -> pd.DataFrame:
+def _prepare_controls_info(patients_info: pd.DataFrame, control_pids: List[int]) -> pd.DataFrame:
     """
     Prepare controls info for index date matching.
     Add birth year column and drop rows with missing birth year.
