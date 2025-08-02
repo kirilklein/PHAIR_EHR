@@ -117,7 +117,9 @@ class OutcomeMaker:
 
         write_header = self.write_header[outcome]
         mode = "w" if write_header else "a"
-        timestamps[write_columns].to_csv(output_path, mode=mode, header=write_header, index=False)
+        timestamps[write_columns].to_csv(
+            output_path, mode=mode, header=write_header, index=False
+        )
         self.write_header[outcome] = False  # ! important for next iterations
 
     def match_concepts(

@@ -20,40 +20,68 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
     """
     Test suite for the age-stratified index date drawing function.
     """
+
     def setUp(self):
         """Set up a small, targeted dataset for all tests."""
         # --- Define Patient IDs ---
         self.c1_pid, self.c2_pid = 1, 2  # Cases born ~1980
         self.c3_pid, self.c4_pid = 3, 4  # Cases born 1990
-        
-        self.k1_pid = 101 # Control born 1980
-        self.k2_pid = 102 # Control born 1990 (will die early)
-        self.k3_pid = 103 # Control born 2000 (unmatchable)
+
+        self.k1_pid = 101  # Control born 1980
+        self.k2_pid = 102  # Control born 1990 (will die early)
+        self.k3_pid = 103  # Control born 2000 (unmatchable)
 
         # --- Patient Info (Ground Truth) ---
-        self.patients_info = pd.DataFrame({
-            PID_COL: [self.c1_pid, self.c2_pid, self.c3_pid, self.c4_pid, 
-                      self.k1_pid, self.k2_pid, self.k3_pid],
-            BIRTHDATE_COL: pd.to_datetime([
-                '1980-05-15', '1981-06-20', '1990-01-10', '1990-07-01',  # Cases
-                '1980-11-01', '1990-03-15', '2000-01-01'                 # Controls
-            ]),
-            DEATHDATE_COL: pd.to_datetime([
-                pd.NaT, pd.NaT, pd.NaT, pd.NaT,                         # Cases are alive
-                pd.NaT, '2008-01-01', pd.NaT                             # k2 dies early
-            ])
-        })
+        self.patients_info = pd.DataFrame(
+            {
+                PID_COL: [
+                    self.c1_pid,
+                    self.c2_pid,
+                    self.c3_pid,
+                    self.c4_pid,
+                    self.k1_pid,
+                    self.k2_pid,
+                    self.k3_pid,
+                ],
+                BIRTHDATE_COL: pd.to_datetime(
+                    [
+                        "1980-05-15",
+                        "1981-06-20",
+                        "1990-01-10",
+                        "1990-07-01",  # Cases
+                        "1980-11-01",
+                        "1990-03-15",
+                        "2000-01-01",  # Controls
+                    ]
+                ),
+                DEATHDATE_COL: pd.to_datetime(
+                    [
+                        pd.NaT,
+                        pd.NaT,
+                        pd.NaT,
+                        pd.NaT,  # Cases are alive
+                        pd.NaT,
+                        "2008-01-01",
+                        pd.NaT,  # k2 dies early
+                    ]
+                ),
+            }
+        )
 
         # --- Case Index Dates ---
-        self.cases_df = pd.DataFrame({
-            PID_COL: [self.c1_pid, self.c2_pid, self.c3_pid, self.c4_pid],
-            TIMESTAMP_COL: pd.to_datetime([
-                '2010-01-01',  # Valid for k1
-                '2012-01-01',  # Valid for k1
-                '2015-01-01',  # INVALID for k2 (after death)
-                '2005-01-01'   # Valid for k2
-            ])
-        })
+        self.cases_df = pd.DataFrame(
+            {
+                PID_COL: [self.c1_pid, self.c2_pid, self.c3_pid, self.c4_pid],
+                TIMESTAMP_COL: pd.to_datetime(
+                    [
+                        "2010-01-01",  # Valid for k1
+                        "2012-01-01",  # Valid for k1
+                        "2015-01-01",  # INVALID for k2 (after death)
+                        "2005-01-01",  # Valid for k2
+                    ]
+                ),
+            }
+        )
 
         # --- List of Control PIDs to match ---
         self.control_pids = [self.k1_pid, self.k2_pid, self.k3_pid]
@@ -69,23 +97,31 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
             cases_df=self.cases_df,
             patients_info=self.patients_info,
             birth_year_tolerance=1,  # e.g., 1980 can match with 1979-1981
-            seed=42
+            seed=42,
         )
 
         # --- MOCKING THE EXPECTED RESULT for demonstration ---
         # A real run would produce this dynamically
-        matching = pd.DataFrame({
-            CONTROL_PID_COL: [self.k1_pid, self.k2_pid],
-            EXPOSED_PID_COL: [self.c1_pid, self.c4_pid] # Assume this is the result
-        })
-        
+        matching = pd.DataFrame(
+            {
+                CONTROL_PID_COL: [self.k1_pid, self.k2_pid],
+                EXPOSED_PID_COL: [
+                    self.c1_pid,
+                    self.c4_pid,
+                ],  # Assume this is the result
+            }
+        )
+
         # Get the match for the control born in 1980
         match_k1 = matching[matching[CONTROL_PID_COL] == self.k1_pid]
         matched_case_for_k1 = match_k1[EXPOSED_PID_COL].iloc[0]
-        
+
         # Assert it was matched with a case from the 1980/1981 pool
-        self.assertIn(matched_case_for_k1, [self.c1_pid, self.c2_pid],
-                      "Control from 1980 was matched outside its birth year stratum.")
+        self.assertIn(
+            matched_case_for_k1,
+            [self.c1_pid, self.c2_pid],
+            "Control from 1980 was matched outside its birth year stratum.",
+        )
 
     def test_death_date_validation(self):
         """
@@ -94,35 +130,45 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
         """
         # The key is that k2 (born 1990, died 2008) can ONLY be matched with c4 (index 2005).
         # Matching with c3 (index 2015) is invalid. The redraw logic must enforce this.
-        
+
         index_dates, matching = draw_index_dates_for_control_with_redraw(
             control_pids=self.control_pids,
             cases_df=self.cases_df,
             patients_info=self.patients_info,
             birth_year_tolerance=1,
-            seed=42 # Using a seed for reproducibility
+            seed=42,  # Using a seed for reproducibility
         )
 
         # --- MOCKING THE EXPECTED RESULT ---
-        matching = pd.DataFrame({
-            CONTROL_PID_COL: [self.k1_pid, self.k2_pid],
-            EXPOSED_PID_COL: [self.c1_pid, self.c4_pid],
-            TIMESTAMP_COL: pd.to_datetime(['2010-01-01', '2005-01-01'])
-        })
-        
+        matching = pd.DataFrame(
+            {
+                CONTROL_PID_COL: [self.k1_pid, self.k2_pid],
+                EXPOSED_PID_COL: [self.c1_pid, self.c4_pid],
+                TIMESTAMP_COL: pd.to_datetime(["2010-01-01", "2005-01-01"]),
+            }
+        )
+
         match_k2 = matching[matching[CONTROL_PID_COL] == self.k2_pid]
-        
+
         self.assertFalse(match_k2.empty, "Control k2 was not matched at all.")
-        
+
         # Check that it was matched to the ONLY valid case
-        self.assertEqual(match_k2[EXPOSED_PID_COL].iloc[0], self.c4_pid,
-                         "Control k2 was not matched with the only case with a valid index date.")
-                         
+        self.assertEqual(
+            match_k2[EXPOSED_PID_COL].iloc[0],
+            self.c4_pid,
+            "Control k2 was not matched with the only case with a valid index date.",
+        )
+
         # Also check the dates directly
-        k2_deathdate = self.patients_info[self.patients_info[PID_COL] == self.k2_pid][DEATHDATE_COL].iloc[0]
+        k2_deathdate = self.patients_info[self.patients_info[PID_COL] == self.k2_pid][
+            DEATHDATE_COL
+        ].iloc[0]
         assigned_index_date = match_k2[TIMESTAMP_COL].iloc[0]
-        self.assertLess(assigned_index_date, k2_deathdate,
-                        "Assigned index date is after the control's death date.")
+        self.assertLess(
+            assigned_index_date,
+            k2_deathdate,
+            "Assigned index date is after the control's death date.",
+        )
 
     def test_unmatchable_control_is_excluded(self):
         """
@@ -134,19 +180,22 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
             cases_df=self.cases_df,
             patients_info=self.patients_info,
             birth_year_tolerance=1,
-            seed=42
+            seed=42,
         )
 
         # --- MOCKING THE EXPECTED RESULT ---
-        index_dates = pd.DataFrame({ PID_COL: [self.k1_pid, self.k2_pid] })
+        index_dates = pd.DataFrame({PID_COL: [self.k1_pid, self.k2_pid]})
 
         # The total number of matched controls should be 2 (k1 and k2)
         self.assertEqual(len(index_dates), 2)
-        
+
         # Specifically check that the unmatchable control ID is not in the final list
         final_pids = index_dates[PID_COL].unique()
-        self.assertNotIn(self.k3_pid, final_pids,
-                         "Unmatchable control was incorrectly included in the final cohort.")
+        self.assertNotIn(
+            self.k3_pid,
+            final_pids,
+            "Unmatchable control was incorrectly included in the final cohort.",
+        )
 
 
 class TestSelectTimeEligibleExposed(unittest.TestCase):
