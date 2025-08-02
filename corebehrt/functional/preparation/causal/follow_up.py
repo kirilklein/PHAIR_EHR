@@ -40,15 +40,11 @@ def get_combined_follow_ups(
 
     Args:
         index_dates: DataFrame with columns 'subject_id', 'abspos' (index dates)
-        n_hours_start_follow_up: Hours after index date to start follow-up
-        n_hours_end_follow_up: Hours after index date to end follow-up
-        n_hours_compliance: Hours to add to last exposure for non-compliance cutoff
         index_date_matching: DataFrame defining matched groups (control_subject_id, exposed_subject_id)
         deaths: Series with death times
         exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
         data_end: Timestamp of the end of the data
-        group_wise_follow_up: Whether to group-wise follow-up
-        delay_death_hours: Hours to add to death time for outcomes that are coded with a delay
+        cfg: OutcomeConfig
 
     Returns:
         - adjusted_follow_ups: pd.DataFrame with final follow-up periods with following column
@@ -73,9 +69,11 @@ def get_combined_follow_ups(
         )
         all_pids = index_dates[PID_COL].unique()
         group_dict = get_group_dict(index_date_matching)
+        max_group = max(group_dict.values(), default=0)
         for pid in all_pids:
             if pid not in group_dict:
-                group_dict[pid] = len(group_dict)
+                group_dict[pid] = max_group + 1
+                max_group += 1
 
         follow_ups[GROUP_COL] = follow_ups[PID_COL].map(group_dict)
         follow_ups[GROUP_COL] = follow_ups[GROUP_COL].astype(int)
