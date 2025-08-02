@@ -279,7 +279,7 @@ class DatasetPreparer:
         patient_pids = set(p.pid for p in patients)
         censor_pids = set(censor_dates.index)
 
-        missing_censor_dates = patient_pids - censor_pids
+        missing_censor_dates = patient_pids - censor_pids  # type: ignore
         if missing_censor_dates:
             logger.error(
                 f"Missing censor dates for {len(missing_censor_dates)} patients"

@@ -54,8 +54,7 @@ def prepare_follow_ups_adjusted(
     Args:
         follow_ups: DataFrame with follow-up information
         non_compliance_abspos: Series with non-compliance times
-        deaths: Dictionary mapping patient IDs to death times
-        group_dict: Dictionary mapping patient IDs to groups
+        deaths: Series with death times
         delay_death_hours: Hours to add to death time for outcomes that are coded with a delay
     """
     follow_ups = follow_ups.copy()

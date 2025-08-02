@@ -54,6 +54,7 @@ outcomes:
       secondary:
         type: [code]
         match: [["D/72892002"]]
+        match_how: exact
       window_hours_min: -10
       window_hours_max: 10
       exclude: true

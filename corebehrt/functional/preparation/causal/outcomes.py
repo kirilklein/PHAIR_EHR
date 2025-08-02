@@ -72,7 +72,7 @@ def get_binary_outcome(
         n_hours_end_follow_up: Hours after index date to end follow-up
         n_hours_compliance: Hours to add to last exposure for non-compliance cutoff
         index_date_matching: DataFrame defining matched groups (control_subject_id, exposed_subject_id)
-        deaths: Series mapping patient IDs to death times (NaN if no death)
+        deaths: Series with death times
         exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
 
     Returns:

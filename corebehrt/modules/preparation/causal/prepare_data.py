@@ -142,9 +142,10 @@ class CausalDatasetPreparer:
             vocabulary=self.vocabulary,
         )
         self._save_artifacts(artifacts, self.paths_cfg.prepared_data)
-        plot_follow_up_distribution(
-            follow_ups, binary_exposure, self.paths_cfg.prepared_data
-        )
+        if follow_ups is not None:
+            plot_follow_up_distribution(
+                follow_ups, binary_exposure, self.paths_cfg.prepared_data
+            )
         return data
 
     def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
@@ -173,14 +174,14 @@ class CausalDatasetPreparer:
         }
         return exposures, index_dates, filtered_outcomes
 
-    def _extract_deaths(self, data: CausalPatientDataset) -> Dict[int, Any]:
+    def _extract_deaths(self, data: CausalPatientDataset) -> pd.Series:
         """Extracts death information for each patient."""
         deaths_list = data.process_in_parallel(
             extract_death, death_token=self.vocabulary[DEATH_CODE]
         )
-        return {
-            patient.pid: death for patient, death in zip(data.patients, deaths_list)
-        }
+        return pd.Series(
+            {patient.pid: death for patient, death in zip(data.patients, deaths_list)}
+        )
 
     def _compute_binary_labels(
         self,
@@ -188,7 +189,7 @@ class CausalDatasetPreparer:
         outcomes: Dict[str, pd.DataFrame],
         index_dates: pd.DataFrame,
         index_date_matching: pd.DataFrame,
-        deaths: Dict[int, Any],
+        deaths: pd.Series,
     ) -> Tuple[pd.Series, pd.DataFrame, pd.DataFrame]:
         """Computes binary exposure and outcome labels."""
         logger.info("Handling exposures and outcomes")
