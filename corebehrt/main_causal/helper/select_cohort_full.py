@@ -115,6 +115,10 @@ def select_cohort(
         Time window requirements for eligibility
     criteria_definitions_path : str
         Path to criteria configuration file
+    index_date_matching_cfg : dict
+        Configuration for index date matching with keys:
+        - birth_year_tolerance: int, default=3
+        - redraw_attempts: int, default=3
     logger : logging.Logger
         Logger for tracking progress
 

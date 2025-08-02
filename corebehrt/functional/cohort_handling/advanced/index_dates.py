@@ -63,8 +63,8 @@ def draw_index_dates_for_control_with_redraw(
     control_pids: List[int],
     cases_df: pd.DataFrame,
     patients_info: pd.DataFrame,
-    birth_year_tolerance: int = 10,
-    redraw_attempts: int = 2,
+    birth_year_tolerance: int = 3,
+    redraw_attempts: int = 3,
     seed: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -81,7 +81,7 @@ def draw_index_dates_for_control_with_redraw(
     patients_info : DataFrame with patient info, including PID_COL, BIRTHDATE_COL, and DEATHDATE_COL.
     birth_year_tolerance : int, default=3
         The +/- range for matching birth years.
-    redraw_attempts : int, default=2
+    redraw_attempts : int, default=3
         Number of redraw attempts for invalid dates.
     seed : int, default=42
         Random seed for reproducibility.
