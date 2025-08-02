@@ -119,12 +119,10 @@ def select_cohort(
     patients_info, exposures, index_dates, index_date_matching = _load_data(
         features_path, exposures_path, exposure, logger
     )
-    control_patients_info = exclude_pids_from_df(
-        patients_info, index_dates[PID_COL].unique()
-    )
 
     criteria_config = load_config(criteria_definitions_path)
     shutil.copy(criteria_definitions_path, join(save_path, CRITERIA_DEFINITIONS_FILE))
+    logger.info("Preparing exposed patients")
     criteria_exposed, index_dates_filtered_exposed, exposed_stats = _prepare_exposed(
         index_dates,
         time_windows,
@@ -134,9 +132,9 @@ def select_cohort(
         splits,
         save_path,
     )
-
+    logger.info("Preparing control patients")
     criteria_control, index_dates_filtered_control, control_stats = _prepare_control(
-        control_patients_info,
+        patients_info,
         index_dates_filtered_exposed,
         logger,
         criteria_config,
@@ -145,7 +143,7 @@ def select_cohort(
         save_path,
         index_date_matching=index_date_matching,
     )
-
+    logger.info("Creating combined visualization")
     # Create combined visualization
     combined_stats = {"exposed": exposed_stats, "control": control_stats}
     plot_multiple_cohort_stats(
@@ -154,7 +152,7 @@ def select_cohort(
         save_path=join(save_path, STATS_PATH, "cohort_comparison.png"),
         show_plot=False,
     )
-
+    logger.info("Saving data")
     criteria = pd.concat([criteria_exposed, criteria_control])
     criteria.to_csv(join(save_path, STATS_PATH, CRITERIA_FLAGS_FILE), index=False)
 

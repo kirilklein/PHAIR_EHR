@@ -9,6 +9,7 @@ DATA = "data"
 
 CONTROL_PID_COL = "control_subject_id"
 EXPOSED_PID_COL = "exposed_subject_id"
+BIRTH_YEAR_COL = "birth_year"
 
 START_COL = "start"
 END_COL = "end"
