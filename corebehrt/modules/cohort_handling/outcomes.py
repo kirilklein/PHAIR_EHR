@@ -25,10 +25,7 @@ from corebehrt.functional.cohort_handling.combined_outcomes import (
     find_matches_within_window,
 )
 from corebehrt.functional.cohort_handling.matching import get_col_booleans
-from corebehrt.functional.preparation.filter import (
-    filter_table_by_pids,
-    remove_missing_timestamps,
-)
+from corebehrt.functional.preparation.filter import remove_missing_timestamps
 from corebehrt.functional.utils.time import get_hours_since_epoch
 
 logger = logging.getLogger(__name__)
@@ -71,7 +68,9 @@ class OutcomeMaker:
             end_time = time.time()
             logger.info(f"Time taken for {outcome}: {end_time - start_time} seconds")
         total_time_end = time.time()
-        logger.info(f"Total time taken for batch: {total_time_end - total_time_start} seconds")
+        logger.info(
+            f"Total time taken for batch: {total_time_end - total_time_start} seconds"
+        )
 
     @staticmethod
     def _prepare_concepts_plus(concepts_plus: pd.DataFrame) -> pd.DataFrame:
@@ -132,8 +131,7 @@ class OutcomeMaker:
         if len(concepts_plus) == 0:
             return create_empty_results_df()
 
-        # Make a copy to avoid modifying the original
-        filtered_concepts = concepts_plus.copy()
+        filtered_concepts = concepts_plus
 
         if "exclude" in attrs:
             filtered_concepts = filtered_concepts[
