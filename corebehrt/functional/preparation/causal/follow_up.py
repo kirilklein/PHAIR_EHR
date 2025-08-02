@@ -8,9 +8,80 @@ from corebehrt.constants.causal.data import (
     START_COL,
     START_TIME_COL,
     GROUP_COL,
+    CONTROL_PID_COL,
 )
 from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.functional.utils.time import get_hours_since_epoch
+from corebehrt.functional.preparation.causal.utils import (
+    filter_df_by_unique_values,
+    get_non_compliance_abspos,
+    get_group_dict,
+)
+from corebehrt.modules.preparation.causal.config import OutcomeConfig
+
+
+def get_combined_follow_ups(
+    index_dates: pd.DataFrame,
+    index_date_matching: pd.DataFrame,
+    deaths: pd.Series,
+    exposures: pd.DataFrame,
+    data_end: pd.Timestamp,
+    cfg: OutcomeConfig,
+) -> pd.DataFrame:
+    """
+    Create follow-up windows.
+
+    This method accounts for multiple censoring events:
+    1. Death events (from deaths parameter)
+    2. Non-compliance periods (last exposure + n_hours_compliance)
+    3. End of follow-up periods
+
+    The final follow-up period for each patient is the minimum of these three values.
+
+    Args:
+        index_dates: DataFrame with columns 'subject_id', 'abspos' (index dates)
+        n_hours_start_follow_up: Hours after index date to start follow-up
+        n_hours_end_follow_up: Hours after index date to end follow-up
+        n_hours_compliance: Hours to add to last exposure for non-compliance cutoff
+        index_date_matching: DataFrame defining matched groups (control_subject_id, exposed_subject_id)
+        deaths: Series with death times
+        exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
+        data_end: Timestamp of the end of the data
+        group_wise_follow_up: Whether to group-wise follow-up
+        delay_death_hours: Hours to add to death time for outcomes that are coded with a delay
+
+    Returns:
+        - adjusted_follow_ups: pd.DataFrame with final follow-up periods with following column
+    """
+    follow_ups = prepare_follow_ups_simple(
+        index_dates, cfg.n_hours_start_follow_up, cfg.n_hours_end_follow_up, data_end
+    )  # simply based on n_hours_start_follow_up and n_hours_end_follow_up
+
+    non_compliance_abspos = get_non_compliance_abspos(exposures, cfg.n_hours_compliance)
+    follow_ups = prepare_follow_ups_adjusted(
+        follow_ups,
+        non_compliance_abspos,
+        deaths,
+        cfg.delay_death_hours,
+    )  # based on non-compliance, death, and group
+
+    if cfg.group_wise_follow_up:  # make group-wise follow-up times shorter
+        if index_date_matching is None:
+            raise ValueError("index_date_matching is required for group-wise follow-up")
+        index_date_matching = filter_df_by_unique_values(
+            index_date_matching, index_dates, CONTROL_PID_COL, PID_COL
+        )
+        all_pids = index_dates[PID_COL].unique()
+        group_dict = get_group_dict(index_date_matching)
+        for pid in all_pids:
+            if pid not in group_dict:
+                group_dict[pid] = len(group_dict)
+
+        follow_ups[GROUP_COL] = follow_ups[PID_COL].map(group_dict)
+        follow_ups[GROUP_COL] = follow_ups[GROUP_COL].astype(int)
+        follow_ups = minimize_end_by_group(follow_ups)
+
+    return follow_ups
 
 
 def prepare_follow_ups_simple(

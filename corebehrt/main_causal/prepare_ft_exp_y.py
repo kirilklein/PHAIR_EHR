@@ -25,7 +25,7 @@ def main(config_path):
     logger = logging.getLogger("prepare finetune data")
     logger.info("Preparing finetune data")
     # Prepare data
-    data = CausalDatasetPreparer(cfg).prepare_finetune_data(mode="tuning")
+    data = CausalDatasetPreparer(cfg, logger).prepare_finetune_data(mode="tuning")
     # Save splits from cohort selection
     pids = data.get_pids()
     folds = create_folds(

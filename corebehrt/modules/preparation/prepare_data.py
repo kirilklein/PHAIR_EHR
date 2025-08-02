@@ -104,8 +104,6 @@ class DatasetPreparer:
             outcomes,
             outcome_cfg.get("n_hours_start_follow_up", 0),
             outcome_cfg.get("n_hours_end_follow_up", None),
-            outcome_cfg.get("group_wise_follow_up", False),
-            outcome_cfg.get("delay_death_hours", 0),
         )
 
         logger.info("Assigning outcomes")
