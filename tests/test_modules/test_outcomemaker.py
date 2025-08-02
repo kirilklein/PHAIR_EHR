@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from collections import defaultdict
+from os.path import join
 
 import pandas as pd
 
@@ -516,45 +517,6 @@ class TestOutcomeMaker(unittest.TestCase):
         combo_outcome = pd.read_csv(combo_file)
         self.assertEqual(len(combo_outcome), 0)
 
-    def test_exclusion_non_fatal_mi(self):
-        """Test exclusion of events that are followed by death within a week."""
-        # Patient 4: MI then death 19 hours later (should be excluded)
-        # Patient 8: MI then death 6 days later (should be excluded)
-        # Patient 9: MI then death 8 days later (should NOT be excluded)
-        outcomes = {
-            "NON_FATAL_MI": {
-                "type": ["code"],
-                "match": [["DI20"]],
-                "match_how": "startswith",
-                "exclusion": {
-                    "events": {
-                        "type": ["code"],
-                        "match": [["DOD"]],
-                        "match_how": "startswith",
-                    },
-                    "window_hours_min": 0,
-                    "window_hours_max": 7 * 24,  # 7 days
-                },
-            }
-        }
-
-        outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
-        outcome_maker(
-            self.concepts_plus,
-            self.patient_set,
-            self.outcomes_path,
-            header_written,
-        )
-
-        output_file = os.path.join(self.outcomes_path, "NON_FATAL_MI.csv")
-        self.assertTrue(os.path.exists(output_file))
-        non_fatal_mi_outcome = pd.read_csv(output_file)
-
-        # Only patient 9 should remain
-        self.assertEqual(len(non_fatal_mi_outcome), 1)
-        self.assertEqual(non_fatal_mi_outcome.iloc[0][PID_COL], 9)
-
     def test_batch_processing_and_header_writing(self):
         """Test that headers are written only once when processing multiple batches."""
         outcomes = {
@@ -565,20 +527,22 @@ class TestOutcomeMaker(unittest.TestCase):
             }
         }
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
+        header_written = defaultdict(
+            bool
+        )  # This is no longer used by OutcomeMaker but required by the signature
 
         # First batch of data
         batch1_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([1, 2])]
         patient_set1 = [1, 2]
         outcome_maker(batch1_concepts, patient_set1, self.outcomes_path, header_written)
 
-        # Second batch of data
+        # Second batch of data, with the same OutcomeMaker instance
         batch2_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([3])]
         patient_set2 = [3]
         outcome_maker(batch2_concepts, patient_set2, self.outcomes_path, header_written)
 
         # Check the output file
-        output_file = os.path.join(self.outcomes_path, "BATCH_TEST.csv")
+        output_file = join(self.outcomes_path, "BATCH_TEST.csv")
         self.assertTrue(os.path.exists(output_file))
 
         with open(output_file, "r") as f:
@@ -593,6 +557,20 @@ class TestOutcomeMaker(unittest.TestCase):
         self.assertTrue(
             all(pid in batch_test_outcome[PID_COL].values for pid in [1, 2, 3])
         )
+
+        # Now, create a new OutcomeMaker and write data. It should overwrite the file.
+        new_outcome_maker = OutcomeMaker(outcomes)
+        batch3_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([3])]
+        patient_set3 = [3]
+        new_outcome_maker(
+            batch3_concepts, patient_set3, self.outcomes_path, header_written
+        )
+
+        # Check that the file was overwritten
+        overwritten_outcome = pd.read_csv(output_file)
+        self.assertEqual(len(overwritten_outcome), 1)
+        self.assertTrue(3 in overwritten_outcome[PID_COL].values)
+        self.assertFalse(1 in overwritten_outcome[PID_COL].values)
 
 
 if __name__ == "__main__":

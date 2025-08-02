@@ -88,8 +88,13 @@ class OutcomeMaker:
         """
         output_path = join(outcomes_path, f"{outcome}.csv")
         if timestamps.empty:
-            logger.warning(f"Outcome {outcome} has no data. Skipping.")
-            return
+            if self.write_header[outcome]:
+                logger.warning(f"Outcome {outcome} has no data. Write only header.")
+                pd.DataFrame(columns=[PID_COL, TIMESTAMP_COL, ABSPOS_COL]).to_csv(
+                    output_path, header=True, index=False
+                )
+                self.write_header[outcome] = False
+            return  # always return, but write only on first call
 
         timestamps = self._prepare_timestamps(timestamps)
         write_header = self.write_header[outcome]
