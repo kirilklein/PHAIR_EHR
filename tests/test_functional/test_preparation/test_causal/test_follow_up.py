@@ -4,7 +4,9 @@ import numpy as np
 from corebehrt.functional.preparation.causal.follow_up import (
     prepare_follow_ups_adjusted,
     prepare_follow_ups_simple,
+    get_combined_follow_ups,
 )
+from corebehrt.modules.preparation.causal.config import OutcomeConfig
 from corebehrt.constants.causal.data import (
     START_COL,
     END_COL,
@@ -12,8 +14,236 @@ from corebehrt.constants.causal.data import (
     DEATH_COL,
     START_TIME_COL,
     END_TIME_COL,
+    CONTROL_PID_COL,
+    EXPOSED_PID_COL,
 )
 from corebehrt.constants.data import PID_COL, ABSPOS_COL, TIMESTAMP_COL
+from corebehrt.functional.utils.time import get_hours_since_epoch
+
+
+class TestGetCombinedFollowUps(unittest.TestCase):
+    """Test cases for the get_combined_follow_ups function."""
+
+    def setUp(self):
+        self.index_dates = pd.DataFrame(
+            {
+                PID_COL: [1, 2, 3, 4, 5, 6],
+                TIMESTAMP_COL: pd.to_datetime(
+                    [
+                        "2023-01-01",
+                        "2023-01-01",
+                        "2023-01-02",
+                        "2023-01-02",
+                        "2023-01-03",
+                        "2023-01-03",
+                    ]
+                ),
+            }
+        )
+        self.index_dates[ABSPOS_COL] = get_hours_since_epoch(
+            self.index_dates[TIMESTAMP_COL]
+        )
+        pid_to_abspos = self.index_dates.set_index(PID_COL)[ABSPOS_COL]
+        self.index_date_matching = pd.DataFrame(
+            {
+                CONTROL_PID_COL: [2, 4, 6],
+                EXPOSED_PID_COL: [1, 3, 5],
+            }
+        )
+        self.deaths = pd.Series(
+            [np.nan, np.nan, 200, np.nan, 300, np.nan], index=[1, 2, 3, 4, 5, 6]
+        )
+        pids_with_death = self.deaths.dropna().index
+        death_abspos = self.deaths.dropna()
+        death_index_abspos = pids_with_death.map(pid_to_abspos)
+        self.deaths.loc[pids_with_death] = death_abspos + death_index_abspos
+
+        self.exposures = pd.DataFrame(
+            {
+                PID_COL: [1, 1, 3, 3, 5, 5],
+                ABSPOS_COL: [10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+            }
+        )
+        self.exposures[ABSPOS_COL] = (
+            self.exposures[PID_COL].map(pid_to_abspos) + self.exposures[ABSPOS_COL]
+        )
+        self.data_end = pd.Timestamp("2024-01-01")
+
+    def test_basic_follow_up(self):
+        """Test basic follow-up without group-wise adjustment."""
+        cfg = OutcomeConfig(
+            n_hours_start_follow_up=0,
+            n_hours_end_follow_up=1000,
+            n_hours_compliance=10,
+            group_wise_follow_up=False,
+            delay_death_hours=0,
+        )
+        result = get_combined_follow_ups(
+            self.index_dates,
+            self.index_date_matching,
+            self.deaths,
+            self.exposures,
+            self.data_end,
+            cfg,
+        )
+        self.assertEqual(len(result), 6)
+
+        pid_to_abspos = self.index_dates.set_index(PID_COL)[ABSPOS_COL]
+
+        # Patient 1: non-compliance at last_exposure(20) + 10 = 30 (relative). Absolute is abspos+30. End is min(abspos+1000, abspos+30)
+        end_p1 = pid_to_abspos[1] + 20 + 10
+        np.testing.assert_allclose(
+            result.loc[result[PID_COL] == 1, END_COL].iloc[0], end_p1
+        )
+
+        # Patient 2: no exposure, so non-compliance is inf. end is abspos+1000
+        end_p2 = pid_to_abspos[2] + 1000
+        np.testing.assert_allclose(
+            result.loc[result[PID_COL] == 2, END_COL].iloc[0], end_p2
+        )
+
+        # Patient 3: death at 200 (relative), non-compliance at 40+10=50 (relative). end is min(abspos+1000, abspos+200, abspos+50)
+        end_p3 = pid_to_abspos[3] + 50
+        np.testing.assert_allclose(
+            result.loc[result[PID_COL] == 3, END_COL].iloc[0], end_p3
+        )
+
+        # Patient 4: no exposure, no death. end is abspos+1000
+        end_p4 = pid_to_abspos[4] + 1000
+        np.testing.assert_allclose(
+            result.loc[result[PID_COL] == 4, END_COL].iloc[0], end_p4
+        )
+
+        # Patient 5: death at 300 (relative), non-compliance at 60+10=70 (relative). end is min(abspos+1000, abspos+300, abspos+70)
+        end_p5 = pid_to_abspos[5] + 70
+        np.testing.assert_allclose(
+            result.loc[result[PID_COL] == 5, END_COL].iloc[0], end_p5
+        )
+
+        # Patient 6: no exposure, no death. end is abspos+1000
+        end_p6 = pid_to_abspos[6] + 1000
+        np.testing.assert_allclose(
+            result.loc[result[PID_COL] == 6, END_COL].iloc[0], end_p6
+        )
+
+    def test_group_wise_follow_up(self):
+        """Test with group-wise follow-up adjustment."""
+        cfg = OutcomeConfig(
+            n_hours_start_follow_up=0,
+            n_hours_end_follow_up=1000,
+            n_hours_compliance=10,
+            group_wise_follow_up=True,
+            delay_death_hours=0,
+        )
+        result = get_combined_follow_ups(
+            self.index_dates,
+            self.index_date_matching,
+            self.deaths,
+            self.exposures,
+            self.data_end,
+            cfg,
+        )
+
+        pid_to_abspos = self.index_dates.set_index(PID_COL)[ABSPOS_COL]
+
+        end_p1 = pid_to_abspos[1] + 20 + 10
+        end_p2 = pid_to_abspos[2] + 1000
+        end_p3 = min(
+            pid_to_abspos[3] + 1000, self.deaths.loc[3], pid_to_abspos[3] + 40 + 10
+        )
+        end_p4 = pid_to_abspos[4] + 1000
+        end_p5 = min(
+            pid_to_abspos[5] + 1000, self.deaths.loc[5], pid_to_abspos[5] + 60 + 10
+        )
+        end_p6 = pid_to_abspos[6] + 1000
+
+        expected_group1_end = min(end_p1, end_p2)
+        expected_group2_end = min(end_p3, end_p4)
+        expected_group3_end = min(end_p5, end_p6)
+
+        self.assertAlmostEqual(
+            result.loc[result[PID_COL] == 1, END_COL].iloc[0], expected_group1_end
+        )
+        self.assertAlmostEqual(
+            result.loc[result[PID_COL] == 2, END_COL].iloc[0], expected_group1_end
+        )
+        self.assertAlmostEqual(
+            result.loc[result[PID_COL] == 3, END_COL].iloc[0], expected_group2_end
+        )
+        self.assertAlmostEqual(
+            result.loc[result[PID_COL] == 4, END_COL].iloc[0], expected_group2_end
+        )
+        self.assertAlmostEqual(
+            result.loc[result[PID_COL] == 5, END_COL].iloc[0], expected_group3_end
+        )
+        self.assertAlmostEqual(
+            result.loc[result[PID_COL] == 6, END_COL].iloc[0], expected_group3_end
+        )
+
+    def test_group_wise_follow_up_no_matching_raises_error(self):
+        """Test that group-wise follow-up raises an error if no matching is provided."""
+        cfg = OutcomeConfig(
+            n_hours_start_follow_up=0,
+            n_hours_end_follow_up=1000,
+            n_hours_compliance=10,
+            group_wise_follow_up=True,
+            delay_death_hours=0,
+        )
+        with self.assertRaises(ValueError):
+            get_combined_follow_ups(
+                self.index_dates, None, self.deaths, self.exposures, self.data_end, cfg
+            )
+
+    def test_no_censoring(self):
+        """Test with no censoring events (no deaths, no non-compliance)."""
+        cfg = OutcomeConfig(
+            n_hours_start_follow_up=0,
+            n_hours_end_follow_up=500,
+            n_hours_compliance=np.inf,
+            group_wise_follow_up=False,
+            delay_death_hours=0,
+        )
+        deaths = pd.Series(np.nan, index=self.index_dates[PID_COL])
+        exposures = pd.DataFrame({PID_COL: [], ABSPOS_COL: []})
+        result = get_combined_follow_ups(
+            self.index_dates,
+            self.index_date_matching,
+            deaths,
+            exposures,
+            self.data_end,
+            cfg,
+        )
+
+        expected_ends = self.index_dates.set_index(PID_COL)[ABSPOS_COL] + 500
+        pd.testing.assert_series_equal(
+            result.set_index(PID_COL)[END_COL],
+            expected_ends,
+            check_names=False,
+        )
+
+    def test_delay_death_hours(self):
+        """Test the delay_death_hours parameter."""
+        cfg = OutcomeConfig(
+            n_hours_start_follow_up=0,
+            n_hours_end_follow_up=1000,
+            n_hours_compliance=np.inf,
+            group_wise_follow_up=False,
+            delay_death_hours=50,
+        )
+
+        # death for patient 3 is 200 (relative), delayed is 250.
+        # end is min(abspos+1000, abspos+250)
+        result = get_combined_follow_ups(
+            self.index_dates,
+            self.index_date_matching,
+            self.deaths,
+            pd.DataFrame({PID_COL: [], ABSPOS_COL: []}),
+            self.data_end,
+            cfg,
+        )
+        self.assertAlmostEqual(
+            result.loc[result[PID_COL] == 3, END_COL].iloc[0], self.deaths.loc[3] + 50
+        )
 
 
 class TestPrepareFollowUpsAdjusted(unittest.TestCase):
