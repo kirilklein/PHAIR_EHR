@@ -142,6 +142,8 @@ class EncodedDataModule:
             outcomes,
             self.cfg.outcome.n_hours_start_follow_up,
             self.cfg.outcome.n_hours_end_follow_up,
+            self.cfg.outcome.group_wise_follow_up,
+            self.cfg.outcome.delay_death_hours,
         )
         binary_outcomes = binary_outcomes.loc[pids]
         return torch.tensor(binary_outcomes.values, dtype=torch.float32)

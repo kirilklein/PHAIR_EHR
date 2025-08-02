@@ -223,6 +223,7 @@ class CausalDatasetPreparer:
                 group_wise_follow_up=self.outcome_cfg.get(
                     "group_wise_follow_up", False
                 ),
+                delay_death_hours=self.outcome_cfg.get("delay_death_hours", 0),
             )
             counts = binary_outcome.value_counts()
             if len(counts) < 2 or counts.min() < min_instances_per_class:

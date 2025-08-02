@@ -39,3 +39,4 @@ outcome:
   n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
   n_hours_compliance: null # follow up time is adjusted based on compliance
   group_wise_follow_up: true # if true, then group-wise follow-up times are used
+  delay_death_hours: 336 # hours to add to death time for outcomes that are coded with a delay
