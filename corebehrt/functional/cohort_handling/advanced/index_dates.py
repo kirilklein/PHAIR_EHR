@@ -1,9 +1,13 @@
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import numpy as np
 import pandas as pd
 
-from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL
+from corebehrt.constants.causal.data import (
+    CONTROL_PID_COL,
+    EXPOSED_PID_COL,
+    BIRTH_YEAR_COL,
+)
 from corebehrt.constants.data import (
     BIRTHDATE_COL,
     DEATHDATE_COL,
@@ -56,109 +60,219 @@ def select_time_eligible_exposed(index_dates: pd.DataFrame, time_windows: dict) 
 
 
 def draw_index_dates_for_control_with_redraw(
-    control_pids: List[str],
-    exposed_index_dates: pd.DataFrame,
+    control_pids: List[int],
+    cases_df: pd.DataFrame,
     patients_info: pd.DataFrame,
+    birth_year_tolerance: int = 10,
     redraw_attempts: int = 2,
     seed: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Draw index dates for unexposed patients by randomly sampling from exposed patients' index dates.
+    Draws index dates for controls by sampling from cases matched on birth year.
 
-    This function assigns index dates to unexposed (control) patients by randomly sampling
-    from the index dates of exposed patients. It ensures that assigned index dates do not
-    occur after a patient's death date. If an invalid date is drawn (after death), the
-    function will attempt to redraw up to 2 additional times before excluding the patient.
+    This function uses a vectorized approach to assign index dates from cases to controls,
+    ensuring that controls have a similar age distribution. It redraws for controls whose
+    assigned date is invalid (e.g., after their death).
 
     Parameters
     ----------
-    control_pids : List[str]
-        List of patient IDs for unexposed/control patients who need index dates assigned.
-    exposed_index_dates : pd.DataFrame
-        DataFrame with exposed patient data, must include PID_COL and TIMESTAMP_COL columns.
-    patients_info : pd.DataFrame
-        DataFrame containing patient information, must include PID_COL and DEATHDATE_COL columns.
+    control_pids : List of patient IDs for unexposed/control patients who need index dates assigned.
+    cases_df : DataFrame of cases index dates, must include PID_COL, TIMESTAMP_COL.
+    patients_info : DataFrame with patient info, including PID_COL, BIRTHDATE_COL, and DEATHDATE_COL.
+    birth_year_tolerance : int, default=3
+        The +/- range for matching birth years.
     redraw_attempts : int, default=2
-        Number of redraw attempts for invalid dates before excluding a patient.
+        Number of redraw attempts for invalid dates.
     seed : int, default=42
-        Random seed for reproducible sampling.
+        Random seed for reproducibility.
 
     Returns
     -------
-    Tuple[pd.DataFrame, pd.DataFrame]
-        - pd.DataFrame: Index dates for valid unexposed patients with columns [PID_COL, TIMESTAMP_COL]
-        - pd.DataFrame: Matching information with columns ['exposed_pid', 'index_date'] showing
-          which exposed patient each unexposed patient was matched to and their assigned index date
+        - DataFrame of valid control index dates.
+        - DataFrame of matching information.
 
-    Notes
-    -----
-    - Patients who seeddie before their assigned index date are excluded after redraw_attempts failed attempts
-    - The matching process uses random sampling with replacement from exposed patients
-    - The function prioritizes validity over maintaining exact sample size
-    - Results are reproducible when using the same seed value
     """
 
     # Set random seed for reproducibility
     np.random.seed(seed)
 
-    # Convert exposed info to arrays for faster sampling
-    exposed_dates_array = exposed_index_dates[TIMESTAMP_COL].values
-    exposed_pids_array = exposed_index_dates[PID_COL].values
-    n_exposed = len(exposed_dates_array)
-    n_unexposed = len(control_pids)
-    if n_exposed == 0:
-        raise ValueError("Cannot draw index dates: no exposed patients available")
+    # 1. Prepare data and add birth year information
+    if cases_df.empty:
+        raise ValueError("Cannot draw index dates: cases_df is empty.")
 
-    # Draw initial random indices
-    sampled_indices = np.random.choice(n_exposed, size=n_unexposed, replace=True)
+    cases_info = _prepare_cases_df(cases_df, patients_info)
+    controls_info = _prepare_controls_info(patients_info, control_pids)
 
-    control_death_dates = (
-        patients_info.set_index(PID_COL)[DEATHDATE_COL].reindex(control_pids).values
-    )
-    control_birth_dates = (
-        patients_info.set_index(PID_COL)[BIRTHDATE_COL].reindex(control_pids).values
+    case_pools = _create_stratified_pools(
+        cases_info, controls_info, birth_year_tolerance
     )
 
-    # Create DataFrame with all necessary info
-    temp_df = pd.DataFrame(
-        {
-            TIMESTAMP_COL: exposed_dates_array[sampled_indices],
-            DEATHDATE_COL: control_death_dates,
-            BIRTHDATE_COL: control_birth_dates,
-            EXPOSED_PID_COL: exposed_pids_array[sampled_indices],
-            CONTROL_PID_COL: control_pids,
-        },
-        index=control_pids,
+    control_byears = controls_info.set_index(CONTROL_PID_COL).loc[
+        control_pids, BIRTH_YEAR_COL
+    ]
+
+    sampled_case_indices = _sample_stratified_indices(control_byears, case_pools)
+
+    temp_df = _construct_initial_matching_df(
+        cases_info, controls_info, control_byears, sampled_case_indices
     )
 
-    for _ in range(redraw_attempts):
-        temp_df, resampled = _resample_invalid_dates(
-            temp_df, exposed_dates_array, exposed_pids_array
+    # 5. Iteratively redraw for invalid matches
+    for i in range(redraw_attempts):
+        print(f"Performing redraw attempt {i + 1}...")
+        temp_df, resampled = _resample_invalid_dates_stratified(
+            temp_df, case_pools, cases_info
         )
         if not resampled:
+            print("No invalid dates to resample. Stopping.")
             break
+    result = _finalize_control(temp_df)
+    return result
 
-    return _finalize_control(temp_df)
 
-
-def _resample_invalid_dates(
-    temp_df: pd.DataFrame,
-    exposed_dates_array: np.ndarray,
-    exposed_pids_array: np.ndarray,
+def _resample_invalid_dates_stratified(
+    temp_df: pd.DataFrame, case_pools: Dict[int, np.ndarray], cases_info: pd.DataFrame
 ) -> Tuple[pd.DataFrame, bool]:
-    """
-    Resample invalid dates.
-    Return temp_df with resampled dates and a boolean indicating if any invalid dates were resampled.
-    """
+    """Resamples invalid dates using a safe, targeted update."""
     invalid_mask = _get_invalid_mask(temp_df)
     if not invalid_mask.any():
         return temp_df, False
-    new_idx = np.random.choice(
-        len(exposed_dates_array), size=invalid_mask.sum(), replace=True
+
+    invalid_byears = temp_df.loc[invalid_mask, "control_birth_year"]
+    new_case_indices = _sample_stratified_indices(invalid_byears, case_pools)
+
+    # --- This is the safer update logic ---
+    # Update the case index for all invalid rows
+    temp_df.loc[invalid_mask, "case_idx"] = new_case_indices
+
+    # Get the new case information. This will raise a KeyError on -1, so handle it.
+    # We create a temporary series to map new indices to new data safely.
+    new_info_map = cases_info.loc[
+        np.unique(new_case_indices[new_case_indices != -1]),
+        [TIMESTAMP_COL, EXPOSED_PID_COL],
+    ]
+
+    new_timestamps = pd.Series(new_case_indices, index=invalid_byears.index).map(
+        new_info_map[TIMESTAMP_COL]
     )
-    temp_df.loc[invalid_mask, TIMESTAMP_COL] = exposed_dates_array[new_idx]
-    temp_df.loc[invalid_mask, EXPOSED_PID_COL] = exposed_pids_array[new_idx]
+    new_pids = pd.Series(new_case_indices, index=invalid_byears.index).map(
+        new_info_map[EXPOSED_PID_COL]
+    )
+
+    # Update only the invalid rows with the new data
+    temp_df.loc[invalid_mask, TIMESTAMP_COL] = new_timestamps
+    temp_df.loc[invalid_mask, EXPOSED_PID_COL] = new_pids
+
     return temp_df, True
+
+
+def _construct_initial_matching_df(
+    cases_info: pd.DataFrame,
+    controls_info: pd.DataFrame,
+    control_byears: pd.Series,
+    sampled_case_indices: np.ndarray,
+) -> pd.DataFrame:
+    """Constructs the initial matching DataFrame, ensuring data alignment."""
+
+    # Create the base DataFrame using the index from control_byears to guarantee alignment
+    temp_df = pd.DataFrame(
+        {"control_birth_year": control_byears.values, "case_idx": sampled_case_indices},
+        index=control_byears.index,
+    )
+
+    # Merge control birth/death dates using the index
+    temp_df = temp_df.merge(
+        controls_info.set_index(CONTROL_PID_COL)[[BIRTHDATE_COL, DEATHDATE_COL]],
+        left_index=True,
+        right_index=True,
+        how="left",
+    )
+
+    # Merge case info using the 'case_idx' column
+    temp_df = temp_df.merge(
+        cases_info[[TIMESTAMP_COL, EXPOSED_PID_COL]].rename_axis("case_idx"),
+        on="case_idx",
+        how="left",
+    )
+    return temp_df
+
+
+def _create_stratified_pools(
+    cases_info: pd.DataFrame, controls_info: pd.DataFrame, birth_year_tolerance: int
+) -> Dict[int, np.ndarray]:
+    """Creates stratified pools of case indices efficiently."""
+
+    # 1. Group cases by birth year once to avoid re-scanning
+    case_indices_by_year = {
+        year: group.index.to_numpy()
+        for year, group in cases_info.groupby(BIRTH_YEAR_COL)
+    }
+
+    # 2. Build the final pools by combining the pre-grouped case years
+    unique_control_byears = controls_info[BIRTH_YEAR_COL].dropna().unique().astype(int)
+    final_case_pools = {}
+
+    for year in unique_control_byears:
+        pool_list = [
+            case_indices_by_year[case_year]
+            for case_year in range(
+                year - birth_year_tolerance, year + birth_year_tolerance + 1
+            )
+            if case_year in case_indices_by_year
+        ]
+
+        if pool_list:
+            final_case_pools[year] = np.concatenate(pool_list)
+
+    return final_case_pools
+
+
+def _sample_stratified_indices(
+    control_birth_years: pd.Series, case_pools: Dict[int, np.ndarray]
+) -> np.ndarray:
+    """
+    Performs stratified sampling based on birth year.
+
+    For each control birth year provided, it randomly selects a case index
+    from the corresponding pre-calculated pool.
+    Args:
+        control_birth_years (pd.Series): A Series of birth years for the controls to sample for.
+        case_pools (Dict[int, np.ndarray]): A dictionary mapping a birth year to an
+                                             array of valid case indices.
+    Returns: np.ndarray: An array of sampled case indices, with -1 for unmatchable years.
+    """
+    # The .get(y, [-1]) safely handles controls whose birth year has no matching case pool
+    return np.array(
+        [np.random.choice(case_pools.get(y, [-1])) for y in control_birth_years]
+    )
+
+
+def _prepare_controls_info(patients_info: pd.DataFrame, control_pids) -> pd.DataFrame:
+    """
+    Prepare controls info for index date matching.
+    Add birth year column and drop rows with missing birth year.
+    Return controls DataFrame with birth year column.
+    """
+    controls_info = patients_info[patients_info[PID_COL].isin(control_pids)].copy()
+    controls_info[BIRTH_YEAR_COL] = pd.to_datetime(controls_info[BIRTHDATE_COL]).dt.year
+    controls_info.rename(columns={PID_COL: CONTROL_PID_COL}, inplace=True)
+    return controls_info
+
+
+def _prepare_cases_df(
+    cases_df: pd.DataFrame, patients_info: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Prepare cases DataFrame for index date matching.
+    Add birth year column and drop rows with missing birth year.
+    Return cases DataFrame with birth year column.
+    """
+    cases_info = pd.merge(cases_df, patients_info[[PID_COL, BIRTHDATE_COL]], on=PID_COL)
+    cases_info[BIRTH_YEAR_COL] = pd.to_datetime(cases_info[BIRTHDATE_COL]).dt.year
+    cases_info.dropna(subset=[BIRTH_YEAR_COL], inplace=True)
+    cases_info[BIRTH_YEAR_COL] = cases_info[BIRTH_YEAR_COL].astype(int)
+    cases_info.rename(columns={PID_COL: EXPOSED_PID_COL}, inplace=True)
+    return cases_info
 
 
 def _finalize_control(temp_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -168,6 +282,9 @@ def _finalize_control(temp_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame
     """
     invalid_mask = _get_invalid_mask(temp_df)
     valid = temp_df.loc[~invalid_mask]
+    if not valid.empty:
+        valid[EXPOSED_PID_COL] = valid[EXPOSED_PID_COL].astype(int)
+
     index_dates = pd.DataFrame(
         {PID_COL: valid.index, TIMESTAMP_COL: valid[TIMESTAMP_COL]}
     )
@@ -178,14 +295,19 @@ def _finalize_control(temp_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame
 
 
 def _get_invalid_mask(temp_df: pd.DataFrame) -> pd.Series:
-    """
-    Get invalid mask.
-    Invalid dates are:
-    - After death date
-    - Before birth date
-    """
+    """Gets an invalid mask, also checking for missing index dates."""
+
+    # A row is invalid if the index date is missing (no match found)
+    invalid_match = temp_df[TIMESTAMP_COL].isna()
+
+    # Or if the date is after death
     after_death = (temp_df[TIMESTAMP_COL] > temp_df[DEATHDATE_COL]) & pd.notna(
         temp_df[DEATHDATE_COL]
     )
-    before_birth = temp_df[TIMESTAMP_COL] < temp_df[BIRTHDATE_COL]
-    return after_death | before_birth
+
+    # Or if the date is before birth (and birth date is known)
+    before_birth = (temp_df[TIMESTAMP_COL] < temp_df[BIRTHDATE_COL]) & pd.notna(
+        temp_df[BIRTHDATE_COL]
+    )
+
+    return invalid_match | after_death | before_birth

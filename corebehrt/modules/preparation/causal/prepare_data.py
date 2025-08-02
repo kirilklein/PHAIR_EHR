@@ -33,6 +33,7 @@ from corebehrt.functional.preparation.filter import (
     censor_patient_with_delays,
     exclude_short_sequences,
 )
+from corebehrt.functional.visualize.follow_ups import plot_follow_up_distribution
 from corebehrt.functional.preparation.truncate import truncate_patient
 from corebehrt.functional.preparation.utils import (
     get_background_length,
@@ -141,13 +142,17 @@ class CausalDatasetPreparer:
             vocabulary=self.vocabulary,
         )
         self._save_artifacts(artifacts, self.paths_cfg.prepared_data)
-
+        if follow_ups is not None:
+            plot_follow_up_distribution(
+                follow_ups, binary_exposure, self.paths_cfg.prepared_data
+            )
         return data
 
     def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
         """Loads single or multiple outcome files into a dictionary."""
         outcomes = {}
         for name, outcome_file in self.paths_cfg.outcome_files.items():
+            logger.info(f"Loading outcome file: {outcome_file}")
             df = pd.read_csv(outcome_file)
             df[PID_COL] = df[PID_COL].astype(int)
             outcomes[name] = df
@@ -169,14 +174,14 @@ class CausalDatasetPreparer:
         }
         return exposures, index_dates, filtered_outcomes
 
-    def _extract_deaths(self, data: CausalPatientDataset) -> Dict[int, Any]:
+    def _extract_deaths(self, data: CausalPatientDataset) -> pd.Series:
         """Extracts death information for each patient."""
         deaths_list = data.process_in_parallel(
             extract_death, death_token=self.vocabulary[DEATH_CODE]
         )
-        return {
-            patient.pid: death for patient, death in zip(data.patients, deaths_list)
-        }
+        return pd.Series(
+            {patient.pid: death for patient, death in zip(data.patients, deaths_list)}
+        )
 
     def _compute_binary_labels(
         self,
@@ -184,7 +189,7 @@ class CausalDatasetPreparer:
         outcomes: Dict[str, pd.DataFrame],
         index_dates: pd.DataFrame,
         index_date_matching: pd.DataFrame,
-        deaths: Dict[int, Any],
+        deaths: pd.Series,
     ) -> Tuple[pd.Series, pd.DataFrame, pd.DataFrame]:
         """Computes binary exposure and outcome labels."""
         logger.info("Handling exposures and outcomes")
@@ -215,6 +220,9 @@ class CausalDatasetPreparer:
                 deaths=deaths,
                 exposures=exposures,
                 data_end=data_end,
+                group_wise_follow_up=self.outcome_cfg.get(
+                    "group_wise_follow_up", False
+                ),
             )
             counts = binary_outcome.value_counts()
             if len(counts) < 2 or counts.min() < min_instances_per_class:
