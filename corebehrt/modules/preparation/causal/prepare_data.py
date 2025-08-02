@@ -2,7 +2,7 @@ import logging
 import os
 from dataclasses import dataclass
 from os.path import join
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
