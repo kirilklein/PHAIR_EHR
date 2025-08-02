@@ -33,6 +33,7 @@ from corebehrt.functional.preparation.filter import (
     censor_patient_with_delays,
     exclude_short_sequences,
 )
+from corebehrt.functional.visualize.follow_ups import plot_follow_up_distribution
 from corebehrt.functional.preparation.truncate import truncate_patient
 from corebehrt.functional.preparation.utils import (
     get_background_length,
@@ -141,13 +142,16 @@ class CausalDatasetPreparer:
             vocabulary=self.vocabulary,
         )
         self._save_artifacts(artifacts, self.paths_cfg.prepared_data)
-
+        plot_follow_up_distribution(
+            follow_ups, binary_exposure, self.paths_cfg.prepared_data
+        )
         return data
 
     def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
         """Loads single or multiple outcome files into a dictionary."""
         outcomes = {}
         for name, outcome_file in self.paths_cfg.outcome_files.items():
+            logger.info(f"Loading outcome file: {outcome_file}")
             df = pd.read_csv(outcome_file)
             df[PID_COL] = df[PID_COL].astype(int)
             outcomes[name] = df
@@ -196,6 +200,7 @@ class CausalDatasetPreparer:
             self.exposure_cfg.get("n_hours_start_follow_up", -1),
             self.exposure_cfg.get("n_hours_end_follow_up"),
             data_end,
+            self.group_wise_follow_up,
         )
 
         binary_outcomes = {}
@@ -215,6 +220,9 @@ class CausalDatasetPreparer:
                 deaths=deaths,
                 exposures=exposures,
                 data_end=data_end,
+                group_wise_follow_up=self.outcome_cfg.get(
+                    "group_wise_follow_up", False
+                ),
             )
             counts = binary_outcome.value_counts()
             if len(counts) < 2 or counts.min() < min_instances_per_class:

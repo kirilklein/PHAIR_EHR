@@ -1,15 +1,17 @@
 import pandas as pd
 
-from corebehrt.constants.causal.data import CONTROL_PID_COL
+from corebehrt.constants.causal.data import CONTROL_PID_COL, GROUP_COL
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.preparation.causal.convert import abspos_to_binary_outcome
 from corebehrt.functional.preparation.causal.follow_up import (
     prepare_follow_ups_adjusted,
     prepare_follow_ups_simple,
+    minimize_end_by_group,
 )
 from corebehrt.functional.preparation.causal.utils import (
     filter_df_by_unique_values,
     get_non_compliance_abspos,
+    get_group_dict,
 )
 
 
@@ -51,6 +53,7 @@ def get_binary_outcome(
     deaths: pd.Series,
     exposures: pd.DataFrame,
     data_end: pd.Timestamp,
+    group_wise_follow_up: bool,
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
     Create binary outcome indicators for patients using adjusted follow-up periods.
@@ -77,17 +80,26 @@ def get_binary_outcome(
             - binary_outcomes: pd.Series with binary outcome indicators
             - adjusted_follow_ups: pd.DataFrame with final follow-up periods
     """
-    if index_date_matching is not None:
+    if group_wise_follow_up:
+        if index_date_matching is None:
+            raise ValueError("index_date_matching is required for group-wise follow-up")
         index_date_matching = filter_df_by_unique_values(
             index_date_matching, index_dates, CONTROL_PID_COL, PID_COL
         )
+        group_dict = get_group_dict(index_date_matching)
     non_compliance_abspos = get_non_compliance_abspos(exposures, n_hours_compliance)
     follow_ups = prepare_follow_ups_simple(
         index_dates, n_hours_start_follow_up, n_hours_end_follow_up, data_end
-    )
+    )  # simply based on n_hours_start_follow_up and n_hours_end_follow_up
+
     follow_ups = prepare_follow_ups_adjusted(
         follow_ups,
         non_compliance_abspos,
         deaths,
-    )
+    )  # based on non-compliance, death, and group
+
+    if group_wise_follow_up:  # make group-wise follow-up times shorter
+        follow_ups[GROUP_COL] = follow_ups[PID_COL].map(group_dict)
+        follow_ups = minimize_end_by_group(follow_ups)
+
     return abspos_to_binary_outcome(follow_ups, outcomes), follow_ups

@@ -55,12 +55,12 @@ outcomes:
     combinations:
       primary:
         type: [code]
-        match: [["D/73438004"]]
+        match: [["EXPOSURE"]]
         match_how: exact
       secondary:
         type: [code]
-        match: [["D/72892002"]]
+        match: [["OUTCOME"]]
         match_how: exact
-      window_hours_min: -10
-      window_hours_max: 10
+      window_hours_min: -1000
+      window_hours_max: 1000
       timestamp_source: primary
