@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class IndexDateHandler:
     @staticmethod
-    def create_timestamp_series(pids: Set[str], timestamp: datetime) -> pd.Series:
+    def create_timestamp_series(pids: Set[int], timestamp: datetime) -> pd.Series:
         """Create a timestamp series for given PIDs."""
         return pd.Series(
             data=timestamp,
@@ -23,7 +23,7 @@ class IndexDateHandler:
 
     @staticmethod
     def get_index_timestamps_for_exposed(
-        pids: Set[str], n_hours_from_exposure: int, exposures: pd.DataFrame
+        pids: Set[int], n_hours_from_exposure: int, exposures: pd.DataFrame
     ) -> pd.Series:
         """Get index timestamps for exposed patients."""
         hours_delta = pd.Timedelta(hours=n_hours_from_exposure)
@@ -35,12 +35,12 @@ class IndexDateHandler:
 
     @staticmethod
     def draw_index_dates_for_unexposed(
-        data_pids: List[str],
+        data_pids: List[int],
         censoring_timestamps: pd.Series,
     ) -> pd.Series:
         """Draw censor dates for patients not in censor_timestamps."""
         np.random.seed(42)
-        missing_pids = set(data_pids) - set(censoring_timestamps.index)
+        missing_pids = set(data_pids) - set(censoring_timestamps.index)  
         random_abspos = np.random.choice(
             censoring_timestamps.values, size=len(missing_pids)
         )
