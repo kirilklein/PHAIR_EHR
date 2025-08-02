@@ -4,9 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 import pandas as pd
 
-COMMON_INDEX_DATE = pd.Timestamp(
-    "2010-01-01"
-)  # for simplicity pick the same index_date for all
+COMMON_INDEX_DATE = "2010-01-01"
 
 
 @dataclass
@@ -73,7 +71,7 @@ class SimulationConfig:
     exposure: ExposureConfig
     outcomes: Dict[str, OutcomeConfig]
     # trigger_codes is no longer needed here, will be derived from vocabulary
-    index_date: pd.Timestamp = COMMON_INDEX_DATE
+    index_date: pd.Timestamp = None
     unobserved_confounder: Optional[UnobservedConfounderConfig] = None
     include_code_prefixes: Optional[List[str]] = None
     seed: int = 42
@@ -83,7 +81,7 @@ class SimulationConfig:
     def __init__(self, config: dict):
         self.paths = PathsConfig(**config["paths"])
         # self.trigger_codes is removed
-
+        self.index_date = pd.Timestamp(config.get("index_date", COMMON_INDEX_DATE))
         self.simulation_model = SimulationModelConfig(
             linear=ModelWeightsConfig(**config["simulation_model"]["linear"]),
             interaction=ModelWeightsConfig(**config["simulation_model"]["interaction"]),

@@ -13,6 +13,7 @@ seed: 42
 debug: false
 min_num_codes: 3
 include_code_prefixes: ["D/"]
+index_date: "2015-01-01"
 
 simulation_model:
   time_decay_halflife_days: 5000
