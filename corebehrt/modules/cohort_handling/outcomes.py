@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from os.path import join
 from typing import Dict, List
 
@@ -36,6 +37,10 @@ logger = logging.getLogger(__name__)
 class OutcomeMaker:
     def __init__(self, outcomes: dict):
         self.outcomes = outcomes
+        logger.info(f"Number of outcomes: {len(outcomes)}")
+        self.write_header = {
+            outcome: True for outcome in outcomes
+        }  # write header for all outcomes on first call
 
     def __call__(
         self,
@@ -68,38 +73,37 @@ class OutcomeMaker:
                     concepts_plus, timestamps, attrs["exclusion"]
                 )
 
-            self._write_df(timestamps, outcomes_path, header_written, outcome)
+            self._write_df(timestamps, outcomes_path, outcome)
 
     def _write_df(
         self,
         timestamps: pd.DataFrame,
         outcomes_path: str,
-        header_written: Dict[str, bool],
         outcome: str,
     ):
         """
         Write a dataframe to a csv file. If the file does not exist, create it and write the header.
         If the file exists, append the data.
-        If the dataframe is empty, write only the header.
+        If the dataframe is empty, do nothing.
         """
         output_path = join(outcomes_path, f"{outcome}.csv")
-        if not timestamps.empty:
-            if ABSPOS_COL not in timestamps.columns:
-                timestamps[ABSPOS_COL] = get_hours_since_epoch(
-                    timestamps[TIMESTAMP_COL]
-                )
-            timestamps[ABSPOS_COL] = timestamps[ABSPOS_COL].astype(int)
-            timestamps[PID_COL] = timestamps[PID_COL].astype(int)
+        if timestamps.empty:
+            logger.warning(f"Outcome {outcome} has no data. Skipping.")
+            return
 
-            write_header = not header_written[outcome]
-            timestamps.to_csv(output_path, mode="a", header=write_header, index=False)
-            if write_header:
-                header_written[outcome] = True
-        elif not header_written[outcome]:
-            pd.DataFrame(columns=[PID_COL, TIMESTAMP_COL, ABSPOS_COL]).to_csv(
-                output_path, header=True, index=False
-            )
-            header_written[outcome] = True
+        timestamps = self._prepare_timestamps(timestamps)
+        write_header = self.write_header[outcome]
+        mode = "w" if write_header else "a"
+        timestamps.to_csv(output_path, mode=mode, header=write_header, index=False)
+        self.write_header[outcome] = False  # ! important for next iterations
+
+    @staticmethod
+    def _prepare_timestamps(timestamps: pd.DataFrame) -> pd.DataFrame:
+        if ABSPOS_COL not in timestamps.columns:
+            timestamps[ABSPOS_COL] = get_hours_since_epoch(timestamps[TIMESTAMP_COL])
+        timestamps[ABSPOS_COL] = timestamps[ABSPOS_COL].astype(int)
+        timestamps[PID_COL] = timestamps[PID_COL].astype(int)
+        return timestamps
 
     def match_concepts(
         self,
