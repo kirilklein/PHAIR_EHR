@@ -200,7 +200,6 @@ class CausalDatasetPreparer:
             self.exposure_cfg.get("n_hours_start_follow_up", -1),
             self.exposure_cfg.get("n_hours_end_follow_up"),
             data_end,
-            self.group_wise_follow_up,
         )
 
         binary_outcomes = {}
