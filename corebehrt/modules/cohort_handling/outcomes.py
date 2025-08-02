@@ -87,6 +87,10 @@ class OutcomeMaker:
         concepts_plus[ABSPOS_COL] = get_hours_since_epoch(concepts_plus[TIMESTAMP_COL])
         concepts_plus[ABSPOS_COL] = concepts_plus[ABSPOS_COL].astype(int)
         concepts_plus[CONCEPT_COL] = pd.Categorical(concepts_plus[CONCEPT_COL])
+        # Pre-compute a lowercase version for fast case-insensitive matching
+        concepts_plus[f"{CONCEPT_COL}_lower"] = (
+            concepts_plus[CONCEPT_COL].astype(str).str.lower()
+        )
         return concepts_plus
 
     def _write_df(
