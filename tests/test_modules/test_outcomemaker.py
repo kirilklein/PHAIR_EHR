@@ -2,7 +2,6 @@ import datetime
 import os
 import tempfile
 import unittest
-from collections import defaultdict
 from os.path import join
 
 import pandas as pd
@@ -538,6 +537,137 @@ class TestOutcomeMaker(unittest.TestCase):
         self.assertEqual(len(overwritten_outcome), 1)
         self.assertTrue(3 in overwritten_outcome[PID_COL].values)
         self.assertFalse(1 in overwritten_outcome[PID_COL].values)
+
+    def test_combination_with_exclusion_flag(self):
+        """Tests the `exclude: true` flag within a combination."""
+        outcomes = {
+            "MI_WITHOUT_DEATH_IN_7_DAYS": {
+                "combinations": {
+                    "primary": {
+                        "type": ["code"],
+                        "match": [["DI20"]],
+                        "match_how": "exact",
+                    },
+                    "secondary": {
+                        "type": ["code"],
+                        "match": [["DOD"]],
+                        "match_how": "exact",
+                    },
+                    "window_hours_min": 0,  # Death must not occur before MI
+                    "window_hours_max": 7 * 24,  # up to 7 days after
+                    "exclude": True,  # Exclude MI events that are followed by death
+                }
+            }
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(self.concepts_plus, self.outcomes_path)
+
+        output_file = join(self.outcomes_path, "MI_WITHOUT_DEATH_IN_7_DAYS.csv")
+        self.assertTrue(os.path.exists(output_file))
+        result_df = pd.read_csv(output_file)
+
+        # Patient 8 had a death 6 days after MI -> Should be EXCLUDED.
+        # Patient 9 had a death 8 days after MI -> Should be INCLUDED (outside window).
+        # Patient 4 had a death after MI, but MI is not the primary event.
+        self.assertEqual(len(result_df), 1)
+        self.assertEqual(result_df.iloc[0][PID_COL], 9)
+
+    def test_combination_at_window_boundary(self):
+        """Tests that events exactly on the window boundary are included."""
+        outcomes = {
+            "STROKE_WITH_PRIOR_ANTICOAGULANT": {
+                "combinations": {
+                    "primary": {"type": ["code"], "match": [["I63"]]},
+                    "secondary": {"type": ["code"], "match": [["B01"]]},
+                    "window_hours_min": -24,  # Exactly 24 hours before
+                    "window_hours_max": 0,
+                }
+            }
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(self.concepts_plus, self.outcomes_path)
+
+        output_file = join(self.outcomes_path, "STROKE_WITH_PRIOR_ANTICOAGULANT.csv")
+        self.assertTrue(os.path.exists(output_file))
+        result_df = pd.read_csv(output_file)
+
+        # Patient 6 had an anticoagulant exactly 24 hours before their second stroke.
+        # This event should be included.
+        self.assertEqual(len(result_df), 1)
+        self.assertEqual(result_df.iloc[0][PID_COL], 6)
+
+    def test_combination_with_multiple_valid_secondary_events(self):
+        """Ensures a primary event is not duplicated if it matches multiple secondary events."""
+        # Add a patient with one primary event and two valid secondary events
+        extra_data = pd.DataFrame(
+            {
+                PID_COL: [10, 10, 10],
+                CONCEPT_COL: ["PRIMARY_EVENT", "SECONDARY_EVENT", "SECONDARY_EVENT"],
+                VALUE_COL: ["p", "s1", "s2"],
+                TIMESTAMP_COL: [
+                    datetime.datetime(2021, 1, 5, 12, 0),  # Primary
+                    datetime.datetime(2021, 1, 5, 13, 0),  # Secondary 1 (+1 hr)
+                    datetime.datetime(2021, 1, 5, 14, 0),  # Secondary 2 (+2 hr)
+                ],
+            }
+        )
+        concepts_for_test = pd.concat(
+            [self.concepts_plus, extra_data], ignore_index=True
+        )
+
+        outcomes = {
+            "SINGLE_MATCH": {
+                "combinations": {
+                    "primary": {"type": ["code"], "match": [["PRIMARY_EVENT"]]},
+                    "secondary": {"type": ["code"], "match": [["SECONDARY_EVENT"]]},
+                    "window_hours_min": 0,
+                    "window_hours_max": 5,
+                }
+            }
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(concepts_for_test, self.outcomes_path)
+
+        output_file = join(self.outcomes_path, "SINGLE_MATCH.csv")
+        self.assertTrue(os.path.exists(output_file))
+        result_df = pd.read_csv(output_file)
+
+        # Should only find one outcome for patient 10, not two.
+        self.assertEqual(len(result_df), 1)
+        self.assertEqual(result_df.iloc[0][PID_COL], 10)
+
+    def test_empty_and_malformed_input(self):
+        """Tests behavior with empty or malformed input DataFrames."""
+        outcomes = {"ANY_OUTCOME": {"type": ["code"], "match": [["D10"]]}}
+        outcome_maker = OutcomeMaker(outcomes)
+
+        # Test with a completely empty DataFrame
+        outcome_maker(
+            pd.DataFrame(columns=self.concepts_plus.columns), self.outcomes_path
+        )
+        output_file = join(self.outcomes_path, "ANY_OUTCOME.csv")
+        self.assertTrue(
+            os.path.exists(output_file), "File should be created for empty input"
+        )
+        self.assertEqual(
+            len(pd.read_csv(output_file)), 0, "File for empty input should have 0 rows"
+        )
+
+        # Test with data containing a missing timestamp
+        malformed_data = pd.DataFrame(
+            {
+                PID_COL: [20],
+                CONCEPT_COL: ["D10"],
+                VALUE_COL: ["val"],
+                TIMESTAMP_COL: [pd.NaT],
+            }
+        )
+        outcome_maker(malformed_data, self.outcomes_path)
+        # This will append to the existing file. Since the NaT row is dropped,
+        # the file content should not change.
+        self.assertEqual(
+            len(pd.read_csv(output_file)), 0, "Malformed row should be dropped"
+        )
 
 
 if __name__ == "__main__":
