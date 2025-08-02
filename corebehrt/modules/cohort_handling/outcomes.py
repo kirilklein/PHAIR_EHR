@@ -160,41 +160,62 @@ class OutcomeMaker:
         else:
             return create_empty_results_df()
 
+    def _find_matches_fast(
+        self,
+        primary_events: pd.DataFrame,
+        secondary_events: pd.DataFrame,
+        window_hours_min: int,
+        window_hours_max: int,
+        timestamp_source: str = PRIMARY,
+    ) -> pd.DataFrame:
+        """The single, fast engine for finding all event pairs within a time window."""
+        if primary_events.empty or secondary_events.empty:
+            return create_empty_results_df()
+
+        primary_with_index = primary_events.reset_index()
+        secondary_renamed = secondary_events.rename(
+            columns={
+                TIMESTAMP_COL: f"{TIMESTAMP_COL}_{SECONDARY}",
+                ABSPOS_COL: f"{ABSPOS_COL}_{SECONDARY}",
+            }
+        )
+        merged = pd.merge(
+            primary_with_index,
+            secondary_renamed[
+                [PID_COL, f"{TIMESTAMP_COL}_{SECONDARY}", f"{ABSPOS_COL}_{SECONDARY}"]
+            ],
+            on=PID_COL,
+        )
+        time_diff = merged[f"{ABSPOS_COL}_{SECONDARY}"] - merged[ABSPOS_COL]
+        mask = (time_diff >= window_hours_min) & (time_diff <= window_hours_max)
+        valid_matches = merged[mask]
+
+        if valid_matches.empty:
+            return create_empty_results_df()
+
+        valid_matches = valid_matches.drop_duplicates(subset="index")
+
+        if timestamp_source == SECONDARY:
+            valid_matches[TIMESTAMP_COL] = valid_matches[f"{TIMESTAMP_COL}_{SECONDARY}"]
+            valid_matches[ABSPOS_COL] = valid_matches[f"{ABSPOS_COL}_{SECONDARY}"]
+
+        result = valid_matches.set_index("index")[primary_events.columns]
+        return result
+
     def match_combinations(
         self,
         concepts_plus: pd.DataFrame,
         combinations: Dict,
     ) -> pd.DataFrame:
-        """Match combinations of codes that occur within a specific time window of each other.
-
-        Args:
-            concepts_plus: DataFrame containing concepts
-            combinations: Dictionary defining the combinations to match
-                Example: {
-                    "primary": {"type": ["code"], "match": [["DOD"]]},
-                    "secondary": {"type": ["code"], "match": [["DI20"]]},
-                    "window_hours_min": 24,
-                    "window_hours_max": 24,
-                    "timestamp_source": "primary" # or "secondary"
-                }
-
-        Returns:
-            DataFrame with timestamps of matched combinations
-        """
-        # Handle empty input DataFrame
-        if len(concepts_plus) == 0:
-            return create_empty_results_df()
-
-        # Get primary and secondary events
+        """Action: KEEPS matching events. Uses the shared matching engine."""
+        # ... (code is unchanged from the previous step, it already uses the fast engine)
         primary_events = self.get_events(concepts_plus, combinations[PRIMARY])
         secondary_events = self.get_events(concepts_plus, combinations[SECONDARY])
 
-        # Return empty DataFrame if either set of events is empty
-        if len(primary_events) == 0 or len(secondary_events) == 0:
+        if primary_events.empty or secondary_events.empty:
             return create_empty_results_df()
 
-        # Find events within the time window
-        return find_matches_within_window(
+        return self._find_matches_fast(
             primary_events,
             secondary_events,
             window_hours_min=combinations[WINDOW_HOURS_MIN],
@@ -215,29 +236,26 @@ class OutcomeMaker:
         target_events: pd.DataFrame,
         exclusion_config: Dict,
     ) -> pd.DataFrame:
-        """Filter out target events that co-occur with exclusion events within a specified time window."""
-        exclusion_events = self.get_events(concepts_plus, exclusion_config["events"])
-
-        if exclusion_events.empty or target_events.empty:
+        """Action: DROPS matching events. Also uses the shared matching engine."""
+        if target_events.empty:
             return target_events
 
-        target_events = target_events.copy()
-        exclusion_events = exclusion_events.rename(
-            columns={ABSPOS_COL: f"{ABSPOS_COL}_exclusion"}
+        # 1. Get the events that will trigger an exclusion.
+        exclusion_events = self.get_events(concepts_plus, exclusion_config["events"])
+
+        if exclusion_events.empty:
+            return target_events
+
+        # 2. Use the shared engine to find all target_events that have a matching exclusion_event.
+        events_to_drop = self._find_matches_fast(
+            primary_events=target_events,
+            secondary_events=exclusion_events,
+            window_hours_min=exclusion_config["window_hours_min"],
+            window_hours_max=exclusion_config["window_hours_max"],
         )
 
-        target_events_with_index = target_events.reset_index()
-        merged = pd.merge(
-            target_events_with_index,
-            exclusion_events[[PID_COL, f"{ABSPOS_COL}_exclusion"]],
-            on=PID_COL,
-        )
+        # 3. If any such events were found, drop them from the original DataFrame.
+        if not events_to_drop.empty:
+            return target_events.drop(index=events_to_drop.index)
 
-        time_diff = merged[f"{ABSPOS_COL}_exclusion"] - merged[ABSPOS_COL]
-        window_min = exclusion_config["window_hours_min"]
-        window_max = exclusion_config["window_hours_max"]
-
-        mask = (time_diff >= window_min) & (time_diff <= window_max)
-        indices_to_drop = merged.loc[mask, "index"].unique()
-
-        return target_events.drop(index=indices_to_drop)
+        return target_events

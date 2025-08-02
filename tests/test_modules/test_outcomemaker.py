@@ -143,14 +143,11 @@ class TestOutcomeMaker(unittest.TestCase):
 
         # Create outcome maker
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
 
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patient_set,
             self.outcomes_path,
-            header_written,
         )
 
         # Check result
@@ -192,14 +189,11 @@ class TestOutcomeMaker(unittest.TestCase):
 
         # Create outcome maker
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
 
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patient_set,
             self.outcomes_path,
-            header_written,
         )
 
         # Check exclude result
@@ -233,14 +227,11 @@ class TestOutcomeMaker(unittest.TestCase):
 
         # Create outcome maker
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
 
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patient_set,
             self.outcomes_path,
-            header_written,
         )
 
         # Check result
@@ -289,14 +280,11 @@ class TestOutcomeMaker(unittest.TestCase):
 
         # Create outcome maker
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
 
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patient_set,
             self.outcomes_path,
-            header_written,
         )
 
         # Check result
@@ -339,14 +327,11 @@ class TestOutcomeMaker(unittest.TestCase):
 
         # Create outcome maker
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
 
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patient_set,
             self.outcomes_path,
-            header_written,
         )
 
         # Add debug prints
@@ -394,14 +379,11 @@ class TestOutcomeMaker(unittest.TestCase):
 
         # Create outcome maker
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
 
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patient_set,
             self.outcomes_path,
-            header_written,
         )
 
         # Check result
@@ -443,14 +425,11 @@ class TestOutcomeMaker(unittest.TestCase):
 
         # Create outcome maker
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
 
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patient_set,
             self.outcomes_path,
-            header_written,
         )
 
         # Check result
@@ -495,14 +474,11 @@ class TestOutcomeMaker(unittest.TestCase):
 
         # Create outcome maker
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(bool)
 
         # Get outcomes
         outcome_maker(
             self.concepts_plus,
-            self.patient_set,
             self.outcomes_path,
-            header_written,
         )
 
         # Check result - all outcome types should produce files
@@ -527,19 +503,13 @@ class TestOutcomeMaker(unittest.TestCase):
             }
         }
         outcome_maker = OutcomeMaker(outcomes)
-        header_written = defaultdict(
-            bool
-        )  # This is no longer used by OutcomeMaker but required by the signature
-
         # First batch of data
         batch1_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([1, 2])]
-        patient_set1 = [1, 2]
-        outcome_maker(batch1_concepts, patient_set1, self.outcomes_path, header_written)
+        outcome_maker(batch1_concepts, self.outcomes_path)
 
         # Second batch of data, with the same OutcomeMaker instance
         batch2_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([3])]
-        patient_set2 = [3]
-        outcome_maker(batch2_concepts, patient_set2, self.outcomes_path, header_written)
+        outcome_maker(batch2_concepts, self.outcomes_path)
 
         # Check the output file
         output_file = join(self.outcomes_path, "BATCH_TEST.csv")
@@ -561,10 +531,7 @@ class TestOutcomeMaker(unittest.TestCase):
         # Now, create a new OutcomeMaker and write data. It should overwrite the file.
         new_outcome_maker = OutcomeMaker(outcomes)
         batch3_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([3])]
-        patient_set3 = [3]
-        new_outcome_maker(
-            batch3_concepts, patient_set3, self.outcomes_path, header_written
-        )
+        new_outcome_maker(batch3_concepts, self.outcomes_path)
 
         # Check that the file was overwritten
         overwritten_outcome = pd.read_csv(output_file)
