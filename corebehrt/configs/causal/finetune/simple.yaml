@@ -16,8 +16,8 @@ model:
   head:
     shared_representation: true # whether to share the bigru representation for exposure and outcome
     bidirectional: true
-    bottleneck_dim: 32
-    l1_lambda: 0
+    bottleneck_dim: 64
+    l1_lambda: 0.2
 
 trainer_args:
   loss_weight_function:
@@ -35,7 +35,7 @@ trainer_args:
 
   early_stopping: 3
   stopping_criterion: roc_auc
-  n_layers_to_freeze: 2
+  n_layers_to_freeze: 1
   freeze_encoder_on_plateau: true
   freeze_encoder_on_plateau_threshold: 0.01
   freeze_encoder_on_plateau_patience: 4
@@ -46,7 +46,7 @@ trainer_args:
   save_curves: false
 
 optimizer:
-  lr: 7e-3
+  lr: 3e-3
   eps: 1e-6
 
 scheduler:
