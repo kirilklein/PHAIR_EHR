@@ -99,14 +99,12 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
     def _get_loss_fn(self, loss_name: str, loss_params: dict):
         """Returns the loss function instance based on the name."""
         if loss_name == "focal":
-            logger.info("Using FocalLossWithLogits")
             if (pos_weight := loss_params.get("pos_weight", None)) is not None:
                 alpha = pos_weight_to_alpha(pos_weight=pos_weight)
             else:
                 alpha = None
             return FocalLossWithLogits(alpha=alpha, gamma=loss_params.get("gamma", 2.0))
         elif loss_name == "bce":
-            logger.info("Using BCEWithLogitsLoss")
             return BCEWithLogitsLoss(pos_weight=loss_params.get("pos_weight"))
         else:
             raise ValueError(f"Unsupported loss function: {loss_name}")
@@ -131,6 +129,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         self.exposure_loss_fct = self._get_loss_fn(
             loss_function_name, exposure_loss_params
         )
+        logger.info(f"Exposure loss function: {self.exposure_loss_fct}")
 
         # Setup outcome losses
         self.outcome_loss_fcts = nn.ModuleDict()
