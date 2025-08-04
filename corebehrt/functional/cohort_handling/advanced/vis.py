@@ -1,10 +1,14 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import matplotlib
 
 matplotlib.use("Agg")  # Use non-interactive backend for headless environments
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import seaborn as sns
+import logging
+from corebehrt.constants.data import PID_COL, AGE_COL
 
 
 def plot_cohort_stats(
@@ -401,3 +405,35 @@ def plot_multiple_cohort_stats(
         plt.show()
     else:
         plt.close()
+
+
+def plot_age_distribution(
+    final_index_dates_with_age: pd.DataFrame,
+    control_pids: List[int],
+    save_path: str,
+    logger: logging.Logger,
+):
+    """Plots the age distribution for exposed vs. control from a pre-calculated age column."""
+    logger.info("Plotting age at index date distribution.")
+    plot_df = final_index_dates_with_age.copy()
+
+    # 1. Create a 'group' column by checking if a patient is in the control list
+    plot_df["group"] = np.where(
+        plot_df[PID_COL].isin(control_pids), "Control", "Exposed"
+    )
+
+    # 2. Create and save the histogram plot
+    plt.figure(figsize=(12, 7))
+    sns.histplot(
+        data=plot_df, x=AGE_COL, hue="group", kde=True, bins=40, element="step"
+    )
+    plt.title("Age Distribution at Index Date (Final Cohorts)")
+    plt.xlabel("Age (years)")
+    plt.ylabel("Patient Count")
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+    plt.tight_layout()
+
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+    logger.info(f"Saved age distribution plot to {save_path}")

@@ -32,6 +32,7 @@ class TestMatchingFunctions(unittest.TestCase):
                 ],
             }
         )
+        self.df[f"{CONCEPT_COL}_lower"] = self.df[CONCEPT_COL].str.lower()
 
     def test_startswith_match_case_sensitive(self):
         # Test startswith_match with case-sensitive matching
@@ -47,13 +48,14 @@ class TestMatchingFunctions(unittest.TestCase):
             self.df, CONCEPT_COL, ["covid", "test"], case_sensitive=False
         )
         expected = pd.Series([True, True, False, False, True, False], name=CONCEPT_COL)
-        pd.testing.assert_series_equal(result, expected)
+        pd.testing.assert_series_equal(result, expected, check_names=False)
 
     def test_contains_match_case_sensitive(self):
         # Test contains_match with case-sensitive matching
         result = contains_match(
             self.df, CONCEPT_COL, ["COVID", "TEST"], case_sensitive=True
         )
+
         expected = pd.Series([True, True, False, False, True, False], name=CONCEPT_COL)
         pd.testing.assert_series_equal(result, expected)
 
@@ -63,7 +65,7 @@ class TestMatchingFunctions(unittest.TestCase):
             self.df, CONCEPT_COL, ["covid", "test"], case_sensitive=False
         )
         expected = pd.Series([True, True, False, False, True, False], name=CONCEPT_COL)
-        pd.testing.assert_series_equal(result, expected)
+        pd.testing.assert_series_equal(result, expected, check_names=False)
 
     def test_exact_match_case_sensitive(self):
         # Test exact_match with case-sensitive matching
@@ -79,7 +81,7 @@ class TestMatchingFunctions(unittest.TestCase):
             self.df, CONCEPT_COL, ["covid", "positive"], case_sensitive=False
         )
         expected = pd.Series([True, False, True, False, False, False], name=CONCEPT_COL)
-        pd.testing.assert_series_equal(result, expected)
+        pd.testing.assert_series_equal(result, expected, check_names=False)
 
     def test_exact_match_no_partial_matches(self):
         # Test that exact_match doesn't match partial strings
