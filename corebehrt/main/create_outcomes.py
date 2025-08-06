@@ -67,11 +67,11 @@ def create_outcomes(loader, cfg, logger) -> None:
         logger.info("Initializing plotting process...")
         # Assumes cfg.plot is a dictionary that can unpack into PlotConfig
         plot_config = PlotConfig(**cfg.plot)
-
+        figures_path = join(cfg.paths.outcomes, "figures")
         # Instantiate the plotter with paths and config
         plotter = OutcomePlotter(
             outcomes_path=outcomes_path,
-            figures_path=cfg.paths.outcomes,
+            figures_path=figures_path,
             config=plot_config,
         )
 

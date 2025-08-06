@@ -156,10 +156,9 @@ class CausalDatasetPreparer:
         )
         self._save_artifacts(artifacts, self.paths_cfg.prepared_data)
         if follow_ups is not None:
-            plot_follow_up_distribution(
-                follow_ups, binary_exposure, self.paths_cfg.prepared_data
-            )
-            plot_outcome_distribution(binary_outcomes, self.paths_cfg.prepared_data)
+            fig_dir = join(self.paths_cfg.prepared_data, "figures")
+            plot_follow_up_distribution(follow_ups, binary_exposure, fig_dir)
+            plot_outcome_distribution(binary_outcomes, fig_dir)
         return data
 
     def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
