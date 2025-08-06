@@ -15,7 +15,7 @@ from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.functional.preparation.causal.utils import (
     filter_df_by_unique_values,
     get_non_compliance_abspos,
-    get_group_dict,
+    assign_groups_to_followups,
 )
 from corebehrt.modules.preparation.causal.config import OutcomeConfig
 
@@ -67,16 +67,8 @@ def get_combined_follow_ups(
         index_date_matching = filter_df_by_unique_values(
             index_date_matching, index_dates, CONTROL_PID_COL, PID_COL
         )
-        all_pids = index_dates[PID_COL].unique()
-        group_dict = get_group_dict(index_date_matching)
-        max_group = max(group_dict.values(), default=0)
-        for pid in all_pids:
-            if pid not in group_dict:
-                group_dict[pid] = max_group + 1
-                max_group += 1
 
-        follow_ups[GROUP_COL] = follow_ups[PID_COL].map(group_dict)
-        follow_ups[GROUP_COL] = follow_ups[GROUP_COL].astype(int)
+        follow_ups = assign_groups_to_followups(follow_ups, index_date_matching)
         follow_ups = minimize_end_by_group(follow_ups)
 
     return follow_ups
