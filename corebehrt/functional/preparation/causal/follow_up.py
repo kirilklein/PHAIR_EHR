@@ -157,19 +157,19 @@ def minimize_end_by_group(follow_ups: pd.DataFrame) -> pd.DataFrame:
     to each patient's own start time.
     """
     # 1. Calculate the potential follow-up duration for each patient
-    follow_ups['duration'] = follow_ups[END_COL] - follow_ups[START_COL]
+    follow_ups["duration"] = follow_ups[END_COL] - follow_ups[START_COL]
 
     # Ensure duration is not negative before this step (handles edge cases where
     # censoring happens before follow-up starts)
-    follow_ups['duration'] = follow_ups['duration'].clip(lower=0)
+    follow_ups["duration"] = follow_ups["duration"].clip(lower=0)
 
     # 2. Find the minimum duration within each group
-    min_duration_by_group = follow_ups.groupby(GROUP_COL)['duration'].transform('min')
+    min_duration_by_group = follow_ups.groupby(GROUP_COL)["duration"].transform("min")
 
     # 3. Calculate the new END_COL based on each patient's START_COL and the group's min_duration
     follow_ups[END_COL] = follow_ups[START_COL] + min_duration_by_group
 
     # Clean up the temporary duration column
-    follow_ups = follow_ups.drop(columns=['duration'])
-    
+    follow_ups = follow_ups.drop(columns=["duration"])
+
     return follow_ups
