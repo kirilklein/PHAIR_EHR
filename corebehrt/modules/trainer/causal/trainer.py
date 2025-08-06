@@ -564,6 +564,21 @@ class CausalEHRTrainer(EHRTrainer):
                 best_model=True,
             )
 
+        # Log metrics to MLFlow
+        if azure.is_mlflow_available():
+            # Log all validation metrics
+            if val_metrics:
+                for metric_name, value in val_metrics.items():
+                    self.run_log(f"val_{metric_name}", value, step=epoch)
+            # Log all test metrics
+            if test_metrics:
+                for metric_name, value in test_metrics.items():
+                    self.run_log(f"test_{metric_name}", value, step=epoch)
+            # Log losses
+            self.run_log("train_loss", avg_train_loss, step=epoch)
+            if val_loss is not None:
+                self.run_log("val_loss", val_loss, step=epoch)
+
         self._self_log_results(
             epoch, val_loss, val_metrics, epoch_loss, len(train_loop)
         )
