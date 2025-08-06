@@ -22,12 +22,17 @@ def plot_probas_hist(
     title: str,
     xlabel: str,
     ax: mpl.axes.Axes,
+    min_quantile: float = 0.001,
+    max_quantile: float = 0.999,
+    num_bins: int = 51,
 ) -> None:
     """
     Plot the histogram of a value column grouped by a group column.
     """
     bin_edges = np.linspace(
-        df[value_col].quantile(0.01), df[value_col].quantile(0.99), 51
+        df[value_col].quantile(min_quantile),
+        df[value_col].quantile(max_quantile),
+        num_bins,
     )
 
     group0_data = df[df[group_col] == 0][value_col]
