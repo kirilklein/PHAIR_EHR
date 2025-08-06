@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 import matplotlib as mpl
+from abc import ABC, abstractmethod
 from corebehrt.constants.causal.data import (
     OUTCOME,
     EffectColumns,
@@ -18,13 +19,120 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class EffectSizePlotConfig:
+class BasePlotConfig:
     max_outcomes_per_figure: int = 10
     max_number_of_figures: int = 10
+
+
+class BasePlotter(ABC):
+    """Abstract base class for creating paginated plots."""
+
+    def __init__(
+        self,
+        data_df: pd.DataFrame,
+        save_dir: str,
+        config: BasePlotConfig,
+        title: str,
+    ):
+        self.df = data_df
+        self.save_dir = save_dir
+        self.config = config
+        self.title = title
+        self.all_outcomes: np.ndarray = np.array([])
+        self.num_figures_to_generate: int = 0
+        self._prepare()
+
+    def _prepare(self):
+        """Handles all initial setup and pre-calculation."""
+        os.makedirs(self.save_dir, exist_ok=True)
+        if not self.df.empty:
+            self.all_outcomes = self.df[OUTCOME].unique()
+
+        required = (
+            (len(self.all_outcomes) + self.config.max_outcomes_per_figure - 1)
+            // self.config.max_outcomes_per_figure
+            if self.config.max_outcomes_per_figure > 0
+            else 0
+        )
+        self.num_figures_to_generate = min(required, self.config.max_number_of_figures)
+        if required > self.num_figures_to_generate:
+            logger.warning(
+                f"Plot generation capped at {self.num_figures_to_generate} figures."
+            )
+
+    def run(self):
+        """Main entry point to generate all plot pages."""
+        if self.num_figures_to_generate > 0:
+            logger.info(f"Generating {self._get_plot_type()} plots...")
+        for page_num in range(self.num_figures_to_generate):
+            self._plot_page(page_num)
+
+    def _plot_page(self, page_num: int):
+        """Creates and saves a single figure (page) of the plot."""
+        start_idx = page_num * self.config.max_outcomes_per_figure
+        end_idx = start_idx + self.config.max_outcomes_per_figure
+        outcomes_on_this_page = self.all_outcomes[start_idx:end_idx]
+        page_df = self.df[self.df[OUTCOME].isin(outcomes_on_this_page)]
+
+        fig, ax = plt.subplots(figsize=self._get_figsize(outcomes_on_this_page))
+
+        self._draw_page_content(ax, page_df, outcomes_on_this_page)
+        self._finalize_figure(fig, ax, page_num, outcomes_on_this_page)
+
+    def _finalize_figure(
+        self,
+        fig: mpl.figure.Figure,
+        ax: mpl.axes.Axes,
+        page_num: int,
+        outcomes_on_page: List[str],
+    ):
+        """Sets final aesthetics and saves the figure."""
+        ax.set_title(
+            f"{self.title} (Part {page_num + 1}/{self.num_figures_to_generate})",
+            fontsize=16,
+        )
+        self._configure_ax(ax, outcomes_on_page)
+
+        save_path = f"{self.save_dir}/{self._get_save_filename(page_num)}"
+        fig.tight_layout()
+        plt.savefig(save_path, bbox_inches="tight")
+        plt.close(fig)
+        logger.info(f"Saved {self._get_plot_type()} plot to {save_path}")
+
+    @abstractmethod
+    def _get_plot_type(self) -> str:
+        """Return a string representing the type of plot for logging."""
+        pass
+
+    @abstractmethod
+    def _get_figsize(self, outcomes_on_page: List[str]) -> tuple:
+        """Return the figure size for the plot."""
+        pass
+
+    @abstractmethod
+    def _get_save_filename(self, page_num: int) -> str:
+        """Return the filename for the saved plot."""
+        pass
+
+    @abstractmethod
+    def _draw_page_content(
+        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+    ):
+        """Draw the main content of the plot for a single page."""
+        pass
+
+    @abstractmethod
+    def _configure_ax(self, ax: mpl.axes.Axes, outcomes_on_page: List[str]):
+        """Configure axis labels, ticks, legends, etc."""
+        pass
+
+
+@dataclass
+class EffectSizePlotConfig(BasePlotConfig):
     plot_individual_effects: bool = False
 
 
-class EffectSizePlotter:
+class EffectSizePlotter(BasePlotter):
     """
     Orchestrates the creation of forest plots for effect sizes, handling
     pagination and styling in a structured way.
@@ -38,18 +146,14 @@ class EffectSizePlotter:
         title: str,
         methods: List[str],
     ):
-        self.df = effects_df
-        self.save_dir = save_dir
-        self.config = config
-        self.title = title
         self.methods = methods
+        self.method_colors = {}
+        self.method_dodge = {}
+        super().__init__(effects_df, save_dir, config, title)
 
-        self._validate_and_prepare()
-
-    def _validate_and_prepare(self):
+    def _prepare(self):
         """Handles all initial setup and pre-calculation."""
-        os.makedirs(self.save_dir, exist_ok=True)
-
+        super()._prepare()
         # Validate if individual effects can be plotted
         if self.config.plot_individual_effects and (
             EffectColumns.effect_0 not in self.df.columns
@@ -60,13 +164,10 @@ class EffectSizePlotter:
             )
             self.config.plot_individual_effects = False
 
-        # Determine methods and outcomes to plot
-        self.all_outcomes = self.df[OUTCOME].unique()
-
         # Pre-calculate aesthetics
         self.method_colors = {
             method: color
-            for i, (method, color) in enumerate(
+            for _, (method, color) in enumerate(
                 zip(self.methods, plt.cm.get_cmap("tab10").colors)
             )
         }
@@ -77,34 +178,39 @@ class EffectSizePlotter:
             method: val for method, val in zip(self.methods, dodge_vals)
         }
 
-        # Calculate pagination
-        required = (
-            len(self.all_outcomes) + self.config.max_outcomes_per_figure - 1
-        ) // self.config.max_outcomes_per_figure
-        self.num_figures_to_generate = min(required, self.config.max_number_of_figures)
-        if required > self.num_figures_to_generate:
-            logger.warning(
-                f"Plot generation capped at {self.num_figures_to_generate} figures."
-            )
+    def _get_plot_type(self) -> str:
+        return "effect size"
 
-    def run(self):
-        """Main entry point to generate all plot pages."""
-        for page_num in range(self.num_figures_to_generate):
-            self._plot_page(page_num)
+    def _get_figsize(self, outcomes_on_page: List[str]) -> tuple:
+        return (max(10, 2 * len(outcomes_on_page)), 6)
 
-    def _plot_page(self, page_num: int):
-        """Creates and saves a single figure (page) of the plot."""
-        start_idx = page_num * self.config.max_outcomes_per_figure
-        end_idx = start_idx + self.config.max_outcomes_per_figure
-        outcomes_on_this_page = self.all_outcomes[start_idx:end_idx]
-        page_df = self.df[self.df[OUTCOME].isin(outcomes_on_this_page)]
+    def _get_save_filename(self, page_num: int) -> str:
+        return f"effect_sizes_plot_{page_num + 1}.png"
 
-        fig, ax = plt.subplots(figsize=(max(10, 2 * len(outcomes_on_this_page)), 6))
-
+    def _draw_page_content(
+        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+    ):
         for method in self.methods:
-            self._draw_method_data(ax, method, page_df, outcomes_on_this_page)
+            self._draw_method_data(ax, method, page_df, outcomes_on_page)
 
-        self._finalize_figure(fig, ax, page_num, outcomes_on_this_page)
+    def _configure_ax(self, ax: mpl.axes.Axes, outcomes_on_page: List[str]):
+        ax.axhline(0, ls="--", color="grey")
+        ax.set_xticks(range(len(outcomes_on_page)))
+        ax.set_xticklabels(outcomes_on_page, fontsize=12)
+        ax.set_xlabel("Outcome", fontsize=14)
+        ax.set_ylabel("Effect size", fontsize=14)
+        handles, labels = ax.get_legend_handles_labels()
+        if self.config.plot_individual_effects:
+            ax.legend(
+                handles,
+                labels,
+                title="Estimation type",
+                bbox_to_anchor=(1.02, 0.5),
+                loc="center left",
+            )
+            plt.subplots_adjust(right=0.8)  # Adjust layout if legend is outside
+        else:
+            ax.legend(title="Estimation type", loc="lower right")
 
     def _draw_method_data(
         self,
@@ -171,53 +277,15 @@ class EffectSizePlotter:
                 label=f"{method.upper()} Y(0)",
             )
 
-    def _finalize_figure(
-        self,
-        fig: mpl.figure.Figure,
-        ax: mpl.axes.Axes,
-        page_num: int,
-        outcomes_on_page: List[str],
-    ):
-        """Sets final aesthetics and saves the figure."""
-        ax.axhline(0, ls="--", color="grey")
-        ax.set_xticks(range(len(outcomes_on_page)))
-        ax.set_xticklabels(outcomes_on_page, fontsize=12)
-        ax.set_xlabel("Outcome", fontsize=14)
-        ax.set_ylabel("Effect size", fontsize=14)
-        ax.set_title(
-            f"{self.title} (Part {page_num + 1}/{self.num_figures_to_generate})",
-            fontsize=16,
-        )
-
-        handles, labels = ax.get_legend_handles_labels()
-        if self.config.plot_individual_effects:
-            ax.legend(
-                handles,
-                labels,
-                title="Estimation type",
-                bbox_to_anchor=(1.02, 0.5),
-                loc="center left",
-            )
-            plt.subplots_adjust(right=0.8)  # Adjust layout if legend is outside
-        else:
-            ax.legend(title="Estimation type", loc="lower right")
-
-        save_path = f"{self.save_dir}/effect_sizes_plot_{page_num + 1}.png"
-        plt.tight_layout()
-        plt.savefig(save_path, bbox_inches="tight")
-        plt.close(fig)
-        logger.info(f"Effect size plot saved to {save_path}")
-
 
 @dataclass
-class ContingencyPlotConfig:
+class ContingencyPlotConfig(BasePlotConfig):
     max_outcomes_per_figure: int = (
         5  # Fewer outcomes per plot works better for grouped bars
     )
-    max_number_of_figures: int = 10
 
 
-class ContingencyTablePlotter:
+class ContingencyTablePlotter(BasePlotter):
     """
     Orchestrates the creation of stacked bar charts from contingency table data.
     """
@@ -229,48 +297,20 @@ class ContingencyTablePlotter:
         config: ContingencyPlotConfig,
         title: str,
     ):
-        self.df = data_df[
-            data_df[STATUS] != "Total"
-        ]  # We only need Treated/Untreated for plotting
-        self.save_dir = save_dir
-        self.config = config
-        self.title = title
+        # We only need Treated/Untreated for plotting
+        filtered_df = data_df[data_df[STATUS] != "Total"].copy()
+        super().__init__(filtered_df, save_dir, config, title)
 
-        self._prepare()
+    def _get_plot_type(self) -> str:
+        return "contingency"
 
-    def _prepare(self):
-        """Pre-calculates necessary attributes for plotting."""
-        os.makedirs(self.save_dir, exist_ok=True)
-        self.all_outcomes = self.df[OUTCOME].unique()
+    def _get_figsize(self, outcomes_on_page: List[str]) -> tuple:
+        return (max(10, 2.5 * len(outcomes_on_page)), 7)
 
-        # Calculate pagination
-        required = (
-            len(self.all_outcomes) + self.config.max_outcomes_per_figure - 1
-        ) // self.config.max_outcomes_per_figure
-        self.num_figures_to_generate = min(required, self.config.max_number_of_figures)
-        if required > self.num_figures_to_generate:
-            logger.warning(
-                f"Plot generation capped at {self.num_figures_to_generate} figures."
-            )
+    def _get_save_filename(self, page_num: int) -> str:
+        return f"contingency_counts_{page_num + 1}.png"
 
-    def run(self):
-        """Main entry point to generate all plot pages."""
-        for page_num in range(self.num_figures_to_generate):
-            self._plot_page(page_num)
-
-    def _plot_page(self, page_num: int):
-        """Creates and saves a single figure (page) of the plot."""
-        start_idx = page_num * self.config.max_outcomes_per_figure
-        end_idx = start_idx + self.config.max_outcomes_per_figure
-        outcomes_on_page = self.all_outcomes[start_idx:end_idx]
-        page_df = self.df[self.df[OUTCOME].isin(outcomes_on_page)]
-
-        fig, ax = plt.subplots(figsize=(max(10, 2.5 * len(outcomes_on_page)), 7))
-
-        self._draw_bars_for_page(ax, page_df, outcomes_on_page)
-        self._finalize_figure(fig, ax, page_num, outcomes_on_page)
-
-    def _draw_bars_for_page(
+    def _draw_page_content(
         self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
     ):
         """Draws the grouped, stacked bars for the outcomes on the current page."""
@@ -328,85 +368,35 @@ class ContingencyTablePlotter:
             color="firebrick",
         )
 
-    def _finalize_figure(
-        self,
-        fig: mpl.figure.Figure,
-        ax: mpl.axes.Axes,
-        page_num: int,
-        outcomes_on_page: List[str],
-    ):
+    def _configure_ax(self, ax: mpl.axes.Axes, outcomes_on_page: List[str]):
         """Sets final aesthetics and saves the figure."""
         ax.set_ylabel("Number of Patients", fontsize=14)
-        ax.set_title(
-            f"{self.title} (Part {page_num + 1}/{self.num_figures_to_generate})",
-            fontsize=16,
-        )
         ax.set_xticks(np.arange(len(outcomes_on_page)))
         ax.set_xticklabels(outcomes_on_page, fontsize=12, rotation=15, ha="right")
         ax.legend()
         ax.grid(axis="y", linestyle="--", alpha=0.7)
 
-        save_path = f"{self.save_dir}/contingency_counts_{page_num + 1}.png"
-        fig.tight_layout()
-        plt.savefig(save_path, bbox_inches="tight")
-        plt.close(fig)
-        logger.info(f"Contingency plot saved to {save_path}")
-
 
 @dataclass
-class AdjustmentPlotConfig:
-    max_outcomes_per_figure: int = 10
-    max_number_of_figures: int = 10
+class AdjustmentPlotConfig(BasePlotConfig):
+    pass
 
 
-class AdjustmentPlotter:
+class AdjustmentPlotter(BasePlotter):
     """
     Orchestrates the creation of detailed plots to visualize the TMLE adjustment process.
     """
 
-    def __init__(
-        self,
-        data_df: pd.DataFrame,
-        save_dir: str,
-        config: AdjustmentPlotConfig,
-        title: str,
-    ):
-        self.df = data_df
-        self.save_dir = save_dir
-        self.config = config
-        self.title = title
-        self._prepare()
+    def _get_plot_type(self) -> str:
+        return "detailed adjustment"
 
-    def _prepare(self):
-        """Pre-calculates necessary attributes for plotting."""
-        os.makedirs(self.save_dir, exist_ok=True)
-        self.all_outcomes = self.df[OUTCOME].unique()
+    def _get_figsize(self, outcomes_on_page: List[str]) -> tuple:
+        return (max(12, 2.5 * len(outcomes_on_page)), 8)
 
-        required = (
-            len(self.all_outcomes) + self.config.max_outcomes_per_figure - 1
-        ) // self.config.max_outcomes_per_figure
-        self.num_figures_to_generate = min(required, self.config.max_number_of_figures)
+    def _get_save_filename(self, page_num: int) -> str:
+        return f"detailed_adjustment_{page_num + 1}.png"
 
-    def run(self):
-        """Main entry point to generate all plot pages."""
-        if self.num_figures_to_generate > 0:
-            logger.info("Generating detailed adjustment plots...")
-        for page_num in range(self.num_figures_to_generate):
-            self._plot_page(page_num)
-
-    def _plot_page(self, page_num: int):
-        """Creates and saves a single, detailed adjustment plot for a page of outcomes."""
-        start_idx = page_num * self.config.max_outcomes_per_figure
-        end_idx = start_idx + self.config.max_outcomes_per_figure
-        outcomes_on_page = self.all_outcomes[start_idx:end_idx]
-        page_df = self.df[self.df[OUTCOME].isin(outcomes_on_page)]
-
-        fig, ax = plt.subplots(figsize=(max(12, 2.5 * len(outcomes_on_page)), 8))
-
-        self._draw_adjustment_arrows(ax, page_df, outcomes_on_page)
-        self._finalize_figure(fig, ax, page_num, outcomes_on_page)
-
-    def _draw_adjustment_arrows(
+    def _draw_page_content(
         self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
     ):
         """Draws the arrows, points, and difference bars for the page."""
@@ -483,13 +473,7 @@ class AdjustmentPlotter:
                 y1_final, xmin=i - cap_width / 2, xmax=i + cap_width / 2, color="black"
             )
 
-    def _finalize_figure(
-        self,
-        fig: mpl.figure.Figure,
-        ax: mpl.axes.Axes,
-        page_num: int,
-        outcomes_on_page: List[str],
-    ):
+    def _configure_ax(self, ax: mpl.axes.Axes, outcomes_on_page: List[str]):
         """Sets final aesthetics and saves the figure."""
         import matplotlib.lines as mlines
 
@@ -497,10 +481,6 @@ class AdjustmentPlotter:
         ax.set_ylabel("Outcome Probability (Risk)", fontsize=14)
         ax.set_xticks(np.arange(len(outcomes_on_page)))
         ax.set_xticklabels(outcomes_on_page, fontsize=12, rotation=15, ha="right")
-        ax.set_title(
-            f"{self.title} (Part {page_num + 1}/{self.num_figures_to_generate})",
-            fontsize=16,
-        )
 
         handles = [
             mlines.Line2D(
@@ -534,9 +514,3 @@ class AdjustmentPlotter:
         ]
         ax.legend(handles=handles)
         ax.grid(axis="y", linestyle="--", alpha=0.5)
-
-        save_path = f"{self.save_dir}/detailed_adjustment_{page_num + 1}.png"
-        fig.tight_layout()
-        plt.savefig(save_path, bbox_inches="tight")
-        plt.close(fig)
-        logger.info(f"Saved detailed adjustment plot to {save_path}")
