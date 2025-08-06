@@ -8,6 +8,11 @@ paths:
 
   outcomes: ./outputs/causal/finetune/outcomes
 
+plot:
+  max_outcomes_to_plot: 100
+  max_subplots_per_figure: 10
+  wide_dist_threshold: 30
+
 outcomes:
   EXPOSURE:
     type: [code]

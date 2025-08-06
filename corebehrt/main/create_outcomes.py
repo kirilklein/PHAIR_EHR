@@ -11,6 +11,8 @@ from corebehrt.modules.features.loader import ShardLoader
 from corebehrt.modules.monitoring.logger import TqdmToLogger
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
+from corebehrt.modules.plot.outcomes import OutcomePlotter
+from corebehrt.modules.plot.outcomes import PlotConfig
 
 CONFIG_PATH = "./corebehrt/configs/outcomes_test.yaml"
 
@@ -59,6 +61,23 @@ def create_outcomes(loader, cfg, logger) -> None:
         loader(), desc="Batch Process Data", file=TqdmToLogger(logger)
     ):
         outcome_maker(concept_batch, outcomes_path)
+
+    # In your main execution flow
+    if cfg.get("plot", False):
+        logger.info("Initializing plotting process...")
+        # Assumes cfg.plot is a dictionary that can unpack into PlotConfig
+        plot_config = PlotConfig(**cfg.plot)
+
+        # Instantiate the plotter with paths and config
+        plotter = OutcomePlotter(
+            outcomes_path=outcomes_path,
+            figures_path=cfg.paths.outcomes,
+            config=plot_config,
+        )
+
+        # Run all plotting functions
+        plotter.run()
+        logger.info("Plotting process finished.")
 
 
 if __name__ == "__main__":
