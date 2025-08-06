@@ -41,6 +41,7 @@ from corebehrt.functional.preparation.utils import (
 )
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.functional.visualize.follow_ups import plot_follow_up_distribution
+from corebehrt.functional.visualize.outcomes import plot_outcome_distribution
 from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
 from corebehrt.modules.features.loader import ShardLoader
 from corebehrt.modules.monitoring.logger import TqdmToLogger
@@ -158,6 +159,7 @@ class CausalDatasetPreparer:
             plot_follow_up_distribution(
                 follow_ups, binary_exposure, self.paths_cfg.prepared_data
             )
+            plot_outcome_distribution(binary_outcomes, self.paths_cfg.prepared_data)
         return data
 
     def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
