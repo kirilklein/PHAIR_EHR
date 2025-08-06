@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from corebehrt.constants.causal.data import EffectColumns
+from corebehrt.constants.causal.data import EffectColumns, TMLEAnalysisColumns
 from corebehrt.modules.plot.estimate import (
     ContingencyPlotConfig,
     EffectSizePlotConfig,
@@ -154,7 +154,14 @@ def create_adjustment_plot(
     """
     if not all(
         col in data_df.columns
-        for col in ["initial_effect", "adjustment", "adjustment_0", "adjustment_1", "initial_effect_0", "initial_effect_1"]
+        for col in [
+            TMLEAnalysisColumns.initial_effect,
+            TMLEAnalysisColumns.adjustment,
+            TMLEAnalysisColumns.adjustment_0,
+            TMLEAnalysisColumns.adjustment_1,
+            TMLEAnalysisColumns.initial_effect_0,
+            TMLEAnalysisColumns.initial_effect_1,
+        ]
     ):
         logger.warning(
             "Skipping adjustment plots: Required columns not found in dataframe."

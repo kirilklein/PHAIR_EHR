@@ -173,9 +173,7 @@ class EffectEstimator:
         final_results_df, combined_stats_df, tmle_analysis_df = (
             self._process_and_save_results(all_effects, all_stats, initial_estimates)
         )
-        self._visualize_effects(
-            final_results_df, combined_stats_df, tmle_analysis_df
-        )
+        self._visualize_effects(final_results_df, combined_stats_df, tmle_analysis_df)
         self.logger.info("Effect estimation complete for all outcomes.")
 
     def _visualize_effects(
@@ -210,13 +208,14 @@ class EffectEstimator:
             config=self.effect_size_plot_cfg,
         )
 
-        self.logger.info("Generating TMLE adjustment visualizations...")
-        create_adjustment_plot(
-            data_df=tmle_analysis_df,
-            save_dir=join(fig_dir, "adjustment_analysis"),
-            config=self.adjustment_plot_cfg,
-            title=f"Adjustment Analysis",
-        )
+        if tmle_analysis_df is not None:
+            self.logger.info("Generating TMLE adjustment visualizations...")
+            create_adjustment_plot(
+                data_df=tmle_analysis_df,
+                save_dir=join(fig_dir, "adjustment_analysis"),
+                config=self.adjustment_plot_cfg,
+                title=f"Adjustment Analysis",
+            )
 
         if EffectColumns.true_effect in final_results_df.columns:
             # show true effects, only show one of the methods (theyre all the same for true effect)

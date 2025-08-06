@@ -7,7 +7,12 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 import matplotlib as mpl
-from corebehrt.constants.causal.data import OUTCOME, EffectColumns, STATUS
+from corebehrt.constants.causal.data import (
+    OUTCOME,
+    EffectColumns,
+    STATUS,
+    TMLEAnalysisColumns,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -356,7 +361,7 @@ class AdjustmentPlotConfig:
 
 class AdjustmentPlotter:
     """
-    Orchestrates the creation of plots to visualize the TMLE adjustment process.
+    Orchestrates the creation of detailed plots to visualize the TMLE adjustment process.
     """
 
     def __init__(
@@ -376,7 +381,6 @@ class AdjustmentPlotter:
         """Pre-calculates necessary attributes for plotting."""
         os.makedirs(self.save_dir, exist_ok=True)
         self.all_outcomes = self.df[OUTCOME].unique()
-        self.methods = self.df[EffectColumns.method].unique()
 
         required = (
             len(self.all_outcomes) + self.config.max_outcomes_per_figure - 1
@@ -386,93 +390,138 @@ class AdjustmentPlotter:
     def run(self):
         """Main entry point to generate all plot pages."""
         if self.num_figures_to_generate > 0:
-            logger.info("Generating adjustment composition and component plots...")
+            logger.info("Generating detailed adjustment plots...")
         for page_num in range(self.num_figures_to_generate):
             self._plot_page(page_num)
 
     def _plot_page(self, page_num: int):
-        """Creates and saves all plots for a single page of outcomes."""
+        """Creates and saves a single, detailed adjustment plot for a page of outcomes."""
         start_idx = page_num * self.config.max_outcomes_per_figure
         end_idx = start_idx + self.config.max_outcomes_per_figure
         outcomes_on_page = self.all_outcomes[start_idx:end_idx]
         page_df = self.df[self.df[OUTCOME].isin(outcomes_on_page)]
 
-        # Create both plots for this page of outcomes
-        self._create_composition_plot(page_df, outcomes_on_page, page_num)
-        self._create_components_plot(page_df, outcomes_on_page, page_num)
+        fig, ax = plt.subplots(figsize=(max(12, 2.5 * len(outcomes_on_page)), 8))
 
-    def _create_composition_plot(self, page_df, outcomes_on_page, page_num):
-        """Creates the stacked bar chart showing initial_effect + adjustment."""
-        fig, ax = plt.subplots(figsize=(max(10, 2 * len(outcomes_on_page)), 6))
-        x = np.arange(len(outcomes_on_page))
-        width = 0.35
+        self._draw_adjustment_arrows(ax, page_df, outcomes_on_page)
+        self._finalize_figure(fig, ax, page_num, outcomes_on_page)
 
-        # This assumes only one method (e.g., TMLE) in the input df.
-        # If multiple methods, this would need dodging similar to other plots.
-        method_df = page_df.set_index(OUTCOME).loc[outcomes_on_page]
-        initial = method_df["initial_effect"]
-        adjustment = method_df["adjustment"]
+    def _draw_adjustment_arrows(
+        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+    ):
+        """Draws the arrows, points, and difference bars for the page."""
+        dodge = 0.15  # Offset for Y0 and Y1
 
-        ax.bar(x, initial, width, label="Initial Effect", color="lightgray")
-        ax.bar(x, adjustment, width, bottom=initial, label="Adjustment", color="salmon")
+        for i, outcome in enumerate(outcomes_on_page):
+            row = page_df[page_df[OUTCOME] == outcome].iloc[0]
 
-        # Add a line for the final, adjusted effect
-        ax.plot(
-            x,
-            initial + adjustment,
-            color="black",
-            marker="_",
-            markersize=15,
-            linestyle="None",
-            label="Final Effect",
+            # --- Extract data points for clarity ---
+            y0_initial = row[TMLEAnalysisColumns.initial_effect_0]
+            y0_adj = row[TMLEAnalysisColumns.adjustment_0]
+            y0_final = y0_initial + y0_adj
+
+            y1_initial = row[TMLEAnalysisColumns.initial_effect_1]
+            y1_adj = row[TMLEAnalysisColumns.adjustment_1]
+            y1_final = y1_initial + y1_adj
+
+            # --- Plot Y0 (Control Group) ---
+            ax.arrow(
+                x=i - dodge,
+                y=y0_initial,
+                dx=0,
+                dy=y0_adj,
+                head_width=0.05,
+                head_length=0.01,
+                fc="royalblue",
+                ec="royalblue",
+                length_includes_head=True,
+            )
+            ax.plot(
+                i - dodge,
+                y0_initial,
+                "o",
+                color="royalblue",
+                markersize=6,
+                label="Control (Y0) Initial" if i == 0 else "",
+            )
+
+            # --- Plot Y1 (Treated Group) ---
+            ax.arrow(
+                x=i + dodge,
+                y=y1_initial,
+                dx=0,
+                dy=y1_adj,
+                head_width=0.05,
+                head_length=0.01,
+                fc="firebrick",
+                ec="firebrick",
+                length_includes_head=True,
+            )
+            ax.plot(
+                i + dodge,
+                y1_initial,
+                "o",
+                color="firebrick",
+                markersize=6,
+                label="Treated (Y1) Initial" if i == 0 else "",
+            )
+
+            # --- Plot Final Risk Difference Bracket ---
+            # The vertical line connecting the final points
+            ax.vlines(
+                i,
+                ymin=y0_final,
+                ymax=y1_final,
+                color="black",
+                linestyle="-",
+                linewidth=1.5,
+            )
+            # Caps at the end of the vertical line
+            cap_width = 0.1
+            ax.hlines(
+                y0_final, xmin=i - cap_width / 2, xmax=i + cap_width / 2, color="black"
+            )
+            ax.hlines(
+                y1_final, xmin=i - cap_width / 2, xmax=i + cap_width / 2, color="black"
+            )
+
+        # Add dummy plots for a clean legend
+        ax.plot([], [], "o", color="royalblue", label="Control (Y0) Initial")
+        ax.plot([], [], "o", color="firebrick", label="Treated (Y1) Initial")
+        ax.arrow(
+            0,
+            0,
+            0,
+            0,
+            head_width=0.05,
+            head_length=0.01,
+            fc="gray",
+            ec="gray",
+            label="Adjustment Arrow",
         )
+        ax.vlines(0, 0, 0, color="black", label="Final Risk Difference")
 
-        ax.axhline(0, color="black", linewidth=0.8)
-        ax.set_ylabel("Effect Size (Risk Difference)", fontsize=12)
-        ax.set_xticks(x)
-        ax.set_xticklabels(outcomes_on_page, rotation=15, ha="right")
+    def _finalize_figure(
+        self,
+        fig: mpl.figure.Figure,
+        ax: mpl.axes.Axes,
+        page_num: int,
+        outcomes_on_page: List[str],
+    ):
+        """Sets final aesthetics and saves the figure."""
+        ax.axhline(0, color="grey", linewidth=0.8, linestyle="--")
+        ax.set_ylabel("Outcome Probability (Risk)", fontsize=14)
+        ax.set_xticks(np.arange(len(outcomes_on_page)))
+        ax.set_xticklabels(outcomes_on_page, fontsize=12, rotation=15, ha="right")
         ax.set_title(
-            f"Adjustment Composition (Part {page_num + 1}/{self.num_figures_to_generate})",
-            fontsize=14,
+            f"{self.title} (Part {page_num + 1}/{self.num_figures_to_generate})",
+            fontsize=16,
         )
         ax.legend()
+        ax.grid(axis="y", linestyle="--", alpha=0.5)
+
+        save_path = f"{self.save_dir}/detailed_adjustment_{page_num + 1}.png"
         fig.tight_layout()
-        save_path = f"{self.save_dir}/adjustment_composition_{page_num + 1}.png"
-        plt.savefig(save_path)
+        plt.savefig(save_path, bbox_inches="tight")
         plt.close(fig)
-        logger.info(f"Saved adjustment plot to {save_path}")
-
-    def _create_components_plot(self, page_df, outcomes_on_page, page_num):
-        """Creates the dot plot showing adjustment_0 and adjustment_1."""
-        fig, ax = plt.subplots(figsize=(max(10, 2 * len(outcomes_on_page)), 6))
-        x = np.arange(len(outcomes_on_page))
-
-        method_df = page_df.set_index("outcome").loc[outcomes_on_page]
-        adj_0 = method_df["adjustment_0"]
-        adj_1 = method_df["adjustment_1"]
-
-        ax.plot(
-            x - 0.1, adj_1, "o", label="Adjustment for Treated (Y1)", color="firebrick"
-        )
-        ax.plot(
-            x + 0.1,
-            adj_0,
-            "x",
-            label="Adjustment for Control (Y0)",
-            color="darkslateblue",
-        )
-
-        ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
-        ax.set_ylabel("Adjustment Value", fontsize=12)
-        ax.set_xticks(x)
-        ax.set_xticklabels(outcomes_on_page, rotation=15, ha="right")
-        ax.set_title(
-            f"Adjustment Components (Part {page_num + 1}/{self.num_figures_to_generate})",
-            fontsize=14,
-        )
-        ax.legend()
-        fig.tight_layout()
-        save_path = f"{self.save_dir}/adjustment_components_{page_num + 1}.png"
-        plt.savefig(save_path)
-        plt.close(fig)
-        logger.info(f"Saved adjustment components plot to {save_path}")
+        logger.info(f"Saved detailed adjustment plot to {save_path}")
