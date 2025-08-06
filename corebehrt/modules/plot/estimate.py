@@ -346,3 +346,133 @@ class ContingencyTablePlotter:
         plt.savefig(save_path, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"Contingency plot saved to {save_path}")
+
+
+@dataclass
+class AdjustmentPlotConfig:
+    max_outcomes_per_figure: int = 10
+    max_number_of_figures: int = 10
+
+
+class AdjustmentPlotter:
+    """
+    Orchestrates the creation of plots to visualize the TMLE adjustment process.
+    """
+
+    def __init__(
+        self,
+        data_df: pd.DataFrame,
+        save_dir: str,
+        config: AdjustmentPlotConfig,
+        title: str,
+    ):
+        self.df = data_df
+        self.save_dir = save_dir
+        self.config = config
+        self.title = title
+        self._prepare()
+
+    def _prepare(self):
+        """Pre-calculates necessary attributes for plotting."""
+        os.makedirs(self.save_dir, exist_ok=True)
+        self.all_outcomes = self.df[OUTCOME].unique()
+        self.methods = self.df[EffectColumns.method].unique()
+
+        required = (
+            len(self.all_outcomes) + self.config.max_outcomes_per_figure - 1
+        ) // self.config.max_outcomes_per_figure
+        self.num_figures_to_generate = min(required, self.config.max_number_of_figures)
+
+    def run(self):
+        """Main entry point to generate all plot pages."""
+        if self.num_figures_to_generate > 0:
+            logger.info("Generating adjustment composition and component plots...")
+        for page_num in range(self.num_figures_to_generate):
+            self._plot_page(page_num)
+
+    def _plot_page(self, page_num: int):
+        """Creates and saves all plots for a single page of outcomes."""
+        start_idx = page_num * self.config.max_outcomes_per_figure
+        end_idx = start_idx + self.config.max_outcomes_per_figure
+        outcomes_on_page = self.all_outcomes[start_idx:end_idx]
+        page_df = self.df[self.df[OUTCOME].isin(outcomes_on_page)]
+
+        # Create both plots for this page of outcomes
+        self._create_composition_plot(page_df, outcomes_on_page, page_num)
+        self._create_components_plot(page_df, outcomes_on_page, page_num)
+
+    def _create_composition_plot(self, page_df, outcomes_on_page, page_num):
+        """Creates the stacked bar chart showing initial_effect + adjustment."""
+        fig, ax = plt.subplots(figsize=(max(10, 2 * len(outcomes_on_page)), 6))
+        x = np.arange(len(outcomes_on_page))
+        width = 0.35
+
+        # This assumes only one method (e.g., TMLE) in the input df.
+        # If multiple methods, this would need dodging similar to other plots.
+        method_df = page_df.set_index(OUTCOME).loc[outcomes_on_page]
+        initial = method_df["initial_effect"]
+        adjustment = method_df["adjustment"]
+
+        ax.bar(x, initial, width, label="Initial Effect", color="lightgray")
+        ax.bar(x, adjustment, width, bottom=initial, label="Adjustment", color="salmon")
+
+        # Add a line for the final, adjusted effect
+        ax.plot(
+            x,
+            initial + adjustment,
+            color="black",
+            marker="_",
+            markersize=15,
+            linestyle="None",
+            label="Final Effect",
+        )
+
+        ax.axhline(0, color="black", linewidth=0.8)
+        ax.set_ylabel("Effect Size (Risk Difference)", fontsize=12)
+        ax.set_xticks(x)
+        ax.set_xticklabels(outcomes_on_page, rotation=15, ha="right")
+        ax.set_title(
+            f"Adjustment Composition (Part {page_num + 1}/{self.num_figures_to_generate})",
+            fontsize=14,
+        )
+        ax.legend()
+        fig.tight_layout()
+        save_path = f"{self.save_dir}/adjustment_composition_{page_num + 1}.png"
+        plt.savefig(save_path)
+        plt.close(fig)
+        logger.info(f"Saved adjustment plot to {save_path}")
+
+    def _create_components_plot(self, page_df, outcomes_on_page, page_num):
+        """Creates the dot plot showing adjustment_0 and adjustment_1."""
+        fig, ax = plt.subplots(figsize=(max(10, 2 * len(outcomes_on_page)), 6))
+        x = np.arange(len(outcomes_on_page))
+
+        method_df = page_df.set_index("outcome").loc[outcomes_on_page]
+        adj_0 = method_df["adjustment_0"]
+        adj_1 = method_df["adjustment_1"]
+
+        ax.plot(
+            x - 0.1, adj_1, "o", label="Adjustment for Treated (Y1)", color="firebrick"
+        )
+        ax.plot(
+            x + 0.1,
+            adj_0,
+            "x",
+            label="Adjustment for Control (Y0)",
+            color="darkslateblue",
+        )
+
+        ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
+        ax.set_ylabel("Adjustment Value", fontsize=12)
+        ax.set_xticks(x)
+        ax.set_xticklabels(outcomes_on_page, rotation=15, ha="right")
+        ax.set_title(
+            f"Adjustment Components (Part {page_num + 1}/{self.num_figures_to_generate})",
+            fontsize=14,
+        )
+        ax.legend()
+        fig.tight_layout()
+        save_path = f"{self.save_dir}/adjustment_components_{page_num + 1}.png"
+        plt.savefig(save_path)
+        plt.close(fig)
+        logger.info(f"Saved adjustment components plot to {save_path}")

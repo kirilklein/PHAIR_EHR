@@ -24,3 +24,6 @@ plot:
     max_outcomes_per_figure: 10
     max_number_of_figures: 10
     plot_individual_effects: true
+  adjustment:
+    max_outcomes_per_figure: 8
+    max_number_of_figures: 10

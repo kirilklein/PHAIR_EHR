@@ -11,6 +11,8 @@ from corebehrt.modules.plot.estimate import (
     EffectSizePlotConfig,
     EffectSizePlotter,
     ContingencyTablePlotter,
+    AdjustmentPlotConfig,
+    AdjustmentPlotter,
 )
 
 logger = logging.getLogger(__name__)
@@ -139,3 +141,28 @@ def create_contingency_table_plot(
         logger.error(
             f"Failed to create contingency table plot. Error: {e}", exc_info=True
         )
+
+
+def create_adjustment_plot(
+    data_df: pd.DataFrame,
+    save_dir: str,
+    config: AdjustmentPlotConfig,
+    title: str = "TMLE Adjustment Analysis",
+):
+    """
+    Creates adjustment plots by initializing and running the AdjustmentPlotter.
+    """
+    if not all(
+        col in data_df.columns
+        for col in ["initial_effect", "adjustment", "adjustment_0", "adjustment_1", "initial_effect_0", "initial_effect_1"]
+    ):
+        logger.warning(
+            "Skipping adjustment plots: Required columns not found in dataframe."
+        )
+        return
+
+    try:
+        plotter = AdjustmentPlotter(data_df, save_dir, config, title)
+        plotter.run()
+    except Exception as e:
+        logger.error(f"Failed to create adjustment plot. Error: {e}", exc_info=True)

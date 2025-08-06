@@ -45,11 +45,13 @@ from corebehrt.functional.io_operations.estimate import (
     save_tmle_analysis,
 )
 from corebehrt.functional.visualize.estimate import (
+    AdjustmentPlotConfig,
     ContingencyPlotConfig,
     EffectSizePlotConfig,
+    create_adjustment_plot,
     create_annotated_heatmap_matplotlib,
-    create_effect_size_plot,
     create_contingency_table_plot,
+    create_effect_size_plot,
 )
 from corebehrt.modules.causal.bias import BiasConfig, BiasIntroducer
 from corebehrt.modules.setup.config import Config
@@ -91,9 +93,13 @@ class EffectEstimator:
             self.contingency_plot_cfg = ContingencyPlotConfig(
                 **self.cfg.plot.get("contingency_table", {})
             )
+            self.adjustment_plot_cfg = AdjustmentPlotConfig(
+                **self.cfg.plot.get("adjustment", {})
+            )
         else:
             self.effect_size_plot_cfg = EffectSizePlotConfig()
             self.contingency_plot_cfg = ContingencyPlotConfig()
+            self.adjustment_plot_cfg = AdjustmentPlotConfig()
 
     def _init_bias_introducer(self) -> BiasIntroducer:
         self.bias_introducer = None
@@ -164,11 +170,11 @@ class EffectEstimator:
             initial_estimates.append(effect_df)
             all_effects.append(effect_df_clean)
 
-        final_results_df, combined_stats_df, initial_estimates_df = (
+        final_results_df, combined_stats_df, tmle_analysis_df = (
             self._process_and_save_results(all_effects, all_stats, initial_estimates)
         )
         self._visualize_effects(
-            final_results_df, combined_stats_df, initial_estimates_df
+            final_results_df, combined_stats_df, tmle_analysis_df
         )
         self.logger.info("Effect estimation complete for all outcomes.")
 
@@ -176,7 +182,7 @@ class EffectEstimator:
         self,
         final_results_df: pd.DataFrame,
         combined_stats_df: pd.DataFrame,
-        initial_estimates_df: pd.DataFrame,
+        tmle_analysis_df: pd.DataFrame,
     ):
         fig_dir = join(self.exp_dir, "figures")
         os.makedirs(fig_dir, exist_ok=True)
@@ -198,10 +204,18 @@ class EffectEstimator:
         )
         create_effect_size_plot(
             effects_df=final_results_df,
-            save_dir=join(fig_dir, "effects_scater"),
+            save_dir=join(fig_dir, "effects_scatter"),
             title=f"Effect estimates by outcome and method",
             methods=methods + ["RD"],
             config=self.effect_size_plot_cfg,
+        )
+
+        self.logger.info("Generating TMLE adjustment visualizations...")
+        create_adjustment_plot(
+            data_df=tmle_analysis_df,
+            save_dir=join(fig_dir, "adjustment_analysis"),
+            config=self.adjustment_plot_cfg,
+            title=f"Adjustment Analysis",
         )
 
         if EffectColumns.true_effect in final_results_df.columns:
@@ -237,7 +251,7 @@ class EffectEstimator:
 
         tmle_analysis_df = prepare_tmle_analysis_df(initial_estimates_df)
         save_tmle_analysis(tmle_analysis_df, self.exp_dir)
-        return final_results_df, combined_stats_df, initial_estimates_df
+        return final_results_df, combined_stats_df, tmle_analysis_df
 
     def _build_multi_estimator(self) -> MultiEstimator:
         """Builds a MultiEstimator for a specific outcome."""
