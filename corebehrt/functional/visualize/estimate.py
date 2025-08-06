@@ -6,7 +6,12 @@ import pandas as pd
 import seaborn as sns
 
 from corebehrt.constants.causal.data import EffectColumns
-from corebehrt.modules.plot.estimate import EffectSizePlotConfig, EffectSizePlotter
+from corebehrt.modules.plot.estimate import (
+    ContingencyPlotConfig,
+    EffectSizePlotConfig,
+    EffectSizePlotter,
+    ContingencyTablePlotter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,3 +121,21 @@ def create_effect_size_plot(
         plotter.run()
     except Exception as e:
         logger.error(f"Failed to create effect size plot. Error: {e}", exc_info=True)
+
+
+def create_contingency_table_plot(
+    data_df: pd.DataFrame,
+    save_dir: str,
+    config: ContingencyPlotConfig,
+    title: str = "Patient Counts by Treatment Status and Outcome",
+):
+    """
+    Creates stacked bar plots from contingency data by running the ContingencyTablePlotter.
+    """
+    try:
+        plotter = ContingencyTablePlotter(data_df, save_dir, config, title)
+        plotter.run()
+    except Exception as e:
+        logger.error(
+            f"Failed to create contingency table plot. Error: {e}", exc_info=True
+        )

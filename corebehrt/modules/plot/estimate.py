@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 import matplotlib as mpl
-from corebehrt.constants.causal.data import OUTCOME, EffectColumns
+from corebehrt.constants.causal.data import OUTCOME, EffectColumns, STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -202,3 +202,147 @@ class EffectSizePlotter:
         plt.savefig(save_path, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"Effect size plot saved to {save_path}")
+
+
+@dataclass
+class ContingencyPlotConfig:
+    max_outcomes_per_figure: int = (
+        5  # Fewer outcomes per plot works better for grouped bars
+    )
+    max_number_of_figures: int = 10
+
+
+class ContingencyTablePlotter:
+    """
+    Orchestrates the creation of stacked bar charts from contingency table data.
+    """
+
+    def __init__(
+        self,
+        data_df: pd.DataFrame,
+        save_dir: str,
+        config: ContingencyPlotConfig,
+        title: str,
+    ):
+        self.df = data_df[
+            data_df[STATUS] != "Total"
+        ]  # We only need Treated/Untreated for plotting
+        self.save_dir = save_dir
+        self.config = config
+        self.title = title
+
+        self._prepare()
+
+    def _prepare(self):
+        """Pre-calculates necessary attributes for plotting."""
+        os.makedirs(self.save_dir, exist_ok=True)
+        self.all_outcomes = self.df[OUTCOME].unique()
+
+        # Calculate pagination
+        required = (
+            len(self.all_outcomes) + self.config.max_outcomes_per_figure - 1
+        ) // self.config.max_outcomes_per_figure
+        self.num_figures_to_generate = min(required, self.config.max_number_of_figures)
+        if required > self.num_figures_to_generate:
+            logger.warning(
+                f"Plot generation capped at {self.num_figures_to_generate} figures."
+            )
+
+    def run(self):
+        """Main entry point to generate all plot pages."""
+        for page_num in range(self.num_figures_to_generate):
+            self._plot_page(page_num)
+
+    def _plot_page(self, page_num: int):
+        """Creates and saves a single figure (page) of the plot."""
+        start_idx = page_num * self.config.max_outcomes_per_figure
+        end_idx = start_idx + self.config.max_outcomes_per_figure
+        outcomes_on_page = self.all_outcomes[start_idx:end_idx]
+        page_df = self.df[self.df[OUTCOME].isin(outcomes_on_page)]
+
+        fig, ax = plt.subplots(figsize=(max(10, 2.5 * len(outcomes_on_page)), 7))
+
+        self._draw_bars_for_page(ax, page_df, outcomes_on_page)
+        self._finalize_figure(fig, ax, page_num, outcomes_on_page)
+
+    def _draw_bars_for_page(
+        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+    ):
+        """Draws the grouped, stacked bars for the outcomes on the current page."""
+        x = np.arange(len(outcomes_on_page))  # the label locations
+        width = 0.35  # the width of the bars
+
+        # Data for Untreated bars
+        untreated_df = (
+            page_df[page_df[STATUS] == "Untreated"]
+            .set_index(OUTCOME)
+            .loc[outcomes_on_page]
+        )
+        no_outcome_untreated = untreated_df["No Outcome"]
+        outcome_untreated = untreated_df["Outcome"]
+
+        # Data for Treated bars
+        treated_df = (
+            page_df[page_df[STATUS] == "Treated"]
+            .set_index(OUTCOME)
+            .loc[outcomes_on_page]
+        )
+        no_outcome_treated = treated_df["No Outcome"]
+        outcome_treated = treated_df["Outcome"]
+
+        # Plotting the bars
+        ax.bar(
+            x - width / 2,
+            no_outcome_untreated,
+            width,
+            label="No Outcome (Untreated)",
+            color="lightblue",
+        )
+        ax.bar(
+            x - width / 2,
+            outcome_untreated,
+            width,
+            bottom=no_outcome_untreated,
+            label="Outcome (Untreated)",
+            color="steelblue",
+        )
+
+        ax.bar(
+            x + width / 2,
+            no_outcome_treated,
+            width,
+            label="No Outcome (Treated)",
+            color="lightcoral",
+        )
+        ax.bar(
+            x + width / 2,
+            outcome_treated,
+            width,
+            bottom=no_outcome_treated,
+            label="Outcome (Treated)",
+            color="firebrick",
+        )
+
+    def _finalize_figure(
+        self,
+        fig: mpl.figure.Figure,
+        ax: mpl.axes.Axes,
+        page_num: int,
+        outcomes_on_page: List[str],
+    ):
+        """Sets final aesthetics and saves the figure."""
+        ax.set_ylabel("Number of Patients", fontsize=14)
+        ax.set_title(
+            f"{self.title} (Part {page_num + 1}/{self.num_figures_to_generate})",
+            fontsize=16,
+        )
+        ax.set_xticks(np.arange(len(outcomes_on_page)))
+        ax.set_xticklabels(outcomes_on_page, fontsize=12, rotation=15, ha="right")
+        ax.legend()
+        ax.grid(axis="y", linestyle="--", alpha=0.7)
+
+        save_path = f"{self.save_dir}/contingency_counts_{page_num + 1}.png"
+        fig.tight_layout()
+        plt.savefig(save_path, bbox_inches="tight")
+        plt.close(fig)
+        logger.info(f"Contingency plot saved to {save_path}")

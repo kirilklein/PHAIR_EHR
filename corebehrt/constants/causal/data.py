@@ -65,6 +65,8 @@ NON_COMPLIANCE_COL = "non_compliance"
 EXPOSURE_TARGET = "exposure_target"
 OUTCOME_TARGETS = "outcome_targets"
 
+STATUS = "status"
+
 
 class EffectColumns:
     method = "method"

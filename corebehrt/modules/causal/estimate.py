@@ -45,9 +45,11 @@ from corebehrt.functional.io_operations.estimate import (
     save_tmle_analysis,
 )
 from corebehrt.functional.visualize.estimate import (
+    ContingencyPlotConfig,
     EffectSizePlotConfig,
     create_annotated_heatmap_matplotlib,
     create_effect_size_plot,
+    create_contingency_table_plot,
 )
 from corebehrt.modules.causal.bias import BiasConfig, BiasIntroducer
 from corebehrt.modules.setup.config import Config
@@ -71,7 +73,7 @@ class EffectEstimator:
             COMBINED_CALIBRATED_PREDICTIONS_FILE,
         )
         self.estimator_cfg = self.cfg.estimator
-        self.effect_size_plot_cfg = EffectSizePlotConfig(**self.cfg.get("plot", {}))
+        self._init_plot_configs()
         self.effect_type = self.cfg.estimator.effect_type
         self.df = pd.read_csv(self.predictions_file)
         self.outcome_names = get_outcome_names(self.df)
@@ -80,6 +82,18 @@ class EffectEstimator:
         self.counterfactual_df = self._load_counterfactual_outcomes()
         self.estimation_args = self._get_estimation_args()
         self._init_bias_introducer()
+
+    def _init_plot_configs(self) -> None:
+        if self.cfg.get("plot", {}) is not None:
+            self.effect_size_plot_cfg = EffectSizePlotConfig(
+                **self.cfg.plot.get("effect_size", {})
+            )
+            self.contingency_plot_cfg = ContingencyPlotConfig(
+                **self.cfg.plot.get("contingency_table", {})
+            )
+        else:
+            self.effect_size_plot_cfg = EffectSizePlotConfig()
+            self.contingency_plot_cfg = ContingencyPlotConfig()
 
     def _init_bias_introducer(self) -> BiasIntroducer:
         self.bias_introducer = None
@@ -150,44 +164,62 @@ class EffectEstimator:
             initial_estimates.append(effect_df)
             all_effects.append(effect_df_clean)
 
-        self._process_and_save_results(all_effects, all_stats, initial_estimates)
-        self._visualize_effects(pd.concat(all_effects, ignore_index=True))
+        final_results_df, combined_stats_df, initial_estimates_df = (
+            self._process_and_save_results(all_effects, all_stats, initial_estimates)
+        )
+        self._visualize_effects(
+            final_results_df, combined_stats_df, initial_estimates_df
+        )
         self.logger.info("Effect estimation complete for all outcomes.")
 
-    def _visualize_effects(self, effects: pd.DataFrame):
+    def _visualize_effects(
+        self,
+        final_results_df: pd.DataFrame,
+        combined_stats_df: pd.DataFrame,
+        initial_estimates_df: pd.DataFrame,
+    ):
         fig_dir = join(self.exp_dir, "figures")
         os.makedirs(fig_dir, exist_ok=True)
         methods = self.estimator_cfg.methods
         create_annotated_heatmap_matplotlib(
-            effects,
+            final_results_df,
             methods + ["RD"],
             EffectColumns.effect,
             join(fig_dir, "effects.png"),
         )
-
+        create_contingency_table_plot(
+            combined_stats_df,
+            join(fig_dir, "contingency_table"),
+            ContingencyPlotConfig(
+                max_outcomes_per_figure=self.effect_size_plot_cfg.max_outcomes_per_figure,
+                max_number_of_figures=self.effect_size_plot_cfg.max_number_of_figures,
+            ),
+            "Patient Counts by Treatment Status and Outcome",
+        )
         create_effect_size_plot(
-            effects_df=effects,
+            effects_df=final_results_df,
             save_dir=join(fig_dir, "effects_scater"),
             title=f"Effect estimates by outcome and method",
             methods=methods + ["RD"],
             config=self.effect_size_plot_cfg,
         )
 
-        if EffectColumns.true_effect in effects.columns:
+        if EffectColumns.true_effect in final_results_df.columns:
             # show true effects, only show one of the methods (theyre all the same for true effect)
             create_annotated_heatmap_matplotlib(
-                effects,
+                final_results_df,
                 methods[:1],
                 EffectColumns.true_effect,
                 join(fig_dir, "true_effects.png"),
             )
 
             # show diff
-            effects["diff"] = (
-                effects[EffectColumns.true_effect] - effects[EffectColumns.effect]
+            final_results_df["diff"] = (
+                final_results_df[EffectColumns.true_effect]
+                - final_results_df[EffectColumns.effect]
             )
             create_annotated_heatmap_matplotlib(
-                effects, methods, "diff", join(fig_dir, "diff.png")
+                final_results_df, methods, "diff", join(fig_dir, "diff.png")
             )
 
     def _process_and_save_results(
@@ -195,7 +227,7 @@ class EffectEstimator:
         all_effects: list,
         all_stats: list,
         initial_estimates: list,
-    ) -> None:
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Combines results from all outcomes and saves them to disk."""
         final_results_df = pd.concat(all_effects, ignore_index=True)
         combined_stats_df = pd.concat(all_stats, ignore_index=True)
@@ -205,6 +237,7 @@ class EffectEstimator:
 
         tmle_analysis_df = prepare_tmle_analysis_df(initial_estimates_df)
         save_tmle_analysis(tmle_analysis_df, self.exp_dir)
+        return final_results_df, combined_stats_df, initial_estimates_df
 
     def _build_multi_estimator(self) -> MultiEstimator:
         """Builds a MultiEstimator for a specific outcome."""
