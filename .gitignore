@@ -16,3 +16,4 @@ linux_install/
 .DS_Store
 corebehrt/main_causal/helper_data/sks_trees/
 mlruns/
+results/

@@ -1,5 +1,8 @@
 import datetime
+import os
+import tempfile
 import unittest
+from os.path import join
 
 import pandas as pd
 
@@ -21,6 +24,8 @@ class TestOutcomeMaker(unittest.TestCase):
 
     def setUp(self):
         """Setup test data"""
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.outcomes_path = self.temp_dir.name
         # Create test concepts data
         self.concepts_plus = pd.DataFrame(
             {
@@ -116,16 +121,27 @@ class TestOutcomeMaker(unittest.TestCase):
         self.concepts_plus = pd.concat(
             [self.concepts_plus, exclusion_data], ignore_index=True
         )
-
-        # Create patient info data
-        self.patients_info = pd.DataFrame(
+        string_match_data = pd.DataFrame(
             {
-                PID_COL: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                PID_COL: [11, 11, 12],
+                CONCEPT_COL: ["FIND_ME_EXACT", "sub_string", "test_value_col"],
+                VALUE_COL: ["exact", "CONTAINS_ME", "other"],
+                TIMESTAMP_COL: [
+                    datetime.datetime(2021, 1, 1, 12, 0),
+                    datetime.datetime(2021, 1, 2, 12, 0),
+                    datetime.datetime(2021, 1, 3, 12, 0),
+                ],
             }
+        )
+        self.concepts_plus = pd.concat(
+            [self.concepts_plus, string_match_data], ignore_index=True
         )
 
         # Patient set for testing
         self.patient_set = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
 
     def test_basic_outcome_creation(self):
         """Test basic outcome creation"""
@@ -143,11 +159,15 @@ class TestOutcomeMaker(unittest.TestCase):
         outcome_maker = OutcomeMaker(outcomes)
 
         # Get outcomes
-        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+        outcome_maker(
+            self.concepts_plus,
+            self.outcomes_path,
+        )
 
         # Check result
-        self.assertIn("TEST_OUTCOME", result)
-        test_outcome = result["TEST_OUTCOME"]
+        output_file = os.path.join(self.outcomes_path, "TEST_OUTCOME.csv")
+        self.assertTrue(os.path.exists(output_file))
+        test_outcome = pd.read_csv(output_file, parse_dates=[TIMESTAMP_COL])
 
         # Should contain 3 rows (Patient 1, 2, and 3 have D10.x codes)
         self.assertEqual(len(test_outcome), 3)
@@ -185,18 +205,23 @@ class TestOutcomeMaker(unittest.TestCase):
         outcome_maker = OutcomeMaker(outcomes)
 
         # Get outcomes
-        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+        outcome_maker(
+            self.concepts_plus,
+            self.outcomes_path,
+        )
 
         # Check exclude result
-        self.assertIn("TEST_EXCLUDE", result)
-        exclude_outcome = result["TEST_EXCLUDE"]
+        exclude_output_file = os.path.join(self.outcomes_path, "TEST_EXCLUDE.csv")
+        self.assertTrue(os.path.exists(exclude_output_file))
+        exclude_outcome = pd.read_csv(exclude_output_file)
         # Should contain 2 rows (Patient 1, 2 have D10.x codes, but not D10.5)
         self.assertEqual(len(exclude_outcome), 2)
         self.assertTrue(all(pid in exclude_outcome[PID_COL].values for pid in [1, 2]))
 
         # Check case insensitive result
-        self.assertIn("TEST_CASE_INSENSITIVE", result)
-        case_outcome = result["TEST_CASE_INSENSITIVE"]
+        case_output_file = os.path.join(self.outcomes_path, "TEST_CASE_INSENSITIVE.csv")
+        self.assertTrue(os.path.exists(case_output_file))
+        case_outcome = pd.read_csv(case_output_file)
         # Should contain 3 rows (Patient 1, 2, 3 have M112 codes)
         self.assertEqual(len(case_outcome), 3)
         self.assertTrue(all(pid in case_outcome[PID_COL].values for pid in [1, 2, 3]))
@@ -214,31 +239,18 @@ class TestOutcomeMaker(unittest.TestCase):
             }
         }
 
-        # Create outcome maker
         outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(self.concepts_plus, self.outcomes_path)
+        output_file = os.path.join(self.outcomes_path, "NOT_M112.csv")
+        self.assertTrue(os.path.exists(output_file))
+        not_outcome = pd.read_csv(output_file)
 
-        # Get outcomes
-        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+        # --- ROBUST FIX ---
+        # Calculate expected count dynamically and correctly.
+        total_rows = len(self.concepts_plus)
+        m112_rows = len(self.concepts_plus[self.concepts_plus[CONCEPT_COL] == "M112"])
+        expected_count = total_rows - m112_rows
 
-        # Check result
-        self.assertIn("NOT_M112", result)
-        not_outcome = result["NOT_M112"]
-
-        # Should contain rows for DOD, DI20, I63, and B01 codes (all non-M112 codes)
-        expected_concepts = [
-            "DOD",
-            "DI20",
-            "I63",
-            "B01",
-            "D10.1",
-            "D02.3",
-            "D10.2",
-            "D10.5",
-        ]
-        # Count how many of these we expect
-        expected_count = len(
-            self.concepts_plus[self.concepts_plus[CONCEPT_COL].isin(expected_concepts)]
-        )
         self.assertEqual(len(not_outcome), expected_count)
 
     def test_death_from_mi_combination(self):
@@ -267,11 +279,15 @@ class TestOutcomeMaker(unittest.TestCase):
         outcome_maker = OutcomeMaker(outcomes)
 
         # Get outcomes
-        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+        outcome_maker(
+            self.concepts_plus,
+            self.outcomes_path,
+        )
 
         # Check result
-        self.assertIn("DEATH_FROM_MI", result)
-        death_mi_outcome = result["DEATH_FROM_MI"]
+        output_file = os.path.join(self.outcomes_path, "DEATH_FROM_MI.csv")
+        self.assertTrue(os.path.exists(output_file))
+        death_mi_outcome = pd.read_csv(output_file, parse_dates=[TIMESTAMP_COL])
 
         # Should only include patient 4 who had DI20 before DOD within the window
         self.assertEqual(len(death_mi_outcome), 1)
@@ -310,13 +326,17 @@ class TestOutcomeMaker(unittest.TestCase):
         outcome_maker = OutcomeMaker(outcomes)
 
         # Get outcomes
-        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+        outcome_maker(
+            self.concepts_plus,
+            self.outcomes_path,
+        )
 
         # Add debug prints
 
         # Check result
-        self.assertIn("STROKE_WITH_ANTICOAGULANT", result)
-        stroke_outcome = result["STROKE_WITH_ANTICOAGULANT"]
+        output_file = os.path.join(self.outcomes_path, "STROKE_WITH_ANTICOAGULANT.csv")
+        self.assertTrue(os.path.exists(output_file))
+        stroke_outcome = pd.read_csv(output_file, parse_dates=[TIMESTAMP_COL])
 
         # Should include both stroke events for patient 6
         # Patient 7's stroke and anticoagulant are outside the window
@@ -358,11 +378,15 @@ class TestOutcomeMaker(unittest.TestCase):
         outcome_maker = OutcomeMaker(outcomes)
 
         # Get outcomes
-        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+        outcome_maker(
+            self.concepts_plus,
+            self.outcomes_path,
+        )
 
         # Check result
-        self.assertIn("MI_BEFORE_DEATH", result)
-        mi_outcome = result["MI_BEFORE_DEATH"]
+        output_file = os.path.join(self.outcomes_path, "MI_BEFORE_DEATH.csv")
+        self.assertTrue(os.path.exists(output_file))
+        mi_outcome = pd.read_csv(output_file, parse_dates=[TIMESTAMP_COL])
 
         # Should only include patient 4
         self.assertEqual(len(mi_outcome), 1)
@@ -400,13 +424,16 @@ class TestOutcomeMaker(unittest.TestCase):
         outcome_maker = OutcomeMaker(outcomes)
 
         # Get outcomes
-        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+        outcome_maker(
+            self.concepts_plus,
+            self.outcomes_path,
+        )
 
         # Check result
-        self.assertIn("IMPOSSIBLE_COMBINATION", result)
-        empty_outcome = result["IMPOSSIBLE_COMBINATION"]
-
-        # Should be empty but have the proper columns
+        output_file = os.path.join(self.outcomes_path, "IMPOSSIBLE_COMBINATION.csv")
+        # Should create a file even for empty results
+        self.assertTrue(os.path.exists(output_file))
+        empty_outcome = pd.read_csv(output_file)
         self.assertEqual(len(empty_outcome), 0)
         self.assertTrue(
             all(
@@ -446,44 +473,230 @@ class TestOutcomeMaker(unittest.TestCase):
         outcome_maker = OutcomeMaker(outcomes)
 
         # Get outcomes
-        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+        outcome_maker(
+            self.concepts_plus,
+            self.outcomes_path,
+        )
 
-        # Check result - all outcome types should be present
-        self.assertEqual(len(result), 2)
-        self.assertIn("BASIC_OUTCOME", result)
-        self.assertIn("COMBINATION_OUTCOME", result)
+        # Check result - all outcome types should produce files
+        basic_file = os.path.join(self.outcomes_path, "BASIC_OUTCOME.csv")
+        combo_file = os.path.join(self.outcomes_path, "COMBINATION_OUTCOME.csv")
 
-    def test_exclusion_non_fatal_mi(self):
-        """Test exclusion of events that are followed by death within a week."""
-        # Patient 4: MI then death 19 hours later (should be excluded)
-        # Patient 8: MI then death 6 days later (should be excluded)
-        # Patient 9: MI then death 8 days later (should NOT be excluded)
+        self.assertTrue(os.path.exists(basic_file))
+        self.assertTrue(os.path.exists(combo_file))
+
+        basic_outcome = pd.read_csv(basic_file)
+        self.assertEqual(len(basic_outcome), 3)
+        combo_outcome = pd.read_csv(combo_file)
+        self.assertEqual(len(combo_outcome), 0)
+
+    def test_batch_processing_and_header_writing(self):
+        """Test that headers are written only once when processing multiple batches."""
         outcomes = {
-            "NON_FATAL_MI": {
+            "BATCH_TEST": {
                 "type": ["code"],
-                "match": [["DI20"]],
+                "match": [["D10"]],
                 "match_how": "startswith",
-                "exclusion": {
-                    "events": {
-                        "type": ["code"],
-                        "match": [["DOD"]],
-                        "match_how": "startswith",
-                    },
-                    "window_hours_min": 0,
-                    "window_hours_max": 7 * 24,  # 7 days
-                },
             }
         }
-
         outcome_maker = OutcomeMaker(outcomes)
-        result = outcome_maker(self.concepts_plus, self.patients_info, self.patient_set)
+        # First batch of data
+        batch1_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([1, 2])]
+        outcome_maker(batch1_concepts, self.outcomes_path)
 
-        self.assertIn("NON_FATAL_MI", result)
-        non_fatal_mi_outcome = result["NON_FATAL_MI"]
+        # Second batch of data, with the same OutcomeMaker instance
+        batch2_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([3])]
+        outcome_maker(batch2_concepts, self.outcomes_path)
 
-        # Only patient 9 should remain
-        self.assertEqual(len(non_fatal_mi_outcome), 1)
-        self.assertEqual(non_fatal_mi_outcome.iloc[0][PID_COL], 9)
+        # Check the output file
+        output_file = join(self.outcomes_path, "BATCH_TEST.csv")
+        self.assertTrue(os.path.exists(output_file))
+
+        with open(output_file, "r") as f:
+            content = f.read()
+            # Check that header appears only once
+            self.assertEqual(content.count("subject_id,time,abspos"), 1)
+
+        # Check the content of the file
+        batch_test_outcome = pd.read_csv(output_file)
+        # Should contain 3 rows from both batches
+        self.assertEqual(len(batch_test_outcome), 3)
+        self.assertTrue(
+            all(pid in batch_test_outcome[PID_COL].values for pid in [1, 2, 3])
+        )
+
+        # Now, create a new OutcomeMaker and write data. It should overwrite the file.
+        new_outcome_maker = OutcomeMaker(outcomes)
+        batch3_concepts = self.concepts_plus[self.concepts_plus[PID_COL].isin([3])]
+        new_outcome_maker(batch3_concepts, self.outcomes_path)
+
+        # Check that the file was overwritten
+        overwritten_outcome = pd.read_csv(output_file)
+        self.assertEqual(len(overwritten_outcome), 1)
+        self.assertTrue(3 in overwritten_outcome[PID_COL].values)
+        self.assertFalse(1 in overwritten_outcome[PID_COL].values)
+
+    def test_combination_with_exclusion_flag(self):
+        """Tests the `exclude: true` flag within a combination."""
+        outcomes = {
+            "MI_WITHOUT_DEATH_IN_7_DAYS": {
+                "combinations": {
+                    "primary": {
+                        "type": ["code"],
+                        "match": [["DI20"]],
+                        "match_how": "exact",
+                    },
+                    "secondary": {
+                        "type": ["code"],
+                        "match": [["DOD"]],
+                        "match_how": "exact",
+                    },
+                    "window_hours_min": 0,  # Death must not occur before MI
+                    "window_hours_max": 7 * 24,  # up to 7 days after
+                    "exclude": True,  # Exclude MI events that are followed by death
+                }
+            }
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(self.concepts_plus, self.outcomes_path)
+
+        output_file = join(self.outcomes_path, "MI_WITHOUT_DEATH_IN_7_DAYS.csv")
+        self.assertTrue(os.path.exists(output_file))
+        result_df = pd.read_csv(output_file)
+
+        # Patient 8 had a death 6 days after MI -> Should be EXCLUDED.
+        # Patient 9 had a death 8 days after MI -> Should be INCLUDED (outside window).
+        # Patient 4 had a death after MI, but MI is not the primary event.
+        self.assertEqual(len(result_df), 1)
+        self.assertEqual(result_df.iloc[0][PID_COL], 9)
+
+    def test_combination_at_window_boundary(self):
+        """Tests that events exactly on the window boundary are included."""
+        outcomes = {
+            "STROKE_WITH_PRIOR_ANTICOAGULANT": {
+                "combinations": {
+                    "primary": {"type": ["code"], "match": [["I63"]]},
+                    "secondary": {"type": ["code"], "match": [["B01"]]},
+                    "window_hours_min": -24,  # Exactly 24 hours before
+                    "window_hours_max": 0,
+                }
+            }
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(self.concepts_plus, self.outcomes_path)
+
+        output_file = join(self.outcomes_path, "STROKE_WITH_PRIOR_ANTICOAGULANT.csv")
+        self.assertTrue(os.path.exists(output_file))
+        result_df = pd.read_csv(output_file)
+
+        # Patient 6 had an anticoagulant exactly 24 hours before their second stroke.
+        # This event should be included.
+        self.assertEqual(len(result_df), 1)
+        self.assertEqual(result_df.iloc[0][PID_COL], 6)
+
+    def test_combination_with_multiple_valid_secondary_events(self):
+        """Ensures a primary event is not duplicated if it matches multiple secondary events."""
+        # Add a patient with one primary event and two valid secondary events
+        extra_data = pd.DataFrame(
+            {
+                PID_COL: [10, 10, 10],
+                CONCEPT_COL: ["PRIMARY_EVENT", "SECONDARY_EVENT", "SECONDARY_EVENT"],
+                VALUE_COL: ["p", "s1", "s2"],
+                TIMESTAMP_COL: [
+                    datetime.datetime(2021, 1, 5, 12, 0),  # Primary
+                    datetime.datetime(2021, 1, 5, 13, 0),  # Secondary 1 (+1 hr)
+                    datetime.datetime(2021, 1, 5, 14, 0),  # Secondary 2 (+2 hr)
+                ],
+            }
+        )
+        concepts_for_test = pd.concat(
+            [self.concepts_plus, extra_data], ignore_index=True
+        )
+
+        outcomes = {
+            "SINGLE_MATCH": {
+                "combinations": {
+                    "primary": {"type": ["code"], "match": [["PRIMARY_EVENT"]]},
+                    "secondary": {"type": ["code"], "match": [["SECONDARY_EVENT"]]},
+                    "window_hours_min": 0,
+                    "window_hours_max": 5,
+                }
+            }
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(concepts_for_test, self.outcomes_path)
+
+        output_file = join(self.outcomes_path, "SINGLE_MATCH.csv")
+        self.assertTrue(os.path.exists(output_file))
+        result_df = pd.read_csv(output_file)
+
+        # Should only find one outcome for patient 10, not two.
+        self.assertEqual(len(result_df), 1)
+        self.assertEqual(result_df.iloc[0][PID_COL], 10)
+
+    def test_empty_and_malformed_input(self):
+        """Tests behavior with empty or malformed input DataFrames."""
+        outcomes = {"ANY_OUTCOME": {"type": ["code"], "match": [["D10"]]}}
+        outcome_maker = OutcomeMaker(outcomes)
+
+        # Test with a completely empty DataFrame
+        outcome_maker(
+            pd.DataFrame(columns=self.concepts_plus.columns), self.outcomes_path
+        )
+        output_file = join(self.outcomes_path, "ANY_OUTCOME.csv")
+        self.assertTrue(
+            os.path.exists(output_file), "File should be created for empty input"
+        )
+        self.assertEqual(
+            len(pd.read_csv(output_file)), 0, "File for empty input should have 0 rows"
+        )
+
+        # Test with data containing a missing timestamp
+        malformed_data = pd.DataFrame(
+            {
+                PID_COL: [20],
+                CONCEPT_COL: ["D10"],
+                VALUE_COL: ["val"],
+                TIMESTAMP_COL: [pd.NaT],
+            }
+        )
+        outcome_maker(malformed_data, self.outcomes_path)
+        # This will append to the existing file. Since the NaT row is dropped,
+        # the file content should not change.
+        self.assertEqual(
+            len(pd.read_csv(output_file)), 0, "Malformed row should be dropped"
+        )
+
+    def test_all_string_matching_variations(self):
+        """Tests exact, contains, and case-insensitive variations, plus value matching."""
+        outcomes = {
+            "EXACT_INSENSITIVE": {
+                "type": ["code"],
+                "match": [["find_me_exact"]],  # Lowercase pattern
+                "match_how": "exact",
+                "case_sensitive": False,
+            },
+            "CONTAINS_INSENSITIVE": {
+                "type": ["code"],
+                "match": [["Sub_String"]],  # Mixed-case pattern
+                "match_how": "contains",
+                "case_sensitive": False,
+            },
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(self.concepts_plus, self.outcomes_path)
+
+        # 1. Check exact, case-insensitive match
+        result_exact = pd.read_csv(join(self.outcomes_path, "EXACT_INSENSITIVE.csv"))
+        self.assertEqual(len(result_exact), 1)
+        self.assertEqual(result_exact.iloc[0][PID_COL], 11)
+
+        # 3. Check contains, case-insensitive
+        result_contains_insensitive = pd.read_csv(
+            join(self.outcomes_path, "CONTAINS_INSENSITIVE.csv")
+        )
+        self.assertEqual(len(result_contains_insensitive), 1)
+        self.assertEqual(result_contains_insensitive.iloc[0][PID_COL], 11)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import List
 from typing import Literal
+import re
 
 
 def get_col_booleans(
@@ -35,32 +36,36 @@ def startswith_match(
     """Match strings using startswith"""
     if not case_sensitive:
         patterns = [x.lower() for x in patterns]
-        return df[column].astype(str).str.lower().str.startswith(tuple(patterns), False)
-    return df[column].astype(str).str.startswith(tuple(patterns), False)
+        # Use the pre-computed lowercase column
+        return df[f"{column}_lower"].str.startswith(tuple(patterns), na=False)
+    return df[column].astype(str).str.startswith(tuple(patterns), na=False)
 
 
 def contains_match(
     df: pd.DataFrame, column: str, patterns: List[str], case_sensitive: bool
 ) -> pd.Series:
-    """Match strings using contains"""
-    col_bool = pd.Series([False] * len(df), index=df.index, name=column)
-    for pattern in patterns:
-        if not case_sensitive:
-            pattern = pattern.lower()
-        if case_sensitive:
-            col_bool |= df[column].astype(str).str.contains(pattern, na=False)
-        else:
-            col_bool |= (
-                df[column].astype(str).str.lower().str.contains(pattern, na=False)
-            )
-    return col_bool
+    """Match strings using a single vectorized regex 'contains' call."""
+    if not patterns:
+        return pd.Series([False] * len(df), index=df.index)
+
+    # Escape patterns to treat special characters literally, then join with '|'
+    regex_pattern = "|".join(re.escape(p) for p in patterns)
+
+    # Perform a single, fast, vectorized call
+    return (
+        df[column]
+        .astype(str)
+        .str.contains(regex_pattern, case=case_sensitive, regex=True, na=False)
+    )
 
 
 def exact_match(
     df: pd.DataFrame, column: str, patterns: List[str], case_sensitive: bool
 ) -> pd.Series:
-    """Match strings using exact match"""
+    """Match strings using exact match (optimized for categorical)"""
     if not case_sensitive:
         patterns = [x.lower() for x in patterns]
-        return df[column].astype(str).str.lower().isin(patterns)
-    return df[column].astype(str).isin(patterns)
+        # Use the pre-computed lowercase column
+        return df[f"{column}_lower"].isin(patterns)
+    # This is the highly optimized path for case-sensitive exact matches
+    return df[column].isin(patterns)

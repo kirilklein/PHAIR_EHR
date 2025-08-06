@@ -9,6 +9,7 @@ DATA = "data"
 
 CONTROL_PID_COL = "control_subject_id"
 EXPOSED_PID_COL = "exposed_subject_id"
+BIRTH_YEAR_COL = "birth_year"
 
 START_COL = "start"
 END_COL = "end"
@@ -42,8 +43,6 @@ SIMULATED_PROBAS_EXPOSED = "P1"  # Simulated probability under treatment
 SIMULATED_PROBAS_CONTROL = "P0"  # Simulated probability under control
 
 # Treatment effect
-TRUE_EFFECT_COL = "true_effect"
-
 INDEX_DATE = "index_date"
 
 
@@ -65,3 +64,28 @@ NON_COMPLIANCE_COL = "non_compliance"
 # Training
 EXPOSURE_TARGET = "exposure_target"
 OUTCOME_TARGETS = "outcome_targets"
+
+
+class EffectColumns:
+    method = "method"
+    effect = "effect"
+    true_effect = "true_effect"
+    ps_bias = "ps_bias"
+    y_bias = "y_bias"
+    std_err = "std_err"
+    CI95_lower = "CI95_lower"
+    CI95_upper = "CI95_upper"
+    effect_1 = "effect_1"
+    effect_0 = "effect_0"
+    outcome = OUTCOME
+
+    @classmethod
+    def get_columns(cls):
+        """
+        Returns a list of all custom attributes defined in the class,
+        """
+        return [
+            name
+            for name, value in cls.__dict__.items()
+            if not name.startswith("_") and not callable(value)
+        ]

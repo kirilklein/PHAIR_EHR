@@ -13,13 +13,15 @@ import torch.nn as nn
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
-from corebehrt.modules.model.model import CorebehrtForFineTuning
-from corebehrt.modules.trainer.utils import limit_dict_for_logging
+from corebehrt.modules.model.model import CorebehrtEncoder
+from corebehrt.modules.trainer.utils import limit_dict_for_logging, pos_weight_to_alpha
+from corebehrt.modules.model.causal.loss import FocalLossWithLogits
+from torch.nn import BCEWithLogitsLoss
 
 logger = logging.getLogger(__name__)
 
 
-class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
+class CorebehrtForCausalFineTuning(CorebehrtEncoder):
     """
     A unified causal fine-tuning model for predicting exposure and multiple outcomes.
 
@@ -38,29 +40,29 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
 
         # --- Architecture Configuration ---
         self.head_config = getattr(config, "head", {})
+        self.loss_config = getattr(config, "loss", {})
         self.shared_representation = self.head_config.get("shared_representation", True)
         self.bidirectional = self.head_config.get("bidirectional", True)
         self.bottleneck_dim = self.head_config.get("bottleneck_dim", 128)
         self.l1_lambda = self.head_config.get("l1_lambda", 0.0)
-
-        if self.shared_representation:
-            logger.info(
-                f"Using a shared bottleneck layer with dimension {self.bottleneck_dim}"
-            )
-            if self.l1_lambda > 0:
-                logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
-            self.bottleneck = nn.Sequential(
-                nn.Linear(config.hidden_size, self.bottleneck_dim),
-                nn.GELU(),
-                nn.Dropout(0.1),
-            )
-
+        if self.l1_lambda > 0:
+            logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
+        self.temperature = self.head_config.get("temperature", 1.0)
         # Get outcome names from config
         self.outcome_names = config.outcome_names
 
         self._setup_pooling_layers(config)
+        self._setup_bottleneck(config)
         self._setup_mlp_heads(config)
         self._setup_loss_functions(config)
+
+    def _setup_bottleneck(self, config):
+        if self.shared_representation:
+            self.encoder_bottleneck = nn.Sequential(
+                nn.Linear(config.hidden_size, self.bottleneck_dim),
+                nn.GELU(),
+                nn.Dropout(0.1),
+            )
 
     def _setup_pooling_layers(self, config):
         if self.shared_representation:
@@ -94,37 +96,63 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         for outcome_name in self.outcome_names:
             self.outcome_heads[outcome_name] = MLPHead(input_size=head_input_size + 1)
 
+    def _get_loss_fn(self, loss_name: str, loss_params: dict):
+        """Returns the loss function instance based on the name."""
+        if loss_name == "focal":
+            if (pos_weight := loss_params.get("pos_weight", None)) is not None:
+                alpha = pos_weight_to_alpha(pos_weight=pos_weight)
+            else:
+                alpha = None
+            return FocalLossWithLogits(alpha=alpha, gamma=loss_params.get("gamma", 2.0))
+        elif loss_name == "bce":
+            return BCEWithLogitsLoss(pos_weight=loss_params.get("pos_weight"))
+        else:
+            raise ValueError(f"Unsupported loss function: {loss_name}")
+
     def _setup_loss_functions(self, config):
-        """Helper method to initialize BCE loss functions with positive weights."""
+        """Helper method to initialize loss functions."""
+        # Loss function choice and parameters
+        loss_function_name = self.loss_config.get("name", "bce")
+        loss_params = self.loss_config.get("params", {})
+
         # Setup exposure loss
+        exposure_loss_params = loss_params.copy()
+
         exposure_pos_weight = self._get_pos_weight_tensor(
             getattr(config, "pos_weight_exposures", None)
         )
+        exposure_loss_params["pos_weight"] = exposure_pos_weight
         if exposure_pos_weight is not None:
             logger.info(
                 f"pos_weight_exposures (loss): {round(float(exposure_pos_weight), 3)}"
             )
-        self.exposure_loss_fct = nn.BCEWithLogitsLoss(pos_weight=exposure_pos_weight)
+        self.exposure_loss_fct = self._get_loss_fn(
+            loss_function_name, exposure_loss_params
+        )
+        logger.info(f"Exposure loss function: {self.exposure_loss_fct}")
 
         # Setup outcome losses
         self.outcome_loss_fcts = nn.ModuleDict()
         pos_weight_outcomes = getattr(config, "pos_weight_outcomes", {})
-
         pos_weights_for_log = {}
+
         for outcome_name in self.outcome_names:
+            outcome_loss_params = loss_params.copy()
             outcome_pos_weight = self._get_pos_weight_tensor(
                 pos_weight_outcomes.get(outcome_name)
             )
-            self.outcome_loss_fcts[outcome_name] = nn.BCEWithLogitsLoss(
-                pos_weight=outcome_pos_weight
-            )
+            outcome_loss_params["pos_weight"] = outcome_pos_weight
             pos_weights_for_log[outcome_name] = (
                 float(outcome_pos_weight) if outcome_pos_weight is not None else 0
             )
 
-        logger.info(
-            f"pos_weights_for_log: \n{limit_dict_for_logging(pos_weights_for_log)}"
-        )
+            self.outcome_loss_fcts[outcome_name] = self._get_loss_fn(
+                loss_function_name, outcome_loss_params
+            )
+        if loss_function_name == "bce":
+            logger.info(
+                f"pos_weights_for_log: \n{limit_dict_for_logging(pos_weights_for_log)}"
+            )
 
     def _get_pos_weight_tensor(self, pos_weight_value):
         """Helper method to convert pos_weight value to tensor if not None."""
@@ -141,7 +169,7 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         # --- Get Patient Representations ---
         if self.shared_representation:
             shared_repr = self.pooler(sequence_output, attention_mask)
-            bottleneck_repr = self.bottleneck(shared_repr)
+            bottleneck_repr = self.encoder_bottleneck(shared_repr)
             outputs.bottleneck_repr = bottleneck_repr  # Store for L1 loss
             exposure_repr = bottleneck_repr
             outcome_reprs = {
@@ -202,7 +230,8 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
         # Only compute exposure loss if label is available
         if EXPOSURE_TARGET in batch:
             exposure_loss = self.exposure_loss_fct(
-                outputs.exposure_logits.view(-1), batch[EXPOSURE_TARGET].view(-1)
+                outputs.exposure_logits.view(-1) / self.temperature,
+                batch[EXPOSURE_TARGET].view(-1),
             )
             outputs.exposure_loss = exposure_loss
             total_loss += exposure_loss
@@ -213,7 +242,9 @@ class CorebehrtForCausalFineTuning(CorebehrtForFineTuning):
                 continue
             predictions = outputs.outcome_logits[outcome_name].view(-1)
             targets = batch[outcome_name].view(-1)
-            outcome_loss = self.outcome_loss_fcts[outcome_name](predictions, targets)
+            outcome_loss = self.outcome_loss_fcts[outcome_name](
+                predictions / self.temperature, targets
+            )
 
             outputs.outcome_losses[outcome_name] = outcome_loss
             total_loss += outcome_loss

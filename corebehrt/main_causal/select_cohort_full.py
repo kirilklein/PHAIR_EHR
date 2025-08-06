@@ -34,6 +34,7 @@ def main(config_path: str):
         path_cfg.cohort,
         cfg.time_windows,
         criteria_definitions_path=path_cfg.criteria_config,
+        index_date_matching_cfg=cfg.get("index_date_matching"),
         logger=logger,
     )
     torch.save(filtered_pids, join(path_cfg.cohort, PID_FILE))

@@ -15,14 +15,14 @@ from corebehrt.constants.causal.data import (
 )
 from corebehrt.constants.causal.paths import (
     SIMULATION_RESULTS_FILE,
+    COUNTERFACTUALS_FILE,
+    COMBINED_CALIBRATED_PREDICTIONS_FILE,
 )
 from corebehrt.constants.data import PID_COL
 
 # Updated paths to match new structure
 OUTPUT_DIR = "./outputs/causal/generated/calibrated_predictions"
 COUNTERFACTUAL_DIR = "./outputs/causal/generated/simulated_outcome"
-COMBINED_PREDICTIONS_FILE = "combined_calibrated_predictions.csv"
-COMBINED_COUNTERFACTUAL_FILE = "combined_simulation_results.csv"
 
 # Optional: Add different noise scales for different components
 EXPOSURE_NOISE = 0.03  # For propensity scores
@@ -30,7 +30,7 @@ OUTCOME_NOISE = 0.05  # For outcome predictions
 NUM_SAMPLES = 10_000
 OUTCOME_PS_WEIGHT = 0.1  # in logit space
 OUTCOME_INTERCEPT = -1  # in logit space
-EXPOSURE_EFFECT = 0.5  # in logit space
+EXPOSURE_EFFECT = 1  # in logit space
 
 CLIP_EPS = 0.001
 PS_BETA_A = 2
@@ -101,12 +101,16 @@ def generate_combined_predictions(
         np.random.seed(outcome_seed)
 
         # Vary the effect sizes slightly for different outcomes
-        outcome_specific_effect = exposure_effect * (0.8 + 0.4 * np.random.random())
-        outcome_specific_intercept = intercept + np.random.normal(0, 0.2)
+        outcome_specific_effect = exposure_effect + np.random.normal(0, 0.01)
+        outcome_specific_intercept = intercept + np.random.normal(0, 0.01)
+        outcome_specific_weight = weight + np.random.normal(0, 0.01)
 
         # p0: probability of outcome if subject was in control group
         # p1: probability of outcome if subject was in treatment group
-        p0 = expit(logit(exposure_probas) * weight + outcome_specific_intercept)
+        p0 = expit(
+            logit(exposure_probas) * outcome_specific_weight
+            + outcome_specific_intercept
+        )
         p0 = np.clip(p0, CLIP_EPS, 1 - CLIP_EPS)
         p1 = expit(logit(p0) + outcome_specific_effect)
         p1 = np.clip(p1, CLIP_EPS, 1 - CLIP_EPS)
@@ -148,11 +152,11 @@ def generate_combined_predictions(
     counterfactual_df = pd.DataFrame(counterfactual_data)
 
     # Save to the combined files
-    output_path = os.path.join(OUTPUT_DIR, COMBINED_PREDICTIONS_FILE)
+    output_path = os.path.join(OUTPUT_DIR, COMBINED_CALIBRATED_PREDICTIONS_FILE)
     df.to_csv(output_path, index=False)
     print(f"Combined calibrated predictions saved to {output_path}")
 
-    counterfactual_path = os.path.join(COUNTERFACTUAL_DIR, COMBINED_COUNTERFACTUAL_FILE)
+    counterfactual_path = os.path.join(COUNTERFACTUAL_DIR, COUNTERFACTUALS_FILE)
     counterfactual_df.to_csv(counterfactual_path, index=False)
     print(f"Combined counterfactual outcomes saved to {counterfactual_path}")
 
@@ -322,7 +326,10 @@ if __name__ == "__main__":
         help="Intercept in the counterfactual outcome model",
     )
     parser.add_argument(
-        "--exposure-effect", type=float, default=1, help="Effect of exposure on outcome"
+        "--exposure-effect",
+        type=float,
+        default=EXPOSURE_EFFECT,
+        help="Effect of exposure on outcome",
     )
     parser.add_argument(
         "--generate-figures",

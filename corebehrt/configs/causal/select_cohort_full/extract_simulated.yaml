@@ -1,0 +1,33 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ### Inputs
+  features: ./outputs/causal/data/features/
+  meds: ./example_data/synthea_meds_causal
+  splits: [tuning]
+  exposures: ./outputs/causal/simulated_outcomes/
+  exposure: exposure.csv # Exposure, optional, set to outcome if not provided. For multiple exposures, create a joint exposure file.
+  criteria_config: ./corebehrt/configs/causal/select_cohort_full/definitions.yaml
+
+  ### Outputs
+  cohort: ./outputs/causal/finetune/cohorts/full_simulated/ # Data directory
+
+time_windows: # if not provided we can use exposures to get the index dates
+  data_end:
+    year: 2024
+    month: 01
+    day: 01
+  data_start:
+    year: 1950
+    month: 1
+    day: 1
+  min_follow_up: # minimum interval between index date and end of data
+    days: 1
+  min_lookback: # minimum interval between start of data and index date
+    days: 365
+
+cv_folds: 2 # can be set to 1 if only a simple train/val split is needed
+val_ratio: 0.1 # only used if cv_folds is set to 1
+test_ratio: 0 # can be set to 1 for test set creation only

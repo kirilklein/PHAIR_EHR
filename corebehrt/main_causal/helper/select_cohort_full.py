@@ -24,7 +24,7 @@ import json
 import logging
 import os
 from os.path import join
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -32,20 +32,27 @@ import torch
 from corebehrt.functional.cohort_handling.advanced.vis import (
     plot_cohort_stats,
     plot_multiple_cohort_stats,
+    plot_age_distribution,
 )
 import shutil
 from corebehrt.constants.causal.paths import (
     EXPOSURES_FILE,
     INDEX_DATE_MATCHING_FILE,
     STATS_PATH,
-)
-from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
-from corebehrt.constants.data import ABSPOS_COL, CONCEPT_COL, PID_COL, TIMESTAMP_COL
-from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE, TEST_PIDS_FILE
-from corebehrt.constants.causal.paths import (
     CRITERIA_FLAGS_FILE,
     CRITERIA_DEFINITIONS_FILE,
 )
+from corebehrt.constants.cohort import CRITERIA_DEFINITIONS, EXCLUSION, INCLUSION
+from corebehrt.constants.data import (
+    ABSPOS_COL,
+    CONCEPT_COL,
+    PID_COL,
+    TIMESTAMP_COL,
+    AGE_COL,
+    BIRTHDATE_COL,
+)
+from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE, TEST_PIDS_FILE
+from corebehrt.constants.causal.data import CONTROL_PID_COL
 from corebehrt.functional.causal.checks import check_time_windows
 from corebehrt.functional.cohort_handling.advanced.index_dates import (
     draw_index_dates_for_control_with_redraw,
@@ -59,7 +66,6 @@ from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with
 from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
 from corebehrt.modules.cohort_handling.advanced.validator import CriteriaValidator
 from corebehrt.modules.cohort_handling.patient_filter import (
-    exclude_pids_from_df,
     filter_df_by_pids,
 )
 from corebehrt.modules.features.loader import ConceptLoader
@@ -77,6 +83,7 @@ def select_cohort(
     save_path: str,
     time_windows: dict,
     criteria_definitions_path: str,
+    index_date_matching_cfg: dict,
     logger: logging.Logger,
 ) -> List[str]:
     """
@@ -108,6 +115,10 @@ def select_cohort(
         Time window requirements for eligibility
     criteria_definitions_path : str
         Path to criteria configuration file
+    index_date_matching_cfg : dict
+        Configuration for index date matching with keys:
+        - birth_year_tolerance: int, default=3
+        - redraw_attempts: int, default=3
     logger : logging.Logger
         Logger for tracking progress
 
@@ -117,15 +128,13 @@ def select_cohort(
         Final patient IDs after all filtering steps
     """
     check_time_windows(time_windows)
-    patients_info, exposures, index_dates = _load_data(
+    patients_info, exposures, index_dates, index_date_matching = _load_data(
         features_path, exposures_path, exposure, logger
-    )
-    control_patients_info = exclude_pids_from_df(
-        patients_info, index_dates[PID_COL].unique()
     )
 
     criteria_config = load_config(criteria_definitions_path)
     shutil.copy(criteria_definitions_path, join(save_path, CRITERIA_DEFINITIONS_FILE))
+    logger.info("Preparing exposed patients")
     criteria_exposed, index_dates_filtered_exposed, exposed_stats = _prepare_exposed(
         index_dates,
         time_windows,
@@ -135,26 +144,29 @@ def select_cohort(
         splits,
         save_path,
     )
-
+    logger.info("Preparing control patients")
     criteria_control, index_dates_filtered_control, control_stats = _prepare_control(
-        control_patients_info,
+        patients_info,
         index_dates_filtered_exposed,
         logger,
         criteria_config,
         meds_path,
         splits,
         save_path,
+        index_date_matching=index_date_matching,
+        index_date_matching_cfg=index_date_matching_cfg,
     )
-
+    logger.info("Creating combined visualization")
     # Create combined visualization
     combined_stats = {"exposed": exposed_stats, "control": control_stats}
+
     plot_multiple_cohort_stats(
         stats_dict=combined_stats,
         figsize=(20, 12),
         save_path=join(save_path, STATS_PATH, "cohort_comparison.png"),
         show_plot=False,
     )
-
+    logger.info("Saving data")
     criteria = pd.concat([criteria_exposed, criteria_control])
     criteria.to_csv(join(save_path, STATS_PATH, CRITERIA_FLAGS_FILE), index=False)
 
@@ -164,23 +176,33 @@ def select_cohort(
     final_index_dates[ABSPOS_COL] = get_hours_since_epoch(
         final_index_dates[TIMESTAMP_COL]
     )
+    final_index_dates[AGE_COL] = _compute_age(final_index_dates, patients_info)
     final_index_dates.to_csv(join(save_path, INDEX_DATES_FILE), index=False)
 
     pids = final_index_dates[PID_COL].unique()
     exposures = exposures.loc[exposures[PID_COL].isin(pids)]
     exposures.to_csv(join(save_path, EXPOSURES_FILE), index=False)
 
+    plot_age_distribution(
+        final_index_dates_with_age=final_index_dates,
+        control_pids=index_dates_filtered_control[PID_COL].unique(),
+        save_path=join(save_path, STATS_PATH, "age_distribution.png"),
+        logger=logger,
+    )
+
     return pids
 
 
 def _prepare_control(
-    control_patients_info: pd.DataFrame,
+    patients_info: pd.DataFrame,
     index_dates: pd.DataFrame,
     logger: logging.Logger,
     criteria_config: dict,
     meds_path: str,
     splits: List[str],
     save_path: str,
+    index_date_matching: pd.DataFrame = None,
+    index_date_matching_cfg: dict = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare control patients for cohort selection.
@@ -189,17 +211,47 @@ def _prepare_control(
     Return control criteria and index dates and index dates for controls.
     """
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
-    control_index_dates, exposure_matching = draw_index_dates_for_control_with_redraw(
-        control_patients_info[PID_COL].unique(),
-        index_dates,
-        control_patients_info,
-    )
-    exposure_matching[ABSPOS_COL] = get_hours_since_epoch(
-        exposure_matching[TIMESTAMP_COL]
-    )
-    exposure_matching.to_csv(join(save_path, INDEX_DATE_MATCHING_FILE), index=False)
-    log_patient_num(logger, control_index_dates, "control_index_dates")
+    if index_date_matching is None:
+        control_pids = list(
+            set(patients_info[PID_COL].unique()) - set(index_dates[PID_COL].unique())
+        )
+        if index_date_matching_cfg is None:
+            index_date_matching_cfg = {"birth_year_tolerance": 3, "redraw_attempts": 3}
+        control_index_dates, index_date_matching = (
+            draw_index_dates_for_control_with_redraw(
+                control_pids,
+                index_dates,
+                patients_info,
+                birth_year_tolerance=index_date_matching_cfg.get(
+                    "birth_year_tolerance"
+                ),
+                redraw_attempts=index_date_matching_cfg.get("redraw_attempts"),
+            )
+        )
+        index_date_matching[ABSPOS_COL] = get_hours_since_epoch(
+            index_date_matching[TIMESTAMP_COL]
+        )
+    else:
+        # Validate required columns exist
+        required_cols = [CONTROL_PID_COL, TIMESTAMP_COL]
+        missing_cols = [
+            col for col in required_cols if col not in index_date_matching.columns
+        ]
+        if missing_cols:
+            raise ValueError(
+                f"Index date matching file missing required columns: {missing_cols}"
+            )
 
+        control_index_dates = index_date_matching.rename(
+            columns={CONTROL_PID_COL: PID_COL}
+        )
+        control_index_dates = control_index_dates[[PID_COL, TIMESTAMP_COL]]
+        # Add ABSPOS_COL for consistency with the other branch
+        control_index_dates[ABSPOS_COL] = get_hours_since_epoch(
+            control_index_dates[TIMESTAMP_COL]
+        )
+    index_date_matching.to_csv(join(save_path, INDEX_DATE_MATCHING_FILE), index=False)
+    log_patient_num(logger, control_index_dates, "control_index_dates")
     criteria_control, included_pids_control, control_stats = filter_by_criteria(
         criteria_config,
         meds_path,
@@ -329,7 +381,7 @@ def _save_stats(stats: dict, save_path: str, description: str, logger: logging.L
 
 def _load_data(
     features_path: str, exposures_path: str, exposure: str, logger: logging.Logger
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Optional[pd.DataFrame]]:
     """
     Load data from features and exposures.
     Return patients info, exposures, and index dates.
@@ -342,7 +394,15 @@ def _load_data(
     exposures = ConceptLoader.read_file(join(exposures_path, exposure))
     log_patient_num(logger, exposures, "exposures")
     index_dates = select_first_event(exposures, PID_COL, TIMESTAMP_COL)
-    return patients_info, exposures, index_dates
+
+    index_date_matching = None
+    if os.path.exists(join(exposures_path, INDEX_DATE_MATCHING_FILE)):
+        logger.info("Loading index date matching file")
+        index_date_matching = pd.read_csv(
+            join(exposures_path, INDEX_DATE_MATCHING_FILE), parse_dates=[TIMESTAMP_COL]
+        )
+
+    return patients_info, exposures, index_dates, index_date_matching
 
 
 def _ensure_stats_format(stats: dict) -> dict:
@@ -464,3 +524,32 @@ def extract_criteria_from_shards(
         f"Successfully processed criteria for {total_patients_processed} patients"
     )
     return pd.concat(criteria_dfs)
+
+
+def _compute_age(
+    index_dates_df: pd.DataFrame, patients_info: pd.DataFrame
+) -> pd.Series:
+    """
+    Computes age at index date for each patient.
+
+    Args:
+        index_dates_df: DataFrame with at least PID_COL and TIMESTAMP_COL.
+        patients_info: DataFrame with at least PID_COL and BIRTHDATE_COL.
+
+    Returns:
+        A pandas Series containing the calculated age in years, aligned with index_dates_df.
+    """
+    # Create a mapping from patient ID to their birthdate for efficient lookup
+    birthdate_map = patients_info.set_index(PID_COL)[BIRTHDATE_COL]
+
+    # Map the birthdates onto the index_dates DataFrame using the patient ID
+    birthdates = index_dates_df[PID_COL].map(birthdate_map)
+
+    # Ensure columns are datetime objects before subtraction
+    index_times = pd.to_datetime(index_dates_df[TIMESTAMP_COL])
+    birth_times = pd.to_datetime(birthdates)
+
+    # Calculate and return the age
+    age_in_years = (index_times - birth_times) / pd.Timedelta(days=365.25)
+
+    return age_in_years
