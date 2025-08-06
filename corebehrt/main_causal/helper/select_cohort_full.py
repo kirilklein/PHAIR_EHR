@@ -196,7 +196,6 @@ def select_cohort(
         save_path=join(save_path, STATS_PATH, "index_date_distribution.png"),
         logger=logger,
     )
-    
 
     return pids
 
