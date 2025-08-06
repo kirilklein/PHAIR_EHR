@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import logging
-from corebehrt.constants.data import PID_COL, AGE_COL
+from corebehrt.constants.data import PID_COL, AGE_COL, TIMESTAMP_COL
 
 
 def plot_cohort_stats(
@@ -437,3 +437,35 @@ def plot_age_distribution(
     plt.close()
 
     logger.info(f"Saved age distribution plot to {save_path}")
+
+
+def plot_index_date_distribution(
+    final_index_dates: pd.DataFrame,
+    control_pids: List[int],
+    save_path: str,
+    logger: logging.Logger,
+):
+    """Plots the index date distribution for exposed vs. control from a pre-calculated index date column."""
+    logger.info("Plotting index date distribution.")
+    plot_df = final_index_dates.copy()
+
+    # 1. Create a 'group' column by checking if a patient is in the control list
+    plot_df["group"] = np.where(
+        plot_df[PID_COL].isin(control_pids), "Control", "Exposed"
+    )
+
+    # 2. Create and save the histogram plot
+    plt.figure(figsize=(12, 7))
+    sns.histplot(
+        data=plot_df, x=TIMESTAMP_COL, hue="group", kde=True, bins=40, element="step"
+    )
+    plt.title("Index Date Distribution (Final Cohorts)")
+    plt.xlabel("Index Date")
+    plt.ylabel("Patient Count")
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+    plt.tight_layout()
+
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+    logger.info(f"Saved index date distribution plot to {save_path}")
