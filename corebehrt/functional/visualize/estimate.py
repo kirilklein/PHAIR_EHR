@@ -1,8 +1,14 @@
-import pandas as pd
+import logging
+import os
+
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
-import os  # Import the os module for path manipulation
+
 from corebehrt.constants.causal.data import EffectColumns
+from corebehrt.modules.plot.estimate import EffectSizePlotConfig, EffectSizePlotter
+
+logger = logging.getLogger(__name__)
 
 
 def create_annotated_heatmap_matplotlib(
@@ -93,3 +99,20 @@ def create_annotated_heatmap_matplotlib(
     else:
         plt.show()
     plt.close()  # Close the plot to free up memory
+
+
+def create_effect_size_plot(
+    effects_df: pd.DataFrame,
+    save_dir: str,
+    config: EffectSizePlotConfig,
+    title: str = "Effect estimates by outcome and method",
+    methods: list[str] = None,
+):
+    """
+    Creates a forest plot by initializing and running the EffectSizePlotter.
+    """
+    try:
+        plotter = EffectSizePlotter(effects_df, save_dir, config, title, methods)
+        plotter.run()
+    except Exception as e:
+        logger.error(f"Failed to create effect size plot. Error: {e}", exc_info=True)

@@ -7,7 +7,7 @@ import torch
 from CausalEstimate import MultiEstimator
 from CausalEstimate.estimators import AIPW, IPW, TMLE
 from CausalEstimate.filter.propensity import filter_common_support
-from corebehrt.modules.causal.bias import BiasConfig, BiasIntroducer
+
 from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     OUTCOME,
@@ -26,15 +26,15 @@ from corebehrt.constants.causal.paths import (
     PATIENTS_FILE,
 )
 from corebehrt.constants.data import PID_COL
-from corebehrt.functional.estimate.data_handler import (
-    get_outcome_names,
-    prepare_data_for_outcome,
-    validate_columns,
-    prepare_tmle_analysis_df,
-)
 from corebehrt.functional.estimate.benchmarks import (
     append_true_effect,
     append_unadjusted_effect,
+)
+from corebehrt.functional.estimate.data_handler import (
+    get_outcome_names,
+    prepare_data_for_outcome,
+    prepare_tmle_analysis_df,
+    validate_columns,
 )
 from corebehrt.functional.estimate.report import (
     compute_outcome_stats,
@@ -44,7 +44,12 @@ from corebehrt.functional.io_operations.estimate import (
     save_all_results,
     save_tmle_analysis,
 )
-from corebehrt.functional.visualize.estimate import create_annotated_heatmap_matplotlib
+from corebehrt.functional.visualize.estimate import (
+    EffectSizePlotConfig,
+    create_annotated_heatmap_matplotlib,
+    create_effect_size_plot,
+)
+from corebehrt.modules.causal.bias import BiasConfig, BiasIntroducer
 from corebehrt.modules.setup.config import Config
 
 
@@ -66,6 +71,7 @@ class EffectEstimator:
             COMBINED_CALIBRATED_PREDICTIONS_FILE,
         )
         self.estimator_cfg = self.cfg.estimator
+        self.effect_size_plot_cfg = EffectSizePlotConfig(**self.cfg.get("plot", {}))
         self.effect_type = self.cfg.estimator.effect_type
         self.df = pd.read_csv(self.predictions_file)
         self.outcome_names = get_outcome_names(self.df)
@@ -158,6 +164,15 @@ class EffectEstimator:
             EffectColumns.effect,
             join(fig_dir, "effects.png"),
         )
+
+        create_effect_size_plot(
+            effects_df=effects,
+            save_dir=join(fig_dir, "effects_scater"),
+            title=f"Effect estimates by outcome and method",
+            methods=methods + ["RD"],
+            config=self.effect_size_plot_cfg,
+        )
+
         if EffectColumns.true_effect in effects.columns:
             # show true effects, only show one of the methods (theyre all the same for true effect)
             create_annotated_heatmap_matplotlib(
