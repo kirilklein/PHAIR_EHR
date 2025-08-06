@@ -442,7 +442,6 @@ class AdjustmentPlotter:
                 "o",
                 color="royalblue",
                 markersize=6,
-                label="Control (Y0) Initial" if i == 0 else "",
             )
 
             # --- Plot Y1 (Treated Group) ---
@@ -463,7 +462,6 @@ class AdjustmentPlotter:
                 "o",
                 color="firebrick",
                 markersize=6,
-                label="Treated (Y1) Initial" if i == 0 else "",
             )
 
             # --- Plot Final Risk Difference Bracket ---
@@ -485,22 +483,6 @@ class AdjustmentPlotter:
                 y1_final, xmin=i - cap_width / 2, xmax=i + cap_width / 2, color="black"
             )
 
-        # Add dummy plots for a clean legend
-        ax.plot([], [], "o", color="royalblue", label="Control (Y0) Initial")
-        ax.plot([], [], "o", color="firebrick", label="Treated (Y1) Initial")
-        ax.arrow(
-            0,
-            0,
-            0,
-            0,
-            head_width=0.05,
-            head_length=0.01,
-            fc="gray",
-            ec="gray",
-            label="Adjustment Arrow",
-        )
-        ax.vlines(0, 0, 0, color="black", label="Final Risk Difference")
-
     def _finalize_figure(
         self,
         fig: mpl.figure.Figure,
@@ -509,6 +491,8 @@ class AdjustmentPlotter:
         outcomes_on_page: List[str],
     ):
         """Sets final aesthetics and saves the figure."""
+        import matplotlib.lines as mlines
+
         ax.axhline(0, color="grey", linewidth=0.8, linestyle="--")
         ax.set_ylabel("Outcome Probability (Risk)", fontsize=14)
         ax.set_xticks(np.arange(len(outcomes_on_page)))
@@ -517,7 +501,38 @@ class AdjustmentPlotter:
             f"{self.title} (Part {page_num + 1}/{self.num_figures_to_generate})",
             fontsize=16,
         )
-        ax.legend()
+
+        handles = [
+            mlines.Line2D(
+                [],
+                [],
+                color="royalblue",
+                marker="o",
+                linestyle="None",
+                label="Control Initial",
+            ),
+            mlines.Line2D(
+                [],
+                [],
+                color="firebrick",
+                marker="o",
+                linestyle="None",
+                label="Treated Initial",
+            ),
+            mlines.Line2D(
+                [],
+                [],
+                color="gray",
+                marker="^",
+                linestyle="None",
+                markersize=7,
+                label="Adjustment Arrow",
+            ),
+            mlines.Line2D(
+                [], [], color="black", linestyle="-", label="Final Risk Difference"
+            ),
+        ]
+        ax.legend(handles=handles)
         ax.grid(axis="y", linestyle="--", alpha=0.5)
 
         save_path = f"{self.save_dir}/detailed_adjustment_{page_num + 1}.png"
