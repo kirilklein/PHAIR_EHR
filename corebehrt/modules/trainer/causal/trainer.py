@@ -568,11 +568,15 @@ class CausalEHRTrainer(EHRTrainer):
         if azure.is_mlflow_available():
             # Log all validation metrics
             if val_metrics:
-                for metric_name, value in val_metrics.items():
+                for i, (metric_name, value) in enumerate(val_metrics.items()):
+                    if i >= self.num_targets_to_log:
+                        break
                     self.run_log(f"val_{metric_name}", value, step=epoch)
             # Log all test metrics
             if test_metrics:
-                for metric_name, value in test_metrics.items():
+                for i, (metric_name, value) in enumerate(test_metrics.items()):
+                    if i >= self.num_targets_to_log:
+                        break
                     self.run_log(f"test_{metric_name}", value, step=epoch)
             # Log losses
             self.run_log("train_loss", avg_train_loss, step=epoch)
