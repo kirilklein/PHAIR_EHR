@@ -14,6 +14,64 @@ from corebehrt.constants.causal.data import (
 )
 
 
+def plot_weights_hist(
+    df: pd.DataFrame,
+    value_col: str,
+    group_col: str,
+    group_labels: Tuple[str, str],
+    title: str,
+    xlabel: str,
+    ax: mpl.axes.Axes,
+    min_quantile: float = 0.001,
+    max_quantile: float = 0.999,
+    num_bins: int = 51,
+    y_max_quantile: float = 0.99,
+) -> None:
+    """
+    Plot the histogram of a value column grouped by a group column.
+    Clips the y-axis to a quantile of the histogram counts to avoid outliers.
+    """
+    bin_edges = np.linspace(
+        df[value_col].quantile(min_quantile),
+        df[value_col].quantile(max_quantile),
+        num_bins,
+    )
+
+    group0_data = df[df[group_col] == 0][value_col]
+    group1_data = df[df[group_col] == 1][value_col]
+
+    # Calculate histograms to determine y-axis limit
+    counts0, _ = np.histogram(group0_data, bins=bin_edges, density=True)
+    counts1, _ = np.histogram(group1_data, bins=bin_edges, density=True)
+    max_count = max(
+        np.quantile(counts0, y_max_quantile), np.quantile(counts1, y_max_quantile)
+    )
+
+    ax.hist(
+        group0_data,
+        bins=bin_edges,
+        label=group_labels[0],
+        density=True,
+        alpha=0.7,
+        color="#3498db",
+    )
+    ax.hist(
+        group1_data,
+        bins=bin_edges,
+        label=group_labels[1],
+        density=True,
+        alpha=0.7,
+        color="#e74c3c",
+    )
+
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.legend(title=group_col)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylim(0, max_count * 1.1)
+
+
 def plot_probas_hist(
     df: pd.DataFrame,
     value_col: str,
