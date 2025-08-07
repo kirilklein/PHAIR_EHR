@@ -27,6 +27,7 @@ def get_combined_follow_ups(
     exposures: pd.DataFrame,
     data_end: pd.Timestamp,
     cfg: OutcomeConfig,
+    censor_by_death: bool = True,
 ) -> pd.DataFrame:
     """
     Create follow-up windows.
@@ -45,6 +46,7 @@ def get_combined_follow_ups(
         exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
         data_end: Timestamp of the end of the data
         cfg: OutcomeConfig
+        censor_by_death: Whether to censor groupwise by death
 
     Returns:
         - adjusted_follow_ups: pd.DataFrame with final follow-up periods with following column
@@ -59,6 +61,7 @@ def get_combined_follow_ups(
         non_compliance_abspos,
         deaths,
         cfg.delay_death_hours,
+        censor_by_death=censor_by_death,
     )  # based on non-compliance, death, and group
 
     if cfg.group_wise_follow_up:  # make group-wise follow-up times shorter
@@ -106,6 +109,7 @@ def prepare_follow_ups_adjusted(
     non_compliance_abspos: pd.Series,
     deaths: pd.Series,
     delay_death_hours: int = 0,
+    censor_by_death: bool = True,
 ) -> pd.DataFrame:
     """
     Prepare the follow-ups for the patients.
@@ -121,13 +125,16 @@ def prepare_follow_ups_adjusted(
     follow_ups = follow_ups.copy()
 
     follow_ups[NON_COMPLIANCE_COL] = follow_ups[PID_COL].map(non_compliance_abspos)
-    follow_ups[DEATH_COL] = follow_ups[PID_COL].map(deaths)
-    follow_ups["delayed_death"] = (
-        follow_ups[DEATH_COL] + delay_death_hours
-    )  # for outcomes that are coded with a delay
-    follow_ups[END_COL] = follow_ups[
-        [END_COL, NON_COMPLIANCE_COL, "delayed_death"]
-    ].min(
+    cols_to_min = [END_COL, NON_COMPLIANCE_COL]
+
+    if censor_by_death:
+        follow_ups[DEATH_COL] = follow_ups[PID_COL].map(deaths)
+        follow_ups["delayed_death"] = (
+            follow_ups[DEATH_COL] + delay_death_hours
+        )  # for outcomes that are coded with a delay
+        cols_to_min.append("delayed_death")
+
+    follow_ups[END_COL] = follow_ups[cols_to_min].min(
         axis=1
     )  # end follow-up if patient dies, non-complies, or the follow-up period ends
     if follow_ups[END_COL].isna().all():

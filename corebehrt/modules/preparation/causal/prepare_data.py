@@ -222,6 +222,16 @@ class CausalDatasetPreparer:
             if outcome_df.empty:
                 self.logger.warning(f"Outcome {outcome_name} has no data. Skipping.")
                 continue
+
+            censor_by_death = not (
+                (outcome_name.lower() in ["dod", "death", "all_cause_death"])
+                or ("death" in outcome_name.lower())
+            )
+            if not censor_by_death:
+                self.logger.info(
+                    f"Outcome {outcome_name} is being processed without censoring by death."
+                )
+
             follow_ups = get_combined_follow_ups(
                 index_dates=index_dates,
                 index_date_matching=index_date_matching,
@@ -229,6 +239,7 @@ class CausalDatasetPreparer:
                 exposures=exposures,
                 data_end=data_end,
                 cfg=self.outcome_cfg,
+                censor_by_death=censor_by_death,
             )
             binary_outcome = abspos_to_binary_outcome(follow_ups, outcome_df)
             counts = binary_outcome.value_counts()
