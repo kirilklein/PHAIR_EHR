@@ -5,8 +5,8 @@ logging:
 paths:
   data: ./example_data/synthea_meds_causal
   features: ./outputs/causal/data/features
-
   outcomes: ./outputs/causal/finetune/outcomes
+  splits: [tuning]
 
 plot:
   max_outcomes_to_plot: 100
