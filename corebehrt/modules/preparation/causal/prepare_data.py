@@ -72,6 +72,8 @@ class CausalDatasetPreparer:
     Differs from DatasetPreparer by also assigning exposures to patients.
     """
 
+    DEATH_OUTCOME_KEYWORDS = ["dod", "death", "all_cause_death"]
+
     def __init__(self, cfg: Config, logger: logging.Logger):
         self.ds_preparer = DatasetPreparer(cfg)
         self.exposure_cfg = ExposureConfig(**cfg.exposure)
@@ -204,9 +206,19 @@ class CausalDatasetPreparer:
         index_date_matching: pd.DataFrame,
         deaths: pd.Series,
     ) -> Tuple[pd.Series, pd.DataFrame, pd.DataFrame]:
-        """Computes binary exposure and outcome labels."""
+        """
+        Computes binary exposure and outcome labels.
+
+        This refactored version pre-computes two sets of follow-up periods:
+        1.  A standard follow-up, censored by death.
+        2.  A special follow-up for death outcomes, which is not censored by death.
+        Inside the loop, it selects the appropriate pre-computed follow-up,
+        improving efficiency and clarity.
+        """
         self.logger.info("Handling exposures and outcomes")
         data_end = self.get_data_end(self.cohort_cfg)
+
+        # --- Exposure Handling (Unchanged) ---
         exposure_follow_ups = prepare_follow_ups_simple(
             index_dates,
             self.exposure_cfg.n_hours_start_follow_up,
@@ -215,33 +227,53 @@ class CausalDatasetPreparer:
         )
         binary_exposure = abspos_to_binary_outcome(exposure_follow_ups, exposures)
 
-        binary_outcomes = {}
-        follow_ups = None
-        min_instances_per_class = self.outcome_cfg.min_instances_per_class
-        for outcome_name, outcome_df in outcomes.items():
-            if outcome_df.empty:
-                self.logger.warning(f"Outcome {outcome_name} has no data. Skipping.")
-                continue
+        # --- Refactored Outcome Handling ---
+        self.logger.info("Pre-calculating follow-up periods for outcomes.")
 
-            censor_by_death = not (
-                (outcome_name.lower() in ["dod", "death", "all_cause_death"])
-                or ("death" in outcome_name.lower())
-            )
-            if not censor_by_death:
-                self.logger.info(
-                    f"Outcome {outcome_name} is being processed without censoring by death."
-                )
+        # 1. Calculate the standard follow-up period (censored by death)
+        standard_follow_ups = get_combined_follow_ups(
+            index_dates=index_dates,
+            index_date_matching=index_date_matching,
+            deaths=deaths,
+            exposures=exposures,
+            data_end=data_end,
+            cfg=self.outcome_cfg,
+            censor_by_death=True,
+        )
 
-            follow_ups = get_combined_follow_ups(
+        # 2. Calculate the special follow-up period for death outcomes (NOT censored by death)
+        if any(self._is_death_outcome(name) for name in outcomes.keys()):
+            death_follow_ups = get_combined_follow_ups(
                 index_dates=index_dates,
                 index_date_matching=index_date_matching,
                 deaths=deaths,
                 exposures=exposures,
                 data_end=data_end,
                 cfg=self.outcome_cfg,
-                censor_by_death=censor_by_death,
+                censor_by_death=False,
             )
-            binary_outcome = abspos_to_binary_outcome(follow_ups, outcome_df)
+
+        binary_outcomes = {}
+        min_instances_per_class = self.outcome_cfg.min_instances_per_class
+        # Using a set for efficient lookup
+
+        for outcome_name, outcome_df in outcomes.items():
+            if outcome_df.empty:
+                self.logger.warning(f"Outcome {outcome_name} has no data. Skipping.")
+                continue
+
+            if self._is_death_outcome(outcome_name):
+                active_follow_ups = death_follow_ups
+                self.logger.info(
+                    f"Using non-censored follow-up for death outcome: {outcome_name}"
+                )
+            else:
+                active_follow_ups = standard_follow_ups
+
+            # Generate binary label using the selected follow-up
+            binary_outcome = abspos_to_binary_outcome(active_follow_ups, outcome_df)
+
+            # Validate class balance
             counts = binary_outcome.value_counts()
             if len(counts) < 2 or counts.min() < min_instances_per_class:
                 self.logger.warning(
@@ -249,8 +281,18 @@ class CausalDatasetPreparer:
                     f"{min_instances_per_class} instances. Value counts: {counts.to_dict()}. Skipping."
                 )
                 continue
+
             binary_outcomes[outcome_name] = binary_outcome
-        return binary_exposure, pd.DataFrame(binary_outcomes), follow_ups
+
+        # Return the standard follow-ups as the representative DataFrame
+        return binary_exposure, pd.DataFrame(binary_outcomes), standard_follow_ups
+
+    def _is_death_outcome(self, outcome_name: str) -> bool:
+        """Determines if the outcome is death-related."""
+        return (
+            outcome_name.lower() in self.DEATH_OUTCOME_KEYWORDS
+            or "death" in outcome_name.lower()
+        )
 
     def _assign_labels(
         self,
