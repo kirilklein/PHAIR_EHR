@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 from tqdm import tqdm
 
-from corebehrt.azure.util.config import load_config
+
 from corebehrt.constants.causal.data import EXPOSURE
 from corebehrt.constants.causal.paths import (
     BINARY_EXPOSURE_FILE,
@@ -16,7 +16,7 @@ from corebehrt.constants.causal.paths import (
     INDEX_DATE_MATCHING_FILE,
 )
 from corebehrt.constants.data import ABSPOS_COL, DEATH_CODE, PID_COL, TIMESTAMP_COL
-from corebehrt.constants.paths import COHORT_CFG, FOLLOW_UPS_FILE, INDEX_DATES_FILE
+from corebehrt.constants.paths import FOLLOW_UPS_FILE, INDEX_DATES_FILE
 from corebehrt.functional.features.normalize import normalize_segments_for_patient
 from corebehrt.functional.io_operations.save import save_vocabulary
 from corebehrt.functional.preparation.causal.convert import (
@@ -77,13 +77,13 @@ class CausalDatasetPreparer:
 
     DEATH_OUTCOME_KEYWORDS = ["dod", "death", "all_cause_death"]
 
-    def __init__(self, cfg: Config, logger: logging.Logger):
+    def __init__(self, cfg: Config, cohort_cfg: Config, logger: logging.Logger):
         self.ds_preparer = DatasetPreparer(cfg)
         self.exposure_cfg = ExposureConfig(**cfg.exposure)
         self.outcome_cfg = OutcomeConfig(**cfg.outcome)
         self.paths_cfg = cfg.paths
         self.data_cfg = cfg.data
-        self.cohort_cfg = load_config(join(self.paths_cfg.cohort, COHORT_CFG))
+        self.end_date = self.get_end_date(cohort_cfg)
         self.vocabulary = self.ds_preparer.vocab
         self.min_instances_per_class = self.data_cfg.get("min_instances_per_class", 10)
         self.logger = logger
@@ -213,7 +213,7 @@ class CausalDatasetPreparer:
         filtering_stats = {}
         data_end = self.get_data_end(self.cohort_cfg)
 
-        filtering_stats[EXPOSURE] = {"before": exposures[PID_COL].nunique()}
+        filtering_stats[EXPOSURE] = {"before": index_dates[PID_COL].nunique()}
         exposure_follow_ups = prepare_follow_ups_simple(
             index_dates,
             self.exposure_cfg.n_hours_start_follow_up,
@@ -413,15 +413,12 @@ class CausalDatasetPreparer:
         return exposures, index_date_matching, index_dates
 
     @staticmethod
-    def get_data_end(cohort_cfg: Config) -> pd.Timestamp:
-        """Retrieves the data end timestamp from the configuration."""
-        try:
-            return pd.to_datetime(cohort_cfg.time_windows.data_end)
-        except AttributeError:
-            logger.warning(
-                "No data_end found in cohort_cfg.time_windows. Defaulting to today."
-            )
-            return pd.to_datetime("today")
+    def get_end_date(cohort_cfg):
+        time_windwos = cohort_cfg.time_windows
+        if data_end := time_windwos.get("data_end"):
+            return pd.to_datetime(data_end)
+        else:
+            return pd.Timestamp.now()
 
     @staticmethod
     def _save_artifacts(artifacts: Artifacts, out_dir: str):
