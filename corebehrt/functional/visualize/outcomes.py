@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from os.path import join
 import os
+import seaborn as sns
 
 
 def plot_outcome_distribution(
@@ -88,3 +89,122 @@ def plot_outcome_distribution(
             plt.savefig(save_path)
             plt.close()  # Close the figure to free memory
             print(f"Plot saved to '{save_path}'")
+
+
+def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int = 25):
+    """
+    Plots patient counts before and after filtering, splitting into multiple files if needed.
+
+    Args:
+        stats (dict): A dictionary containing the before/after counts.
+        output_dir (str): The directory to save the plot(s) in.
+        max_items_per_plot (int): Maximum number of items (exposure + outcomes)
+                                  to display in a single plot.
+    """
+    if not stats:
+        print("Statistics dictionary is empty, skipping plot generation.")
+        return
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 1. Convert stats dict to a long-form DataFrame for plotting
+    plot_data = []
+    for name, values in stats.items():
+        plot_data.append(
+            {
+                "name": name,
+                "status": "Before Filtering",
+                "count": values.get("before", 0),
+            }
+        )
+        after_counts = values.get("after", {})
+        total_after_count = sum(
+            v for k, v in after_counts.items() if k not in ["skipped", "reason"]
+        )
+        plot_data.append(
+            {"name": name, "status": "After Filtering", "count": total_after_count}
+        )
+
+    df_plot = pd.DataFrame(plot_data)
+
+    # Sort by the 'before' count to have a more organized plot
+    sorted_names = (
+        df_plot[df_plot["status"] == "Before Filtering"]
+        .sort_values("count", ascending=False)["name"]
+        .tolist()
+    )
+    df_plot["name"] = pd.Categorical(
+        df_plot["name"], categories=sorted_names, ordered=True
+    )
+    df_plot = df_plot.sort_values("name")
+
+    # 2. Split item names into chunks based on max_items_per_plot
+    item_names = df_plot["name"].unique().tolist()
+    num_items = len(item_names)
+
+    if num_items == 0:
+        print("No data to plot.")
+        return
+
+    num_plots = (num_items + max_items_per_plot - 1) // max_items_per_plot
+    if num_plots > 1:
+        print(
+            f"Number of items ({num_items}) exceeds the limit of {max_items_per_plot}. "
+            f"Generating {num_plots} plots."
+        )
+
+    # 3. Loop through chunks and generate a plot for each
+    for i in range(num_plots):
+        start_index = i * max_items_per_plot
+        end_index = start_index + max_items_per_plot
+
+        # Get the subset of names and data for the current plot
+        chunk_names = item_names[start_index:end_index]
+        subset_df = df_plot[df_plot["name"].isin(chunk_names)]
+
+        # Dynamically adjust figure size
+        fig_height = max(6, len(chunk_names) * 0.4)
+        plt.figure(figsize=(12, fig_height))
+        sns.set_style("whitegrid")
+
+        bar_plot = sns.barplot(
+            x="count", y="name", hue="status", data=subset_df, orient="h"
+        )
+
+        # Set titles and labels
+        title = "Patient Counts Before and After Filtering"
+        if num_plots > 1:
+            title += f" (Part {i + 1}/{num_plots})"
+
+        plt.title(title, fontsize=16)
+        plt.xlabel("Number of Patients", fontsize=12)
+        plt.ylabel("Exposure / Outcome", fontsize=12)
+        plt.legend(title="Filtering Status")
+
+        # Add text labels on bars
+        for p in bar_plot.patches:
+            width = p.get_width()
+            if width > 0:  # Only label bars with a value
+                bar_plot.annotate(
+                    f"{width:.0f}",
+                    (width, p.get_y() + p.get_height() / 2.0),
+                    ha="left",
+                    va="center",
+                    xytext=(5, 0),
+                    textcoords="offset points",
+                )
+
+        # Adjust x-axis limit for labels
+        plt.xlim(right=subset_df["count"].max() * 1.15)
+        plt.tight_layout()
+
+        # Determine save path
+        base_filename = "filtering_counts_comparison"
+        if num_plots > 1:
+            save_path = join(output_dir, f"{base_filename}_{i + 1}.png")
+        else:
+            save_path = join(output_dir, f"{base_filename}.png")
+
+        plt.savefig(save_path)
+        print(f"Saved filtering statistics plot to {save_path}")
+        plt.close()

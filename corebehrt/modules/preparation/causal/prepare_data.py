@@ -41,7 +41,10 @@ from corebehrt.functional.preparation.utils import (
 )
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.functional.visualize.follow_ups import plot_follow_up_distribution
-from corebehrt.functional.visualize.outcomes import plot_outcome_distribution
+from corebehrt.functional.visualize.outcomes import (
+    plot_outcome_distribution,
+    plot_filtering_stats,
+)
 from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
 from corebehrt.modules.features.loader import ShardLoader
 from corebehrt.modules.monitoring.logger import TqdmToLogger
@@ -119,8 +122,10 @@ class CausalDatasetPreparer:
         deaths = self._extract_deaths(data)
 
         self.logger.info("Computing binary labels")
-        binary_exposure, binary_outcomes, follow_ups = self._compute_binary_labels(
-            exposures, outcomes, index_dates, index_date_matching, deaths
+        binary_exposure, binary_outcomes, follow_ups, filtering_stats = (
+            self._compute_binary_labels(
+                exposures, outcomes, index_dates, index_date_matching, deaths
+            )
         )
         self.logger.info(
             f"Binary exposure distribution\n{binary_exposure.value_counts()}"
@@ -161,6 +166,7 @@ class CausalDatasetPreparer:
             fig_dir = join(self.paths_cfg.prepared_data, "figures")
             plot_follow_up_distribution(follow_ups, binary_exposure, fig_dir)
             plot_outcome_distribution(binary_outcomes, fig_dir)
+            plot_filtering_stats(filtering_stats, fig_dir)
         return data
 
     def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
@@ -205,7 +211,7 @@ class CausalDatasetPreparer:
         index_dates: pd.DataFrame,
         index_date_matching: pd.DataFrame,
         deaths: pd.Series,
-    ) -> Tuple[pd.Series, pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[pd.Series, pd.DataFrame, pd.DataFrame, dict]:
         """
         Computes binary exposure and outcome labels.
 
@@ -216,9 +222,10 @@ class CausalDatasetPreparer:
         improving efficiency and clarity.
         """
         self.logger.info("Handling exposures and outcomes")
+        filtering_stats = {}
         data_end = self.get_data_end(self.cohort_cfg)
 
-        # --- Exposure Handling (Unchanged) ---
+        filtering_stats[EXPOSURE] = {"before": exposures[PID_COL].nunique()}
         exposure_follow_ups = prepare_follow_ups_simple(
             index_dates,
             self.exposure_cfg.n_hours_start_follow_up,
@@ -226,7 +233,7 @@ class CausalDatasetPreparer:
             data_end,
         )
         binary_exposure = abspos_to_binary_outcome(exposure_follow_ups, exposures)
-
+        filtering_stats[EXPOSURE]["after"] = binary_exposure.value_counts().to_dict()
         # --- Refactored Outcome Handling ---
         self.logger.info("Pre-calculating follow-up periods for outcomes.")
 
@@ -255,11 +262,16 @@ class CausalDatasetPreparer:
 
         binary_outcomes = {}
         min_instances_per_class = self.outcome_cfg.min_instances_per_class
-        # Using a set for efficient lookup
 
         for outcome_name, outcome_df in outcomes.items():
+            filtering_stats[outcome_name] = {"before": outcome_df[PID_COL].nunique()}
+
             if outcome_df.empty:
                 self.logger.warning(f"Outcome {outcome_name} has no data. Skipping.")
+                filtering_stats[outcome_name]["after"] = {
+                    "skipped": True,
+                    "reason": "Empty dataframe",
+                }
                 continue
 
             if self._is_death_outcome(outcome_name):
@@ -280,12 +292,22 @@ class CausalDatasetPreparer:
                     f"Outcome {outcome_name} has a class with fewer than "
                     f"{min_instances_per_class} instances. Value counts: {counts.to_dict()}. Skipping."
                 )
+                filtering_stats[outcome_name]["after"] = {
+                    "skipped": True,
+                    "reason": "Low class instances",
+                }
                 continue
 
+            filtering_stats[outcome_name]["after"] = counts.to_dict()
             binary_outcomes[outcome_name] = binary_outcome
 
         # Return the standard follow-ups as the representative DataFrame
-        return binary_exposure, pd.DataFrame(binary_outcomes), standard_follow_ups
+        return (
+            binary_exposure,
+            pd.DataFrame(binary_outcomes),
+            standard_follow_ups,
+            filtering_stats,
+        )
 
     def _is_death_outcome(self, outcome_name: str) -> bool:
         """Determines if the outcome is death-related."""
