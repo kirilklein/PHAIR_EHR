@@ -118,11 +118,10 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
             }
         )
         after_counts = values.get("after", {})
-        total_after_count = sum(
-            v for k, v in after_counts.items() if k not in ["skipped", "reason"]
-        )
+        if 1 in after_counts:
+            positive_counts = after_counts[1]
         plot_data.append(
-            {"name": name, "status": "After Filtering", "count": total_after_count}
+            {"name": name, "status": "After Filtering", "count": positive_counts}
         )
 
     df_plot = pd.DataFrame(plot_data)
