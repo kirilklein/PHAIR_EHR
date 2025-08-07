@@ -91,15 +91,14 @@ def plot_outcome_distribution(
             print(f"Plot saved to '{save_path}'")
 
 
-def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int = 25):
+def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int = 100):
     """
     Plots patient counts before and after filtering, splitting into multiple files if needed.
 
     Args:
         stats (dict): A dictionary containing the before/after counts.
         output_dir (str): The directory to save the plot(s) in.
-        max_items_per_plot (int): Maximum number of items (exposure + outcomes)
-                                  to display in a single plot.
+        max_items_per_plot (int): Maximum number of items to display in a single plot.
     """
     if not stats:
         print("Statistics dictionary is empty, skipping plot generation.")
@@ -107,9 +106,9 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # 1. Convert stats dict to a long-form DataFrame for plotting
     plot_data = []
     for name, values in stats.items():
+        # Append the "Before" count
         plot_data.append(
             {
                 "name": name,
@@ -117,11 +116,19 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
                 "count": values.get("before", 0),
             }
         )
+
+        # --- FIX IS HERE ---
+        # For the "After" bar, we plot the number of positive events.
+        # Use .get(1, 0) to safely get the count of positive cases (key 1), defaulting to 0.
         after_counts = values.get("after", {})
-        if 1 in after_counts:
-            positive_counts = after_counts[1]
+        positive_events_after = after_counts.get(1, 0)
+
         plot_data.append(
-            {"name": name, "status": "After Filtering", "count": positive_counts}
+            {
+                "name": name,
+                "status": "After Positive Events",  # Renamed for clarity
+                "count": positive_events_after,
+            }
         )
 
     df_plot = pd.DataFrame(plot_data)
@@ -137,10 +144,9 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
     )
     df_plot = df_plot.sort_values("name")
 
-    # 2. Split item names into chunks based on max_items_per_plot
+    # (The rest of the plotting logic with splitting into chunks remains the same)
     item_names = df_plot["name"].unique().tolist()
     num_items = len(item_names)
-
     if num_items == 0:
         print("No data to plot.")
         return
