@@ -117,7 +117,14 @@ class CausalDatasetPreparer:
             pids, exposures, index_dates, outcomes
         )
 
-        # 2. Compute labels and outcomes
+        # 2. Censor, truncate, and normalize sequences
+        self._censor_and_truncate_sequences(data, index_dates)
+        data.patients = data.process_in_parallel(normalize_segments_for_patient)
+        self.logger.info(
+            f"Max segment length: {max(max(p.segments, default=0) for p in data.patients)}"
+        )
+
+        # 3. Compute labels and outcomes
         index_dates[ABSPOS_COL] = get_hours_since_epoch(index_dates[TIMESTAMP_COL])
         deaths = self._extract_deaths(data)
 
@@ -127,29 +134,10 @@ class CausalDatasetPreparer:
                 exposures, outcomes, index_dates, index_date_matching, deaths
             )
         )
-        self.logger.info(
-            f"Binary exposure distribution\n{binary_exposure.value_counts()}"
-        )
-        self.logger.info(
-            f"Binary outcomes distribution\n{binary_outcomes.apply(pd.Series.value_counts)}"
-        )
 
-        # 3. Assign labels to patient data
+        # 4. Assign labels to patient data
         self._assign_labels(data, binary_exposure, binary_outcomes)
 
-        # 4. Censor, truncate, and normalize sequences
-        self._censor_and_truncate_sequences(data, index_dates)
-        data.patients = data.process_in_parallel(normalize_segments_for_patient)
-
-        self.logger.info(
-            f"Max segment length: {max(max(p.segments, default=0) for p in data.patients)}"
-        )
-        class_counts = binary_outcomes.drop(columns=PID_COL, errors="ignore").apply(
-            pd.Series.value_counts
-        )
-        self.logger.info(
-            "\nClass counts:\n" + class_counts.fillna(0).astype(int).to_string()
-        )
         # 5. Save all generated artifacts
         self.logger.info("Saving artifacts")
         artifacts = Artifacts(
@@ -300,11 +288,17 @@ class CausalDatasetPreparer:
 
             filtering_stats[outcome_name]["after"] = counts.to_dict()
             binary_outcomes[outcome_name] = binary_outcome
-
+        binary_outcomes = pd.DataFrame(binary_outcomes)
+        self.logger.info(
+            f"Binary exposure distribution\n{binary_exposure.value_counts()}"
+        )
+        self.logger.info(
+            f"Binary outcomes distribution\n{binary_outcomes.apply(pd.Series.value_counts)}"
+        )
         # Return the standard follow-ups as the representative DataFrame
         return (
             binary_exposure,
-            pd.DataFrame(binary_outcomes),
+            binary_outcomes,
             standard_follow_ups,
             filtering_stats,
         )
