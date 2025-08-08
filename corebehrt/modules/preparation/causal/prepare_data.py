@@ -40,7 +40,10 @@ from corebehrt.functional.preparation.utils import (
     get_non_priority_tokens,
 )
 from corebehrt.functional.utils.time import get_hours_since_epoch
-from corebehrt.functional.visualize.follow_ups import plot_follow_up_distribution
+from corebehrt.functional.visualize.follow_ups import (
+    plot_follow_up_distribution,
+    plot_followups_timeline,
+)
 from corebehrt.functional.visualize.outcomes import (
     plot_outcome_distribution,
     plot_filtering_stats,
@@ -155,6 +158,9 @@ class CausalDatasetPreparer:
             plot_follow_up_distribution(follow_ups, binary_exposure, fig_dir)
             plot_outcome_distribution(binary_outcomes, fig_dir)
             plot_filtering_stats(filtering_stats, fig_dir)
+            plot_followups_timeline(
+                exposures, outcomes, follow_ups, save_dir=fig_dir, n_random_subjects=15
+            )
         return data
 
     def _load_outcomes(self) -> Dict[str, pd.DataFrame]:
