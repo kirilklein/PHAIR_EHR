@@ -211,14 +211,13 @@ class CausalDatasetPreparer:
         """
         self.logger.info("Handling exposures and outcomes")
         filtering_stats = {}
-        data_end = self.get_data_end(self.cohort_cfg)
 
-        filtering_stats[EXPOSURE] = {"before": index_dates[PID_COL].nunique()}
+        filtering_stats[EXPOSURE] = {"before": exposures[PID_COL].nunique()}
         exposure_follow_ups = prepare_follow_ups_simple(
             index_dates,
             self.exposure_cfg.n_hours_start_follow_up,
             self.exposure_cfg.n_hours_end_follow_up,
-            data_end,
+            self.end_date,
         )
         binary_exposure = abspos_to_binary_outcome(exposure_follow_ups, exposures)
         filtering_stats[EXPOSURE]["after"] = binary_exposure.value_counts().to_dict()
@@ -231,7 +230,7 @@ class CausalDatasetPreparer:
             index_date_matching=index_date_matching,
             deaths=deaths,
             exposures=exposures,
-            data_end=data_end,
+            data_end=self.end_date,
             cfg=self.outcome_cfg,
             censor_by_death=True,
         )
@@ -243,7 +242,7 @@ class CausalDatasetPreparer:
                 index_date_matching=index_date_matching,
                 deaths=deaths,
                 exposures=exposures,
-                data_end=data_end,
+                data_end=self.end_date,
                 cfg=self.outcome_cfg,
                 censor_by_death=False,
             )
@@ -414,9 +413,9 @@ class CausalDatasetPreparer:
 
     @staticmethod
     def get_end_date(cohort_cfg):
-        time_windwos = cohort_cfg.time_windows
-        if data_end := time_windwos.get("data_end"):
-            return pd.to_datetime(data_end)
+        time_windows = cohort_cfg.time_windows
+        if data_end := time_windows.get("data_end"):
+            return pd.Timestamp(**data_end)
         else:
             return pd.Timestamp.now()
 
