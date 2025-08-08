@@ -86,7 +86,7 @@ class EffectEstimator:
         self._init_bias_introducer()
 
     def _init_plot_configs(self) -> None:
-        if self.cfg.get("plot", {}) is not None:
+        if self.cfg.get("plot", False):
             self.effect_size_plot_cfg = EffectSizePlotConfig(
                 **self.cfg.plot.get("effect_size", {})
             )
