@@ -78,25 +78,28 @@ def _plot_step_by_step_flow(ax, stats: Dict) -> None:
     initial = stats.get("initial_total", 0)
     final = stats.get("final_included", 0)
 
-    # Get exclusion totals
+    # Get totals reported by the stats object
     inclusion_stats = stats.get("excluded_by_inclusion_criteria", {})
-    exclusion_stats = stats.get("excluded_by_exclusion_criteria", {})
-
     total_excluded_by_inclusion = inclusion_stats.get("total_excluded", 0)
-    total_excluded_by_exclusion = exclusion_stats.get("total_excluded", 0)
 
-    # Calculate intermediate counts
+    # Patients remaining after inclusion is simply those meeting the inclusion expression
     after_inclusion = initial - total_excluded_by_inclusion
-    after_exclusion = after_inclusion - total_excluded_by_exclusion
 
-    # Stages and counts
+    # Patients excluded at the exclusion step should be computed CONDITIONED on having
+    # passed inclusion. This automatically accounts for overlaps between inclusion-violators
+    # and exclusion-violators.
+    excluded_at_exclusion_step = max(0, after_inclusion - final)
+
+    # After exclusion equals the final included cohort
+    # after_exclusion = after_inclusion - excluded_at_exclusion_step  # equals `final`
+
+    # Use three bars to avoid confusion: Initial -> After Inclusion -> Final (After Exclusion)
     stages = [
         "Initial\nCohort",
         "After\nInclusion",
-        "After\nExclusion",
         "Final\nCohort",
     ]
-    counts = [initial, after_inclusion, after_exclusion, final]
+    counts = [initial, after_inclusion, final]
 
     # Colors: blue for kept, progressively darker
     colors = ["#4A90E2", "#357ABD", "#2E6B9E", "#1F4F79"]
@@ -141,10 +144,10 @@ def _plot_step_by_step_flow(ax, stats: Dict) -> None:
             ),
         )
 
-    # Exclusion exclusion arrow
-    if total_excluded_by_exclusion > 0:
+    # Exclusion arrow (conditioned on having passed inclusion)
+    if excluded_at_exclusion_step > 0:
         ax.annotate(
-            f"Excluded: {total_excluded_by_exclusion:,}",
+            f"Excluded: {excluded_at_exclusion_step:,}",
             xy=(1.5, arrow_height),
             xytext=(1.5, arrow_height + max_height * 0.15),
             arrowprops=dict(arrowstyle="->", color="red", lw=3),
