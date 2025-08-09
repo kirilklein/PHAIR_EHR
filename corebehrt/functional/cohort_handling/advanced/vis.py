@@ -459,9 +459,25 @@ def plot_index_date_distribution(
 
     # 2. Create and save the histogram plot
     plt.figure(figsize=(12, 7))
-    sns.histplot(
-        data=plot_df, x=TIMESTAMP_COL, hue="group", kde=True, bins=40, element="step"
-    )
+    try:
+        sns.histplot(
+            data=plot_df,
+            x=TIMESTAMP_COL,
+            hue="group",
+            kde=True,
+            bins=40,
+            element="step",
+        )
+    except Exception as e:
+        print(f"Error plotting index date distribution: {e}")
+        sns.histplot(
+            data=plot_df,
+            x=TIMESTAMP_COL,
+            hue="group",
+            kde=False,
+            bins=40,
+            element="step",
+        )
     plt.title("Index Date Distribution (Final Cohorts)")
     plt.xlabel("Index Date")
     plt.ylabel("Patient Count")
