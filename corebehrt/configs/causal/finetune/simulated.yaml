@@ -14,10 +14,10 @@ paths:
 
 model:
   head:
-    shared_representation: true # whether to share the bigru representation for exposure and outcome
+    shared_representation: false # whether to share the bigru representation for exposure and outcome
     bidirectional: true
     bottleneck_dim: 64
-    l1_lambda: 0.3
+    l1_lambda: 0.2
     temperature: 1
   loss:
     name: bce # bce by default

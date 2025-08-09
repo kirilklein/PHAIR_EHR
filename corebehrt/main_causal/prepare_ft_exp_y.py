@@ -13,6 +13,7 @@ from corebehrt.functional.features.split import create_folds
 from corebehrt.modules.preparation.causal.prepare_data import CausalDatasetPreparer
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.config import load_config
+from corebehrt.constants.paths import COHORT_CFG
 
 CONFIG_PATH = "./corebehrt/configs/causal/finetune/prepare/ft_exp_y.yaml"
 
@@ -25,7 +26,11 @@ def main(config_path):
     logger = logging.getLogger("prepare finetune data")
     logger.info("Preparing finetune data")
     # Prepare data
-    data = CausalDatasetPreparer(cfg, logger).prepare_finetune_data(mode="tuning")
+    cohort_cfg = load_config(join(cfg.paths.cohort, COHORT_CFG))
+    cohort_cfg.save_to_yaml(join(cfg.paths.prepared_data, COHORT_CFG))
+    data = CausalDatasetPreparer(cfg, cohort_cfg, logger).prepare_finetune_data(
+        mode="tuning"
+    )
     # Save splits from cohort selection
     pids = data.get_pids()
     folds = create_folds(

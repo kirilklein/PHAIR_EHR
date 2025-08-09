@@ -189,6 +189,64 @@ class TestDrawIndexDatesStratified(unittest.TestCase):
             "Unmatchable control was incorrectly included in the final cohort.",
         )
 
+    def test_exhausted_redraw_attempts_excludes_control(self):
+        """
+        Test that a control is excluded if all potential index dates from its
+        pool are invalid, even after redrawing.
+        """
+        # Modify the cases DataFrame: make BOTH cases in k2's pool have invalid dates
+        cases_df_all_invalid = self.cases_df.copy()
+        cases_df_all_invalid.loc[
+            cases_df_all_invalid[PID_COL] == self.c4_pid, TIMESTAMP_COL
+        ] = pd.to_datetime("2009-01-01")
+        # Now, c3's date is 2015 and c4's is 2009. Both are after k2's death in 2008.
+
+        index_dates, matching = draw_index_dates_for_control_with_redraw(
+            control_pids=self.control_pids,
+            cases_df=cases_df_all_invalid,
+            patients_info=self.patients_info,
+            birth_year_tolerance=1,
+            redraw_attempts=5,  # Give it plenty of attempts
+            seed=42,
+        )
+
+        # Only k1 should be successfully matched. k2 and k3 should be excluded.
+        self.assertEqual(
+            len(index_dates), 1, "Only one control should be successfully matched."
+        )
+        self.assertEqual(
+            index_dates[PID_COL].iloc[0],
+            self.k1_pid,
+            "The only matched control should be k1.",
+        )
+
+    def test_birth_date_validation(self):
+        """
+        Test that an index date occurring before the control's birth date is invalid.
+        """
+        # Modify a case to have a very early index date
+        cases_df_early_date = self.cases_df.copy()
+        cases_df_early_date.loc[
+            cases_df_early_date[PID_COL] == self.c1_pid, TIMESTAMP_COL
+        ] = pd.to_datetime("1970-01-01")
+        # This date is before k1's birth date (1980). k1 can now only be matched to c2.
+
+        index_dates, matching = draw_index_dates_for_control_with_redraw(
+            control_pids=[self.k1_pid],  # Test only with k1 for simplicity
+            cases_df=cases_df_early_date,
+            patients_info=self.patients_info,
+            birth_year_tolerance=1,
+            seed=1,  # Use a seed that would likely pick c1 first
+        )
+
+        # k1 must be matched with c2, as c1's date is invalid.
+        match_k1 = matching[matching[CONTROL_PID_COL] == self.k1_pid]
+        self.assertEqual(
+            match_k1[EXPOSED_PID_COL].iloc[0],
+            self.c2_pid,
+            "Control was not matched with the only case having a valid birth-time index date.",
+        )
+
 
 class TestSelectTimeEligibleExposed(unittest.TestCase):
     def setUp(self):

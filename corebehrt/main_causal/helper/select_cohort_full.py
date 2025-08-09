@@ -33,6 +33,7 @@ from corebehrt.functional.cohort_handling.advanced.vis import (
     plot_cohort_stats,
     plot_multiple_cohort_stats,
     plot_age_distribution,
+    plot_index_date_distribution,
 )
 import shutil
 from corebehrt.constants.causal.paths import (
@@ -187,6 +188,12 @@ def select_cohort(
         final_index_dates_with_age=final_index_dates,
         control_pids=index_dates_filtered_control[PID_COL].unique(),
         save_path=join(save_path, STATS_PATH, "age_distribution.png"),
+        logger=logger,
+    )
+    plot_index_date_distribution(
+        final_index_dates,
+        control_pids=index_dates_filtered_control[PID_COL].unique(),
+        save_path=join(save_path, STATS_PATH, "index_date_distribution.png"),
         logger=logger,
     )
 

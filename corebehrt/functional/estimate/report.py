@@ -1,7 +1,7 @@
 import pandas as pd
 from CausalEstimate.stats.stats import compute_treatment_outcome_table
 
-from corebehrt.constants.causal.data import EXPOSURE_COL, OUTCOME
+from corebehrt.constants.causal.data import EXPOSURE_COL, OUTCOME, STATUS
 
 
 def convert_effect_to_dataframe(effect: dict) -> pd.DataFrame:
@@ -70,6 +70,6 @@ def compute_outcome_stats(analysis_df: pd.DataFrame, outcome_name: str) -> pd.Da
     """
     stats_table = compute_treatment_outcome_table(analysis_df, EXPOSURE_COL, OUTCOME)
     stats_table = stats_table.reset_index(drop=False)
-    stats_table.rename(columns={"index": "status"}, inplace=True)
+    stats_table.rename(columns={"index": STATUS}, inplace=True)
     stats_table[OUTCOME] = outcome_name
     return stats_table

@@ -95,8 +95,8 @@ def abspos_to_binary_outcome(
     merged = follow_ups.merge(outcomes, on=PID_COL, how="left")
 
     # Find outcomes within follow-up periods
-    within_followup = (merged[ABSPOS_COL] > merged[START_COL]) & (
-        merged[ABSPOS_COL] < merged[END_COL]
+    within_followup = (merged[ABSPOS_COL] >= merged[START_COL]) & (
+        merged[ABSPOS_COL] <= merged[END_COL]
     )
 
     # Get unique patient IDs who had outcomes within follow-up

@@ -10,9 +10,11 @@ from corebehrt.constants.causal.data import (
     PROBAS_CONTROL,
     PROBAS_EXPOSED,
     PS_COL,
+    TMLEAnalysisColumns,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.counterfactuals import expand_counterfactuals
+
 
 TMLE_ANALYSIS_INPUT_COLS = [
     "initial_effect_1",
@@ -121,23 +123,23 @@ def prepare_tmle_analysis_df(initial_estimates_df: pd.DataFrame) -> pd.DataFrame
     Filters for TMLE results and calculates specific analysis columns.
     Returns a dataframe ready for saving, or None if conditions are not met.
     """
-    required_cols = TMLE_ANALYSIS_INPUT_COLS + ["method", "outcome", "effect"]
-
-    if not all(col in initial_estimates_df.columns for col in required_cols):
-        print("Skipping TMLE analysis: required columns not found.")
-        return None
-
-    tmle_df = initial_estimates_df[initial_estimates_df["method"] == "TMLE"].copy()
+    RELEVANT_COLUMNS = TMLEAnalysisColumns.get_columns()
+    tmle_df = initial_estimates_df[
+        initial_estimates_df[TMLEAnalysisColumns.method] == "TMLE"
+    ].copy()
 
     if tmle_df.empty:
         print("Skipping TMLE analysis: no TMLE results found.")
         return None
 
     print("Preparing TMLE-specific analysis file.")
-    tmle_df["initial_effect"] = (
-        tmle_df["initial_effect_1"] - tmle_df["initial_effect_0"]
+    tmle_df[TMLEAnalysisColumns.initial_effect] = (
+        tmle_df[TMLEAnalysisColumns.initial_effect_1]
+        - tmle_df[TMLEAnalysisColumns.initial_effect_0]
     )
-    tmle_df["adjustment"] = tmle_df["adjustment_1"] - tmle_df["adjustment_0"]
+    tmle_df[TMLEAnalysisColumns.adjustment] = (
+        tmle_df[TMLEAnalysisColumns.adjustment_1]
+        - tmle_df[TMLEAnalysisColumns.adjustment_0]
+    )
     tmle_df = tmle_df.round(5)
-    final_cols = required_cols + ["initial_effect", "adjustment"]
-    return tmle_df[final_cols]
+    return tmle_df[RELEVANT_COLUMNS]
