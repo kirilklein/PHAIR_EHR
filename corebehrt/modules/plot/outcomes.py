@@ -24,7 +24,6 @@ class OutcomePlotter:
     def __init__(self, outcomes_path: str, figures_path: str, config: PlotConfig):
         self.outcomes_path = outcomes_path
         self.figures_path = figures_path
-        os.makedirs(figures_path, exist_ok=True)
         self.config = config
 
         # --- State variables for iterative plotting ---
