@@ -67,11 +67,14 @@ def create_outcomes(loader: ShardLoader, cfg: Config, logger: logging.Logger) ->
         logger.info("Initializing plotting process...")
         # Lazy import to avoid hard dependency when plotting is disabled
         from corebehrt.modules.plot.outcomes import OutcomePlotter, PlotConfig
+
         # Normalize cfg.plot in case it's a Mapping-like object (e.g., OmegaConf)
-        plot_kwargs = plot_section if isinstance(plot_section, dict) else dict(plot_section)
+        plot_kwargs = (
+            plot_section if isinstance(plot_section, dict) else dict(plot_section)
+        )
         plot_config = PlotConfig(**plot_kwargs) if plot_kwargs else PlotConfig()
         figures_path = join(cfg.paths.outcomes, "figures")
-        
+
         # Ensure figures directory exists
         os.makedirs(figures_path, exist_ok=True)
         plotter = OutcomePlotter(
@@ -84,6 +87,7 @@ def create_outcomes(loader: ShardLoader, cfg: Config, logger: logging.Logger) ->
             logger.info("Plotting process finished.")
         except Exception:
             logger.exception("Plotting process failed; continuing without plots.")
+
 
 if __name__ == "__main__":
     args = get_args(CONFIG_PATH)
