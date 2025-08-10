@@ -192,6 +192,7 @@ class EffectSizePlotter(BasePlotter):
     ):
         for method in self.methods:
             self._draw_method_data(ax, method, page_df, outcomes_on_page)
+        self._draw_true_effect(ax, page_df, outcomes_on_page)
 
     def _configure_ax(self, ax: mpl.axes.Axes, outcomes_on_page: List[str]):
         ax.axhline(0, ls="--", color="grey")
@@ -200,17 +201,32 @@ class EffectSizePlotter(BasePlotter):
         ax.set_xlabel("Outcome", fontsize=14)
         ax.set_ylabel("Effect size", fontsize=14)
         handles, labels = ax.get_legend_handles_labels()
+
+        # Deduplicate labels for clarity in the legend
+        unique_labels = {}
+        for handle, label in zip(handles, labels):
+            if label not in unique_labels:
+                unique_labels[label] = handle
+
+        legend_handles = list(unique_labels.values())
+        legend_labels = list(unique_labels.keys())
+
         if self.config.plot_individual_effects:
             ax.legend(
-                handles,
-                labels,
+                legend_handles,
+                legend_labels,
                 title="Estimation type",
                 bbox_to_anchor=(1.02, 0.5),
                 loc="center left",
             )
             plt.subplots_adjust(right=0.8)  # Adjust layout if legend is outside
         else:
-            ax.legend(title="Estimation type", loc="lower right")
+            ax.legend(
+                handles=legend_handles,
+                labels=legend_labels,
+                title="Estimation type",
+                loc="best",
+            )
 
     def _draw_method_data(
         self,
@@ -275,6 +291,29 @@ class EffectSizePlotter(BasePlotter):
                 markersize=5,
                 alpha=0.7,
                 label=f"{method.upper()} Y(0)",
+            )
+
+    def _draw_true_effect(
+        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+    ):
+        if EffectColumns.true_effect not in page_df.columns:
+            return
+        true_effects = page_df.groupby(OUTCOME)[EffectColumns.true_effect].first()
+        x_coords, y_coords = [], []
+        for i, outcome in enumerate(outcomes_on_page):
+            if outcome in true_effects.index and pd.notna(true_effects[outcome]):
+                x_coords.append(i)
+                y_coords.append(true_effects[outcome])
+        if x_coords:
+            ax.plot(
+                x_coords,
+                y_coords,
+                "*",
+                markersize=12,
+                color="black",
+                label="True Effect",
+                linestyle="None",
+                zorder=5,
             )
 
 
