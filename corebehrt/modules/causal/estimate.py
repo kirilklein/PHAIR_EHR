@@ -194,10 +194,7 @@ class EffectEstimator:
         create_contingency_table_plot(
             combined_stats_df,
             join(fig_dir, "contingency_table"),
-            ContingencyPlotConfig(
-                max_outcomes_per_figure=self.effect_size_plot_cfg.max_outcomes_per_figure,
-                max_number_of_figures=self.effect_size_plot_cfg.max_number_of_figures,
-            ),
+            self.contingency_plot_cfg,
             "Patient Counts by Treatment Status and Outcome",
         )
         create_effect_size_plot(

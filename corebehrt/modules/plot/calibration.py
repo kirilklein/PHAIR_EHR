@@ -128,10 +128,9 @@ class PlottingManager:
         for name in self.outcomes_to_plot:
             df[f"diff_{name}"] = df[f"{CF_PROBAS}_{name}"] - df[f"{PROBAS}_{name}"]
 
-        df["ipw"] = np.where(
-            df[EXPOSURE_COL] == 1, 1 / df[PS_COL], 1 / (1 - df[PS_COL])
-        )
-
+        # Avoid inf/NaN when PS hits 0 or 1
+        ps = df[PS_COL].clip(1e-6, 1 - 1e-6)
+        df["ipw"] = np.where(df[EXPOSURE_COL] == 1, 1.0 / ps, 1.0 / (1.0 - ps))
         # Plot IPW distribution
         fig, ax = plt.subplots()
         plot_weights_hist(

@@ -33,7 +33,7 @@ def plot_outcome_distribution(
         plt.xlabel("Proportion of Positive Outcomes")
         plt.ylabel("Outcomes")
         plt.title("Distribution of Positive Outcomes")
-        plt.xlim(0, 1)
+        plt.xlim(0, 1.05)
 
         for bar in bars:
             width = bar.get_width()

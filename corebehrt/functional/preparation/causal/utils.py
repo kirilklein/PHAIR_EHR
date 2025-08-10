@@ -30,8 +30,15 @@ def assign_groups_to_followups(
         follow_ups[GROUP_COL] = follow_ups[PID_COL]
         return follow_ups
 
+    # Guard against duplicate control IDs to prevent ambiguous mapping
+    dupes = index_date_matching[CONTROL_PID_COL].duplicated()
+    if dupes.any():
+        raise ValueError(
+            "Duplicate control PIDs detected in index_date_matching: "
+            f"{index_date_matching.loc[dupes, CONTROL_PID_COL].unique()}"
+        )
     # 1. Create a map from a control's ID to their matched exposed patient's ID.
-    #    This series will have control_pids as the index and exposed_pids as values.
+    #    This series will have control_pids as the index and exposed_pids as values.#
     control_to_group_map = pd.Series(
         index_date_matching[EXPOSED_PID_COL].values,
         index=index_date_matching[CONTROL_PID_COL],

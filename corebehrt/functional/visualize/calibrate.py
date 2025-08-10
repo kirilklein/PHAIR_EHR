@@ -46,6 +46,8 @@ def plot_weights_hist(
     max_count = max(
         np.quantile(counts0, y_max_quantile), np.quantile(counts1, y_max_quantile)
     )
+    if max_count == 0:
+        max_count = max(counts0.max(), counts1.max())
 
     ax.hist(
         group0_data,
