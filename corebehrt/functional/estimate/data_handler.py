@@ -124,10 +124,25 @@ def prepare_tmle_analysis_df(initial_estimates_df: pd.DataFrame) -> pd.DataFrame
     Returns a dataframe ready for saving, or None if conditions are not met.
     """
     RELEVANT_COLUMNS = TMLEAnalysisColumns.get_columns()
-    tmle_df = initial_estimates_df[
-        initial_estimates_df[TMLEAnalysisColumns.method] == "TMLE"
-    ].copy()
 
+    # Validate required inputs exist prior to filtering/derivations
+    required_input_cols = {
+        TMLEAnalysisColumns.method,
+        TMLEAnalysisColumns.initial_effect_1,
+        TMLEAnalysisColumns.initial_effect_0,
+        TMLEAnalysisColumns.adjustment_1,
+        TMLEAnalysisColumns.adjustment_0,
+    }
+    missing_input = sorted(
+        col for col in required_input_cols if col not in initial_estimates_df.columns
+    )
+    if missing_input:
+        raise ValueError(f"TMLE analysis missing required columns: {missing_input}")
+
+    # Filter TMLE rows
+    tmle_df = initial_estimates_df.loc[
+        initial_estimates_df[TMLEAnalysisColumns.method].eq("TMLE")
+    ].copy()
     if tmle_df.empty:
         print("Skipping TMLE analysis: no TMLE results found.")
         return None

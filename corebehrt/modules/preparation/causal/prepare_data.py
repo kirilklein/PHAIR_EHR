@@ -119,18 +119,16 @@ class CausalDatasetPreparer:
         exposures, index_dates, outcomes = self._filter_dataframes_by_pids(
             pids, exposures, index_dates, outcomes
         )
-
+        if ABSPOS_COL not in index_dates.columns:
+            index_dates[ABSPOS_COL] = get_hours_since_epoch(index_dates[TIMESTAMP_COL])
         # 2. Censor, truncate, and normalize sequences
         self._censor_and_truncate_sequences(data, index_dates)
         data.patients = data.process_in_parallel(normalize_segments_for_patient)
         self.logger.info(
             f"Max segment length: {max(max(p.segments, default=0) for p in data.patients)}"
         )
-
         # 3. Compute labels and outcomes
-        index_dates[ABSPOS_COL] = get_hours_since_epoch(index_dates[TIMESTAMP_COL])
         deaths = self._extract_deaths(data)
-
         self.logger.info("Computing binary labels")
         binary_exposure, binary_outcomes, follow_ups, filtering_stats = (
             self._compute_binary_labels(

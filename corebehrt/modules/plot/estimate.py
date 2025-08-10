@@ -403,9 +403,11 @@ class AdjustmentPlotter(BasePlotter):
         dodge = 0.15  # Offset for Y0 and Y1
 
         for i, outcome in enumerate(outcomes_on_page):
-            row = page_df[page_df[OUTCOME] == outcome].iloc[0]
-
-            # --- Extract data points for clarity ---
+            outcome_df = page_df[page_df[OUTCOME] == outcome]
+            if outcome_df.empty:
+                logger.warning(f"No data found for outcome: {outcome}")
+                continue
+            row = outcome_df.iloc[0]
             y0_initial = row[TMLEAnalysisColumns.initial_effect_0]
             y0_adj = row[TMLEAnalysisColumns.adjustment_0]
             y0_final = y0_initial + y0_adj
