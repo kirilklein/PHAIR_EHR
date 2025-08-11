@@ -401,7 +401,7 @@ class CausalEHRTrainer(EHRTrainer):
             )
 
     def _accumulate_encodings(self, outputs, prediction_data):
-        prediction_data["pids"].extend(outputs.pids)
+        prediction_data["pids"].extend(outputs.pids.tolist())
         prediction_data["patient_encodings"].append(outputs.patient_encodings.cpu())
         prediction_data["token_ids"].append(outputs.token_ids.cpu())
         prediction_data["token_encodings"].append(outputs.token_encodings.cpu())
