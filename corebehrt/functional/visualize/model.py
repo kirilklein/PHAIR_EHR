@@ -8,128 +8,27 @@ from typing import Union, Dict, List, Optional
 import pandas as pd
 
 
-def visualize_weight_distributions(
-    model_or_state_dict: Union[nn.Module, Dict[str, torch.Tensor]],
-    layer_filter: Optional[Union[str, List[str]]] = None,
-    bins: int = 100,
-    max_subplots_per_fig: int = 12,
-    cols: int = 4,
-    plot_type: str = "hist_kde",
-    title: str = "Weight Distributions",
-    save_dir: Optional[str] = None,
-) -> None:
-    """
-    Analyzes and visualizes the weight distributions of a PyTorch model.
-
-    This function generates histograms and/or kernel density estimates for the
-    weights of specified layers, and prints summary statistics (mean, std dev,
-    and sparsity). If the number of layers to plot exceeds `max_subplots_per_fig`,
-    multiple figures will be generated.
-
-    Args:
-        model_or_state_dict (Union[nn.Module, Dict[str, torch.Tensor]]):
-            A PyTorch model (nn.Module) or its state_dict.
-        layer_filter (Optional[Union[str, List[str]]], optional):
-            A string or list of strings to filter layer names. Only layers
-            whose names contain any of these substrings will be plotted.
-            If None, all layers with weights are plotted. Defaults to None.
-        bins (int, optional):
-            Number of bins for the histograms. Defaults to 100.
-        max_subplots_per_fig (int, optional):
-            The maximum number of subplots to show in a single figure.
-            Defaults to 9.
-        cols (int, optional):
-            Number of columns in the plot grid. Defaults to 3.
-        plot_type (str, optional):
-            Type of plot to generate. Options are:
-            - 'hist_kde': Histogram with a KDE overlay (default).
-            - 'hist': Histogram only.
-            - 'kde': KDE only.
-        title (str, optional):
-            The main title for the entire figure. Defaults to 'Weight Distributions'.
-        print_stats (bool, optional):
-            If True, prints a table with summary statistics for each weight tensor.
-            Defaults to True.
-        save_dir (Optional[str], optional):
-            If provided, the directory where plots will be saved. The directory
-            will be created if it doesn't exist. Plots are saved as
-            'weight_distributions_{i}.png'. If None, plots are shown directly.
-            Defaults to None.
-    """
+# --- Helper for plotting distributions for a single group ---
+def _plot_distributions_for_group(
+    weights_in_group: Dict[str, np.ndarray],
+    group_name: str,
+    base_title: str,
+    save_dir: Optional[str],
+    bins: int,
+    max_subplots_per_fig: int,
+    cols: int,
+):
+    """Helper to generate and save/show distribution plots for a group of layers."""
     if save_dir:
         save_dir = os.path.join(save_dir, "weight_distributions")
         os.makedirs(save_dir, exist_ok=True)
 
-    # --- 1. Get State Dictionary and Extract Weights ---
-    if isinstance(model_or_state_dict, dict):
-        state_dict = model_or_state_dict
-    elif hasattr(model_or_state_dict, "state_dict"):
-        state_dict = model_or_state_dict.state_dict()
-    else:
-        raise TypeError("Input must be a PyTorch model (nn.Module) or a state_dict.")
-
-    weights_data = {}
-    stats = []
-
-    for name, param in state_dict.items():
-        if param.is_floating_point():
-            param_data = param.data.cpu().numpy()
-            weights_data[name] = param_data.flatten()
-
-            # Calculate stats
-            mean = np.mean(param_data)
-            std = np.std(param_data)
-            close_to_zero_pct = (
-                np.isclose(param_data, 0, atol=1e-5).sum() / param_data.size
-            ) * 100
-            stats.append(
-                {
-                    "name": name,
-                    "shape": list(param.shape),
-                    "mean": mean,
-                    "std": std,
-                    "zeros_pct": close_to_zero_pct,
-                }
-            )
-
-    if not weights_data:
-        print("No weight tensors found in the model/state_dict.")
-        return
-
-    plot_weight_statistics(
-        stats,
-        base_title="Model Weight Statistics",
-        output_path=os.path.join(save_dir, "weight_statistics.png"),
-    )
-
-    # --- 3. Filter Layers for Plotting ---
-    if layer_filter:
-        if isinstance(layer_filter, str):
-            layer_filter = [layer_filter]
-
-        filtered_weights = {
-            name: data
-            for name, data in weights_data.items()
-            if any(f in name for f in layer_filter)
-        }
-        if not filtered_weights:
-            print(
-                f"\nWarning: No layers found matching the filter: {layer_filter}. Nothing to plot."
-            )
-            return
-    else:
-        filtered_weights = weights_data
-
-    # --- 4. Visualize Weight Distributions ---
-    layers_to_plot = list(filtered_weights.items())
+    layers_to_plot = list(weights_in_group.items())
     num_layers = len(layers_to_plot)
     if num_layers == 0:
         return
 
-    print(
-        f"\nGenerating {num_layers} weight distribution plot(s) across multiple figures..."
-    )
-
+    print(f"\n--- Generating plots for '{group_name}' group... ---")
     num_figures = int(np.ceil(num_layers / max_subplots_per_fig))
 
     for fig_num in range(num_figures):
@@ -140,66 +39,146 @@ def visualize_weight_distributions(
 
         rows = int(np.ceil(num_plots_on_fig / cols))
 
-        plt.style.use("seaborn-v0_8-whitegrid")
+        # --- CHANGE: Make subplots shorter for a more compact view ---
         fig, axes = plt.subplots(
-            rows, cols, figsize=(cols * 4.5, rows * 3.5), constrained_layout=True
+            rows, cols, figsize=(cols * 4, rows * 1.5), constrained_layout=True
         )
         axes = np.array(axes).flatten()
 
         for i, (name, data) in enumerate(chunk_items):
             ax = axes[i]
-
-            if plot_type == "hist_kde":
-                sns.histplot(
-                    data,
-                    bins=bins,
-                    ax=ax,
-                    kde=True,
-                    color="#4c72b0",
-                    alpha=0.6,
-                    edgecolor="white",
-                )
-            elif plot_type == "hist":
-                sns.histplot(
-                    data,
-                    bins=bins,
-                    ax=ax,
-                    kde=False,
-                    color="#55a868",
-                    alpha=0.7,
-                    edgecolor="white",
-                )
-            elif plot_type == "kde":
-                sns.kdeplot(data, ax=ax, color="#c44e52", fill=True, alpha=0.5)
-            else:
-                raise ValueError(
-                    "plot_type must be one of 'hist_kde', 'hist', or 'kde'"
-                )
-
-            ax.axvline(x=0, color="red", linestyle="--", linewidth=1.0, alpha=0.7)
-            ax.set_title(name, fontsize=16, wrap=True, y=1.02)
+            sns.histplot(
+                data,
+                bins=bins,
+                ax=ax,
+                kde=True,
+                color="#4c72b0",
+                alpha=0.6,
+                edgecolor=None,
+            )
+            ax.axvline(x=0, color="red", linestyle="--", linewidth=1.2, alpha=0.7)
+            # --- CHANGE: Smaller font size for titles to fit compact layout ---
+            ax.set_title(name, fontsize=10, wrap=True)
             ax.set_ylabel("")
+            ax.set_xlabel("")
             ax.set_yticks([])
-            ax.tick_params(axis="x", labelsize=11)
+            ax.tick_params(axis="x", labelsize=9)
             ax.ticklabel_format(style="sci", axis="x", scilimits=(-2, 2))
 
         for i in range(num_plots_on_fig, len(axes)):
             axes[i].set_visible(False)
 
-        fig_title = (
-            f"{title} (Part {fig_num + 1}/{num_figures})" if num_figures > 1 else title
-        )
-        fig.suptitle(fig_title, fontsize=18, weight="bold")
+        fig_title = f"{base_title} - {group_name}"
+        if num_figures > 1:
+            fig_title += f" (Part {fig_num + 1}/{num_figures})"
+        fig.suptitle(fig_title, fontsize=16, weight="bold")
 
         if save_dir:
-            save_path = os.path.join(
-                save_dir, f"weight_distributions_part_{fig_num + 1}.png"
-            )
-            plt.savefig(save_path)
+            filename = f"{group_name.lower()}_part_{fig_num + 1}.png"
+            save_path = os.path.join(save_dir, filename)
+            plt.savefig(save_path, dpi=200, bbox_inches="tight")
             print(f"Saved figure to {save_path}")
             plt.close(fig)
         else:
             plt.show()
+
+
+# --- Main visualization function, now an orchestrator ---
+def visualize_weight_distributions(
+    model_or_state_dict: Union[nn.Module, Dict[str, torch.Tensor]],
+    bins: int = 75,
+    max_subplots_per_fig: int = 16,  # Increased default
+    cols: int = 4,
+    base_title: str = "Weight Distributions",
+    save_dir: Optional[str] = None,
+):
+    """
+    Analyzes and visualizes the weight distributions and statistics of a PyTorch model,
+    grouping layers by component.
+
+    This function generates two sets of plots:
+    1. Histograms of weight distributions for each layer.
+    2. Bar charts of weight statistics (mean, std, sparsity) for each layer group.
+    """
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+
+    if isinstance(model_or_state_dict, dict):
+        state_dict = model_or_state_dict
+    elif hasattr(model_or_state_dict, "state_dict"):
+        state_dict = model_or_state_dict.state_dict()
+    else:
+        raise TypeError("Input must be a PyTorch model (nn.Module) or a state_dict.")
+
+    all_weights = {
+        name: param.data.cpu().numpy().flatten()
+        for name, param in state_dict.items()
+        if param.is_floating_point()
+    }
+
+    if not all_weights:
+        print("No weight tensors found in the model/state_dict.")
+        return
+
+    # --- Group weights by component ---
+    grouped_weights = {
+        "Embeddings": {},
+        "Poolers": {},
+        "Heads": {},
+        "Loss": {},
+        "Body": {},
+    }
+    for name, data in all_weights.items():
+        if name.startswith("embeddings."):
+            grouped_weights["Embeddings"][name] = data
+        elif "pooler" in name:
+            grouped_weights["Poolers"][name] = data
+        elif "head" in name:
+            grouped_weights["Heads"][name] = data
+        elif "loss" in name:
+            grouped_weights["Loss"][name] = data
+        else:
+            grouped_weights["Body"][name] = data
+
+    # --- Plot distributions for each group ---
+    for group_name, weights_in_group in grouped_weights.items():
+        if weights_in_group:
+            _plot_distributions_for_group(
+                weights_in_group,
+                group_name,
+                base_title,
+                save_dir,
+                bins,
+                max_subplots_per_fig,
+                cols,
+            )
+        else:
+            print(f"Skipping '{group_name}' distribution plot as it has no layers.")
+
+    # --- Calculate and plot weight statistics ---
+    print("\n--- Calculating and plotting weight statistics... ---")
+    stats = []
+    for name, data in all_weights.items():
+        if data.size == 0:
+            continue
+        stats.append(
+            {
+                "name": name,
+                "mean": np.mean(data),
+                "std": np.std(data),
+                "zeros_pct": 100 * (np.sum(data == 0) / data.size),
+            }
+        )
+
+    stats_output_path = None
+    if save_dir:
+        stats_output_path = os.path.join(save_dir, "weight_statistics.png")
+
+    _plot_weight_statistics(
+        stats=stats,
+        base_title="Model Weight Statistics",
+        output_path=stats_output_path,
+    )
 
 
 def _create_single_stats_plot(df: pd.DataFrame, title: str):
@@ -270,7 +249,7 @@ def _create_single_stats_plot(df: pd.DataFrame, title: str):
                 # --- CHANGE 2: Larger annotation font size ---
                 fontsize=10,
                 color="white" if ha == "right" else "black",
-                weight='bold' if ha == 'right' else 'normal'
+                weight="bold" if ha == "right" else "normal",
             )
 
     fig.suptitle(title, fontsize=20, weight="bold")
@@ -278,7 +257,7 @@ def _create_single_stats_plot(df: pd.DataFrame, title: str):
 
 
 # --- Main orchestrator function (with your new "Loss" group) ---
-def plot_weight_statistics(
+def _plot_weight_statistics(
     stats: List[Dict],
     base_title: str = "Model Weight Statistics",
     output_path: Optional[str] = None,
@@ -286,6 +265,7 @@ def plot_weight_statistics(
     """
     Creates high-quality, grouped bar charts of model weight statistics.
     Layers are grouped into 'Embeddings', 'Poolers', 'Heads', 'Loss', and 'Body'.
+    This is intended to be a helper function.
 
     Args:
         stats (List[Dict]): A list of dictionaries with stats for all layers.
