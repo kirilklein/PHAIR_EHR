@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
-from corebehrt.constants.data import ATTENTION_MASK
+from corebehrt.constants.data import ATTENTION_MASK, CONCEPT_FEAT, PID_COL
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
 from corebehrt.modules.model.model import CorebehrtEncoder
 from corebehrt.modules.trainer.utils import limit_dict_for_logging, pos_weight_to_alpha
@@ -160,7 +160,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             return torch.tensor(pos_weight_value)
         return None
 
-    def forward(self, batch: dict, cf: bool = False):
+    def forward(self, batch: dict, cf: bool = False, return_encodings: bool = False):
         """Forward pass for causal inference."""
         outputs = super().forward(batch)
         sequence_output = outputs[0]
@@ -175,6 +175,8 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             outcome_reprs = {
                 outcome_name: bottleneck_repr for outcome_name in self.outcome_names
             }
+            if return_encodings:
+                outputs.patient_encodings = shared_repr
         else:
             exposure_repr = self.exposure_pooler(sequence_output, attention_mask)
             outcome_reprs = {
@@ -183,6 +185,13 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
                 )
                 for outcome_name in self.outcome_names
             }
+            if return_encodings:
+                outputs.patient_encodings = exposure_repr  # Or some combination
+
+        if return_encodings:
+            outputs.token_encodings = sequence_output
+            outputs.pids = batch[PID_COL]
+            outputs.token_ids = batch[CONCEPT_FEAT]
 
         # --- Exposure Prediction ---
         exposure_logits = self.exposure_head(exposure_repr)

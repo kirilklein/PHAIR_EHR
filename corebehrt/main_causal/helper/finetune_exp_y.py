@@ -119,7 +119,9 @@ def finetune_fold(
     trainer.val_dataset = val_dataset
 
     logger.info("Evaluating on validation set")
-    *_, val_prediction_data = trainer._evaluate(mode="val")
+    *_, val_prediction_data = trainer._evaluate(
+        mode="val", save_encodings=cfg.get("save_encodings", False)
+    )
     if val_prediction_data is not None:
         trainer.process_causal_classification_results(
             val_prediction_data, mode="val", save_results=True
@@ -129,7 +131,9 @@ def finetune_fold(
         logger.info("Evaluating on test set")
         test_dataset = ExposureOutcomesDataset(test_data.patients)
         trainer.test_dataset = test_dataset
-        *_, test_prediction_data = trainer._evaluate(mode="test")
+        *_, test_prediction_data = trainer._evaluate(
+            mode="test", save_encodings=cfg.get("save_encodings", False)
+        )
         if test_prediction_data is not None:
             trainer.process_causal_classification_results(
                 test_prediction_data, mode="test", save_results=True
