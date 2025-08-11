@@ -172,7 +172,9 @@ def visualize_weight_distributions(
 
     stats_output_path = None
     if save_dir:
-        stats_output_path = os.path.join(save_dir, "weight_statistics.png")
+        # --- CHANGE: Save stats plots in the same subdirectory as distributions ---
+        stats_dir = os.path.join(save_dir, "weight_distributions")
+        stats_output_path = os.path.join(stats_dir, "weight_statistics.png")
 
     _plot_weight_statistics(
         stats=stats,
