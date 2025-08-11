@@ -12,8 +12,8 @@ def visualize_weight_distributions(
     model_or_state_dict: Union[nn.Module, Dict[str, torch.Tensor]],
     layer_filter: Optional[Union[str, List[str]]] = None,
     bins: int = 100,
-    max_subplots_per_fig: int = 15,
-    cols: int = 5,
+    max_subplots_per_fig: int = 12,
+    cols: int = 4,
     plot_type: str = "hist_kde",
     title: str = "Weight Distributions",
     save_dir: Optional[str] = None,
@@ -177,7 +177,7 @@ def visualize_weight_distributions(
                 )
 
             ax.axvline(x=0, color="red", linestyle="--", linewidth=1.0, alpha=0.7)
-            ax.set_title(name, fontsize=18, wrap=True, y=1.02)
+            ax.set_title(name, fontsize=16, wrap=True, y=1.02)
             ax.set_ylabel("")
             ax.set_yticks([])
             ax.tick_params(axis="x", labelsize=11)
@@ -202,105 +202,37 @@ def visualize_weight_distributions(
             plt.show()
 
 
-def plot_weight_statistics(
-    stats: List[Dict],
-    base_title: str = "Model Weight Statistics",
-    output_path: Optional[str] = None,
-) -> None:
-    """
-    Creates high-quality, grouped bar charts of model weight statistics.
-    Layers are grouped into 'Embeddings', 'Poolers', 'Heads', and 'Body'.
-
-    Args:
-        stats (List[Dict]): A list of dictionaries with stats for all layers.
-        base_title (str): The base title for all figures.
-        output_path (Optional[str]): If provided, saves the figures to files
-            with a group-specific suffix (e.g., 'path_embeddings.png').
-            If None, displays the plots interactively.
-    """
-    if not stats:
-        print("No statistics provided to plot.")
-        return
-
-    # --- 1. Group the stats based on layer names ---
-    grouped_stats = {
-        "Embeddings": [],
-        "Poolers": [],
-        "Heads": [],
-        "Body": [],
-        "Loss": [],
-    }
-    for s in stats:
-        name = s["name"]
-        if name.startswith("embeddings."):
-            grouped_stats["Embeddings"].append(s)
-        elif "pooler" in name:
-            grouped_stats["Poolers"].append(s)
-        elif "heads" in name:
-            grouped_stats["Heads"].append(s)
-        elif "loss" in name:
-            grouped_stats["Loss"].append(s)
-        else:
-            grouped_stats["Body"].append(s)
-
-    # --- 2. Iterate through groups and plot each one ---
-    for group_name, group_data in grouped_stats.items():
-        if not group_data:
-            print(f"Skipping '{group_name}' group as it has no layers.")
-            continue
-
-        print(f"\n--- Generating plot for '{group_name}' group... ---")
-
-        df = pd.DataFrame(group_data).set_index("name")
-        df = df.iloc[::-1]  # Plot first layer at the top
-
-        fig_title = f"{base_title} - {group_name}"
-        fig = _create_single_stats_plot(df, title=fig_title)
-
-        # --- 3. Save or show the figure for the current group ---
-        if output_path:
-            # Create a unique filename for each group plot
-            path_parts = os.path.splitext(output_path)
-            group_output_path = f"{path_parts[0]}_{group_name.lower()}{path_parts[1]}"
-
-            output_dir = os.path.dirname(group_output_path)
-            if output_dir:
-                os.makedirs(output_dir, exist_ok=True)
-
-            plt.savefig(group_output_path, dpi=200, bbox_inches="tight")
-            print(f"Saved weight statistics plot to {group_output_path}")
-            plt.close(fig)  # Close the figure to free memory
-        else:
-            plt.show()
-
-
 def _create_single_stats_plot(df: pd.DataFrame, title: str):
     """
     Creates a single figure with 3 subplots for a given DataFrame of stats.
     This is a helper function to be called by the main plotter.
     """
-    # Adjust figure height based on the number of layers for better readability
-    fig_height = max(4, len(df) * 0.5)
+    # --- CHANGE 1: Tighter vertical spacing ---
+    # Reducing the multiplier from 0.5 to 0.4 makes the plot more compact.
+    fig_height = max(4, len(df) * 0.4)
 
-    # Use constrained_layout=True for robust automatic layout management
     fig, axes = plt.subplots(
         1, 3, figsize=(18, fig_height), sharey=True, constrained_layout=True
     )
     plt.style.use("seaborn-v0_8-whitegrid")
 
+    # --- Use a thicker bar width to reduce whitespace between bars ---
+    bar_width = 0.85
+
     # --- Plot 1: Mean (μ) ---
     ax1 = axes[0]
     colors_mean = plt.cm.RdBu_r(np.linspace(0.1, 0.9, len(df)))
-    df["mean"].plot(kind="barh", ax=ax1, color=colors_mean, width=0.5)
+    df["mean"].plot(kind="barh", ax=ax1, color=colors_mean, width=bar_width)
     ax1.set_title("Mean Weight Value (μ)", fontsize=14, weight="bold")
     ax1.set_xlabel("Value")
     ax1.axvline(0, color="black", linestyle="--", linewidth=1, alpha=0.7)
     ax1.grid(axis="x", linestyle="--", alpha=0.6)
+    ax1.tick_params(axis="y", labelsize=12)
 
     # --- Plot 2: Standard Deviation (σ) ---
     ax2 = axes[1]
     colors_std = plt.cm.viridis_r(np.linspace(0.1, 0.8, len(df)))
-    df["std"].plot(kind="barh", ax=ax2, color=colors_std, width=0.5)
+    df["std"].plot(kind="barh", ax=ax2, color=colors_std, width=bar_width)
     ax2.set_title("Standard Deviation (σ)", fontsize=14, weight="bold")
     ax2.set_xlabel("Value")
     ax2.grid(axis="x", linestyle="--", alpha=0.6)
@@ -308,10 +240,10 @@ def _create_single_stats_plot(df: pd.DataFrame, title: str):
     # --- Plot 3: Sparsity (% Zeros) ---
     ax3 = axes[2]
     colors_zeros = plt.cm.Reds(np.linspace(0.2, 0.8, len(df)))
-    df["zeros_pct"].plot(kind="barh", ax=ax3, color=colors_zeros, width=0.5)
+    df["zeros_pct"].plot(kind="barh", ax=ax3, color=colors_zeros, width=bar_width)
     ax3.set_title("Sparsity (% Zeros)", fontsize=14, weight="bold")
     ax3.set_xlabel("Percentage (%)")
-    ax3.set_xlim(0, 101)  # Set limit slightly past 100 for labels
+    ax3.set_xlim(0, 101)
     ax3.grid(axis="x", linestyle="--", alpha=0.6)
 
     # Add value labels to the bars for clarity
@@ -335,9 +267,82 @@ def _create_single_stats_plot(df: pd.DataFrame, title: str):
                 text,
                 va="center",
                 ha=ha,
-                fontsize=9,
+                # --- CHANGE 2: Larger annotation font size ---
+                fontsize=10,
                 color="white" if ha == "right" else "black",
+                weight='bold' if ha == 'right' else 'normal'
             )
 
     fig.suptitle(title, fontsize=20, weight="bold")
     return fig
+
+
+# --- Main orchestrator function (with your new "Loss" group) ---
+def plot_weight_statistics(
+    stats: List[Dict],
+    base_title: str = "Model Weight Statistics",
+    output_path: Optional[str] = None,
+) -> None:
+    """
+    Creates high-quality, grouped bar charts of model weight statistics.
+    Layers are grouped into 'Embeddings', 'Poolers', 'Heads', 'Loss', and 'Body'.
+
+    Args:
+        stats (List[Dict]): A list of dictionaries with stats for all layers.
+        base_title (str): The base title for all figures.
+        output_path (Optional[str]): If provided, saves the figures to files
+            with a group-specific suffix (e.g., 'path_embeddings.png').
+            If None, displays the plots interactively.
+    """
+    if not stats:
+        print("No statistics provided to plot.")
+        return
+
+    # --- 1. Group the stats based on layer names (with Loss group) ---
+    grouped_stats = {
+        "Embeddings": [],
+        "Poolers": [],
+        "Heads": [],
+        "Loss": [],
+        "Body": [],
+    }
+    for s in stats:
+        name = s["name"]
+        if name.startswith("embeddings."):
+            grouped_stats["Embeddings"].append(s)
+        elif "pooler" in name:
+            grouped_stats["Poolers"].append(s)
+        elif "head" in name:
+            grouped_stats["Heads"].append(s)
+        elif "loss" in name:
+            grouped_stats["Loss"].append(s)
+        else:
+            grouped_stats["Body"].append(s)
+
+    # --- 2. Iterate through groups and plot each one ---
+    for group_name, group_data in grouped_stats.items():
+        if not group_data:
+            print(f"Skipping '{group_name}' group as it has no layers.")
+            continue
+
+        print(f"\n--- Generating plot for '{group_name}' group... ---")
+
+        df = pd.DataFrame(group_data).set_index("name")
+        df = df.iloc[::-1]  # Plot first layer at the top
+
+        fig_title = f"{base_title} - {group_name}"
+        fig = _create_single_stats_plot(df, title=fig_title)
+
+        # --- 3. Save or show the figure for the current group ---
+        if output_path:
+            path_parts = os.path.splitext(output_path)
+            group_output_path = f"{path_parts[0]}_{group_name.lower()}{path_parts[1]}"
+            output_dir = os.path.dirname(group_output_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+
+            plt.savefig(group_output_path, dpi=200, bbox_inches="tight")
+            print(f"Saved weight statistics plot to {group_output_path}")
+            plt.close(fig)
+        else:
+            plt.show()
