@@ -14,6 +14,7 @@ import torch
 from corebehrt.azure import setup_metrics_dir
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.trainer.setup import replace_steps_with_epochs
+from corebehrt.functional.visualize.model import visualize_weight_distributions
 from corebehrt.modules.preparation.causal.dataset import (
     CausalPatientDataset,
     ExposureOutcomesDataset,
@@ -114,6 +115,7 @@ def finetune_fold(
     model = modelmanager_trained.initialize_finetune_model(
         checkpoint, outcomes, exposures
     )
+    visualize_weight_distributions(model, save_dir=join(fold_folder, "figs"))
 
     trainer.model = model
     trainer.val_dataset = val_dataset
