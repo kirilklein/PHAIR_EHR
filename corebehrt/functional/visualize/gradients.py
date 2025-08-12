@@ -5,33 +5,91 @@ import numpy as np
 import torch.nn as nn
 from torch.optim import Optimizer
 from torch.cuda.amp import GradScaler
-from typing import Callable, Optional, Tuple, Dict, List
-from collections import defaultdict
+from typing import Callable, Optional, Dict
 
 
-def _get_parameter_group(name: str) -> str:
-    """Categorizes a parameter name into a logical model group."""
-    if name.startswith("bert.encoder") or name.startswith("encoder.layer"):
-        return "Encoder"
-    if name.startswith("bert.embeddings") or name.startswith("embeddings"):
-        return "Embeddings"
-    if name.startswith("pooler"):
-        return "Shared Pooler"
-    if name.startswith("exposure_pooler"):
-        return "Exposure Pooler"
-    if name.startswith("outcome_poolers"):
-        return "Outcome Poolers"
-    if name.startswith("encoder_bottleneck"):
-        return "Bottleneck"
-    if name.startswith("exposure_head"):
-        return "Exposure Head"
-    if name.startswith("outcome_heads"):
-        # e.g., 'outcome_heads.MI.classifier.1.weight' -> 'Outcome Head: MI'
-        parts = name.split(".")
-        if len(parts) > 1:
-            return f"Outcome Head ({parts[1]})"
-        return "Outcome Heads"
-    return "Other"
+def _plot_distributions_for_group(
+    gradients_in_group: Dict[str, np.ndarray],
+    group_name: str,
+    base_title: str,
+    save_dir: Optional[str],
+    bins: int,
+    max_subplots_per_fig: int,
+    cols: int,
+):
+    """
+    Helper to generate and save/show distribution plots for a group of gradients.
+    This function is styled to match the weight distribution plotter.
+    """
+    if save_dir:
+        # Create a specific subdirectory for gradient plots
+        save_dir = os.path.join(save_dir, "gradient_distributions")
+        os.makedirs(save_dir, exist_ok=True)
+
+    layers_to_plot = list(gradients_in_group.items())
+    num_layers = len(layers_to_plot)
+    if num_layers == 0:
+        return
+
+    print(f"\n--- Generating gradient plots for '{group_name}' group... ---")
+    num_figures = int(np.ceil(num_layers / max_subplots_per_fig))
+
+    for fig_num in range(num_figures):
+        start_idx = fig_num * max_subplots_per_fig
+        end_idx = start_idx + max_subplots_per_fig
+        chunk_items = layers_to_plot[start_idx:end_idx]
+        num_plots_on_fig = len(chunk_items)
+
+        rows = int(np.ceil(num_plots_on_fig / cols))
+
+        # Use the same compact subplot sizing as the weight plotter
+        fig, axes = plt.subplots(
+            rows, cols, figsize=(cols * 4, rows * 1.5), constrained_layout=True
+        )
+        axes = np.array(axes).flatten()
+
+        for i, (name, data) in enumerate(chunk_items):
+            ax = axes[i]
+            # Use the same styling for the histogram plot
+            sns.histplot(
+                data,
+                bins=bins,
+                ax=ax,
+                kde=True,
+                color="#4c72b0",  # Matched color
+                alpha=0.6,
+                edgecolor=None,
+            )
+            # Add the vertical line at zero, just like the weight plots
+            ax.axvline(x=0, color="red", linestyle="--", linewidth=1.2, alpha=0.7)
+
+            # Use the same compact title and label styling
+            ax.set_title(name, fontsize=10, wrap=True)
+            ax.set_ylabel("")
+            ax.set_xlabel("")
+            ax.set_yticks([])
+            ax.tick_params(axis="x", labelsize=9)
+            ax.ticklabel_format(style="sci", axis="x", scilimits=(-2, 2))
+
+        # Hide any unused subplots
+        for i in range(num_plots_on_fig, len(axes)):
+            axes[i].set_visible(False)
+
+        # Create a title for the entire figure
+        fig_title = f"{base_title} - {group_name}"
+        if num_figures > 1:
+            fig_title += f" (Part {fig_num + 1}/{num_figures})"
+        fig.suptitle(fig_title, fontsize=16, weight="bold")
+
+        if save_dir:
+            # Matched file naming convention
+            filename = f"{group_name.lower()}_part_{fig_num + 1}.png"
+            save_path = os.path.join(save_dir, filename)
+            plt.savefig(save_path, dpi=200, bbox_inches="tight")
+            print(f"Saved figure to {save_path}")
+            plt.close(fig)
+        else:
+            plt.show()
 
 
 def plot_gradient_distributions(
@@ -41,14 +99,15 @@ def plot_gradient_distributions(
     log: Callable[[str], None] = print,
     run_folder: str = ".",
     global_step: int = 0,
-    grid_size: Tuple[int, int] = (4, 3),
-) -> None:
+    bins: int = 75,
+    max_subplots_per_fig: int = 16,
+    cols: int = 4,
+):
     """
-    Inspects and plots the distributions of gradients, grouped by model component.
+    Inspects and plots the distributions of gradients, grouped by model component,
+    with styling and structure that mirrors the weight visualization functions.
 
-    This function automatically paginates plots and saves them as separate figures
-    for each logical group of parameters (Encoder, Heads, etc.). It MUST be
-    called after `loss.backward()` and before `optimizer.step()`.
+    This function MUST be called after `loss.backward()` and before `optimizer.step()`.
 
     Args:
         model (nn.Module): The model whose gradients are to be plotted.
@@ -56,98 +115,64 @@ def plot_gradient_distributions(
         scaler (Optional[GradScaler]): The GradScaler for mixed precision.
         log (Callable[[str], None]): A logging function (e.g., `print`).
         run_folder (str): Base folder to save figures.
-        global_step (int): The current training step for file naming.
-        grid_size (Tuple[int, int]): The (rows, cols) for subplots per figure.
+        global_step (int): The current training step, included in the plot title.
+        bins (int): Number of bins for the histograms.
+        max_subplots_per_fig (int): Maximum number of subplots on a single figure.
+        cols (int): Number of columns in the subplot grid.
     """
     # --- 1. Unscale gradients to view their true values ---
-    save_dir = os.path.join(run_folder, "figs", "gradient_plots")
+    save_dir = os.path.join(run_folder, "figs")  # Base directory for figures
     os.makedirs(save_dir, exist_ok=True)
 
+    unscaled_str = ""
     if scaler and scaler.is_enabled():
         try:
             scaler.unscale_(optimizer)
+            unscaled_str = " (Unscaled)"
         except Exception as e:
             log(f"Warning: Could not unscale gradients for plotting: {e}")
 
     # --- 2. Extract and group all available gradients ---
-    grouped_gradients: Dict[str, List[Tuple[str, np.ndarray]]] = defaultdict(list)
+    # Use the same grouping logic as the weight visualizer
+    grouped_gradients = {
+        "Embeddings": {},
+        "Poolers": {},
+        "Heads": {},
+        "Loss": {},
+        "Body": {},
+    }
     for name, param in model.named_parameters():
-        if param.grad is not None:
-            group = _get_parameter_group(name)
+        if param.grad is not None and param.requires_grad:
             grad_data = param.grad.detach().cpu().numpy().flatten()
-            grouped_gradients[group].append((name, grad_data))
+            if name.startswith("embeddings."):
+                grouped_gradients["Embeddings"][name] = grad_data
+            elif "pooler" in name:
+                grouped_gradients["Poolers"][name] = grad_data
+            elif "head" in name:
+                grouped_gradients["Heads"][name] = grad_data
+            elif "loss" in name:
+                grouped_gradients["Loss"][name] = grad_data
+            else:
+                grouped_gradients["Body"][name] = grad_data
 
-    if not grouped_gradients:
+    if not any(grouped_gradients.values()):
         log("No gradients found to plot. Ensure this is called after loss.backward().")
         return
 
-    log(
-        f"\n--- Plotting Gradients for {len(grouped_gradients)} Groups (Step {global_step}) ---"
-    )
-    rows, cols = grid_size
-    subplots_per_fig = rows * cols
-    total_plots_saved = 0
+    log(f"\n--- Plotting Gradient Distributions (Step {global_step}) ---")
+    base_title = f"Gradient Distributions{unscaled_str} at Step {global_step}"
 
-    # --- 3. Loop through each group and create figures ---
-    for group_name, gradient_items in sorted(grouped_gradients.items()):
-        num_total_plots_in_group = len(gradient_items)
-
-        # Paginate if the number of parameters in the group exceeds the grid size
-        for i in range(0, num_total_plots_in_group, subplots_per_fig):
-            chunk = gradient_items[i : i + subplots_per_fig]
-            page_num = (i // subplots_per_fig) + 1
-
-            plt.style.use("seaborn-v0_8-whitegrid")
-            # Make subplots less tall
-            fig, axes = plt.subplots(
-                rows, cols, figsize=(cols * 4, rows * 2.8), constrained_layout=True
+    # --- 3. Loop through each group and create figures using the helper ---
+    for group_name, gradients_in_group in grouped_gradients.items():
+        if gradients_in_group:
+            _plot_distributions_for_group(
+                gradients_in_group=gradients_in_group,
+                group_name=group_name,
+                base_title=base_title,
+                save_dir=save_dir,
+                bins=bins,
+                max_subplots_per_fig=max_subplots_per_fig,
+                cols=cols,
             )
-            axes = np.array(axes).flatten()
-
-            # Plot each gradient distribution in the chunk
-            for j, (name, grad_data) in enumerate(chunk):
-                ax = axes[j]
-                sns.histplot(
-                    grad_data,
-                    bins=80,
-                    ax=ax,
-                    kde=True,
-                    color="#2a9d8f",
-                    alpha=0.7,
-                    edgecolor="white",
-                )
-                # Set larger title, with no stats (mu/sigma)
-                ax.set_title(f"{name}", fontsize=11, wrap=True)
-                ax.set_xlabel("Gradient Value", fontsize=8)
-                ax.set_ylabel("")
-                ax.set_yticks([])
-                ax.tick_params(axis="x", labelsize=8)
-                ax.ticklabel_format(style="sci", axis="x", scilimits=(-2, 2))
-
-            # Hide unused subplots
-            for j in range(len(chunk), subplots_per_fig):
-                axes[j].set_visible(False)
-
-            unscaled_str = " (Unscaled)" if scaler else ""
-            fig.suptitle(
-                f"Gradient Distributions: {group_name}{unscaled_str}\nStep {global_step} (Page {page_num})",
-                fontsize=16,
-                weight="bold",
-            )
-
-            # Save the figure with a group-specific name
-            safe_group_name = (
-                group_name.replace(" ", "_")
-                .replace(":", "")
-                .replace("(", "")
-                .replace(")", "")
-            )
-            plot_path = os.path.join(
-                save_dir,
-                f"grads_step_{global_step}_group_{safe_group_name}_p{page_num}.png",
-            )
-            plt.savefig(plot_path, dpi=150, bbox_inches="tight")
-            plt.close(fig)
-            total_plots_saved += 1
-
-    log(f"Saved gradient plots across {total_plots_saved} figure(s) in '{save_dir}'")
+        else:
+            log(f"Skipping '{group_name}' gradient plot as it has no layers.")
