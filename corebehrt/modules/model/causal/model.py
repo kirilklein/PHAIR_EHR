@@ -9,14 +9,14 @@ import logging
 
 import torch
 import torch.nn as nn
+from torch.nn import BCEWithLogitsLoss
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK, CONCEPT_FEAT, PID_COL
 from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
+from corebehrt.modules.model.causal.loss import FocalLossWithLogits
 from corebehrt.modules.model.model import CorebehrtEncoder
 from corebehrt.modules.trainer.utils import limit_dict_for_logging, pos_weight_to_alpha
-from corebehrt.modules.model.causal.loss import FocalLossWithLogits
-from torch.nn import BCEWithLogitsLoss
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +50,6 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         self.temperature = self.head_config.get("temperature", 1.0)
         # Get outcome names from config
         self.outcome_names = config.outcome_names
-        self.exposure_embedding_dim = self.head_config.get("exposure_embedding_dim", 2)
-        self.exposure_embedding = nn.Embedding(2, self.exposure_embedding_dim)
         self._setup_pooling_layers(config)
         self._setup_bottleneck(config)
         self._setup_mlp_heads(config)
@@ -95,9 +93,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         # Create separate heads for each outcome
         self.outcome_heads = nn.ModuleDict()
         for outcome_name in self.outcome_names:
-            self.outcome_heads[outcome_name] = MLPHead(
-                input_size=head_input_size + self.exposure_embedding_dim
-            )
+            self.outcome_heads[outcome_name] = MLPHead(input_size=head_input_size + 1)
 
     def _get_loss_fn(self, loss_name: str, loss_params: dict):
         """Returns the loss function instance based on the name."""
@@ -201,16 +197,14 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         outputs.exposure_logits = exposure_logits
 
         # --- Multiple Outcome Predictions ---
-        exposure_status = batch[EXPOSURE_TARGET].to(torch.long)
-
+        exposure_status = 2 * batch[EXPOSURE_TARGET] - 1  # Convert from 0/1 to -1/1
         if cf:
-            exposure_status = 1 - exposure_status  # Flip for counterfactual
-        exposure_embedding = self.exposure_embedding(exposure_status)
+            exposure_status = -exposure_status  # Flip for counterfactual
         # Compute logits for each outcome using its specific representation
         outputs.outcome_logits = {}
         for outcome_name in self.outcome_names:
             outcome_input = torch.cat(
-                (outcome_reprs[outcome_name], exposure_embedding), dim=-1
+                (outcome_reprs[outcome_name], exposure_status.unsqueeze(-1)), dim=-1
             )  # [bs, hidden_size] vs [bs] -> [bs, hidden_size + 1]
             outputs.outcome_logits[outcome_name] = self.outcome_heads[outcome_name](
                 outcome_input
@@ -271,3 +265,21 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             total_loss += l1_loss
 
         outputs.loss = total_loss
+
+    @staticmethod
+    def _init_weights(module: nn.Module):
+        """Initializes weights of Linear and GRU layers with a more robust scheme."""
+        if isinstance(module, nn.Linear):
+            # Kaiming Normal is a good choice for layers followed by ReLU/GELU
+            nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.GRU):
+            # Xavier uniform is a common choice for RNNs
+            for name, param in module.named_parameters():
+                if "weight_ih" in name:
+                    nn.init.xavier_uniform_(param.data)
+                elif "weight_hh" in name:
+                    nn.init.xavier_uniform_(param.data)
+                elif "bias" in name:
+                    param.data.fill_(0)
