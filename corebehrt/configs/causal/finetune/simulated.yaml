@@ -11,13 +11,13 @@ paths:
   ## OUTPUTS
   model: ./outputs/causal/finetune/models/simulated # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
-
+save_encodings: true
 model:
   head:
-    shared_representation: false # whether to share the bigru representation for exposure and outcome
+    shared_representation: true # whether to share the bigru representation for exposure and outcome
     bidirectional: true
-    bottleneck_dim: 64
-    l1_lambda: 0.2
+    bottleneck_dim: 128
+    l1_lambda: 0.01 # .2
     temperature: 1
   loss:
     name: bce # bce by default
@@ -46,9 +46,11 @@ trainer_args:
   use_pcgrad: false
   plot_histograms: true
   save_curves: false
+  plot_gradients: true
+  plot_gradients_frequency: 20
 
 optimizer:
-  lr: 9e-4
+  lr: 5e-4
   eps: 1e-6
 
 scheduler:
