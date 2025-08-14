@@ -5,7 +5,7 @@ from os.path import join
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-from matplotlib.lines import Line2D
+import matplotlib.dates as mdates
 
 from corebehrt.constants.causal.data import END_COL, START_COL
 from corebehrt.constants.data import PID_COL, ABSPOS_COL
@@ -51,6 +51,7 @@ def plot_followups_timeline(
     exposures: pd.DataFrame,
     outcomes: dict[str, pd.DataFrame] | None,
     follow_ups: pd.DataFrame,
+    index_date_matching: pd.DataFrame,
     subject_ids: list[int] | None = None,
     n_random_subjects: int = 8,
     title: str = "Follow-up Timeline (Exposures & Outcomes)",
@@ -88,12 +89,20 @@ def plot_followups_timeline(
     fu["start_dt"] = get_datetime_from_hours_since_epoch(fu[START_COL])
     fu["end_dt"] = get_datetime_from_hours_since_epoch(fu[END_COL])
 
-    # Prepare figure
-    height = max(3, 0.7 * len(subject_ids))
+    # --- IMPROVEMENT: Tighter vertical spacing to fit more subjects ---
+    # Reduced the multiplier from 0.7 to 0.45 for denser plotting.
+    height = max(3, 0.45 * len(subject_ids))
     fig, ax = plt.subplots(figsize=(12, height))
 
     # y mapping
     y_map = {pid: i for i, pid in enumerate(subject_ids)}
+
+    # --- IMPROVEMENT: Calculate text offset based on plot's date range ---
+    # This makes the label placement robust to different time scales.
+    total_min_date = fu["start_dt"].min()
+    total_max_date = fu["end_dt"].max()
+    date_range = total_max_date - total_min_date
+    text_offset = date_range * 0.01  # 1% of total range
 
     # Brackets and labels
     for _, row in fu.iterrows():
@@ -101,13 +110,15 @@ def plot_followups_timeline(
         ax.hlines(
             y=y, xmin=row["start_dt"], xmax=row["end_dt"], color="lightgray", lw=2
         )
+        # --- IMPROVEMENT: Smaller font and offset to the right ---
         ax.text(
-            row["end_dt"],
+            row["end_dt"] + text_offset,  # Position text to the right
             y,
-            f" {int(row[PID_COL])}",
+            f"{int(row[PID_COL])}",  # No leading space needed
             va="center",
             ha="left",
-            fontsize=9,
+            fontsize=8,  # Smaller font
+            color="gray",
         )
         ax.text(row["start_dt"], y, "[", va="center", ha="right", fontsize=12)
         ax.text(row["end_dt"], y, "]", va="center", ha="left", fontsize=12)
@@ -120,86 +131,76 @@ def plot_followups_timeline(
         if tmp.empty or ABSPOS_COL not in tmp.columns:
             return
         tmp["time_dt"] = get_datetime_from_hours_since_epoch(tmp[ABSPOS_COL])
-        merged = tmp.merge(fu[[PID_COL, START_COL, END_COL]], on=PID_COL, how="left")
-        within = (merged[ABSPOS_COL] >= merged[START_COL]) & (
-            merged[ABSPOS_COL] <= merged[END_COL]
-        )
+        # Use a left merge to ensure we check all events, even those outside any fu window
+        merged = tmp.merge(fu[[PID_COL, "start_dt", "end_dt"]], on=PID_COL, how="left")
+
         for _, r in merged.iterrows():
-            y = y_map[int(r[PID_COL])]
-            alpha = 1.0 if bool(within.loc[_]) else 0.35
+            # Check if event is within the follow-up period for that subject
+            is_within = (
+                (r["start_dt"] <= r["time_dt"] <= r["end_dt"])
+                if pd.notna(r["start_dt"])
+                else False
+            )
+            alpha = 1.0 if is_within else 0.35
             ax.scatter(
                 r["time_dt"],
-                y,
+                y_map[int(r[PID_COL])],
                 color=color,
                 marker=marker,
-                s=35,
+                s=40,  # Slightly larger symbols
                 alpha=alpha,
-                label=label,
+                label=label,  # Label every point for auto-legend
+                zorder=5,  # Ensure points are drawn on top of lines
             )
 
     # Colors
     default_outcome_colors = {}
     if outcomes:
+        palette = sns.color_palette("Set2", n_colors=len(outcomes))
         for i, name in enumerate(sorted(outcomes.keys())):
-            default_outcome_colors[f"Outcome: {name}"] = sns.color_palette("Set2")[
-                i % 8
-            ]
+            default_outcome_colors[f"Outcome: {name}"] = palette[i]
     if outcome_colors:
         default_outcome_colors.update(outcome_colors)
 
-    # Plot exposures
+    # Plot exposures and outcomes
     add_events(exposures, "Exposure", color="black", marker="^")
-    # Plot outcomes
     if outcomes:
-        for name, df in outcomes.items():
+        for name, df in sorted(outcomes.items()):
+            label_name = f"Outcome: {name}"
             add_events(
                 df,
-                f"Outcome: {name}",
-                color=default_outcome_colors.get(f"Outcome: {name}", "C1"),
+                label_name,
+                color=default_outcome_colors.get(label_name, "C1"),
                 marker="o",
             )
 
-    # Build legend without duplicates
-    handles = [
-        Line2D(
-            [0],
-            [0],
-            marker="^",
-            color="w",
-            label="Exposure",
-            markerfacecolor="black",
-            markersize=7,
-        )
-    ]
-    if outcomes:
-        for name in sorted(outcomes.keys()):
-            handles.append(
-                Line2D(
-                    [0],
-                    [0],
-                    marker="o",
-                    color="w",
-                    label=f"Outcome: {name}",
-                    markerfacecolor=default_outcome_colors.get(
-                        f"Outcome: {name}", "C1"
-                    ),
-                    markersize=7,
-                )
-            )
-    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1.0))
+    # --- IMPROVEMENT: Automated legend creation to avoid duplicates ---
+    # This is more robust and cleaner than manual legend building.
+    handles, labels = ax.get_legend_handles_labels()
+    unique_labels = dict(zip(labels, handles))
+    ax.legend(
+        unique_labels.values(),
+        unique_labels.keys(),
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        title="Events",
+    )
 
     # Formatting
     ax.set_title(title)
     ax.set_xlabel("Time")
-    ax.set_yticks([])
-    ax.grid(axis="x", linestyle=":", alpha=0.4)
-    fig.tight_layout()
+    ax.set_yticks([])  # Hide y-axis ticks
+    ax.spines[["left", "right", "top"]].set_visible(False)  # Remove frame
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    ax.grid(axis="x", linestyle=":", alpha=0.5)
+    fig.tight_layout(rect=[0, 0, 0.85, 1])  # Adjust layout to make space for legend
 
+    # Save or show plot
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
-        fig.savefig(
-            join(save_dir, "follow_ups_timeline.png"), dpi=200, bbox_inches="tight"
-        )
+        path = join(save_dir, "follow_ups_timeline.png")
+        fig.savefig(path, dpi=200)
+        print(f"Plot saved to {path}")
     else:
         plt.show()
 

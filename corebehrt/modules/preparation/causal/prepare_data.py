@@ -157,7 +157,12 @@ class CausalDatasetPreparer:
             plot_outcome_distribution(binary_outcomes, fig_dir)
             plot_filtering_stats(filtering_stats, fig_dir)
             plot_followups_timeline(
-                exposures, outcomes, follow_ups, save_dir=fig_dir, n_random_subjects=15
+                exposures,
+                outcomes,
+                follow_ups,
+                index_date_matching,
+                save_dir=fig_dir,
+                n_random_subjects=20,
             )
         return data
 
