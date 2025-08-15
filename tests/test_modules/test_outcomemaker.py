@@ -698,6 +698,78 @@ class TestOutcomeMaker(unittest.TestCase):
         self.assertEqual(len(result_contains_insensitive), 1)
         self.assertEqual(result_contains_insensitive.iloc[0][PID_COL], 11)
 
+    def test_combination_with_inclusion_flag(self):
+        """Tests the `exclude: false` flag (default) for a combination."""
+        outcomes = {
+            "MI_WITH_DEATH_IN_7_DAYS": {
+                "combinations": {
+                    "primary": {
+                        "type": ["code"],
+                        "match": [["DI20"]],
+                        "match_how": "exact",
+                    },
+                    "secondary": {
+                        "type": ["code"],
+                        "match": [["DOD"]],
+                        "match_how": "exact",
+                    },
+                    "window_hours_min": 0,
+                    "window_hours_max": 7 * 24,
+                    # "exclude": False # This is the default, can be omitted
+                }
+            }
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(self.concepts_plus, self.outcomes_path)
+
+        output_file = join(self.outcomes_path, "MI_WITH_DEATH_IN_7_DAYS.csv")
+        self.assertTrue(os.path.exists(output_file))
+        result_df = pd.read_csv(output_file)
+
+        # Patient 8 had a death 6 days after MI -> Should be INCLUDED.
+        # Patient 9 had a death 8 days after MI -> Should be EXCLUDED (outside window).
+        # Patient 4 had a death <24h after MI -> Should be INCLUDED.
+        self.assertEqual(len(result_df), 2)
+        self.assertTrue(all(pid in result_df[PID_COL].values for pid in [4, 8]))
+
+    def test_washout_period_combination(self):
+        """Tests finding a primary event by excluding other instances of the same event."""
+        # Patient 6 has a second stroke 9 days after the first one.
+        # We want to find only the first stroke in a 30-day period.
+        outcomes = {
+            "FIRST_STROKE_IN_30_DAYS": {
+                "combinations": {
+                    "primary": {"type": ["code"], "match": [["I63"]]},
+                    "secondary": {
+                        "type": ["code"],
+                        "match": [["I63"]],
+                    },  # Match against itself
+                    "window_hours_min": -30
+                    * 24,  # Look for another stroke in the 30 days prior
+                    "window_hours_max": -1,  # but not including the same day.
+                    "exclude": True,  # Keep the primary stroke if no other stroke is found before it.
+                }
+            }
+        }
+        outcome_maker = OutcomeMaker(outcomes)
+        outcome_maker(self.concepts_plus, self.outcomes_path)
+
+        output_file = join(self.outcomes_path, "FIRST_STROKE_IN_30_DAYS.csv")
+        result_df = pd.read_csv(output_file, parse_dates=[TIMESTAMP_COL])
+
+        # Patient 6's first stroke (Feb 1) should be found.
+        # Patient 6's second stroke (Feb 10) should be EXCLUDED because another stroke occurred 9 days prior.
+        # Patient 7's stroke should be found as it has no prior strokes.
+        self.assertEqual(len(result_df), 2)
+
+        # Check that we have the right events
+        expected_timestamps = [
+            datetime.datetime(2020, 2, 1, 10, 0),  # Patient 6's first stroke
+            datetime.datetime(2020, 2, 15, 10, 0),  # Patient 7's stroke
+        ]
+        actual_timestamps = pd.to_datetime(result_df[TIMESTAMP_COL].values)
+        self.assertTrue(all(ts in actual_timestamps for ts in expected_timestamps))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,7 @@ from corebehrt.constants.data import (
     AGE_FEAT,
     ATTENTION_MASK,
     CONCEPT_FEAT,
+    PID_COL,
     SEGMENT_FEAT,
 )
 from corebehrt.modules.preparation.dataset import PatientData, PatientDataset
@@ -105,6 +106,7 @@ class ExposureOutcomesDataset:
             SEGMENT_FEAT: torch.tensor(patient.segments, dtype=torch.long),
             AGE_FEAT: torch.tensor(patient.ages, dtype=torch.float),
             ATTENTION_MASK: attention_mask,
+            PID_COL: torch.tensor(patient.pid, dtype=torch.long),
         }
         sample[EXPOSURE_TARGET] = torch.tensor(patient.exposure, dtype=torch.float)
         for outcome_name, outcome_value in patient.outcomes.items():

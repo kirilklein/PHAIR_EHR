@@ -14,6 +14,7 @@ import torch
 from corebehrt.azure import setup_metrics_dir
 from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 from corebehrt.functional.trainer.setup import replace_steps_with_epochs
+from corebehrt.functional.visualize.model import visualize_weight_distributions
 from corebehrt.modules.preparation.causal.dataset import (
     CausalPatientDataset,
     ExposureOutcomesDataset,
@@ -114,12 +115,15 @@ def finetune_fold(
     model = modelmanager_trained.initialize_finetune_model(
         checkpoint, outcomes, exposures
     )
+    visualize_weight_distributions(model, save_dir=join(fold_folder, "figs"))
 
     trainer.model = model
     trainer.val_dataset = val_dataset
 
     logger.info("Evaluating on validation set")
-    *_, val_prediction_data = trainer._evaluate(mode="val")
+    *_, val_prediction_data = trainer._evaluate(
+        mode="val", save_encodings=cfg.get("save_encodings", False)
+    )
     if val_prediction_data is not None:
         trainer.process_causal_classification_results(
             val_prediction_data, mode="val", save_results=True
@@ -129,7 +133,9 @@ def finetune_fold(
         logger.info("Evaluating on test set")
         test_dataset = ExposureOutcomesDataset(test_data.patients)
         trainer.test_dataset = test_dataset
-        *_, test_prediction_data = trainer._evaluate(mode="test")
+        *_, test_prediction_data = trainer._evaluate(
+            mode="test", save_encodings=cfg.get("save_encodings", False)
+        )
         if test_prediction_data is not None:
             trainer.process_causal_classification_results(
                 test_prediction_data, mode="test", save_results=True

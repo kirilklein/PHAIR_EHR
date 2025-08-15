@@ -1,8 +1,21 @@
-import pandas as pd
+import logging
+import os
+
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
-import os  # Import the os module for path manipulation
-from corebehrt.constants.causal.data import EffectColumns
+
+from corebehrt.constants.causal.data import EffectColumns, TMLEAnalysisColumns
+from corebehrt.modules.plot.estimate import (
+    ContingencyPlotConfig,
+    EffectSizePlotConfig,
+    EffectSizePlotter,
+    ContingencyTablePlotter,
+    AdjustmentPlotConfig,
+    AdjustmentPlotter,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def create_annotated_heatmap_matplotlib(
@@ -93,3 +106,70 @@ def create_annotated_heatmap_matplotlib(
     else:
         plt.show()
     plt.close()  # Close the plot to free up memory
+
+
+def create_effect_size_plot(
+    effects_df: pd.DataFrame,
+    save_dir: str,
+    config: EffectSizePlotConfig,
+    title: str = "Effect estimates by outcome and method",
+    methods: list[str] = None,
+):
+    """
+    Creates a forest plot by initializing and running the EffectSizePlotter.
+    """
+    try:
+        plotter = EffectSizePlotter(effects_df, save_dir, config, title, methods)
+        plotter.run()
+    except Exception as e:
+        logger.error(f"Failed to create effect size plot. Error: {e}", exc_info=True)
+
+
+def create_contingency_table_plot(
+    data_df: pd.DataFrame,
+    save_dir: str,
+    config: ContingencyPlotConfig,
+    title: str = "Patient Counts by Treatment Status and Outcome",
+):
+    """
+    Creates stacked bar plots from contingency data by running the ContingencyTablePlotter.
+    """
+    try:
+        plotter = ContingencyTablePlotter(data_df, save_dir, config, title)
+        plotter.run()
+    except Exception as e:
+        logger.error(
+            f"Failed to create contingency table plot. Error: {e}", exc_info=True
+        )
+
+
+def create_adjustment_plot(
+    data_df: pd.DataFrame,
+    save_dir: str,
+    config: AdjustmentPlotConfig,
+    title: str = "TMLE Adjustment Analysis",
+):
+    """
+    Creates adjustment plots by initializing and running the AdjustmentPlotter.
+    """
+    if not all(
+        col in data_df.columns
+        for col in [
+            TMLEAnalysisColumns.initial_effect,
+            TMLEAnalysisColumns.adjustment,
+            TMLEAnalysisColumns.adjustment_0,
+            TMLEAnalysisColumns.adjustment_1,
+            TMLEAnalysisColumns.initial_effect_0,
+            TMLEAnalysisColumns.initial_effect_1,
+        ]
+    ):
+        logger.warning(
+            "Skipping adjustment plots: Required columns not found in dataframe."
+        )
+        return
+
+    try:
+        plotter = AdjustmentPlotter(data_df, save_dir, config, title)
+        plotter.run()
+    except Exception as e:
+        logger.error(f"Failed to create adjustment plot. Error: {e}", exc_info=True)

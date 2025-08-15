@@ -1,6 +1,7 @@
 import os
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from corebehrt.constants.causal.data import (
     CF_PROBAS,
@@ -13,6 +14,7 @@ from corebehrt.functional.visualize.calibrate import (
     plot_cf_diff_vs_probas_by_group,
     plot_cf_probas_diff_vs_certainty_in_exposure,
     plot_probas_hist,
+    plot_weights_hist,
     produce_calibration_plots,
 )
 from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
@@ -125,6 +127,23 @@ class PlottingManager:
         # Pre-calculate diff columns
         for name in self.outcomes_to_plot:
             df[f"diff_{name}"] = df[f"{CF_PROBAS}_{name}"] - df[f"{PROBAS}_{name}"]
+
+        # Avoid inf/NaN when PS hits 0 or 1
+        ps = df[PS_COL].clip(1e-6, 1 - 1e-6)
+        df["ipw"] = np.where(df[EXPOSURE_COL] == 1, 1.0 / ps, 1.0 / (1.0 - ps))
+        # Plot IPW distribution
+        fig, ax = plt.subplots()
+        plot_weights_hist(
+            df,
+            "ipw",
+            EXPOSURE_COL,
+            ("Control", "Exposed"),
+            "IPW: Control vs Exposed",
+            "IPW",
+            ax,
+        )
+        fig.savefig(hist_fig_dir / "ipw_by_exposure_hist.png", bbox_inches="tight")
+        plt.close(fig)
 
         # --- Subplot Grid Helpers ---
         cols = min(3, num_outcomes)

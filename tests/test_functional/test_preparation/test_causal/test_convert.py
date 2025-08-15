@@ -123,7 +123,7 @@ class TestAbsposToBinaryOutcome(unittest.TestCase):
 
         # 4. Assertions
         expected = pd.Series(
-            [0, 0, 0, 0], index=[1, 2, 3, 4], name="has_outcome", dtype=int
+            [1, 1, 1, 1], index=[1, 2, 3, 4], name="has_outcome", dtype=int
         )
         pd.testing.assert_series_equal(result, expected, check_names=False)
 

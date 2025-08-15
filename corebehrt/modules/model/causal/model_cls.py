@@ -13,7 +13,7 @@ from torch.nn import BCEWithLogitsLoss
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK, CONCEPT_FEAT, PID_COL
-from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
+from corebehrt.modules.model.causal.heads import MLPHead
 from corebehrt.modules.model.causal.loss import FocalLossWithLogits
 from corebehrt.modules.model.model import CorebehrtEncoder
 from corebehrt.modules.trainer.utils import limit_dict_for_logging, pos_weight_to_alpha
@@ -23,16 +23,12 @@ logger = logging.getLogger(__name__)
 
 class CorebehrtForCausalFineTuning(CorebehrtEncoder):
     """
-    A unified causal fine-tuning model for predicting exposure and multiple outcomes.
+    A simplified causal fine-tuning model using the last token representation.
 
-    This class supports two architectures, controlled by `config.shared_representation`:
-    1.  True (default): Uses a single, shared BiGRU pooler to create a patient
-        representation for both tasks. This encourages learning a generalized
-        and efficient representation.
-    2.  False: Uses two independent BiGRU poolers, creating separate
-        representations for the exposure and outcome tasks.
-
-    The model uses separate MLP heads for exposure and each outcome prediction.
+    This model generates a patient representation by taking the hidden state of the
+    last token from the CoreBEHRT encoder output. A bottleneck layer and
+    separate MLP heads are then applied to this representation to predict exposure
+    and multiple outcomes.
     """
 
     def __init__(self, config):
@@ -41,59 +37,51 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         # --- Architecture Configuration ---
         self.head_config = getattr(config, "head", {})
         self.loss_config = getattr(config, "loss", {})
-        self.shared_representation = self.head_config.get("shared_representation", True)
-        self.bidirectional = self.head_config.get("bidirectional", True)
         self.bottleneck_dim = self.head_config.get("bottleneck_dim", 128)
         self.l1_lambda = self.head_config.get("l1_lambda", 0.0)
         if self.l1_lambda > 0:
             logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
         self.temperature = self.head_config.get("temperature", 1.0)
+
         # Get outcome names from config
         self.outcome_names = config.outcome_names
-        self._setup_pooling_layers(config)
-        self._setup_bottleneck(config)
-        self._setup_mlp_heads(config)
+        # self.exposure_embedding_dim = self.head_config.get("exposure_embedding_dim", 1)
+        # self.exposure_embedding = nn.Embedding(2, self.exposure_embedding_dim)
+
+        self._setup_bottleneck_and_heads(config)
         self._setup_loss_functions(config)
 
-    def _setup_bottleneck(self, config):
-        if self.shared_representation:
-            self.encoder_bottleneck = nn.Sequential(
-                nn.Linear(config.hidden_size, self.bottleneck_dim),
-                nn.GELU(),
-                nn.Dropout(0.1),
-            )
+        logger.info("Applying custom Kaiming weight initialization to causal heads...")
+        self.encoder_bottleneck.apply(self._init_weights)
+        self.exposure_head.apply(self._init_weights)
+        self.outcome_heads.apply(self._init_weights)
 
-    def _setup_pooling_layers(self, config):
-        if self.shared_representation:
-            logger.info("Using shared patient representation")
-            # A single pooler for all tasks
-            self.pooler = PatientRepresentationPooler(
-                hidden_size=config.hidden_size, bidirectional=self.bidirectional
-            )
-        else:
-            logger.info("Using separate patient representations")
-            # Separate poolers for exposure and each outcome
-            self.exposure_pooler = PatientRepresentationPooler(
-                hidden_size=config.hidden_size, bidirectional=self.bidirectional
-            )
-            self.outcome_poolers = nn.ModuleDict()
-            for outcome_name in self.outcome_names:
-                self.outcome_poolers[outcome_name] = PatientRepresentationPooler(
-                    hidden_size=config.hidden_size, bidirectional=self.bidirectional
-                )
+    def _setup_bottleneck_and_heads(self, config):
+        """Sets up the bottleneck layer and MLP heads for all tasks."""
+        logger.info(
+            f"Using last token representation with a bottleneck of dim {self.bottleneck_dim}"
+        )
 
-    def _setup_mlp_heads(self, config):
-        if self.shared_representation:
-            head_input_size = self.bottleneck_dim
-        else:
-            head_input_size = config.hidden_size
+        # A single bottleneck applied to the last token representation
+        self.encoder_bottleneck = nn.Sequential(
+            nn.Linear(config.hidden_size, self.bottleneck_dim),
+            nn.GELU(),
+            nn.Dropout(0.1),
+        )
 
+        # The input to all heads is the output of the bottleneck layer
+        head_input_size = self.bottleneck_dim
+
+        # MLP head for exposure prediction
         self.exposure_head = MLPHead(input_size=head_input_size)
 
-        # Create separate heads for each outcome
+        # Create separate MLP heads for each outcome
         self.outcome_heads = nn.ModuleDict()
         for outcome_name in self.outcome_names:
-            self.outcome_heads[outcome_name] = MLPHead(input_size=head_input_size + 1)
+            # The outcome head takes the patient representation + the exposure status embedding
+            self.outcome_heads[outcome_name] = MLPHead(
+                input_size=head_input_size + 1  # self.exposure_embedding_dim
+            )
 
     def _get_loss_fn(self, loss_name: str, loss_params: dict):
         """Returns the loss function instance based on the name."""
@@ -116,7 +104,6 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
 
         # Setup exposure loss
         exposure_loss_params = loss_params.copy()
-
         exposure_pos_weight = self._get_pos_weight_tensor(
             getattr(config, "pos_weight_exposures", None)
         )
@@ -156,56 +143,56 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
     def _get_pos_weight_tensor(self, pos_weight_value):
         """Helper method to convert pos_weight value to tensor if not None."""
         if pos_weight_value is not None:
-            return torch.tensor(pos_weight_value)
+            return torch.tensor(pos_weight_value, device=self.device)
         return None
 
     def forward(self, batch: dict, cf: bool = False, return_encodings: bool = False):
         """Forward pass for causal inference."""
         outputs = super().forward(batch)
-        sequence_output = outputs[0]
-        attention_mask = batch[ATTENTION_MASK]
+        sequence_output = outputs[0]  # [batch_size, seq_len, hidden_size]
+        attention_mask = batch[ATTENTION_MASK]  # [batch_size, seq_len]
 
-        # --- Get Patient Representations ---
-        if self.shared_representation:
-            shared_repr = self.pooler(sequence_output, attention_mask)
-            bottleneck_repr = self.encoder_bottleneck(shared_repr)
-            outputs.bottleneck_repr = bottleneck_repr  # Store for L1 loss
-            exposure_repr = bottleneck_repr
-            outcome_reprs = {
-                outcome_name: bottleneck_repr for outcome_name in self.outcome_names
-            }
-            if return_encodings:
-                outputs.patient_encodings = shared_repr
-        else:
-            exposure_repr = self.exposure_pooler(sequence_output, attention_mask)
-            outcome_reprs = {
-                outcome_name: self.outcome_poolers[outcome_name](
-                    sequence_output, attention_mask
-                )
-                for outcome_name in self.outcome_names
-            }
-            if return_encodings:
-                outputs.patient_encodings = exposure_repr  # Or some combination
+        # --- Get Patient Representation from the Last Token ---
+        # Get the length of each sequence by summing the attention mask
+        sequence_lengths = torch.sum(attention_mask, dim=1)
+        # Get the index of the last token for each sample in the batch
+        last_token_indices = sequence_lengths - 1
+
+        # Use advanced indexing to select the hidden state of the last token for each sample
+        # This creates a tensor of shape [batch_size, hidden_size]
+        last_token_repr = sequence_output[
+            torch.arange(sequence_output.size(0)), last_token_indices
+        ]
+
+        # Apply bottleneck to get the final patient representation
+        patient_repr = self.encoder_bottleneck(last_token_repr)
+        outputs.bottleneck_repr = patient_repr  # Store for L1 loss calculation
 
         if return_encodings:
+            outputs.patient_encodings = patient_repr
             outputs.token_encodings = sequence_output
             outputs.pids = batch[PID_COL]
             outputs.token_ids = batch[CONCEPT_FEAT]
 
         # --- Exposure Prediction ---
-        exposure_logits = self.exposure_head(exposure_repr)
+        exposure_logits = self.exposure_head(patient_repr)
         outputs.exposure_logits = exposure_logits
 
         # --- Multiple Outcome Predictions ---
-        exposure_status = 2 * batch[EXPOSURE_TARGET] - 1  # Convert from 0/1 to -1/1
+        exposure_status = batch[EXPOSURE_TARGET]  # .to(torch.long)
+
         if cf:
-            exposure_status = -exposure_status  # Flip for counterfactual
-        # Compute logits for each outcome using its specific representation
+            exposure_status = 2 * (1 - exposure_status) - 1  # Flip for counterfactual
+
+        exposure_embedding = exposure_status  # self.exposure_embedding(exposure_status)
+
+        # Compute logits for each outcome
         outputs.outcome_logits = {}
         for outcome_name in self.outcome_names:
+            # Concatenate the patient representation with the exposure status embedding
             outcome_input = torch.cat(
-                (outcome_reprs[outcome_name], exposure_status.unsqueeze(-1)), dim=-1
-            )  # [bs, hidden_size] vs [bs] -> [bs, hidden_size + 1]
+                (patient_repr, exposure_embedding.unsqueeze(1)), dim=-1
+            )
             outputs.outcome_logits[outcome_name] = self.outcome_heads[outcome_name](
                 outcome_input
             )
@@ -217,16 +204,11 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         return outputs
 
     def _should_compute_losses(self, batch):
-        """Check if we should compute losses based on available labels. If all outcome labels are present AND Exposure is present we can compute loss."""
-
-        # Check if exposure label is present
+        """Check if we should compute losses based on available labels."""
         has_exposure_label = EXPOSURE_TARGET in batch
-
-        # Check if any outcome labels are present
         has_outcome_labels = all(
             outcome_name in batch for outcome_name in self.outcome_names
         )
-
         return has_exposure_label and has_outcome_labels
 
     def _compute_losses(self, outputs, batch):
@@ -234,7 +216,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         total_loss = 0
         outputs.outcome_losses = {}
 
-        # Only compute exposure loss if label is available
+        # Exposure loss
         if EXPOSURE_TARGET in batch:
             exposure_loss = self.exposure_loss_fct(
                 outputs.exposure_logits.view(-1) / self.temperature,
@@ -243,22 +225,19 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             outputs.exposure_loss = exposure_loss
             total_loss += exposure_loss
 
-        # Only compute outcome losses for available labels
+        # Outcome losses
         for outcome_name in self.outcome_names:
-            if outcome_name not in batch:
-                continue
-            predictions = outputs.outcome_logits[outcome_name].view(-1)
-            targets = batch[outcome_name].view(-1)
-            outcome_loss = self.outcome_loss_fcts[outcome_name](
-                predictions / self.temperature, targets
-            )
-
-            outputs.outcome_losses[outcome_name] = outcome_loss
-            total_loss += outcome_loss
+            if outcome_name in batch:
+                predictions = outputs.outcome_logits[outcome_name].view(-1)
+                targets = batch[outcome_name].view(-1)
+                outcome_loss = self.outcome_loss_fcts[outcome_name](
+                    predictions / self.temperature, targets
+                )
+                outputs.outcome_losses[outcome_name] = outcome_loss
+                total_loss += outcome_loss
 
         # Add L1 regularization on the bottleneck representation
-        if self.shared_representation and self.l1_lambda > 0:
-            # L1 norm per sample, then mean over batch
+        if self.l1_lambda > 0:
             l1_regularization = torch.norm(outputs.bottleneck_repr, p=1, dim=-1).mean()
             l1_loss = self.l1_lambda * l1_regularization
             outputs.l1_loss = l1_loss
@@ -268,18 +247,9 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
 
     @staticmethod
     def _init_weights(module: nn.Module):
-        """Initializes weights of Linear and GRU layers with a more robust scheme."""
+        """Initializes weights of Linear layers with Kaiming Normal."""
         if isinstance(module, nn.Linear):
             # Kaiming Normal is a good choice for layers followed by ReLU/GELU
             nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.GRU):
-            # Xavier uniform is a common choice for RNNs
-            for name, param in module.named_parameters():
-                if "weight_ih" in name:
-                    nn.init.xavier_uniform_(param.data)
-                elif "weight_hh" in name:
-                    nn.init.xavier_uniform_(param.data)
-                elif "bias" in name:
-                    param.data.fill_(0)

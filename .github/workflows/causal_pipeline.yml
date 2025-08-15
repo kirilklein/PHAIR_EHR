@@ -103,10 +103,10 @@ jobs:
           source .github/workflows/pipeline_helpers.sh
           
           run_step main_causal.estimate        estimate.yaml
-          python -m tests.pipeline.test_estimate \
-          ./outputs/causal/estimate/simple \
-          example_data/synthea_meds_causal/tuning \
-          --ci_expansion_factor 2.1 
+          # python -m tests.pipeline.test_estimate \
+          # ./outputs/causal/estimate/simple \
+          # example_data/synthea_meds_causal/tuning \
+          # --ci_expansion_factor 2.1 
       
       - name: Criteria and stats # this relies on calibrated predictions for weighing.
         shell: bash

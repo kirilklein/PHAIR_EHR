@@ -33,6 +33,7 @@ from corebehrt.functional.cohort_handling.advanced.vis import (
     plot_cohort_stats,
     plot_multiple_cohort_stats,
     plot_age_distribution,
+    plot_index_date_distribution,
 )
 import shutil
 from corebehrt.constants.causal.paths import (
@@ -131,7 +132,7 @@ def select_cohort(
     patients_info, exposures, index_dates, index_date_matching = _load_data(
         features_path, exposures_path, exposure, logger
     )
-
+    exposed_pids = index_dates[PID_COL].unique()
     criteria_config = load_config(criteria_definitions_path)
     shutil.copy(criteria_definitions_path, join(save_path, CRITERIA_DEFINITIONS_FILE))
     logger.info("Preparing exposed patients")
@@ -148,6 +149,7 @@ def select_cohort(
     criteria_control, index_dates_filtered_control, control_stats = _prepare_control(
         patients_info,
         index_dates_filtered_exposed,
+        exposed_pids,
         logger,
         criteria_config,
         meds_path,
@@ -189,13 +191,20 @@ def select_cohort(
         save_path=join(save_path, STATS_PATH, "age_distribution.png"),
         logger=logger,
     )
+    plot_index_date_distribution(
+        final_index_dates,
+        control_pids=index_dates_filtered_control[PID_COL].unique(),
+        save_path=join(save_path, STATS_PATH, "index_date_distribution.png"),
+        logger=logger,
+    )
 
     return pids
 
 
 def _prepare_control(
     patients_info: pd.DataFrame,
-    index_dates: pd.DataFrame,
+    filtered_exposed_index_dates: pd.DataFrame,
+    exposed_pids: List[str],
     logger: logging.Logger,
     criteria_config: dict,
     meds_path: str,
@@ -212,15 +221,13 @@ def _prepare_control(
     """
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
     if index_date_matching is None:
-        control_pids = list(
-            set(patients_info[PID_COL].unique()) - set(index_dates[PID_COL].unique())
-        )
+        control_pids = list(set(patients_info[PID_COL].unique()) - set(exposed_pids))
         if index_date_matching_cfg is None:
             index_date_matching_cfg = {"birth_year_tolerance": 3, "redraw_attempts": 3}
         control_index_dates, index_date_matching = (
             draw_index_dates_for_control_with_redraw(
                 control_pids,
-                index_dates,
+                filtered_exposed_index_dates,
                 patients_info,
                 birth_year_tolerance=index_date_matching_cfg.get(
                     "birth_year_tolerance"
