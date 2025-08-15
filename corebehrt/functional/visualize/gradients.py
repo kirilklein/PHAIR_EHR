@@ -102,6 +102,7 @@ def plot_gradient_distributions(
     bins: int = 75,
     max_subplots_per_fig: int = 16,
     cols: int = 4,
+    allow_destructive_unscaling: bool = False,
 ):
     """
     Inspects and plots the distributions of gradients, grouped by model component,
@@ -111,7 +112,7 @@ def plot_gradient_distributions(
 
     Args:
         model (nn.Module): The model whose gradients are to be plotted.
-        optimizer (Optimizer): The optimizer, needed for unscaling gradients.
+        optimizer (Optimizer): The optimizer, only needed if allow_destructive_unscaling=True.
         scaler (Optional[GradScaler]): The GradScaler for mixed precision.
         log (Callable[[str], None]): A logging function (e.g., `print`).
         run_folder (str): Base folder to save figures.
@@ -119,18 +120,32 @@ def plot_gradient_distributions(
         bins (int): Number of bins for the histograms.
         max_subplots_per_fig (int): Maximum number of subplots on a single figure.
         cols (int): Number of columns in the subplot grid.
+        allow_destructive_unscaling (bool): If True, allows calling scaler.unscale_(optimizer)
+            which mutates optimizer state. If False (default), uses non-destructive approach.
     """
-    # --- 1. Unscale gradients to view their true values ---
+    # --- 1. Handle gradient scaling non-destructively ---
     save_dir = os.path.join(run_folder, "figs")  # Base directory for figures
     os.makedirs(save_dir, exist_ok=True)
 
     unscaled_str = ""
+    scale_factor = 1.0
+
     if scaler and scaler.is_enabled():
-        try:
-            scaler.unscale_(optimizer)
-            unscaled_str = " (Unscaled)"
-        except Exception as e:
-            log(f"Warning: Could not unscale gradients for plotting: {e}")
+        if allow_destructive_unscaling:
+            # Original destructive approach (only if explicitly opted in)
+            try:
+                scaler.unscale_(optimizer)
+                unscaled_str = " (Unscaled)"
+            except Exception as e:
+                log(f"Warning: Could not unscale gradients for plotting: {e}")
+        else:
+            # Non-destructive approach: get scale and divide gradient copies
+            try:
+                scale_factor = scaler.get_scale()
+                unscaled_str = " (Unscaled)" if scale_factor != 1.0 else ""
+            except Exception as e:
+                log(f"Warning: Could not get scale factor for gradient plotting: {e}")
+                scale_factor = 1.0
 
     # --- 2. Extract and group all available gradients ---
     # Use the same grouping logic as the weight visualizer
@@ -143,7 +158,12 @@ def plot_gradient_distributions(
     }
     for name, param in model.named_parameters():
         if param.grad is not None and param.requires_grad:
-            grad_data = param.grad.detach().cpu().numpy().flatten()
+            # Create a copy of the gradient and apply unscaling if needed
+            grad_tensor = param.grad.detach().clone()
+            if scale_factor != 1.0:
+                grad_tensor = grad_tensor / scale_factor
+            grad_data = grad_tensor.cpu().numpy().flatten()
+
             if name.startswith("embeddings."):
                 grouped_gradients["Embeddings"][name] = grad_data
             elif "pooler" in name:
