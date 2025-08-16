@@ -19,6 +19,7 @@ from corebehrt.modules.monitoring.causal.metric_aggregation import (
 )
 
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
+from corebehrt.functional.io_operations.load import load_vocabulary
 from corebehrt.modules.setup.config import Config, load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
 
@@ -35,7 +36,8 @@ def main_finetune(config_path):
     logger = logging.getLogger("finetune_exp_y")
 
     loaded_data = torch.load(join(cfg.paths.prepared_data, PREPARED_ALL_PATIENTS))
-    data = CausalPatientDataset(loaded_data)
+    vocab = load_vocabulary(cfg.paths.prepared_data)
+    data = CausalPatientDataset(loaded_data, vocab)
     test_data = CausalPatientDataset([])
 
     # Initialize test and train/val pid lists

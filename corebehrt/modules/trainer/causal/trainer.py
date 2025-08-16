@@ -51,7 +51,6 @@ class CausalEHRTrainer(EHRTrainer):
         self.best_exposure_auc = None
         self.use_pcgrad = self.args.get("use_pcgrad", False)
         self.plot_histograms = self.args.get("plot_histograms", False)
-        self.save_encodings = self.args.get("save_encodings", False)
         self.plot_gradients = self.args.get("plot_gradients", False)
         self.plot_gradients_frequency = self.args.get("plot_gradients_frequency", 100)
         self._set_plateau_parameters()
@@ -218,7 +217,7 @@ class CausalEHRTrainer(EHRTrainer):
             f"Epoch {epoch} metrics: {limit_dict_for_logging(val_metrics, self.num_targets_to_log)}\n"
         )
 
-    def _evaluate(self, mode="val", save_encodings: bool = False) -> tuple:
+    def evaluate(self, mode="val") -> tuple:
         """Returns the validation/test loss and metrics for exposure and all outcomes."""
         if mode == "val":
             if self.val_dataset is None:
@@ -249,12 +248,6 @@ class CausalEHRTrainer(EHRTrainer):
             ),
         }
 
-        if save_encodings:
-            prediction_data["pids"] = []
-            prediction_data["patient_encodings"] = []
-            prediction_data["token_ids"] = []
-            prediction_data["token_encodings"] = []
-
         for outcome_name in self.outcome_names:
             prediction_data[outcome_name] = CausalPredictionData(
                 metric_values={f"{outcome_name}_{name}": [] for name in self.metrics},
@@ -270,7 +263,7 @@ class CausalEHRTrainer(EHRTrainer):
             for batch in loop:
                 self.batch_to_device(batch)
                 with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
-                    outputs = self.model(batch, return_encodings=save_encodings)
+                    outputs = self.model(batch)
                     cf_outputs = self.model(batch, cf=True)
 
                 if hasattr(outputs, "loss"):
@@ -285,8 +278,6 @@ class CausalEHRTrainer(EHRTrainer):
                     self._accumulate_predictions(
                         batch, outputs, cf_outputs, prediction_data
                     )
-                    if save_encodings:
-                        self._accumulate_encodings(outputs, prediction_data)
                 else:
                     self._calculate_batch_metrics(batch, outputs, prediction_data)
 
@@ -294,8 +285,6 @@ class CausalEHRTrainer(EHRTrainer):
             metrics = self.process_causal_classification_results(
                 prediction_data, mode, save_results=False
             )
-            if save_encodings:
-                self._save_encodings(prediction_data, mode)
         else:
             exposure_metrics = compute_avg_metrics(
                 prediction_data[EXPOSURE].metric_values
@@ -454,12 +443,6 @@ class CausalEHRTrainer(EHRTrainer):
                 cf_outputs.outcome_logits[outcome_name].float().cpu()
             )
 
-    def _accumulate_encodings(self, outputs, prediction_data):
-        prediction_data["pids"].extend(outputs.pids.tolist())
-        prediction_data["patient_encodings"].append(outputs.patient_encodings.cpu())
-        prediction_data["token_ids"].append(outputs.token_ids.cpu())
-        prediction_data["token_encodings"].append(outputs.token_encodings.cpu())
-
     def _calculate_batch_metrics(
         self,
         batch: Dict[str, torch.Tensor],
@@ -488,36 +471,6 @@ class CausalEHRTrainer(EHRTrainer):
                 prediction_data[outcome_name].metric_values[
                     f"{outcome_name}_{name}"
                 ].append(outcome_value)
-
-    def _save_encodings(self, prediction_data: dict, mode: str):
-        """Saves token and patient encodings."""
-        self.log(f"Saving encodings for mode {mode}...")
-        encodings_dir = os.path.join(self.run_folder, "encodings")
-        os.makedirs(encodings_dir, exist_ok=True)
-        # This can consume a lot of memory, but it's the most straightforward way
-        # to save the encodings per patient.
-        pids = prediction_data["pids"]
-        patient_encodings = torch.cat(prediction_data["patient_encodings"], dim=0)
-
-        # This will be very large.
-        token_ids = torch.cat(prediction_data["token_ids"], dim=0)
-        token_encodings = torch.cat(prediction_data["token_encodings"], dim=0)
-
-        patient_enc_dict = {pid: enc for pid, enc in zip(pids, patient_encodings)}
-        token_enc_dict = {
-            pid: {"token_ids": t_ids, "encodings": t_enc}
-            for pid, t_ids, t_enc in zip(pids, token_ids, token_encodings)
-        }
-
-        torch.save(
-            patient_enc_dict,
-            os.path.join(encodings_dir, f"{mode}_patient_encodings.pt"),
-        )
-        torch.save(
-            token_enc_dict, os.path.join(encodings_dir, f"{mode}_token_encodings.pt")
-        )
-
-        self.log("Encodings saved.")
 
     def _save_target_results(
         self,
@@ -563,9 +516,9 @@ class CausalEHRTrainer(EHRTrainer):
             val_exposure_loss,
             val_outcome_loss,
             val_prediction_data,
-        ) = self._evaluate(mode="val")
+        ) = self.evaluate(mode="val")
         _, test_metrics, test_exposure_loss, test_outcome_loss, test_prediction_data = (
-            self._evaluate(mode="test")
+            self.evaluate(mode="test")
         )
 
         current_metric_value = val_metrics.get(

@@ -21,6 +21,7 @@ from corebehrt.modules.preparation.causal.dataset import (
 )
 from corebehrt.modules.setup.causal.manager import CausalModelManager
 from corebehrt.modules.trainer.causal.trainer import CausalEHRTrainer
+from corebehrt.modules.trainer.encodings import EncodingSaver
 
 
 def cv_loop(
@@ -115,15 +116,15 @@ def finetune_fold(
     model = modelmanager_trained.initialize_finetune_model(
         checkpoint, outcomes, exposures
     )
-    visualize_weight_distributions(model, save_dir=join(fold_folder, "figs"))
+
+    if cfg.get("visualize_weight_distributions", False):
+        visualize_weight_distributions(model, save_dir=join(fold_folder, "figs"))
 
     trainer.model = model
     trainer.val_dataset = val_dataset
 
     logger.info("Evaluating on validation set")
-    *_, val_prediction_data = trainer._evaluate(
-        mode="val", save_encodings=cfg.get("save_encodings", False)
-    )
+    *_, val_prediction_data = trainer.evaluate(mode="val")
     if val_prediction_data is not None:
         trainer.process_causal_classification_results(
             val_prediction_data, mode="val", save_results=True
@@ -133,10 +134,13 @@ def finetune_fold(
         logger.info("Evaluating on test set")
         test_dataset = ExposureOutcomesDataset(test_data.patients)
         trainer.test_dataset = test_dataset
-        *_, test_prediction_data = trainer._evaluate(
-            mode="test", save_encodings=cfg.get("save_encodings", False)
-        )
+        *_, test_prediction_data = trainer.evaluate(mode="test")
         if test_prediction_data is not None:
             trainer.process_causal_classification_results(
                 test_prediction_data, mode="test", save_results=True
             )
+
+    if cfg.get("save_encodings", False):
+        EncodingSaver(
+            model, val_dataset, train_data.vocab, join(fold_folder, "encodings")
+        ).save()
