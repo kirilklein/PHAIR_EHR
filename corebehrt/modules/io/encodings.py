@@ -14,5 +14,9 @@ class ShardLoader:
             raise ValueError(f"No shard files found in {self.shard_dir}")
         max_shard = len(shard_files) if self.num_shards is None else self.num_shards
         return pd.concat(
-            [pd.read_parquet(os.path.join(self.shard_dir, f)) for i, f in enumerate(shard_files) if i < max_shard]
+            [
+                pd.read_parquet(os.path.join(self.shard_dir, f))
+                for i, f in enumerate(shard_files)
+                if i < max_shard
+            ]
         )
