@@ -1,5 +1,5 @@
 import os
-from typing import Dict
+from typing import Dict, List
 
 import pandas as pd
 import torch
@@ -21,8 +21,8 @@ from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 class EncodingSaver:
     """
     A class to generate and save patient and token-level encodings
-    from a trained model and a dataset. It writes data in chunks to CSV files
-    to handle very large datasets without high memory usage.
+    from a trained model and a dataset. It saves patient encodings to a single
+    parquet file and token encodings to parquet shards in a subdirectory.
     """
 
     def __init__(
@@ -39,7 +39,7 @@ class EncodingSaver:
             model: The trained PyTorch model.
             dataset: The dataset (e.g., val_dataset, test_dataset) to process.
             vocab (Dict[str, int]): The vocabulary mapping tokens to integer IDs.
-            save_dir (str): The directory where the encoding CSV files will be saved.
+            save_dir (str): The directory where the encoding files will be saved.
             batch_size (int): The batch size for processing the data.
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -55,7 +55,18 @@ class EncodingSaver:
             self.vocab[code] for code in ignore_codes if code in self.vocab
         }
 
+        # Accumulator for patient encodings
+        self.patient_batches: List[pd.DataFrame] = []
+
+        # Token encoding shard counter
+        self.token_shard_counter = 0
+
         os.makedirs(self.save_dir, exist_ok=True)
+
+        # Create token_encodings subdirectory
+        self.token_save_dir = os.path.join(self.save_dir, "token_encodings")
+        os.makedirs(self.token_save_dir, exist_ok=True)
+
         print(f"EncodingSaver initialized. Encodings will be saved to: {self.save_dir}")
         print(f"Using device: {self.device}")
         print(f"Ignoring token IDs: {self.ignore_token_ids}")
@@ -69,15 +80,11 @@ class EncodingSaver:
             collate_fn=self.dataset.collate_fn,
         )
 
-    def _process_and_save_batches(
-        self, dataloader: DataLoader, patient_filepath: str, token_filepath: str
-    ):
+    def _process_and_save_batches(self, dataloader: DataLoader):
         """
-        Iterates through the dataloader, processes each batch, and appends
-        the results directly to CSV files to conserve memory.
+        Iterates through the dataloader, processes each batch, and saves
+        token encodings as parquet shards while accumulating patient encodings.
         """
-        is_first_batch = True
-
         for batch in tqdm(dataloader, desc="Generating and Saving Encodings"):
             for key, value in batch.items():
                 if isinstance(value, torch.Tensor):
@@ -107,45 +114,57 @@ class EncodingSaver:
                 token_encodings = outputs.token_encodings[mask].cpu().numpy()
                 df_token_encodings = pd.DataFrame(
                     token_encodings,
-                    columns=[f"encoding_{i}" for i in range(token_encodings.shape[1])],
+                    columns=[f"x{i}" for i in range(token_encodings.shape[1])],
                 )
                 df_token_batch = pd.concat([df_token_meta, df_token_encodings], axis=1)
 
-                # Append to token CSV
-                df_token_batch.to_csv(
-                    token_filepath,
-                    mode="a" if not is_first_batch else "w",
-                    header=is_first_batch,
-                    index=False,
+                # Save token batch as parquet shard
+                token_shard_path = os.path.join(
+                    self.token_save_dir, f"{self.token_shard_counter}.parquet"
                 )
+                df_token_batch.to_parquet(token_shard_path, index=False)
+                self.token_shard_counter += 1
 
-            # --- Process and Save Patient-Level Encodings ---
+            # --- Process and Accumulate Patient-Level Encodings ---
             patient_encodings = outputs.patient_encodings.cpu().numpy()
+
+            # Get the last valid (non-ignored) age for each patient
+            concepts = batch[CONCEPT_FEAT]
+            mask = torch.ones_like(concepts, dtype=torch.bool, device=self.device)
+            for token_id in self.ignore_token_ids:
+                mask &= concepts != token_id
+
+            # Find the last valid token position for each patient
+            last_valid_ages = []
+            for i in range(concepts.shape[0]):  # For each patient in the batch
+                valid_positions = torch.where(mask[i])[0]
+                if len(valid_positions) > 0:
+                    last_valid_pos = valid_positions[-1].item()
+                    last_valid_ages.append(
+                        float(batch[AGE_FEAT][i, last_valid_pos].cpu().numpy().item())
+                    )
+                else:
+                    # Fallback to last position if no valid tokens (shouldn't happen normally)
+                    last_valid_ages.append(
+                        float(batch[AGE_FEAT][i, -1].cpu().numpy().item())
+                    )
+
             df_patient_meta = pd.DataFrame(
                 {
                     PID_COL: batch[PID_COL].cpu().numpy(),
-                    AGE_FEAT: batch[AGE_FEAT][:, 0]
-                    .cpu()
-                    .numpy(),  # First age as representative
+                    AGE_FEAT: last_valid_ages,  # Use last valid age after masking
                 }
             )
             df_patient_encodings = pd.DataFrame(
                 patient_encodings,
-                columns=[f"encoding_{i}" for i in range(patient_encodings.shape[1])],
+                columns=[f"x{i}" for i in range(patient_encodings.shape[1])],
             )
             df_patient_batch = pd.concat(
                 [df_patient_meta, df_patient_encodings], axis=1
             )
 
-            # Append to patient CSV
-            df_patient_batch.to_csv(
-                patient_filepath,
-                mode="a" if not is_first_batch else "w",
-                header=is_first_batch,
-                index=False,
-            )
-
-            is_first_batch = False  # After the first batch, we always append
+            # Accumulate patient batch
+            self.patient_batches.append(df_patient_batch)
 
     def save(self):
         """
@@ -153,17 +172,30 @@ class EncodingSaver:
         """
         dataloader = self._get_dataloader()
 
-        patient_filepath = os.path.join(self.save_dir, "patient_encodings.csv")
-        token_filepath = os.path.join(self.save_dir, "token_encodings.csv")
-
-        # Ensure files are clean before starting if they exist
+        # Clean up existing files/directories
+        patient_filepath = os.path.join(self.save_dir, "patient_encodings.parquet")
         if os.path.exists(patient_filepath):
             os.remove(patient_filepath)
-        if os.path.exists(token_filepath):
-            os.remove(token_filepath)
 
-        self._process_and_save_batches(dataloader, patient_filepath, token_filepath)
+        # Clean up token encodings directory
+        if os.path.exists(self.token_save_dir):
+            for file in os.listdir(self.token_save_dir):
+                file_path = os.path.join(self.token_save_dir, file)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
 
+        self._process_and_save_batches(dataloader)
+
+        # Save accumulated patient encodings to single parquet file
+        if self.patient_batches:
+            df_all_patients = pd.concat(self.patient_batches, ignore_index=True)
+            df_all_patients.to_parquet(patient_filepath, index=False)
+            print(f"\nPatient encodings saved to: {patient_filepath}")
+            print(f"Total patients: {len(df_all_patients)}")
+        else:
+            print("\nNo patient encodings to save.")
+
+        print(
+            f"Token encodings saved as {self.token_shard_counter} parquet shards in: {self.token_save_dir}"
+        )
         print("\n--- Encoding saving process complete. ---")
-        print(f"Patient encodings saved to: {patient_filepath}")
-        print(f"Token encodings saved to: {token_filepath}")
