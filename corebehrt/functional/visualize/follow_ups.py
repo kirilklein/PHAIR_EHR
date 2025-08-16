@@ -8,7 +8,7 @@ import seaborn as sns
 import matplotlib.dates as mdates
 import numpy as np
 
-from corebehrt.constants.causal.data import END_COL, START_COL
+from corebehrt.constants.causal.data import END_COL, START_COL, DEATH_COL
 from corebehrt.constants.data import PID_COL, ABSPOS_COL
 from corebehrt.functional.utils.time import get_datetime_from_hours_since_epoch
 
@@ -30,7 +30,7 @@ def plot_follow_up_distribution(
     sns.histplot(
         data=follow_ups,
         x="follow_up_days",
-        hue="has_outcome",
+        hue="exposure",
         kde=False,
         element="step",
         stat="count",
@@ -58,14 +58,15 @@ def plot_followups_timeline(
     title: str = "Follow-up Timeline (Exposures & Outcomes)",
     outcome_colors: dict[str, str] | None = None,
     save_dir: str | None = None,
+    seed: int = 42,
 ):
     """
-    Matplotlib timeline showing follow-up windows, exposures, and outcomes.
+    Matplotlib timeline showing follow-up windows, exposures, outcomes, and deaths.
     When selecting subjects randomly, their matched pairs (if any) are also included.
 
     - exposures: DataFrame with PID_COL and ABSPOS_COL (hours since epoch)
     - outcomes: Dict[name -> DataFrame with PID_COL and ABSPOS_COL]
-    - follow_ups: DataFrame with PID_COL, START_COL, END_COL (hours since epoch)
+    - follow_ups: DataFrame with PID_COL, START_COL, END_COL, DEATH_COL (hours since epoch)
     - index_date_matching: DataFrame with control_subject_id, exposed_subject_id
     """
     if follow_ups is None or follow_ups.empty:
@@ -93,7 +94,7 @@ def plot_followups_timeline(
 
         # Randomly sample from available patients until we have enough groups
         available_pids = [pid for pid in all_pids if pid not in selected_subjects]
-        np.random.seed(42)  # For reproducibility
+        np.random.seed(seed)  # For reproducibility
 
         while len(subject_groups) < n_random_subjects and available_pids:
             # Pick a random patient from those not yet selected
@@ -211,7 +212,7 @@ def plot_followups_timeline(
                 if pd.notna(r["start_dt"])
                 else False
             )
-            alpha = 1.0 if is_within else 0.35
+            alpha = 0.9 if is_within else 0.35
             ax.scatter(
                 r["time_dt"],
                 y_map[int(r[PID_COL])],
@@ -233,7 +234,7 @@ def plot_followups_timeline(
         default_outcome_colors.update(outcome_colors)
 
     # Plot exposures and outcomes
-    add_events(exposures, "Exposure", color="black", marker="^")
+    add_events(exposures, "Exposure", color="grey", marker=".")
     if outcomes:
         for name, df in sorted(outcomes.items()):
             label_name = f"Outcome: {name}"
@@ -243,6 +244,26 @@ def plot_followups_timeline(
                 color=default_outcome_colors.get(label_name, "C1"),
                 marker="o",
             )
+
+    # Add death events
+    if DEATH_COL in follow_ups.columns:
+        deaths_for_plot = follow_ups[follow_ups[PID_COL].isin(subject_ids)].copy()
+        deaths_for_plot = deaths_for_plot[deaths_for_plot[DEATH_COL].notna()]
+        if not deaths_for_plot.empty:
+            deaths_for_plot["death_dt"] = get_datetime_from_hours_since_epoch(
+                deaths_for_plot[DEATH_COL]
+            )
+            for _, row in deaths_for_plot.iterrows():
+                ax.scatter(
+                    row["death_dt"],
+                    y_map[int(row[PID_COL])],
+                    color="black",
+                    marker="x",
+                    s=80,  # Slightly larger for visibility
+                    alpha=1.0,
+                    label="Death",
+                    zorder=6,  # Ensure death markers are drawn on top
+                )
 
     # --- IMPROVEMENT: Automated legend creation to avoid duplicates ---
     # This is more robust and cleaner than manual legend building.

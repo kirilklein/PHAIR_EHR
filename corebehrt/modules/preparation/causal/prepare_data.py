@@ -130,10 +130,14 @@ class CausalDatasetPreparer:
         # 3. Compute labels and outcomes
         deaths = self._extract_deaths(data)
         self.logger.info("Computing binary labels")
-        binary_exposure, binary_outcomes, follow_ups, filtering_stats = (
-            self._compute_binary_labels(
-                exposures, outcomes, index_dates, index_date_matching, deaths
-            )
+
+        # Compute exposure targets from censored patient data instead of original exposure data
+        # This ensures consistency between exposure targets and available concepts
+        binary_exposure = self._compute_exposure_from_censored_data(data)
+
+        # Compute outcome targets normally (outcomes are not typically present in concept data)
+        binary_outcomes, follow_ups, filtering_stats = self._compute_outcome_labels(
+            outcomes, index_dates, index_date_matching, deaths, exposures
         )
 
         # 4. Assign labels to patient data
@@ -162,7 +166,7 @@ class CausalDatasetPreparer:
                 follow_ups,
                 index_date_matching,
                 save_dir=fig_dir,
-                n_random_subjects=20,
+                n_random_subjects=30,
             )
         return data
 
@@ -311,12 +315,123 @@ class CausalDatasetPreparer:
             filtering_stats,
         )
 
+    def _compute_outcome_labels(
+        self,
+        outcomes: Dict[str, pd.DataFrame],
+        index_dates: pd.DataFrame,
+        index_date_matching: pd.DataFrame,
+        deaths: pd.Series,
+        exposures: pd.DataFrame,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+        """
+        Computes binary outcome labels only (not exposure labels).
+
+        This is a modified version of _compute_binary_labels that only handles outcomes.
+        """
+        self.logger.info("Handling outcomes")
+        filtering_stats = {}
+
+        # 1. Calculate the standard follow-up period (censored by death)
+        standard_follow_ups = get_combined_follow_ups(
+            index_dates=index_dates,
+            index_date_matching=index_date_matching,
+            deaths=deaths,
+            exposures=exposures,  # Empty since we're not using it for outcomes
+            data_end=self.end_date,
+            cfg=self.outcome_cfg,
+            censor_by_death=True,
+        )
+
+        # 2. Calculate the special follow-up period for death outcomes (NOT censored by death)
+        death_follow_ups = None
+        if any(self._is_death_outcome(name) for name in outcomes.keys()):
+            death_follow_ups = get_combined_follow_ups(
+                index_dates=index_dates,
+                index_date_matching=index_date_matching,
+                deaths=deaths,
+                exposures=exposures,  # Empty since we're not using it for outcomes
+                data_end=self.end_date,
+                cfg=self.outcome_cfg,
+                censor_by_death=False,
+            )
+
+        # 3. Process each outcome
+        binary_outcomes = {}
+        min_instances_per_class = self.min_instances_per_class
+
+        for outcome_name, outcome_df in outcomes.items():
+            self.logger.info(f"Processing outcome: {outcome_name}")
+            filtering_stats[outcome_name] = {"before": outcome_df[PID_COL].nunique()}
+
+            if outcome_df.empty:
+                self.logger.warning(f"Outcome {outcome_name} has no data. Skipping.")
+                filtering_stats[outcome_name]["after"] = {
+                    "skipped": True,
+                    "reason": "Empty dataframe",
+                }
+                continue
+
+            if self._is_death_outcome(outcome_name):
+                active_follow_ups = death_follow_ups
+                self.logger.info(
+                    f"Using non-censored follow-up for death outcome: {outcome_name}"
+                )
+            else:
+                active_follow_ups = standard_follow_ups
+
+            # Generate binary label using the selected follow-up
+            binary_outcome = abspos_to_binary_outcome(active_follow_ups, outcome_df)
+
+            # Validate class balance
+            counts = binary_outcome.value_counts()
+            if len(counts) < 2 or counts.min() < min_instances_per_class:
+                self.logger.warning(
+                    f"Outcome {outcome_name} has a class with fewer than "
+                    f"{min_instances_per_class} instances. Value counts: {counts.to_dict()}. Skipping."
+                )
+                filtering_stats[outcome_name]["after"] = {
+                    "skipped": True,
+                    "reason": "Low class instances",
+                }
+                continue
+
+            filtering_stats[outcome_name]["after"] = counts.to_dict()
+            binary_outcomes[outcome_name] = binary_outcome
+
+        binary_outcomes = pd.DataFrame(binary_outcomes)
+        self.logger.info(
+            f"Binary outcomes distribution\n{binary_outcomes.apply(pd.Series.value_counts)}"
+        )
+        return binary_outcomes, standard_follow_ups, filtering_stats
+
     def _is_death_outcome(self, outcome_name: str) -> bool:
         """Determines if the outcome is death-related."""
         return (
             outcome_name.lower() in self.DEATH_OUTCOME_KEYWORDS
             or "death" in outcome_name.lower()
         )
+
+    def _compute_exposure_from_censored_data(
+        self, data: CausalPatientDataset
+    ) -> pd.Series:
+        """
+        Computes exposure targets based on the presence of exposure concepts
+        in the censored patient concept data.
+
+        This ensures consistency between the exposure targets and the actual
+        concepts available in the censored sequences.
+        """
+        exposure_code = self.vocabulary.get("EXPOSURE")
+        if exposure_code is None:
+            raise ValueError("EXPOSURE concept not found in vocabulary")
+
+        exposure_targets = {}
+        for patient in data.patients:
+            # Check if exposure concept is present in the censored concept data
+            has_exposure = int(exposure_code in set(patient.concepts))
+            exposure_targets[patient.pid] = has_exposure
+
+        return pd.Series(exposure_targets, name="exposure")
 
     def _assign_labels(
         self,
