@@ -52,7 +52,7 @@ def assign_groups_to_followups(
 
     # 3. Fill the `NaN` values. The NaNs correspond to exposed patients.
     #    We fill the NaN with the patient's own ID, making the exposed_pid the group ID.
-    follow_ups[GROUP_COL].fillna(follow_ups[PID_COL], inplace=True)
+    follow_ups[GROUP_COL] = follow_ups[GROUP_COL].fillna(follow_ups[PID_COL])
 
     # Ensure the group column is an integer type.
     follow_ups[GROUP_COL] = follow_ups[GROUP_COL].astype(int)

@@ -188,7 +188,7 @@ def plot_followups_timeline(
     death_events = None
     if DEATH_COL in fu_plot.columns and fu_plot[DEATH_COL].notna().any():
         deaths_df = fu_plot[[PID_COL, DEATH_COL]].dropna().copy()
-        deaths_df.rename(columns={DEATH_COL: ABSPOS_COL}, inplace=True)
+        deaths_df = deaths_df.rename(columns={DEATH_COL: ABSPOS_COL})
         death_events = deaths_df
 
     # --- PLOTTING SETUP ---
@@ -200,6 +200,21 @@ def plot_followups_timeline(
         for pid in group:
             y_map[pid] = y_pos
             y_pos += 1
+
+    # --- NEW: Add background shading for matched groups ---
+    group_colors = ["#F0F0F0", "white"]  # Alternating light gray and white
+    for i, group in enumerate(subject_groups):
+        # Only add shading for actual groups (more than 1 person)
+        if len(group) > 1:
+            y_coords = [y_map[pid] for pid in group]
+            # The span should cover the vertical space of the group
+            ax.axhspan(
+                min(y_coords) - 0.5,
+                max(y_coords) + 0.5,
+                color=group_colors[i % 2],
+                zorder=0,  # zorder=0 sends it to the very back
+                alpha=0.7,
+            )
 
     date_range = fu_plot["end_dt"].max() - fu_plot["start_dt"].min()
     text_offset = date_range * 0.01

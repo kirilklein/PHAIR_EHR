@@ -122,7 +122,8 @@ class CausalDatasetPreparer:
         if ABSPOS_COL not in index_dates.columns:
             index_dates[ABSPOS_COL] = get_hours_since_epoch(index_dates[TIMESTAMP_COL])
         # 2. Censor, truncate, and normalize sequences
-        self._censor_and_truncate_sequences(data, index_dates)
+        censor_dates = self._censor_and_truncate_sequences(data, index_dates)
+
         data.patients = data.process_in_parallel(normalize_segments_for_patient)
         self.logger.info(
             f"Max segment length: {max(max(p.segments, default=0) for p in data.patients)}"
@@ -161,10 +162,11 @@ class CausalDatasetPreparer:
             plot_outcome_distribution(binary_outcomes, fig_dir)
             plot_filtering_stats(filtering_stats, fig_dir)
             plot_followups_timeline(
-                exposures,
-                outcomes,
-                follow_ups,
-                index_date_matching,
+                exposures=exposures,
+                outcomes=outcomes,
+                follow_ups=follow_ups,
+                index_date_matching=index_date_matching,
+                censor_dates=censor_dates,
                 save_dir=fig_dir,
                 n_random_subjects=30,
             )
@@ -446,7 +448,7 @@ class CausalDatasetPreparer:
 
     def _censor_and_truncate_sequences(
         self, data: CausalPatientDataset, index_dates: pd.DataFrame
-    ):
+    ) -> pd.Series:
         """Applies censoring, filters short sequences, and truncates."""
         # Censor sequences based on index dates
         index_dates = index_dates.drop_duplicates(subset=PID_COL, keep="last")
@@ -495,6 +497,7 @@ class CausalDatasetPreparer:
             sep_token=self.vocabulary["[SEP]"],
             non_priority_tokens=non_priority_tokens,
         )
+        return censor_dates
 
     def load_shards_into_patient_data(
         self, pids: List[int] = None, mode: str = "tuning"
