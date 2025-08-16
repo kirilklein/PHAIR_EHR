@@ -6,9 +6,6 @@ REM -------------------------------
 
 :: Run the pipeline with inline error checking
 :: Run Preprocessing and Pretraining
-echo Delete old features
-rmdir /s /q outputs\causal\data\features
-
 echo ==== Running finetune... ====
 python -m corebehrt.main_causal.finetune_exp_y --config_path corebehrt\configs\causal\finetune\uncensored.yaml
 if errorlevel 1 goto :error

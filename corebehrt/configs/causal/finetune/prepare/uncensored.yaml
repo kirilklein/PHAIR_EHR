@@ -29,10 +29,12 @@ data:
 
 exposure:
   # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
-  n_hours_censoring: 50_000 # censor time after index date (negative means before)
+  n_hours_censoring: 300_000 # censor time after index date (negative means before)
   n_hours_start_follow_up: -1 # start follow up (considering outcomes) time after index date (negative means before)
   n_hours_end_follow_up: 10 # end follow up (considering outcomes) time after index date (negative means before)
 outcome:
-  n_hours_start_follow_up: 1 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_start_follow_up: -10_000 # start follow up (considering outcomes) time after index date (negative means before)
   n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
   n_hours_compliance: null # follow up time is adjusted based on compliance
+  group_wise_follow_up: false # if true, then group-wise follow-up times are used
+  delay_death_hours: 336 # hours to add to death time for outcomes that are coded with a delay
