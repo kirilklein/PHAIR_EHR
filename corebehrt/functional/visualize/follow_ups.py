@@ -1,15 +1,16 @@
-from pathlib import Path
 import os
 from os.path import join
+from pathlib import Path
+from typing import Dict, List, Optional
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
-import matplotlib.dates as mdates
-import numpy as np
 
-from corebehrt.constants.causal.data import END_COL, START_COL, DEATH_COL
-from corebehrt.constants.data import PID_COL, ABSPOS_COL
+from corebehrt.constants.causal.data import DEATH_COL, END_COL, START_COL
+from corebehrt.constants.data import ABSPOS_COL, PID_COL
 from corebehrt.functional.utils.time import get_datetime_from_hours_since_epoch
 
 
@@ -48,225 +49,273 @@ def plot_follow_up_distribution(
     plt.close()
 
 
-def plot_followups_timeline(
-    exposures: pd.DataFrame,
-    outcomes: dict[str, pd.DataFrame] | None,
+def _get_subject_groups(
     follow_ups: pd.DataFrame,
     index_date_matching: pd.DataFrame,
-    subject_ids: list[int] | None = None,
+    n_random_subjects: int,
+    seed: int,
+) -> List[List[int]]:
+    """Selects random subjects and includes their matched pairs."""
+    all_pids = set(follow_ups[PID_COL].astype(int).unique())
+    selected_subjects = set()
+    subject_groups = []
+
+    matching_df = index_date_matching.copy()
+    if "control_subject_id" in matching_df.columns:
+        matching_df["control_subject_id"] = matching_df["control_subject_id"].astype(
+            int
+        )
+    if "exposed_subject_id" in matching_df.columns:
+        matching_df["exposed_subject_id"] = matching_df["exposed_subject_id"].astype(
+            int
+        )
+
+    available_pids = list(all_pids)
+    np.random.seed(seed)
+
+    while len(subject_groups) < n_random_subjects and available_pids:
+        base_pid = np.random.choice(
+            [p for p in available_pids if p not in selected_subjects]
+        )
+        if base_pid in selected_subjects:
+            continue
+
+        group = {base_pid}
+
+        # Find all partners matched with base_pid
+        control_matches = matching_df[matching_df["control_subject_id"] == base_pid]
+        exposed_matches = matching_df[matching_df["exposed_subject_id"] == base_pid]
+
+        for _, row in control_matches.iterrows():
+            partner_id = int(row["exposed_subject_id"])
+            if partner_id in all_pids:
+                group.add(partner_id)
+
+        for _, row in exposed_matches.iterrows():
+            partner_id = int(row["control_subject_id"])
+            if partner_id in all_pids:
+                group.add(partner_id)
+
+        subject_groups.append(sorted(list(group)))
+        selected_subjects.update(group)
+
+    return subject_groups
+
+
+def _plot_censor_dates(ax: plt.axes, censor_dates: pd.Series, y_map: Dict[int, int]):
+    """Plots censor dates as vertical dashed lines."""
+    if censor_dates is None or censor_dates.empty:
+        return
+
+    censor_df = censor_dates.reset_index()
+    censor_df.columns = [PID_COL, "censor_abspos"]
+    censor_df[PID_COL] = censor_df[PID_COL].astype(int)
+
+    # Filter for subjects in our plot
+    subjects_in_plot = list(y_map.keys())
+    censor_df = censor_df[censor_df[PID_COL].isin(subjects_in_plot)]
+
+    if censor_df.empty:
+        return
+
+    censor_df["censor_dt"] = get_datetime_from_hours_since_epoch(
+        censor_df["censor_abspos"]
+    )
+
+    for _, row in censor_df.iterrows():
+        pid = int(row[PID_COL])
+        y = y_map[pid]
+        ax.vlines(
+            x=row["censor_dt"],
+            ymin=y - 0.4,
+            ymax=y + 0.4,
+            color="dimgray",
+            linestyle="--",
+            lw=1.5,
+            label="Censor Date",
+            zorder=4,  # Just below events
+        )
+
+
+def plot_followups_timeline(
+    exposures: pd.DataFrame,
+    outcomes: Optional[Dict[str, pd.DataFrame]],
+    follow_ups: pd.DataFrame,
+    index_date_matching: pd.DataFrame,
+    censor_dates: pd.Series,
+    subject_ids: Optional[List[int]] = None,
     n_random_subjects: int = 8,
     title: str = "Follow-up Timeline (Exposures & Outcomes)",
-    outcome_colors: dict[str, str] | None = None,
-    save_dir: str | None = None,
+    outcome_colors: Optional[Dict[str, str]] = None,
+    save_dir: Optional[str] = None,
     seed: int = 42,
 ):
     """
-    Matplotlib timeline showing follow-up windows, exposures, outcomes, and deaths.
+    Matplotlib timeline showing follow-up windows, exposures, outcomes, censor dates, and deaths.
     When selecting subjects randomly, their matched pairs (if any) are also included.
 
     - exposures: DataFrame with PID_COL and ABSPOS_COL (hours since epoch)
     - outcomes: Dict[name -> DataFrame with PID_COL and ABSPOS_COL]
     - follow_ups: DataFrame with PID_COL, START_COL, END_COL, DEATH_COL (hours since epoch)
     - index_date_matching: DataFrame with control_subject_id, exposed_subject_id
+    - censor_dates: Series with PID_COL as index and censor_date (hours since epoch) as values
     """
     if follow_ups is None or follow_ups.empty:
         print("No follow-ups provided. Nothing to plot.")
         return
 
-    # Select subjects with their matched pairs
-    all_pids = follow_ups[PID_COL].astype(int).unique()
-
+    # --- REFACTORED: Subject Selection Logic ---
     if not subject_ids:
-        # Create a set to track which subjects we've already included
-        selected_subjects = set()
-        subject_groups = []  # List of lists, each sublist is a matched group
-
-        # Convert matching dataframe columns to int for consistency
-        matching_df = index_date_matching.copy()
-        if "control_subject_id" in matching_df.columns:
-            matching_df["control_subject_id"] = matching_df[
-                "control_subject_id"
-            ].astype(int)
-        if "exposed_subject_id" in matching_df.columns:
-            matching_df["exposed_subject_id"] = matching_df[
-                "exposed_subject_id"
-            ].astype(int)
-
-        # Randomly sample from available patients until we have enough groups
-        available_pids = [pid for pid in all_pids if pid not in selected_subjects]
-        np.random.seed(seed)  # For reproducibility
-
-        while len(subject_groups) < n_random_subjects and available_pids:
-            # Pick a random patient from those not yet selected
-            base_pid = np.random.choice(available_pids)
-
-            # Find their matched group
-            group = [base_pid]
-            selected_subjects.add(base_pid)
-
-            # Check if this patient is in the matching dataframe
-            # Look for matches where base_pid is either control or exposed
-            control_matches = matching_df[matching_df["control_subject_id"] == base_pid]
-            exposed_matches = matching_df[matching_df["exposed_subject_id"] == base_pid]
-
-            # Add matched partners
-            for _, row in control_matches.iterrows():
-                partner_id = int(row["exposed_subject_id"])
-                if partner_id in all_pids and partner_id not in selected_subjects:
-                    group.append(partner_id)
-                    selected_subjects.add(partner_id)
-
-            for _, row in exposed_matches.iterrows():
-                partner_id = int(row["control_subject_id"])
-                if partner_id in all_pids and partner_id not in selected_subjects:
-                    group.append(partner_id)
-                    selected_subjects.add(partner_id)
-
-            subject_groups.append(sorted(group))  # Sort for consistent ordering
-
-            # Update available patients
-            available_pids = [pid for pid in all_pids if pid not in selected_subjects]
-
-        # Flatten the groups into a single list, maintaining group structure for y-positioning
-        subject_ids = []
-        for group in subject_groups:
-            subject_ids.extend(group)
-
+        subject_groups = _get_subject_groups(
+            follow_ups, index_date_matching, n_random_subjects, seed
+        )
+        subject_ids = [pid for group in subject_groups for pid in group]
     else:
+        all_pids = set(follow_ups[PID_COL].astype(int).unique())
         subject_ids = [int(pid) for pid in subject_ids if int(pid) in all_pids]
-        # For explicitly provided subject_ids, we'll treat each as its own group
         subject_groups = [[pid] for pid in subject_ids]
 
-    if len(subject_ids) == 0:
-        print("No matching subject_ids found in follow-ups.")
+    if not subject_ids:
+        print("No valid subject_ids found to plot.")
         return
 
-    fu = follow_ups[follow_ups[PID_COL].isin(subject_ids)].copy()
-    fu["start_dt"] = get_datetime_from_hours_since_epoch(fu[START_COL])
-    fu["end_dt"] = get_datetime_from_hours_since_epoch(fu[END_COL])
+    # --- REFACTORED: Centralized Data Preparation ---
+    fu_plot = follow_ups[follow_ups[PID_COL].isin(subject_ids)].copy()
+    fu_plot["start_dt"] = get_datetime_from_hours_since_epoch(fu_plot[START_COL])
+    fu_plot["end_dt"] = get_datetime_from_hours_since_epoch(fu_plot[END_COL])
 
-    # --- IMPROVEMENT: Tighter vertical spacing to fit more subjects ---
-    # Reduced the multiplier from 0.7 to 0.45 for denser plotting.
+    # --- REFACTORED: Prepare death data for unified event plotting ---
+    death_events = None
+    if DEATH_COL in fu_plot.columns and fu_plot[DEATH_COL].notna().any():
+        deaths_df = fu_plot[[PID_COL, DEATH_COL]].dropna().copy()
+        deaths_df.rename(columns={DEATH_COL: ABSPOS_COL}, inplace=True)
+        death_events = deaths_df
+
+    # --- PLOTTING SETUP ---
     height = max(3, 0.45 * len(subject_ids))
     fig, ax = plt.subplots(figsize=(12, height))
 
-    # Create y mapping that groups matched pairs together
-    y_pos = 0
-    y_map = {}
+    y_pos, y_map = 0, {}
     for group in subject_groups:
         for pid in group:
             y_map[pid] = y_pos
             y_pos += 1
 
-    # --- IMPROVEMENT: Calculate text offset based on plot's date range ---
-    # This makes the label placement robust to different time scales.
-    total_min_date = fu["start_dt"].min()
-    total_max_date = fu["end_dt"].max()
-    date_range = total_max_date - total_min_date
-    text_offset = date_range * 0.01  # 1% of total range
+    date_range = fu_plot["end_dt"].max() - fu_plot["start_dt"].min()
+    text_offset = date_range * 0.01
 
-    # Brackets and labels
-    for _, row in fu.iterrows():
+    # --- PLOT TIMELINE BARS ---
+    for _, row in fu_plot.iterrows():
         y = y_map[int(row[PID_COL])]
         ax.hlines(
             y=y, xmin=row["start_dt"], xmax=row["end_dt"], color="lightgray", lw=2
         )
 
-        # Determine if this patient is exposed or control
         pid = int(row[PID_COL])
         patient_type = ""
         if not index_date_matching.empty:
             if pid in index_date_matching["exposed_subject_id"].values:
-                patient_type = " (E)"  # Exposed
+                patient_type = " (E)"
             elif pid in index_date_matching["control_subject_id"].values:
-                patient_type = " (C)"  # Control
+                patient_type = " (C)"
 
-        # --- IMPROVEMENT: Smaller font and offset to the right ---
         ax.text(
-            row["end_dt"] + text_offset,  # Position text to the right
+            row["end_dt"] + text_offset,
             y,
-            f"{pid}{patient_type}",  # Add patient type indicator
+            f"{pid}{patient_type}",
             va="center",
             ha="left",
-            fontsize=8,  # Smaller font
+            fontsize=8,
             color="gray",
         )
         ax.text(row["start_dt"], y, "[", va="center", ha="right", fontsize=12)
         ax.text(row["end_dt"], y, "]", va="center", ha="left", fontsize=12)
 
-    # Prepare events
-    def add_events(df: pd.DataFrame, label: str, color: str, marker: str):
-        if df is None or df.empty:
+    # --- NEW: Plot censor dates ---
+    _plot_censor_dates(ax, censor_dates, y_map)
+
+    # --- REFACTORED: Unified Event Plotting Function ---
+    def add_events(
+        df: pd.DataFrame,
+        label: str,
+        color: str,
+        marker: str,
+        size: int,
+        alpha: float = 0.9,
+        outside_alpha: float = 0.6,
+    ):
+        if df is None or df.empty or ABSPOS_COL not in df.columns:
             return
         tmp = df[df[PID_COL].isin(subject_ids)].copy()
-        if tmp.empty or ABSPOS_COL not in tmp.columns:
+        if tmp.empty:
             return
+
         tmp["time_dt"] = get_datetime_from_hours_since_epoch(tmp[ABSPOS_COL])
-        # Use a left merge to ensure we check all events, even those outside any fu window
-        merged = tmp.merge(fu[[PID_COL, "start_dt", "end_dt"]], on=PID_COL, how="left")
+        merged = tmp.merge(
+            fu_plot[[PID_COL, "start_dt", "end_dt"]], on=PID_COL, how="left"
+        )
 
         for _, r in merged.iterrows():
-            # Check if event is within the follow-up period for that subject
             is_within = (
                 (r["start_dt"] <= r["time_dt"] <= r["end_dt"])
                 if pd.notna(r["start_dt"])
                 else False
             )
-            alpha = 0.9 if is_within else 0.35
             ax.scatter(
                 r["time_dt"],
                 y_map[int(r[PID_COL])],
                 color=color,
                 marker=marker,
-                s=40,  # Slightly larger symbols
-                alpha=alpha,
-                label=label,  # Label every point for auto-legend
-                zorder=5,  # Ensure points are drawn on top of lines
+                s=size,
+                alpha=alpha if is_within else outside_alpha,
+                label=label,
+                zorder=5,
             )
 
-    # Colors
-    default_outcome_colors = {}
+    # --- PLOT ALL EVENTS ---
+    # Define colors
+    outcome_palette = {}
     if outcomes:
         palette = sns.color_palette("Set2", n_colors=len(outcomes))
         for i, name in enumerate(sorted(outcomes.keys())):
-            default_outcome_colors[f"Outcome: {name}"] = palette[i]
+            outcome_palette[f"Outcome: {name}"] = palette[i]
     if outcome_colors:
-        default_outcome_colors.update(outcome_colors)
+        outcome_palette.update(outcome_colors)
 
-    # Plot exposures and outcomes
-    add_events(exposures, "Exposure", color="grey", marker=".")
+    # Plot exposures, outcomes, and deaths
+    add_events(
+        exposures,
+        "Exposure",
+        color="grey",
+        marker=".",
+        size=50,
+        alpha=0.9,
+        outside_alpha=0.5,
+    )
     if outcomes:
         for name, df in sorted(outcomes.items()):
-            label_name = f"Outcome: {name}"
+            label = f"Outcome: {name}"
             add_events(
                 df,
-                label_name,
-                color=default_outcome_colors.get(label_name, "C1"),
+                label,
+                color=outcome_palette.get(label, "C1"),
                 marker="o",
+                size=40,
+                alpha=1.0,
+                outside_alpha=1.0,
             )
 
-    # Add death events
-    if DEATH_COL in follow_ups.columns:
-        deaths_for_plot = follow_ups[follow_ups[PID_COL].isin(subject_ids)].copy()
-        deaths_for_plot = deaths_for_plot[deaths_for_plot[DEATH_COL].notna()]
-        if not deaths_for_plot.empty:
-            deaths_for_plot["death_dt"] = get_datetime_from_hours_since_epoch(
-                deaths_for_plot[DEATH_COL]
-            )
-            for _, row in deaths_for_plot.iterrows():
-                ax.scatter(
-                    row["death_dt"],
-                    y_map[int(row[PID_COL])],
-                    color="black",
-                    marker="x",
-                    s=80,  # Slightly larger for visibility
-                    alpha=1.0,
-                    label="Death",
-                    zorder=6,  # Ensure death markers are drawn on top
-                )
+    add_events(
+        death_events,
+        "Death",
+        color="black",
+        marker="x",
+        size=80,
+        alpha=1.0,
+        outside_alpha=0.9,
+    )
 
-    # --- IMPROVEMENT: Automated legend creation to avoid duplicates ---
-    # This is more robust and cleaner than manual legend building.
+    # --- FINALIZE PLOT ---
     handles, labels = ax.get_legend_handles_labels()
     unique_labels = dict(zip(labels, handles))
     ax.legend(
@@ -277,20 +326,18 @@ def plot_followups_timeline(
         title="Events",
     )
 
-    # Formatting
     ax.set_title(title)
     ax.set_xlabel("Time")
-    ax.set_yticks([])  # Hide y-axis ticks
-    ax.spines[["left", "right", "top"]].set_visible(False)  # Remove frame
+    ax.set_yticks([])
+    ax.spines[["left", "right", "top"]].set_visible(False)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
     ax.grid(axis="x", linestyle=":", alpha=0.5)
-    fig.tight_layout(rect=[0, 0, 0.85, 1])  # Adjust layout to make space for legend
+    fig.tight_layout(rect=[0, 0, 0.85, 1])
 
-    # Save or show plot
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         path = join(save_dir, "follow_ups_timeline.png")
-        fig.savefig(path, dpi=200)
+        fig.savefig(path, dpi=200, bbox_inches="tight")
         print(f"Plot saved to {path}")
     else:
         plt.show()
