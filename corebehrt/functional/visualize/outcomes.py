@@ -126,7 +126,7 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
         plot_data.append(
             {
                 "name": name,
-                "status": "After Positive Events",  # Renamed for clarity
+                "status": "Within Follow-up Window",  # Renamed for clarity
                 "count": positive_events_after,
             }
         )
