@@ -12,6 +12,7 @@ def main(processed_data_dir: str, exposure_code: str = "EXPOSURE"):
     exposure_mismatches = 0
     exposure_no_code = 0
     code_no_exposure = 0
+    exposure_mismatch_pids = []
 
     # Check outcome consistency for all outcome types
     outcome_stats = {}
@@ -23,6 +24,7 @@ def main(processed_data_dir: str, exposure_code: str = "EXPOSURE"):
 
         if has_exposure_code != has_exposure_label:
             exposure_mismatches += 1
+            exposure_mismatch_pids.append(p.pid)
             if has_exposure_label and not has_exposure_code:
                 exposure_no_code += 1
             elif has_exposure_code and not has_exposure_label:
@@ -36,6 +38,7 @@ def main(processed_data_dir: str, exposure_code: str = "EXPOSURE"):
                     "outcome_no_code": 0,
                     "code_no_outcome": 0,
                     "total_patients": 0,
+                    "mismatch_pids": [],
                 }
 
             outcome_stats[outcome_name]["total_patients"] += 1
@@ -47,6 +50,7 @@ def main(processed_data_dir: str, exposure_code: str = "EXPOSURE"):
 
                 if has_outcome_code != has_outcome_label:
                     outcome_stats[outcome_name]["mismatches"] += 1
+                    outcome_stats[outcome_name]["mismatch_pids"].append(p.pid)
                     if has_outcome_label and not has_outcome_code:
                         outcome_stats[outcome_name]["outcome_no_code"] += 1
                     elif has_outcome_code and not has_outcome_label:
@@ -70,6 +74,9 @@ def main(processed_data_dir: str, exposure_code: str = "EXPOSURE"):
         print(
             f"  - {code_no_exposure} patients w/ code in sequence, wo/ exposure label"
         )
+        print(
+            f"  - Example PIDs with exposure mismatches: {exposure_mismatch_pids[:10]}"
+        )
 
     # Report outcome results
     overall_success = exposure_mismatches == 0
@@ -89,6 +96,9 @@ def main(processed_data_dir: str, exposure_code: str = "EXPOSURE"):
             )
             print(
                 f"  - {stats['code_no_outcome']} patients w/ code in sequence, wo/ outcome label"
+            )
+            print(
+                f"  - Example PIDs with {outcome_name} mismatches: {stats['mismatch_pids'][:10]}"
             )
 
     if overall_success:

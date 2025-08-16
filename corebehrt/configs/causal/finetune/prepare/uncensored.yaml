@@ -6,7 +6,7 @@ paths:
   ## INPUTS
   features: ./outputs/causal/data/features
   tokenized: ./outputs/causal/data/tokenized
-  cohort: ./outputs/causal/finetune/cohorts/full # path to cohort directory
+  cohort: ./outputs/causal/finetune/cohorts/full_uncensored/ # path to cohort directory
 
   outcomes: ./outputs/causal/finetune/outcomes
   outcome_files: # should correspond to the file names in the outcomes directory
