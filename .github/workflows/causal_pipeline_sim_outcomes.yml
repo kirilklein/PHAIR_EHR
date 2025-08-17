@@ -91,6 +91,19 @@ jobs:
           source .github/workflows/pipeline_helpers.sh
           
           run_step main_causal.estimate        estimate_simulated_with_bias.yaml
+      - name: Run XGBoost baseline test
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          python -m tests.pipeline.train_xgb_baseline \
+          --data_path ./outputs/causal/finetune/prepared_data_simulated \
+          --min_roc_auc 0.6 \
+          --target-bounds "exposure:min:0.8,max:1" \
+          --target-bounds "OUTCOME:min:0.7,max:1" \
+          --target-bounds "OUTCOME_2:min:0.7,max:1" \
+          --target-bounds "OUTCOME_3:min:0.7,max:1"
+
       - name: Test Estimate Result
         shell: bash
         run: |
