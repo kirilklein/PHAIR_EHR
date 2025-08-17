@@ -228,17 +228,12 @@ class CausalDatasetPreparer:
         deaths: pd.Series,
     ) -> Tuple[pd.Series, pd.DataFrame, pd.DataFrame, dict]:
         """
-        Computes binary exposure and outcome labels.
-
-        This refactored version pre-computes two sets of follow-up periods:
-        1.  A standard follow-up, censored by death.
-        2.  A special follow-up for death outcomes, which is not censored by death.
-        Inside the loop, it selects the appropriate pre-computed follow-up,
-        improving efficiency and clarity.
+        Computes binary exposure and delegates outcome label computation.
         """
-        self.logger.info("Handling exposures and outcomes")
+        self.logger.info("Handling exposures")
         filtering_stats = {}
 
+        # --- Exposure Calculation ---
         filtering_stats[EXPOSURE] = {"before": exposures[PID_COL].nunique()}
         exposure_follow_ups = prepare_follow_ups_simple(
             index_dates,
@@ -248,80 +243,29 @@ class CausalDatasetPreparer:
         )
         binary_exposure = abspos_to_binary_outcome(exposure_follow_ups, exposures)
         filtering_stats[EXPOSURE]["after"] = binary_exposure.value_counts().to_dict()
-        # --- Refactored Outcome Handling ---
-        self.logger.info("Pre-calculating follow-up periods for outcomes.")
 
-        # 1. Calculate the standard follow-up period (censored by death)
-        standard_follow_ups = get_combined_follow_ups(
-            index_dates=index_dates,
-            index_date_matching=index_date_matching,
-            deaths=deaths,
-            exposures=exposures,
-            data_end=self.end_date,
-            cfg=self.outcome_cfg,
-            censor_by_death=True,
-        )
-
-        # 2. Calculate the special follow-up period for death outcomes (NOT censored by death)
-        if any(self._is_death_outcome(name) for name in outcomes.keys()):
-            death_follow_ups = get_combined_follow_ups(
+        # --- Outcome Calculation (Delegated) ---
+        binary_outcomes, standard_follow_ups, outcome_stats = (
+            self._compute_outcome_labels(
+                outcomes=outcomes,
                 index_dates=index_dates,
                 index_date_matching=index_date_matching,
                 deaths=deaths,
                 exposures=exposures,
-                data_end=self.end_date,
-                cfg=self.outcome_cfg,
-                censor_by_death=False,
             )
+        )
 
-        binary_outcomes = {}
-        min_instances_per_class = self.outcome_cfg.min_instances_per_class
+        # --- Combine Stats & Finalize ---
+        filtering_stats.update(outcome_stats)
 
-        for outcome_name, outcome_df in outcomes.items():
-            filtering_stats[outcome_name] = {"before": outcome_df[PID_COL].nunique()}
-
-            if outcome_df.empty:
-                self.logger.warning(f"Outcome {outcome_name} has no data. Skipping.")
-                filtering_stats[outcome_name]["after"] = {
-                    "skipped": True,
-                    "reason": "Empty dataframe",
-                }
-                continue
-
-            if self._is_death_outcome(outcome_name):
-                active_follow_ups = death_follow_ups
-                self.logger.info(
-                    f"Using non-censored follow-up for death outcome: {outcome_name}"
-                )
-            else:
-                active_follow_ups = standard_follow_ups
-
-            # Generate binary label using the selected follow-up
-            binary_outcome = abspos_to_binary_outcome(active_follow_ups, outcome_df)
-
-            # Validate class balance
-            counts = binary_outcome.value_counts()
-            if len(counts) < 2 or counts.min() < min_instances_per_class:
-                self.logger.warning(
-                    f"Outcome {outcome_name} has a class with fewer than "
-                    f"{min_instances_per_class} instances. Value counts: {counts.to_dict()}. Skipping."
-                )
-                filtering_stats[outcome_name]["after"] = {
-                    "skipped": True,
-                    "reason": "Low class instances",
-                }
-                continue
-
-            filtering_stats[outcome_name]["after"] = counts.to_dict()
-            binary_outcomes[outcome_name] = binary_outcome
-        binary_outcomes = pd.DataFrame(binary_outcomes)
         self.logger.info(
             f"Binary exposure distribution\n{binary_exposure.value_counts()}"
         )
         self.logger.info(
             f"Binary outcomes distribution\n{binary_outcomes.apply(pd.Series.value_counts)}"
         )
-        # Return the standard follow-ups as the representative DataFrame
+
+        # Return the standard follow-ups as the representative DataFrame for outcomes
         return (
             binary_exposure,
             binary_outcomes,
@@ -329,7 +273,7 @@ class CausalDatasetPreparer:
             filtering_stats,
         )
 
-    def compute_outcome_labels(
+    def _compute_outcome_labels(
         self,
         outcomes: Dict[str, pd.DataFrame],
         index_dates: pd.DataFrame,
@@ -338,8 +282,8 @@ class CausalDatasetPreparer:
         exposures: pd.DataFrame,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
         """
-        Computes binary outcome labels only.
-        This is a modified version of _compute_binary_labels that only handles outcomes.
+        Computes binary outcome labels.
+        This is the dedicated method for outcome processing.
         """
         self.logger.info("Handling outcomes")
         filtering_stats = {}
@@ -392,10 +336,7 @@ class CausalDatasetPreparer:
             else:
                 active_follow_ups = standard_follow_ups
 
-            # Generate binary label using the selected follow-up
             binary_outcome = abspos_to_binary_outcome(active_follow_ups, outcome_df)
-
-            # Validate class balance
             counts = binary_outcome.value_counts()
             if len(counts) < 2 or counts.min() < min_instances_per_class:
                 self.logger.warning(
@@ -412,9 +353,6 @@ class CausalDatasetPreparer:
             binary_outcomes[outcome_name] = binary_outcome
 
         binary_outcomes = pd.DataFrame(binary_outcomes)
-        self.logger.info(
-            f"Binary outcomes distribution\n{binary_outcomes.apply(pd.Series.value_counts)}"
-        )
         return binary_outcomes, standard_follow_ups, filtering_stats
 
     def _is_death_outcome(self, outcome_name: str) -> bool:

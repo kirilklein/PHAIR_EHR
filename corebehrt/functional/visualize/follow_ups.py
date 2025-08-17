@@ -315,7 +315,7 @@ def plot_follow_up_duration_distribution(
     sns.histplot(
         data=follow_ups,
         x="follow_up_days",
-        hue="exposure",
+        hue="has_outcome",
         kde=False,
         element="step",
         stat="count",
