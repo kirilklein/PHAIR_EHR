@@ -70,11 +70,13 @@ def plot_followup_start_end_distribution(
         xlabel = "Days relative to index date"
         title_suffix = "(relative)"
     elif mode == "absolute":
-        # Convert hours to days for a more interpretable x-axis
-        df["start_plot"] = df[start_col] / 24
-        df["end_plot"] = df[end_col] / 24
-        xlabel = "Days since epoch"
+        # --- MODIFICATION START ---
+        # Convert hours since epoch to datetime objects for a calendar-time axis
+        df["start_plot"] = get_datetime_from_hours_since_epoch(df[start_col])
+        df["end_plot"] = get_datetime_from_hours_since_epoch(df[end_col])
+        xlabel = "Date"
         title_suffix = "(absolute)"
+        # --- MODIFICATION END ---
     else:
         raise ValueError("mode must be 'relative' or 'absolute'")
 
@@ -109,6 +111,16 @@ def plot_followup_start_end_distribution(
     axes[1].set_xlabel(xlabel)
     axes[1].set_ylabel("Density")
     axes[1].grid(True, alpha=0.3)
+
+    # --- MODIFICATION START ---
+    # Add date formatting for absolute mode
+    if mode == "absolute":
+        # Format the x-axis to show dates nicely
+        date_format = mdates.DateFormatter("%Y-%m")
+        axes[1].xaxis.set_major_formatter(date_format)
+        axes[1].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=10))
+        fig.autofmt_xdate()  # Auto-formats the x-axis labels (rotation, alignment)
+    # --- MODIFICATION END ---
 
     os.makedirs(out_dir, exist_ok=True)
     plt.tight_layout()
