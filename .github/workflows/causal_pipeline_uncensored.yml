@@ -51,7 +51,7 @@ jobs:
           source .github/workflows/pipeline_helpers.sh
           
           run_step main.create_outcomes                     outcomes.yaml
-          run_step main_causal.select_cohort_full           select_cohort_full/extract.yaml
+          run_step main_causal.select_cohort_full           select_cohort_full/extract_uncensored.yaml
 
       - name: Prepare Finetune Data
         shell: bash
@@ -67,6 +67,26 @@ jobs:
           source .github/workflows/pipeline_helpers.sh
           run_step main_causal.finetune_exp_y         finetune/uncensored.yaml
           
+      - name: Validate uncensored data preparation
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          python -m tests.pipeline.test_uncensored_prepared --processed_data_dir ./outputs/causal/finetune/prepared_data_uncensored
+
+      - name: Run XGBoost baseline test
+        shell: bash
+        run: |
+          set -euo pipefail
+          l
+          python -m tests.pipeline.train_xgb_baseline \
+          --data_path ./outputs/causal/finetune/prepared_data_uncensored \
+          --min_roc_auc 0.6 \
+          --target-bounds "exposure:min:0.9,max:1" \
+          --target-bounds "OUTCOME:min:0.9,max:1" \
+          --target-bounds "OUTCOME_2:min:0.9,max:1" \
+          --target-bounds "OUTCOME_3:min:0.9,max:1"
+
       - name: Check performance
         shell: bash
         run: |

@@ -6,6 +6,11 @@ REM -------------------------------
 
 :: Run the pipeline with inline error checking
 :: Run Preprocessing and Pretraining
+
+echo ==== Running select_cohort... ====
+python -m corebehrt.main_causal.select_cohort_full --config_path corebehrt\configs\causal\select_cohort_full\extract_uncensored.yaml
+if errorlevel 1 goto :error
+
 echo ==== Running prepare_finetune_data... ====
 python -m corebehrt.main_causal.prepare_ft_exp_y --config_path corebehrt\configs\causal\finetune\prepare\uncensored.yaml
 if errorlevel 1 goto :error
