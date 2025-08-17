@@ -41,7 +41,7 @@ from corebehrt.functional.preparation.utils import (
 )
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.functional.visualize.follow_ups import (
-    plot_follow_up_distribution,
+    plot_follow_up_duration_distribution,
     plot_followups_timeline,
 )
 from corebehrt.functional.visualize.outcomes import (
@@ -158,7 +158,8 @@ class CausalDatasetPreparer:
         self._save_artifacts(artifacts, self.paths_cfg.prepared_data)
         if follow_ups is not None:
             fig_dir = join(self.paths_cfg.prepared_data, "figures")
-            plot_follow_up_distribution(follow_ups, binary_exposure, fig_dir)
+            plot_follow_up_duration_distribution(follow_ups, binary_exposure, fig_dir)
+
             plot_outcome_distribution(binary_outcomes, fig_dir)
             plot_filtering_stats(filtering_stats, fig_dir)
             plot_followups_timeline(

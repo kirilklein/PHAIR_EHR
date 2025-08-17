@@ -14,7 +14,7 @@ from corebehrt.constants.data import ABSPOS_COL, PID_COL
 from corebehrt.functional.utils.time import get_datetime_from_hours_since_epoch
 
 
-def plot_follow_up_distribution(
+def plot_follow_up_duration_distribution(
     follow_ups: pd.DataFrame, binary_exposure: pd.Series, out_dir: str
 ):
     """
