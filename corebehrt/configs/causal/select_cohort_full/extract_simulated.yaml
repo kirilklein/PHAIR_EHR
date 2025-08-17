@@ -16,7 +16,7 @@ paths:
 
 time_windows: # if not provided we can use exposures to get the index dates
   data_end:
-    year: 2050
+    year: 2025
     month: 01
     day: 01
   data_start:
