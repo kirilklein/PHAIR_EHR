@@ -10,8 +10,251 @@ import pandas as pd
 import seaborn as sns
 
 from corebehrt.constants.causal.data import DEATH_COL, END_COL, START_COL
-from corebehrt.constants.data import ABSPOS_COL, PID_COL
-from corebehrt.functional.utils.time import get_datetime_from_hours_since_epoch
+from corebehrt.constants.data import ABSPOS_COL, PID_COL, TIMESTAMP_COL
+from corebehrt.functional.utils.time import (
+    get_datetime_from_hours_since_epoch,
+    get_hours_since_epoch,
+)
+
+
+def plot_followup_start_end_distribution(
+    follow_ups: pd.DataFrame,
+    exposure: pd.Series,
+    out_dir: str,
+    *,
+    pid_col: str = PID_COL,
+    start_col: str = START_COL,  # absolute hours since epoch
+    end_col: str = END_COL,  # absolute hours since epoch
+    index_col: str = TIMESTAMP_COL,  # datetime object or string
+    mode: str = "relative",  # "relative" or "absolute"
+    colors: dict | None = None,  # optional, e.g. {0: "tab:blue", 1:"tab:orange"}
+    dpi: int = 300,
+):
+    """
+    Plots the distribution of follow-up start and end times, grouped by exposure.
+
+    - mode="relative": x = days since index date (time=0 at index_col)
+    - mode="absolute": x = time (normal calendar-time view)
+    """
+    # Minimal prep
+    df = follow_ups[[pid_col, start_col, end_col, index_col]].copy()
+    df = df.merge(
+        exposure.rename("exposure"), left_on=pid_col, right_index=True, how="left"
+    )
+    df["exposure"] = df["exposure"].fillna(0).astype(int)
+
+    # Convert index_col to hours since epoch if it's a datetime object or string
+    if pd.api.types.is_string_dtype(
+        df[index_col]
+    ) or pd.api.types.is_datetime64_any_dtype(df[index_col]):
+        df[index_col] = pd.to_datetime(df[index_col]).apply(get_hours_since_epoch)
+
+    # Ensure all columns are numeric (hours since epoch)
+    for col in [start_col, end_col, index_col]:
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = pd.to_datetime(df[col]).apply(get_hours_since_epoch)
+
+    df = df.dropna(subset=[start_col, end_col, index_col])
+
+    # Ensure start <= end
+    swap = df[start_col] > df[end_col]
+    if swap.any():
+        df.loc[swap, [start_col, end_col]] = df.loc[
+            swap, [end_col, start_col]
+        ].to_numpy()
+
+    # Choose x-transform
+    if mode == "relative":
+        df["start_plot"] = (df[start_col] - df[index_col]) / 24
+        df["end_plot"] = (df[end_col] - df[index_col]) / 24
+        xlabel = "Days relative to index date"
+        title_suffix = "(relative)"
+    elif mode == "absolute":
+        # Convert hours to days for a more interpretable x-axis
+        df["start_plot"] = df[start_col] / 24
+        df["end_plot"] = df[end_col] / 24
+        xlabel = "Days since epoch"
+        title_suffix = "(absolute)"
+    else:
+        raise ValueError("mode must be 'relative' or 'absolute'")
+
+    # Plotting
+    fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True, dpi=dpi)
+
+    # Plot start times distribution
+    sns.kdeplot(
+        data=df,
+        x="start_plot",
+        hue="exposure",
+        ax=axes[0],
+        palette=colors,
+        fill=True,
+        common_norm=False,
+    )
+    axes[0].set_title(f"Distribution of Follow-up Start Times {title_suffix}")
+    axes[0].set_ylabel("Density")
+    axes[0].grid(True, alpha=0.3)
+
+    # Plot end times distribution
+    sns.kdeplot(
+        data=df,
+        x="end_plot",
+        hue="exposure",
+        ax=axes[1],
+        palette=colors,
+        fill=True,
+        common_norm=False,
+    )
+    axes[1].set_title(f"Distribution of Follow-up End Times {title_suffix}")
+    axes[1].set_xlabel(xlabel)
+    axes[1].set_ylabel("Density")
+    axes[1].grid(True, alpha=0.3)
+
+    os.makedirs(out_dir, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(
+        join(out_dir, f"follow_up_start_end_distribution_{mode}.png"),
+        dpi=dpi,
+        bbox_inches="tight",
+    )
+    plt.close()
+
+    print(
+        f"Plot saved to {join(out_dir, f'follow_up_start_end_distribution_{mode}.png')}"
+    )
+
+
+def plot_followup_coverage(
+    follow_ups: pd.DataFrame,
+    exposure: pd.Series,
+    out_dir: str,
+    *,
+    pid_col: str = PID_COL,
+    start_col: str = START_COL,  # absolute hours since epoch
+    end_col: str = END_COL,  # absolute hours since epoch
+    index_col: str = TIMESTAMP_COL,  # absolute hours since epoch (index date)
+    mode: str = "relative",  # "relative" or "absolute"
+    normalize: bool = True,  # True → proportions, False → counts
+    colors: dict | None = None,  # optional, e.g. {0: "tab:blue", 1:"tab:orange"}
+    dpi: int = 300,
+):
+    """
+    Coverage of patients under follow-up over time, grouped by exposure.
+    - mode="relative": x = days since index date (time=0 at index_col)
+    - mode="absolute": x = time (normal calendar-time view)
+    - normalize=True: plot proportions; False: plot counts
+    Returns a tidy DataFrame with (x, count, proportion, exposure).
+    """
+    # Minimal prep
+    df = follow_ups[[pid_col, start_col, end_col, index_col]].copy()
+    df = df.merge(
+        exposure.rename("exposure"), left_on=pid_col, right_index=True, how="left"
+    )
+    df["exposure"] = df["exposure"].fillna(0).astype(int)
+
+    # Convert index_col to hours since epoch if it's a datetime object or string
+    if pd.api.types.is_string_dtype(
+        df[index_col]
+    ) or pd.api.types.is_datetime64_any_dtype(df[index_col]):
+        df[index_col] = pd.to_datetime(df[index_col]).apply(get_hours_since_epoch)
+
+    # Ensure all columns are numeric (hours since epoch)
+    for col in [start_col, end_col, index_col]:
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = pd.to_datetime(df[col]).apply(get_hours_since_epoch)
+
+    df = df.dropna(subset=[start_col, end_col, index_col])
+
+    # Ensure start <= end
+    swap = df[start_col] > df[end_col]
+    if swap.any():
+        df.loc[swap, [start_col, end_col]] = df.loc[
+            swap, [end_col, start_col]
+        ].to_numpy()
+
+    # Choose x-transform
+    if mode == "relative":
+        start_d = np.floor((df[start_col] - df[index_col]) / 24).astype(int)
+        end_d = np.ceil((df[end_col] - df[index_col]) / 24).astype(int)
+    elif mode == "absolute":
+        start_d = np.floor(df[start_col] / 24).astype(int)
+        end_d = np.ceil(df[end_col] / 24).astype(int)
+    else:
+        raise ValueError("mode must be 'relative' or 'absolute'")
+
+    df["start_d"], df["end_d"] = start_d, end_d
+    xmin, xmax = int(df["start_d"].min()), int(df["end_d"].max())
+    L = xmax - xmin + 2  # sentinel slot
+
+    # Build coverage per exposure using a difference array
+    curves = []
+    for g in sorted(df["exposure"].unique()):
+        sub = df[df["exposure"] == g]
+        if sub.empty:
+            continue
+        total = sub[pid_col].nunique()
+
+        diff = np.zeros(L, dtype=np.int32)
+        s = (sub["start_d"].to_numpy() - xmin).clip(0, L - 1)
+        e = (sub["end_d"].to_numpy() - xmin).clip(0, L - 1)
+        np.add.at(diff, s, 1)
+        e1 = e + 1
+        np.add.at(diff, e1[e1 < L], -1)
+
+        counts = diff.cumsum()[:-1]
+        x = np.arange(xmin, xmax + 1)
+        curves.append(
+            pd.DataFrame(
+                {
+                    "x": x,
+                    "count": counts,
+                    "proportion": counts / total if total > 0 else 0.0,
+                    "exposure": g,
+                    "total_patients": total,
+                }
+            )
+        )
+
+    coverage = pd.concat(curves, ignore_index=True)
+
+    # Plot
+    __doc__, ax = plt.subplots(figsize=(10, 5))
+    ycol = "proportion" if normalize else "count"
+    for g in sorted(coverage["exposure"].unique()):
+        part = coverage[coverage["exposure"] == g]
+        ax.plot(
+            part["x"],
+            part[ycol],
+            label=f"Exposure={g}",
+            linewidth=2,
+            **({"color": colors[g]} if (colors and g in colors) else {}),
+        )
+
+    if mode == "relative":
+        ax.axvline(0, linestyle="--", alpha=0.6)
+
+    ax.set_xlabel(
+        "Days relative to index" if mode == "relative" else "Days since epoch"
+    )
+    ax.set_ylabel(
+        "Proportion under follow-up" if normalize else "Patients under follow-up"
+    )
+    ax.set_title(
+        "Follow-up coverage" + (" (relative)" if mode == "relative" else " (absolute)")
+    )
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+
+    os.makedirs(out_dir, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(
+        join(out_dir, f"follow_up_coverage_curve_{mode}.png"),
+        dpi=dpi,
+        bbox_inches="tight",
+    )
+    plt.close()
+
+    return coverage
 
 
 def plot_follow_up_duration_distribution(
