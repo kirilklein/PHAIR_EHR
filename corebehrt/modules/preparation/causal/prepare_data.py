@@ -134,13 +134,10 @@ class CausalDatasetPreparer:
         deaths = self._extract_deaths(data)
         self.logger.info("Computing binary labels")
 
-        # Compute exposure targets from censored patient data instead of original exposure data
-        # This ensures consistency between exposure targets and available concepts
-        binary_exposure = self._compute_exposure_from_censored_data(data)
-
-        # Compute outcome targets normally (outcomes are not typically present in concept data)
-        binary_outcomes, follow_ups, filtering_stats = self._compute_outcome_labels(
-            outcomes, index_dates, index_date_matching, deaths, exposures
+        binary_exposure, binary_outcomes, follow_ups, filtering_stats = (
+            self._compute_binary_labels(
+                exposures, outcomes, index_dates, index_date_matching, deaths
+            )
         )
 
         # 4. Assign labels to patient data
@@ -332,7 +329,7 @@ class CausalDatasetPreparer:
             filtering_stats,
         )
 
-    def _compute_outcome_labels(
+    def compute_outcome_labels(
         self,
         outcomes: Dict[str, pd.DataFrame],
         index_dates: pd.DataFrame,
@@ -341,8 +338,7 @@ class CausalDatasetPreparer:
         exposures: pd.DataFrame,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
         """
-        Computes binary outcome labels only (not exposure labels).
-
+        Computes binary outcome labels only.
         This is a modified version of _compute_binary_labels that only handles outcomes.
         """
         self.logger.info("Handling outcomes")
@@ -353,7 +349,7 @@ class CausalDatasetPreparer:
             index_dates=index_dates,
             index_date_matching=index_date_matching,
             deaths=deaths,
-            exposures=exposures,  # Empty since we're not using it for outcomes
+            exposures=exposures,
             data_end=self.end_date,
             cfg=self.outcome_cfg,
             censor_by_death=True,
@@ -366,7 +362,7 @@ class CausalDatasetPreparer:
                 index_dates=index_dates,
                 index_date_matching=index_date_matching,
                 deaths=deaths,
-                exposures=exposures,  # Empty since we're not using it for outcomes
+                exposures=exposures,
                 data_end=self.end_date,
                 cfg=self.outcome_cfg,
                 censor_by_death=False,
