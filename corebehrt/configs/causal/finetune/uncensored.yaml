@@ -14,9 +14,10 @@ paths:
 
 model:
   head:
-    shared_representation: true # whether to share the bigru representation for exposure and outcome
+    shared_representation: false # whether to share the bigru representation for exposure and outcome
     bidirectional: true
-    bottleneck_dim: 64
+    bottleneck_dim: 16
+visualize_weight_distributions: true
 
 trainer_args:
   loss_weight_function:
@@ -37,13 +38,14 @@ trainer_args:
   use_pcgrad: true
 
 optimizer:
-  lr: 7e-3
+  lr: 2e-3
   eps: 1e-6
+  head_lr_factor: 2 # Head learning rate = lr * head_lr_factor
 
 scheduler:
-  _target_: transformers.get_linear_schedule_with_warmup
-  num_training_epochs: 15
-  num_warmup_epochs: 3
+  _target_: transformers.get_cosine_schedule_with_warmup
+  num_training_epochs: 10
+  num_warmup_epochs: 2
 
 metrics:
   roc_auc:
