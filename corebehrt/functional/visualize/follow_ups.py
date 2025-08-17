@@ -136,6 +136,73 @@ def plot_followup_start_end_distribution(
     )
 
 
+def _prepare_followup_data_for_coverage(
+    follow_ups: pd.DataFrame,
+    exposure: pd.Series,
+    pid_col: str,
+    start_col: str,
+    end_col: str,
+    index_col: str,
+) -> pd.DataFrame:
+    """Prepares and cleans the follow-up and exposure data for plotting."""
+    df = follow_ups[[pid_col, start_col, end_col, index_col]].copy()
+    df = df.merge(
+        exposure.rename("exposure"), left_on=pid_col, right_index=True, how="left"
+    )
+    df["exposure"] = df["exposure"].fillna(0).astype(int)
+
+    for col in [start_col, end_col, index_col]:
+        if pd.api.types.is_string_dtype(
+            df[col]
+        ) or pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = pd.to_datetime(df[col]).apply(get_hours_since_epoch)
+
+    df = df.dropna(subset=[start_col, end_col, index_col])
+
+    swap = df[start_col] > df[end_col]
+    if swap.any():
+        df.loc[swap, [start_col, end_col]] = df.loc[
+            swap, [end_col, start_col]
+        ].to_numpy()
+
+    return df
+
+
+def _calculate_coverage_curves(df: pd.DataFrame, pid_col: str) -> pd.DataFrame:
+    """Calculates coverage curves using a difference array for efficiency."""
+    xmin, xmax = int(df["start_d"].min()), int(df["end_d"].max())
+    L = xmax - xmin + 2  # +2 for sentinel slot and inclusive range
+
+    curves = []
+    for g in sorted(df["exposure"].unique()):
+        sub = df[df["exposure"] == g]
+        if sub.empty:
+            continue
+        total = sub[pid_col].nunique()
+
+        diff = np.zeros(L, dtype=np.int32)
+        s = (sub["start_d"].to_numpy() - xmin).clip(0, L - 1)
+        e = (sub["end_d"].to_numpy() - xmin).clip(0, L - 1)
+
+        np.add.at(diff, s, 1)
+        e1 = e + 1
+        np.add.at(diff, e1[e1 < L], -1)
+
+        counts = diff.cumsum()[:-1]
+        x = np.arange(xmin, xmax + 1)
+        curves.append(
+            pd.DataFrame(
+                {
+                    "x": x,
+                    "count": counts,
+                    "proportion": counts / total if total > 0 else 0.0,
+                    "exposure": g,
+                }
+            )
+        )
+    return pd.concat(curves, ignore_index=True)
+
+
 def plot_followup_coverage(
     follow_ups: pd.DataFrame,
     exposure: pd.Series,
@@ -151,121 +218,83 @@ def plot_followup_coverage(
     dpi: int = 300,
 ):
     """
-    Coverage of patients under follow-up over time, grouped by exposure.
+    Plots coverage of patients under follow-up over time, grouped by exposure.
+
     - mode="relative": x = days since index date (time=0 at index_col)
     - mode="absolute": x = time (normal calendar-time view)
     - normalize=True: plot proportions; False: plot counts
-    Returns a tidy DataFrame with (x, count, proportion, exposure).
+    Returns a tidy DataFrame with the calculated coverage data.
     """
-    # Minimal prep
-    df = follow_ups[[pid_col, start_col, end_col, index_col]].copy()
-    df = df.merge(
-        exposure.rename("exposure"), left_on=pid_col, right_index=True, how="left"
+    # 1. Prepare Data
+    df = _prepare_followup_data_for_coverage(
+        follow_ups, exposure, pid_col, start_col, end_col, index_col
     )
-    df["exposure"] = df["exposure"].fillna(0).astype(int)
 
-    # Convert index_col to hours since epoch if it's a datetime object or string
-    if pd.api.types.is_string_dtype(
-        df[index_col]
-    ) or pd.api.types.is_datetime64_any_dtype(df[index_col]):
-        df[index_col] = pd.to_datetime(df[index_col]).apply(get_hours_since_epoch)
-
-    # Ensure all columns are numeric (hours since epoch)
-    for col in [start_col, end_col, index_col]:
-        if pd.api.types.is_datetime64_any_dtype(df[col]):
-            df[col] = pd.to_datetime(df[col]).apply(get_hours_since_epoch)
-
-    df = df.dropna(subset=[start_col, end_col, index_col])
-
-    # Ensure start <= end
-    swap = df[start_col] > df[end_col]
-    if swap.any():
-        df.loc[swap, [start_col, end_col]] = df.loc[
-            swap, [end_col, start_col]
-        ].to_numpy()
-
-    # Choose x-transform
+    # 2. Calculate integer-day start/end points
     if mode == "relative":
-        start_d = np.floor((df[start_col] - df[index_col]) / 24).astype(int)
-        end_d = np.ceil((df[end_col] - df[index_col]) / 24).astype(int)
+        df["start_d"] = np.floor((df[start_col] - df[index_col]) / 24).astype(int)
+        df["end_d"] = np.ceil((df[end_col] - df[index_col]) / 24).astype(int)
+        xlabel = "Days relative to index"
     elif mode == "absolute":
-        start_d = np.floor(df[start_col] / 24).astype(int)
-        end_d = np.ceil(df[end_col] / 24).astype(int)
+        df["start_d"] = np.floor(df[start_col] / 24).astype(int)  # Days since epoch
+        df["end_d"] = np.ceil(df[end_col] / 24).astype(int)  # Days since epoch
+        xlabel = "Date"
     else:
         raise ValueError("mode must be 'relative' or 'absolute'")
 
-    df["start_d"], df["end_d"] = start_d, end_d
-    xmin, xmax = int(df["start_d"].min()), int(df["end_d"].max())
-    L = xmax - xmin + 2  # sentinel slot
+    # 3. Calculate Coverage Curves
+    coverage = _calculate_coverage_curves(df, pid_col)
 
-    # Build coverage per exposure using a difference array
-    curves = []
-    for g in sorted(df["exposure"].unique()):
-        sub = df[df["exposure"] == g]
-        if sub.empty:
-            continue
-        total = sub[pid_col].nunique()
-
-        diff = np.zeros(L, dtype=np.int32)
-        s = (sub["start_d"].to_numpy() - xmin).clip(0, L - 1)
-        e = (sub["end_d"].to_numpy() - xmin).clip(0, L - 1)
-        np.add.at(diff, s, 1)
-        e1 = e + 1
-        np.add.at(diff, e1[e1 < L], -1)
-
-        counts = diff.cumsum()[:-1]
-        x = np.arange(xmin, xmax + 1)
-        curves.append(
-            pd.DataFrame(
-                {
-                    "x": x,
-                    "count": counts,
-                    "proportion": counts / total if total > 0 else 0.0,
-                    "exposure": g,
-                    "total_patients": total,
-                }
-            )
+    # 4. Transform x-axis for plotting
+    if mode == "absolute":
+        # Convert integer days since epoch back to datetime for plotting
+        coverage["x_plot"] = pd.to_datetime("1970-01-01") + pd.to_timedelta(
+            coverage["x"], unit="D"
         )
+    else:
+        coverage["x_plot"] = coverage["x"]  # For relative, x is just integer days
 
-    coverage = pd.concat(curves, ignore_index=True)
-
-    # Plot
-    __doc__, ax = plt.subplots(figsize=(10, 5))
+    # 5. Plotting
+    fig, ax = plt.subplots(figsize=(10, 5), dpi=dpi)
     ycol = "proportion" if normalize else "count"
+
     for g in sorted(coverage["exposure"].unique()):
         part = coverage[coverage["exposure"] == g]
+        color_arg = {"color": colors[g]} if (colors and g in colors) else {}
         ax.plot(
-            part["x"],
+            part["x_plot"],
             part[ycol],
             label=f"Exposure={g}",
             linewidth=2,
-            **({"color": colors[g]} if (colors and g in colors) else {}),
+            **color_arg,
         )
 
     if mode == "relative":
-        ax.axvline(0, linestyle="--", alpha=0.6)
+        ax.axvline(0, linestyle="--", alpha=0.6, color="k")
 
-    ax.set_xlabel(
-        "Days relative to index" if mode == "relative" else "Days since epoch"
-    )
+    if mode == "absolute":
+        # Format the x-axis to show dates nicely
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=10))
+        fig.autofmt_xdate()
+
+    ax.set_xlabel(xlabel)
     ax.set_ylabel(
         "Proportion under follow-up" if normalize else "Patients under follow-up"
     )
-    ax.set_title(
-        "Follow-up coverage" + (" (relative)" if mode == "relative" else " (absolute)")
-    )
+    ax.set_title(f"Follow-up coverage ({mode})")
     ax.grid(True, alpha=0.3)
     ax.legend()
+    ax.margins(x=0.01)
 
     os.makedirs(out_dir, exist_ok=True)
     plt.tight_layout()
-    plt.savefig(
-        join(out_dir, f"follow_up_coverage_curve_{mode}.png"),
-        dpi=dpi,
-        bbox_inches="tight",
-    )
+
+    save_path = join(out_dir, f"follow_up_coverage_curve_{mode}.png")
+    plt.savefig(save_path, dpi=dpi, bbox_inches="tight")
     plt.close()
 
+    print(f"Plot saved to {save_path}")
     return coverage
 
 
