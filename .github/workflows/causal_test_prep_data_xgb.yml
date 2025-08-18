@@ -1,4 +1,4 @@
-name: 'Causal test (data preparation)'
+name: 'Causal test (data preparation)+xgb test'
 
 on:
   workflow_dispatch:
@@ -48,6 +48,7 @@ jobs:
           source .github/workflows/pipeline_helpers.sh
           run_step main.create_outcomes                     outcomes.yaml
           run_step main_causal.select_cohort_full           select_cohort_full/extract.yaml
+          run_step main_causal.select_cohort_full           select_cohort_full/extract_uncensored.yaml
 
       - name: Prepare Finetune Data
         shell: bash
