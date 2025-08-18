@@ -12,6 +12,7 @@ paths:
   model: ./outputs/causal/finetune/models/simulated # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 save_encodings: true
+visualize_weight_distributions: true
 model:
   head:
     shared_representation: false # whether to share the bigru representation for exposure and outcome
