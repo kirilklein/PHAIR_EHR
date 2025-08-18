@@ -40,7 +40,6 @@ trainer_args:
 optimizer:
   lr: 2e-3
   eps: 1e-6
-  head_lr_factor: 2 # Head learning rate = lr * head_lr_factor
 
 scheduler:
   _target_: transformers.get_cosine_schedule_with_warmup
