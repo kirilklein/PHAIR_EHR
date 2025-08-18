@@ -53,6 +53,7 @@ trainer_args:
 optimizer:
   lr: 5e-4
   eps: 1e-6
+  weight_decay: 0
 
 scheduler:
   _target_: transformers.get_linear_schedule_with_warmup
