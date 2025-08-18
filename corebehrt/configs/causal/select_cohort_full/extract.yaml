@@ -35,3 +35,4 @@ test_ratio: 0 # can be set to 1 for test set creation only
 index_date_matching:
   birth_year_tolerance: 3
   redraw_attempts: 2
+  age_adjusted: true # Set to false for non-age-adjusted sampling/ true by default

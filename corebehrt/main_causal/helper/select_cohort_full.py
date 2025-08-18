@@ -233,6 +233,7 @@ def _prepare_control(
                     "birth_year_tolerance"
                 ),
                 redraw_attempts=index_date_matching_cfg.get("redraw_attempts"),
+                age_adjusted=index_date_matching_cfg.get("age_adjusted", True),
             )
         )
         index_date_matching[ABSPOS_COL] = get_hours_since_epoch(
