@@ -17,6 +17,7 @@ model:
     shared_representation: false # whether to share the bigru representation for exposure and outcome
     bidirectional: true
     bottleneck_dim: 16
+    pooling_strategy: gru # cls or gru
 visualize_weight_distributions: true
 
 trainer_args:
