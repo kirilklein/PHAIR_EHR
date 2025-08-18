@@ -84,7 +84,7 @@ def plot_followup_start_end_distribution(
     fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True, dpi=dpi)
 
     # Plot start times distribution
-    sns.kdeplot(
+    sns.histplot(
         data=df,
         x="start_plot",
         hue="exposure",
@@ -98,7 +98,7 @@ def plot_followup_start_end_distribution(
     axes[0].grid(True, alpha=0.3)
 
     # Plot end times distribution
-    sns.kdeplot(
+    sns.histplot(
         data=df,
         x="end_plot",
         hue="exposure",
