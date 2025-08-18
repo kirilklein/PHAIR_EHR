@@ -3,7 +3,9 @@ import torch
 from os.path import join
 
 
-def main(processed_data_dir: str, exposure_code: str = "EXPOSURE", tolerance: float = 0.05):
+def main(
+    processed_data_dir: str, exposure_code: str = "EXPOSURE", tolerance: float = 0.05
+):
     patients = torch.load(join(processed_data_dir, "patients.pt"))
     vocabulary = torch.load(join(processed_data_dir, "vocabulary.pt"))
 
@@ -68,12 +70,12 @@ def main(processed_data_dir: str, exposure_code: str = "EXPOSURE", tolerance: fl
         else:
             percentage_diff = exposure_mismatch_rate * 100
             print(
-                f"✓ Exposure ({exposure_code}): {exposure_mismatches}/{n_patients} patients ({percentage_diff:.2f}%) have mismatched exposure labels and codes (within tolerance of {tolerance*100:.1f}%)"
+                f"✓ Exposure ({exposure_code}): {exposure_mismatches}/{n_patients} patients ({percentage_diff:.2f}%) have mismatched exposure labels and codes (within tolerance of {tolerance * 100:.1f}%)"
             )
     else:
         percentage_diff = exposure_mismatch_rate * 100
         print(
-            f"✗ Exposure ({exposure_code}): {exposure_mismatches}/{n_patients} patients ({percentage_diff:.2f}%) have mismatched exposure labels and codes (exceeds tolerance of {tolerance*100:.1f}%)"
+            f"✗ Exposure ({exposure_code}): {exposure_mismatches}/{n_patients} patients ({percentage_diff:.2f}%) have mismatched exposure labels and codes (exceeds tolerance of {tolerance * 100:.1f}%)"
         )
         print(
             f"  - {exposure_no_code} patients w/ exposure label, wo/ code in sequence"
@@ -97,13 +99,13 @@ def main(processed_data_dir: str, exposure_code: str = "EXPOSURE", tolerance: fl
             else:
                 percentage_diff = outcome_mismatch_rate * 100
                 print(
-                    f"✓ Outcome ({outcome_name}): {stats['mismatches']}/{stats['total_patients']} patients ({percentage_diff:.2f}%) have mismatched outcome labels and codes (within tolerance of {tolerance*100:.1f}%)"
+                    f"✓ Outcome ({outcome_name}): {stats['mismatches']}/{stats['total_patients']} patients ({percentage_diff:.2f}%) have mismatched outcome labels and codes (within tolerance of {tolerance * 100:.1f}%)"
                 )
         else:
             overall_success = False
             percentage_diff = outcome_mismatch_rate * 100
             print(
-                f"✗ Outcome ({outcome_name}): {stats['mismatches']}/{stats['total_patients']} patients ({percentage_diff:.2f}%) have mismatched outcome labels and codes (exceeds tolerance of {tolerance*100:.1f}%)"
+                f"✗ Outcome ({outcome_name}): {stats['mismatches']}/{stats['total_patients']} patients ({percentage_diff:.2f}%) have mismatched outcome labels and codes (exceeds tolerance of {tolerance * 100:.1f}%)"
             )
             print(
                 f"  - {stats['outcome_no_code']} patients w/ outcome label, wo/ code in sequence"
@@ -126,7 +128,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--processed_data_dir", type=str, required=True)
     parser.add_argument("--exposure_code", type=str, required=False, default="EXPOSURE")
-    parser.add_argument("--tolerance", type=float, required=False, default=0.05,
-                        help="Tolerance for mismatch rate (default: 0.05 = 5%%)")
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        required=False,
+        default=0.05,
+        help="Tolerance for mismatch rate (default: 0.05 = 5%%)",
+    )
     args = parser.parse_args()
     main(args.processed_data_dir, args.exposure_code, args.tolerance)
