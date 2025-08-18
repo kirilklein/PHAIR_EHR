@@ -22,6 +22,7 @@ from corebehrt.modules.preparation.causal.dataset import (
 from corebehrt.modules.setup.causal.manager import CausalModelManager
 from corebehrt.modules.trainer.causal.trainer import CausalEHRTrainer
 from corebehrt.modules.trainer.encodings import EncodingSaver
+from corebehrt.modules.model.causal.initialize import initialize_sigmoid_bias
 
 
 def cv_loop(
@@ -87,6 +88,9 @@ def finetune_fold(
     )  # needed for sampler/ can be made optional
     exposures = train_data.get_exposures()
     model = modelmanager.initialize_finetune_model(checkpoint, outcomes, exposures)
+
+    if cfg.model.get("initialize_sigmoid_bias", False):
+        model = initialize_sigmoid_bias(model, outcomes, exposures, logger)
 
     optimizer, sampler, scheduler, cfg = modelmanager.initialize_training_components(
         model, outcomes
