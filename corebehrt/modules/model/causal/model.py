@@ -13,7 +13,11 @@ from torch.nn import BCEWithLogitsLoss
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
 from corebehrt.constants.data import ATTENTION_MASK, CONCEPT_FEAT, PID_COL
-from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
+from corebehrt.modules.model.causal.heads import (
+    CLSPooler,
+    MLPHead,
+    PatientRepresentationPooler,
+)
 from corebehrt.modules.model.causal.loss import FocalLossWithLogits
 from corebehrt.modules.model.model import CorebehrtEncoder
 from corebehrt.modules.trainer.utils import limit_dict_for_logging, pos_weight_to_alpha
@@ -64,21 +68,32 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             )
 
     def _setup_pooling_layers(self, config):
+        pooling_strategy = self.head_config.get("pooling_strategy", "gru")
+        logger.info(f"Using pooling strategy: '{pooling_strategy}'")
+
+        if pooling_strategy == "cls":
+            PoolerClass = CLSPooler
+        elif pooling_strategy == "gru":
+            PoolerClass = PatientRepresentationPooler
+        else:
+            raise ValueError(
+                f"Unsupported pooling strategy: {pooling_strategy}. Choose 'cls' or 'gru'."
+            )
         if self.shared_representation:
             logger.info("Using shared patient representation")
             # A single pooler for all tasks
-            self.pooler = PatientRepresentationPooler(
+            self.pooler = PoolerClass(
                 hidden_size=config.hidden_size, bidirectional=self.bidirectional
             )
         else:
             logger.info("Using separate patient representations")
             # Separate poolers for exposure and each outcome
-            self.exposure_pooler = PatientRepresentationPooler(
+            self.exposure_pooler = PoolerClass(
                 hidden_size=config.hidden_size, bidirectional=self.bidirectional
             )
             self.outcome_poolers = nn.ModuleDict()
             for outcome_name in self.outcome_names:
-                self.outcome_poolers[outcome_name] = PatientRepresentationPooler(
+                self.outcome_poolers[outcome_name] = PoolerClass(
                     hidden_size=config.hidden_size, bidirectional=self.bidirectional
                 )
 
