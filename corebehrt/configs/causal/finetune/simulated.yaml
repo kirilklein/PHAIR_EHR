@@ -21,9 +21,9 @@ model:
     l1_lambda: 0 # .2
     temperature: 1
   loss:
-    name: bce # bce by default
+    name: focal # bce by default
     #params: # alpha is computed from pos_weight
-    # gamma: 2.0
+    gamma: 2.0
   initialize_sigmoid_bias: false
 
 trainer_args:
@@ -39,11 +39,11 @@ trainer_args:
   shuffle: true
   checkpoint_frequency: 1
   early_stopping: 3
-  stopping_criterion: roc_auc
+  stopping_criterion: val_loss
   n_layers_to_freeze: 0
   freeze_encoder_on_plateau: true
   freeze_encoder_on_plateau_threshold: 0.01
-  freeze_encoder_on_plateau_patience: 4
+  freeze_encoder_on_plateau_patience: 5
 
   use_pcgrad: false
   plot_histograms: true
@@ -57,7 +57,7 @@ optimizer:
   weight_decay: 0
 
 scheduler:
-  _target_: transformers.get_linear_schedule_with_warmup
+  _target_: transformers.get_cosine_schedule_with_warmup
   num_training_epochs: 15
   num_warmup_epochs: 2
 
