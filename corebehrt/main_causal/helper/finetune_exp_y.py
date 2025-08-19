@@ -23,6 +23,7 @@ from corebehrt.modules.setup.causal.manager import CausalModelManager
 from corebehrt.modules.trainer.causal.trainer import CausalEHRTrainer
 from corebehrt.modules.trainer.encodings import EncodingSaver
 from corebehrt.modules.model.causal.initialize import initialize_sigmoid_bias
+from corebehrt.modules.plot.patient_encodings import EncodingAnalyzer
 
 
 def cv_loop(
@@ -145,6 +146,7 @@ def finetune_fold(
             )
 
     if cfg.get("save_encodings", False):
-        EncodingSaver(
-            model, val_dataset, train_data.vocab, join(fold_folder, "encodings")
-        ).save()
+        encoding_dir = join(fold_folder, "encodings")
+        EncodingSaver(model, val_dataset, train_data.vocab, encoding_dir).save()
+        if cfg.get("visualize_encodings", False):
+            EncodingAnalyzer(encoding_dir, join(encoding_dir, "figs")).analyze()
