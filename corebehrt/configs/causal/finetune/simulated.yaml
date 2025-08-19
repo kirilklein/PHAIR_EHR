@@ -11,8 +11,11 @@ paths:
   ## OUTPUTS
   model: ./outputs/causal/finetune/models/simulated # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
+
 save_encodings: true
-visualize_weight_distributions: true
+visualize_encodings: true
+visualize_weight_distributions: false
+
 model:
   head:
     shared_representation: false # whether to share the bigru representation for exposure and outcome
@@ -20,10 +23,11 @@ model:
     bottleneck_dim: 128
     l1_lambda: 0 # .2
     temperature: 1
+    pooling_strategy: gru # cls or gru
   loss:
     name: focal # bce by default
-    #params: # alpha is computed from pos_weight
-    gamma: 2.0
+    params:
+      gamma: 2.0
   initialize_sigmoid_bias: false
 
 trainer_args:
