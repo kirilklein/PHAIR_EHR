@@ -5,6 +5,7 @@ cross-validation folds, saving model checkpoints, and aggregating predictions.
 It handles dataset preparation, model initialization, and training loop execution.
 """
 
+import logging
 import os
 from os.path import join
 from typing import Dict, List
@@ -28,7 +29,7 @@ from corebehrt.modules.plot.patient_encodings import EncodingAnalyzer
 
 def cv_loop(
     cfg,
-    logger,
+    logger: logging.Logger,
     finetune_folder: str,
     data: CausalPatientDataset,
     folds: list,
@@ -53,7 +54,7 @@ def cv_loop(
 
 def finetune_fold(
     cfg,
-    logger,
+    logger: logging.Logger,
     finetune_folder: str,
     train_data: CausalPatientDataset,
     val_data: CausalPatientDataset,
@@ -149,4 +150,7 @@ def finetune_fold(
         encoding_dir = join(fold_folder, "encodings")
         EncodingSaver(model, val_dataset, train_data.vocab, encoding_dir).save()
         if cfg.get("visualize_encodings", False):
-            EncodingAnalyzer(encoding_dir, join(encoding_dir, "figs")).analyze()
+            try:
+                EncodingAnalyzer(encoding_dir, join(encoding_dir, "figs")).analyze()
+            except Exception as e:
+                logger.exception(f"Failed to visualize encodings: {e}")
