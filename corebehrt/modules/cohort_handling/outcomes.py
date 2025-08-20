@@ -1,5 +1,6 @@
 import logging
 import time
+import json
 from os.path import join
 from typing import Dict, List
 
@@ -38,6 +39,12 @@ class OutcomeMaker:
             outcome: True for outcome in outcomes
         }  # write header for all outcomes on first call
 
+        # Initialize stats tracking
+        self.stats = {
+            outcome: {"total_outcomes": 0, "unique_subjects": set()}
+            for outcome in outcomes
+        }
+
     def __call__(
         self,
         concepts_plus: pd.DataFrame,
@@ -62,6 +69,9 @@ class OutcomeMaker:
                     concepts_plus, attrs["type"], attrs["match"], attrs
                 )
 
+            # Update stats before writing
+            self._update_stats(outcome, timestamps)
+
             self._write_df(timestamps, outcomes_path, outcome)
             end_time = time.time()
             logger.info(f"Time taken for {outcome}: {end_time - start_time} seconds")
@@ -69,6 +79,10 @@ class OutcomeMaker:
         logger.info(
             f"Total time taken for batch: {total_time_end - total_time_start} seconds"
         )
+
+        # Log cumulative stats and save to JSON
+        self._log_stats()
+        self._save_stats_to_json(outcomes_path)
 
     @staticmethod
     def _prepare_concepts_plus(concepts_plus: pd.DataFrame) -> pd.DataFrame:
@@ -254,3 +268,52 @@ class OutcomeMaker:
         return self.match_concepts(
             concepts_plus, config["type"], config["match"], extra_params
         )
+
+    def _update_stats(self, outcome: str, timestamps: pd.DataFrame) -> None:
+        """Update statistics for an outcome."""
+        if not timestamps.empty:
+            # Update total count
+            batch_count = len(timestamps)
+            self.stats[outcome]["total_outcomes"] += batch_count
+
+            # Update unique subjects
+            unique_subjects_in_batch = set(timestamps[PID_COL].unique())
+            self.stats[outcome]["unique_subjects"].update(unique_subjects_in_batch)
+
+            logger.info(
+                f"Outcome {outcome}: +{batch_count} outcomes, "
+                f"+{len(unique_subjects_in_batch)} subjects in this batch"
+            )
+
+    def _log_stats(self) -> None:
+        """Log cumulative statistics for all outcomes."""
+        logger.info("=== Cumulative Outcome Statistics ===")
+        for outcome, stats in self.stats.items():
+            total_outcomes = stats["total_outcomes"]
+            unique_subject_count = len(stats["unique_subjects"])
+            logger.info(
+                f"{outcome}: {total_outcomes} total outcomes, "
+                f"{unique_subject_count} unique subjects"
+            )
+
+    def _save_stats_to_json(self, outcomes_path: str) -> None:
+        """Save cumulative statistics to a JSON file."""
+        stats_for_json = self.get_stats()
+        stats_file_path = join(outcomes_path, "outcome_statistics.json")
+
+        try:
+            with open(stats_file_path, "w") as f:
+                json.dump(stats_for_json, f, indent=2)
+            logger.info(f"Outcome statistics saved to: {stats_file_path}")
+        except Exception as e:
+            logger.error(f"Failed to save outcome statistics to JSON: {e}")
+
+    def get_stats(self) -> Dict[str, Dict[str, int]]:
+        """Return current statistics as a dictionary."""
+        return {
+            outcome: {
+                "total_outcomes": stats["total_outcomes"],
+                "unique_subjects": len(stats["unique_subjects"]),
+            }
+            for outcome, stats in self.stats.items()
+        }
