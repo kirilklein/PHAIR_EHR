@@ -12,8 +12,8 @@ paths:
   model: ./outputs/causal/finetune/models/simulated # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
-save_encodings: true
-visualize_encodings: true
+save_encodings: false
+visualize_encodings: false
 visualize_weight_distributions: false
 
 model:
@@ -52,7 +52,7 @@ trainer_args:
   use_pcgrad: false
   plot_histograms: true
   save_curves: false
-  plot_gradients: true
+  plot_gradients: false
   plot_gradients_frequency: 20
 
 optimizer:
