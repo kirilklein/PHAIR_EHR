@@ -1,6 +1,7 @@
 import os
 import json
 import warnings
+from typing import Optional
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -45,13 +46,13 @@ class EncodingAnalyzer:
         os.makedirs(self.save_dir, exist_ok=True)
 
         # Initialize data and result holders
-        self.patient_encodings_df = None
-        self.embeddings = None
-        self.pids = None
+        self.patient_encodings_df: Optional[pd.DataFrame] = None
+        self.embeddings: Optional[np.ndarray] = None
+        self.pids: Optional[np.ndarray] = None
         self.analysis_results = {}
-        self.embeddings_pca = None
-        self.embeddings_umap = None
-        self.embeddings_tsne = None
+        self.embeddings_pca: Optional[np.ndarray] = None
+        self.embeddings_umap: Optional[np.ndarray] = None
+        self.embeddings_tsne: Optional[np.ndarray] = None
         self.pca_model = None
 
         print(f"EncodingAnalyzer initialized. Reading from: {self.encoding_dir}")
@@ -140,11 +141,15 @@ class EncodingAnalyzer:
         umap_reducer = umap.UMAP(
             n_components=2, random_state=42, n_neighbors=15, min_dist=0.1
         )
-        self.embeddings_umap = umap_reducer.fit_transform(embeddings_pca_full)
+        self.embeddings_umap = np.asarray(
+            umap_reducer.fit_transform(embeddings_pca_full)
+        )
 
         print("Computing t-SNE...")
         tsne_reducer = TSNE(n_components=2, random_state=42, perplexity=30)
-        self.embeddings_tsne = tsne_reducer.fit_transform(embeddings_pca_full)
+        self.embeddings_tsne = np.asarray(
+            tsne_reducer.fit_transform(embeddings_pca_full)
+        )
 
     def _generate_main_visualization(self):
         """Generates and saves the first 2x3 summary plot."""
