@@ -91,20 +91,23 @@ class OutcomeMaker:
         - Remove missing timestamps
         - Get only relevant columns
         - Add absolute positions
-        - Convert absolute positions to int
         - Convert concept column to categorical
+        - Convert value column to string for consistent matching
         """
         concepts_plus = remove_missing_timestamps(concepts_plus)
         concepts_plus = concepts_plus[
             [PID_COL, TIMESTAMP_COL, CONCEPT_COL, VALUE_COL]
         ]  # get only relevant columns
         concepts_plus[ABSPOS_COL] = get_hours_since_epoch(concepts_plus[TIMESTAMP_COL])
-        concepts_plus[ABSPOS_COL] = concepts_plus[ABSPOS_COL].astype(int)
         concepts_plus[CONCEPT_COL] = pd.Categorical(concepts_plus[CONCEPT_COL])
         # Pre-compute a lowercase version for fast case-insensitive matching
         concepts_plus[f"{CONCEPT_COL}_lower"] = (
             concepts_plus[CONCEPT_COL].astype(str).str.lower()
         )
+        # Convert VALUE_COL to string for consistent matching
+        concepts_plus[VALUE_COL] = concepts_plus[VALUE_COL].astype(str)
+        # Pre-compute a lowercase version for case-insensitive value matching
+        concepts_plus[f"{VALUE_COL}_lower"] = concepts_plus[VALUE_COL].str.lower()
         return concepts_plus
 
     def _write_df(
