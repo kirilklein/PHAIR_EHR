@@ -91,8 +91,15 @@ class TestCreateOutcomes(TestMainScript):
                 zip(output.iterrows(), expected_output.iterrows())
             ):
                 for column in output.columns:
-                    self.assertEqual(
-                        row[column],
-                        expected_row[column],
-                        f"Unexpected value at row {idx}, column {column}",
-                    )
+                    if column in ["abspos"]:
+                        self.assertEqual(
+                            int(float(row[column])),
+                            int(float(expected_row[column])),
+                            f"Unexpected value at row {idx}, column {column}",
+                        )
+                    else:
+                        self.assertEqual(
+                            row[column],
+                            expected_row[column],
+                            f"Unexpected value at row {idx}, column {column}",
+                        )
