@@ -6,7 +6,7 @@ import numpy as np
 import seaborn as sns
 from typing import Union, Dict, List, Optional
 import pandas as pd
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 from matplotlib.axes import Axes
 
 

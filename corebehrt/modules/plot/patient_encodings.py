@@ -11,7 +11,8 @@ from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import umap
 from corebehrt.constants.data import PID_COL
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
+
 
 # Suppress common warnings from visualization libraries
 warnings.filterwarnings("ignore")

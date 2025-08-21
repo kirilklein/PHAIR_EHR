@@ -13,7 +13,7 @@ from matplotlib.axes import Axes
 from corebehrt.constants.causal.data import EXPOSURE
 from corebehrt.functional.visualize.calibrate import plot_probas_hist
 from corebehrt.modules.trainer.causal.utils import CausalPredictionData
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 
 # --- Configuration ---

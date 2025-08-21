@@ -39,7 +39,7 @@ from corebehrt.functional.cohort_handling.stats import (
     get_stratified_stats,
 )
 from corebehrt.functional.utils.log import log_table
-from corebehrt.azure.util.azure import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 logger = logging.getLogger("get_stat")
 

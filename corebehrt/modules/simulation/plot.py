@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 
 def plot_hist(p_exposure, output_dir):

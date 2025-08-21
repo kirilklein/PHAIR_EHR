@@ -15,7 +15,8 @@ from corebehrt.constants.causal.data import (
     TARGETS,
 )
 from corebehrt.constants.data import PID_COL
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
+
 
 def save_ps_distribution_figure(subject_ids, ps_scores, exposures):
     """

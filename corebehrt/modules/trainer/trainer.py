@@ -19,7 +19,7 @@ from corebehrt.modules.monitoring.metric_aggregation import (
 from corebehrt.modules.setup.config import Config, instantiate_class
 from corebehrt.modules.trainer.freezing import freeze_bottom_layers, unfreeze_all_layers
 from corebehrt.modules.trainer.utils import is_plateau
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 yaml.add_representer(Config, lambda dumper, data: data.yaml_repr(dumper))
 

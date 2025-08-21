@@ -19,7 +19,7 @@ from corebehrt.functional.visualize.calibrate import (
 )
 from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
-from corebehrt.azure.util.azure import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from typing import List, Tuple

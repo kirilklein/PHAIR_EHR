@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from os.path import join
 import os
 import seaborn as sns
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 
 def plot_outcome_distribution(

@@ -14,7 +14,8 @@ from corebehrt.constants.causal.data import (
     TMLEAnalysisColumns,
 )
 
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
+
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 

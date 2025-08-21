@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.optim import Optimizer
 from torch.cuda.amp import GradScaler
 from typing import Callable, Optional, Dict
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 from matplotlib.axes import Axes
 from typing import List
 

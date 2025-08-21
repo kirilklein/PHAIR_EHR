@@ -15,7 +15,7 @@ from corebehrt.functional.utils.time import (
     get_datetime_from_hours_since_epoch,
     get_hours_since_epoch,
 )
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 
 def plot_followup_start_end_distribution(

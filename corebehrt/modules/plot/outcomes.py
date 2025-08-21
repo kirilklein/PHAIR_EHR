@@ -10,7 +10,8 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
+
 from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 
 logger = logging.getLogger(__name__)

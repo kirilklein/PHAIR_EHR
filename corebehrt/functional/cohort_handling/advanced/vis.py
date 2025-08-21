@@ -9,7 +9,7 @@ import pandas as pd
 import seaborn as sns
 import logging
 from corebehrt.constants.data import PID_COL, AGE_COL, TIMESTAMP_COL
-from corebehrt.azure.util.azure import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 from matplotlib.axes import Axes
 from matplotlib.container import BarContainer
 

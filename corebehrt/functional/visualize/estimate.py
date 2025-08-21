@@ -14,7 +14,7 @@ from corebehrt.modules.plot.estimate import (
     AdjustmentPlotConfig,
     AdjustmentPlotter,
 )
-from corebehrt.azure.util import save_figure_with_azure_copy
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 logger = logging.getLogger(__name__)
 
