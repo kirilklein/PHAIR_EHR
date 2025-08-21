@@ -165,7 +165,7 @@ def select_cohort(
     plot_multiple_cohort_stats(
         stats_dict=combined_stats,
         figsize=(20, 12),
-        save_path=join(save_path, STATS_PATH, "cohort_comparison.png"),
+        save_path=join(save_path, STATS_PATH, "figs", "cohort_comparison.png"),
         show_plot=False,
     )
     logger.info("Saving data")
@@ -188,13 +188,13 @@ def select_cohort(
     plot_age_distribution(
         final_index_dates_with_age=final_index_dates,
         control_pids=index_dates_filtered_control[PID_COL].unique(),
-        save_path=join(save_path, STATS_PATH, "age_distribution.png"),
+        save_path=join(save_path, STATS_PATH, "figs", "age_distribution.png"),
         logger=logger,
     )
     plot_index_date_distribution(
         final_index_dates,
         control_pids=index_dates_filtered_control[PID_COL].unique(),
-        save_path=join(save_path, STATS_PATH, "index_date_distribution.png"),
+        save_path=join(save_path, STATS_PATH, "figs", "index_date_distribution.png"),
         logger=logger,
     )
 
@@ -280,7 +280,7 @@ def _prepare_control(
     plot_cohort_stats(
         stats=control_stats,
         title="Control Patients Cohort Selection",
-        save_path=join(save_path, STATS_PATH, "control_flow.png"),
+        save_path=join(save_path, STATS_PATH, "figs", "control_flow.png"),
         show_plot=False,
     )
     control_index_date_filtered = filter_df_by_pids(
@@ -321,7 +321,7 @@ def _prepare_exposed(
     plot_cohort_stats(
         stats=exposed_stats,
         title="Exposed Patients Cohort Selection",
-        save_path=join(save_path, STATS_PATH, "exposed_flow.png"),
+        save_path=join(save_path, STATS_PATH, "figs", "exposed_flow.png"),
         show_plot=False,
     )
     index_dates_filtered_exposed = filter_df_by_pids(index_dates, included_pids_exposed)
