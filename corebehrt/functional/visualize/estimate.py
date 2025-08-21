@@ -14,6 +14,7 @@ from corebehrt.modules.plot.estimate import (
     AdjustmentPlotConfig,
     AdjustmentPlotter,
 )
+from corebehrt.azure.util import save_figure_with_azure_copy
 
 logger = logging.getLogger(__name__)
 
@@ -101,11 +102,10 @@ def create_annotated_heatmap_matplotlib(
         output_dir = os.path.dirname(save_path)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        plt.savefig(save_path, bbox_inches="tight")
-        print(f"Plot saved to: {save_path}")
+        save_figure_with_azure_copy(plt.gcf(), save_path, bbox_inches="tight")
     else:
         plt.show()
-    plt.close()  # Close the plot to free up memory
+        plt.close()
 
 
 def create_effect_size_plot(

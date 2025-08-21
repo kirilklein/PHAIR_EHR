@@ -6,6 +6,8 @@ import numpy as np
 import seaborn as sns
 from typing import Union, Dict, List, Optional
 import pandas as pd
+from corebehrt.azure.util import save_figure_with_azure_copy
+from matplotlib.axes import Axes
 
 
 # --- Helper for plotting distributions for a single group ---
@@ -43,10 +45,10 @@ def _plot_distributions_for_group(
         fig, axes = plt.subplots(
             rows, cols, figsize=(cols * 4, rows * 1.5), constrained_layout=True
         )
-        axes = np.array(axes).flatten()
+        axes: List[Axes] = np.array(axes).flatten()
 
         for i, (name, data) in enumerate(chunk_items):
-            ax = axes[i]
+            ax: Axes = axes[i]
             sns.histplot(
                 data,
                 bins=bins,
@@ -76,9 +78,8 @@ def _plot_distributions_for_group(
         if save_dir:
             filename = f"{group_name.lower()}_part_{fig_num + 1}.png"
             save_path = os.path.join(save_dir, filename)
-            plt.savefig(save_path, dpi=200, bbox_inches="tight")
+            save_figure_with_azure_copy(fig, save_path, dpi=200, bbox_inches="tight")
             print(f"Saved figure to {save_path}")
-            plt.close(fig)
         else:
             plt.show()
 
@@ -201,7 +202,7 @@ def _create_single_stats_plot(df: pd.DataFrame, title: str):
     bar_width = 0.85
 
     # --- Plot 1: Mean (μ) ---
-    ax1 = axes[0]
+    ax1: Axes = axes[0]
     colors_mean = plt.cm.RdBu_r(np.linspace(0.1, 0.9, len(df)))
     df["mean"].plot(kind="barh", ax=ax1, color=colors_mean, width=bar_width)
     ax1.set_title("Mean Weight Value (μ)", fontsize=14, weight="bold")
@@ -211,7 +212,7 @@ def _create_single_stats_plot(df: pd.DataFrame, title: str):
     ax1.tick_params(axis="y", labelsize=12)
 
     # --- Plot 2: Standard Deviation (σ) ---
-    ax2 = axes[1]
+    ax2: Axes = axes[1]
     colors_std = plt.cm.viridis_r(np.linspace(0.1, 0.8, len(df)))
     df["std"].plot(kind="barh", ax=ax2, color=colors_std, width=bar_width)
     ax2.set_title("Standard Deviation (σ)", fontsize=14, weight="bold")
@@ -219,7 +220,7 @@ def _create_single_stats_plot(df: pd.DataFrame, title: str):
     ax2.grid(axis="x", linestyle="--", alpha=0.6)
 
     # --- Plot 3: Sparsity (% Zeros) ---
-    ax3 = axes[2]
+    ax3: Axes = axes[2]
     colors_zeros = plt.cm.Reds(np.linspace(0.2, 0.8, len(df)))
     df["zeros_pct"].plot(kind="barh", ax=ax3, color=colors_zeros, width=bar_width)
     ax3.set_title("Sparsity (% Zeros)", fontsize=14, weight="bold")
@@ -323,8 +324,10 @@ def _plot_weight_statistics(
             if output_dir:
                 os.makedirs(output_dir, exist_ok=True)
 
-            plt.savefig(group_output_path, dpi=200, bbox_inches="tight")
+            save_figure_with_azure_copy(
+                fig, group_output_path, dpi=200, bbox_inches="tight"
+            )
             print(f"Saved weight statistics plot to {group_output_path}")
-            plt.close(fig)
         else:
             plt.show()
+            plt.close(fig)

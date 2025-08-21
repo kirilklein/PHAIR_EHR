@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from os.path import join
 import os
 import seaborn as sns
+from corebehrt.azure.util import save_figure_with_azure_copy
 
 
 def plot_outcome_distribution(
@@ -46,8 +47,8 @@ def plot_outcome_distribution(
 
         plt.tight_layout()
         save_path = join(outcome_dir, "outcome_distribution.png")
-        plt.savefig(save_path)
-        plt.close()
+
+        save_figure_with_azure_copy(plt.gcf(), save_path)
         print(f"Plot saved to '{save_path}'")
 
     else:
@@ -86,8 +87,8 @@ def plot_outcome_distribution(
 
             plt.tight_layout()
             save_path = join(outcome_dir, f"outcome_distribution_{i + 1}.png")
-            plt.savefig(save_path)
-            plt.close()  # Close the figure to free memory
+
+            save_figure_with_azure_copy(plt.gcf(), save_path)
             print(f"Plot saved to '{save_path}'")
 
 
@@ -210,6 +211,5 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
         else:
             save_path = join(output_dir, f"{base_filename}.png")
 
-        plt.savefig(save_path)
+        save_figure_with_azure_copy(plt.gcf(), save_path)
         print(f"Saved filtering statistics plot to {save_path}")
-        plt.close()

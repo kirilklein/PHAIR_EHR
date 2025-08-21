@@ -15,7 +15,7 @@ from corebehrt.constants.causal.data import (
     TARGETS,
 )
 from corebehrt.constants.data import PID_COL
-
+from corebehrt.azure.util import save_figure_with_azure_copy
 
 def save_ps_distribution_figure(subject_ids, ps_scores, exposures):
     """
@@ -49,10 +49,12 @@ def save_ps_distribution_figure(subject_ids, ps_scores, exposures):
     Path(figures_dir).mkdir(parents=True, exist_ok=True)
 
     # Save figure
-    plt.savefig(
-        os.path.join(figures_dir, "ps_distribution.png"), dpi=300, bbox_inches="tight"
+    save_figure_with_azure_copy(
+        plt.gcf(),
+        os.path.join(figures_dir, "ps_distribution.png"),
+        dpi=300,
+        bbox_inches="tight",
     )
-    plt.close()
     print(
         f"Propensity score distribution figure saved to {figures_dir}/ps_distribution.png"
     )
@@ -105,12 +107,12 @@ def save_outcome_probas_figures(subject_ids, cf_data, outcome_df):
     plt.title("True Outcome Probabilities by Exposure Status")
     plt.ylabel("Probability")
     plt.xticks(rotation=45)
-    plt.savefig(
+    save_figure_with_azure_copy(
+        plt.gcf(),
         os.path.join(figures_dir, "true_outcome_probas.png"),
         dpi=300,
         bbox_inches="tight",
     )
-    plt.close()
 
     # ---------------------------
     # Figure 2: Predicted outcome probabilities by actual outcome
@@ -149,12 +151,12 @@ def save_outcome_probas_figures(subject_ids, cf_data, outcome_df):
     plt.title("Predicted Outcome Probabilities by Actual Outcome")
     plt.ylabel("Probability")
     plt.xticks(rotation=45)
-    plt.savefig(
+    save_figure_with_azure_copy(
+        plt.gcf(),
         os.path.join(figures_dir, "predicted_outcome_probas.png"),
         dpi=300,
         bbox_inches="tight",
     )
-    plt.close()
 
     print(f"Outcome probability figures saved to {figures_dir}")
 
@@ -216,12 +218,12 @@ def save_comparison_figures(subject_ids, cf_data, outcome_df):
     plt.ylabel("Count")
 
     plt.tight_layout()
-    plt.savefig(
+    save_figure_with_azure_copy(
+        plt.gcf(),
         os.path.join(figures_dir, "control_probas_comparison.png"),
         dpi=300,
         bbox_inches="tight",
     )
-    plt.close()
 
     # ---------------------------
     # Comparison for treatment (A=1) probabilities
@@ -259,12 +261,12 @@ def save_comparison_figures(subject_ids, cf_data, outcome_df):
     plt.ylabel("Count")
 
     plt.tight_layout()
-    plt.savefig(
+    save_figure_with_azure_copy(
+        plt.gcf(),
         os.path.join(figures_dir, "treatment_probas_comparison.png"),
         dpi=300,
         bbox_inches="tight",
     )
-    plt.close()
 
     # ---------------------------
     # Comparison for observed outcome probabilities
@@ -302,12 +304,12 @@ def save_comparison_figures(subject_ids, cf_data, outcome_df):
     plt.ylabel("Count")
 
     plt.tight_layout()
-    plt.savefig(
+    save_figure_with_azure_copy(
+        plt.gcf(),
         os.path.join(figures_dir, "observed_probas_comparison.png"),
         dpi=300,
         bbox_inches="tight",
     )
-    plt.close()
 
     print(f"Probability comparison figures saved to {figures_dir}")
 
@@ -339,13 +341,12 @@ def save_predicted_outcome_probas_distribution(cf_data, outcome_df):
     plt.xlabel("Predicted Probability")
     plt.ylabel("Count")
 
-    plt.savefig(
+    save_figure_with_azure_copy(
+        plt.gcf(),
         os.path.join(figures_dir, "predicted_outcome_probas_distribution.png"),
         dpi=300,
         bbox_inches="tight",
     )
-    plt.close()
-
     print(
         f"Predicted outcome probability distribution saved to {os.path.join(figures_dir, 'predicted_outcome_probas_distribution.png')}"
     )
@@ -399,12 +400,12 @@ def save_outcome_probas_by_exposure_figure(subject_ids, cf_data, outcome_df):
     plt.xlabel("Exposure Status")
     plt.ylabel("Probability")
     plt.legend(title="Probability Type")
-    plt.savefig(
+    save_figure_with_azure_copy(
+        plt.gcf(),
         os.path.join(figures_dir, "true_outcome_probas_by_exposure.png"),
         dpi=300,
         bbox_inches="tight",
     )
-    plt.close()
 
     # ---------------------------
     # Predicted probabilities by exposure
@@ -449,11 +450,11 @@ def save_outcome_probas_by_exposure_figure(subject_ids, cf_data, outcome_df):
     plt.xlabel("Exposure Status")
     plt.ylabel("Probability")
     plt.legend(title="Probability Type")
-    plt.savefig(
+    save_figure_with_azure_copy(
+        plt.gcf(),
         os.path.join(figures_dir, "predicted_outcome_probas_by_exposure.png"),
         dpi=300,
         bbox_inches="tight",
     )
-    plt.close()
 
     print(f"Outcome probabilities by exposure figures saved to {figures_dir}")

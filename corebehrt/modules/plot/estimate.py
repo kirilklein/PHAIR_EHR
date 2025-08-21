@@ -6,7 +6,6 @@ from typing import List
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-import matplotlib as mpl
 from abc import ABC, abstractmethod
 from corebehrt.constants.causal.data import (
     OUTCOME,
@@ -14,6 +13,10 @@ from corebehrt.constants.causal.data import (
     STATUS,
     TMLEAnalysisColumns,
 )
+
+from corebehrt.azure.util import save_figure_with_azure_copy
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +84,8 @@ class BasePlotter(ABC):
 
     def _finalize_figure(
         self,
-        fig: mpl.figure.Figure,
-        ax: mpl.axes.Axes,
+        fig: Figure,
+        ax: Axes,
         page_num: int,
         outcomes_on_page: List[str],
     ):
@@ -95,8 +98,7 @@ class BasePlotter(ABC):
 
         save_path = f"{self.save_dir}/{self._get_save_filename(page_num)}"
         fig.tight_layout()
-        plt.savefig(save_path, bbox_inches="tight")
-        plt.close(fig)
+        save_figure_with_azure_copy(fig, save_path, bbox_inches="tight")
         logger.info(f"Saved {self._get_plot_type()} plot to {save_path}")
 
     @abstractmethod
@@ -116,13 +118,13 @@ class BasePlotter(ABC):
 
     @abstractmethod
     def _draw_page_content(
-        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+        self, ax: Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
     ):
         """Draw the main content of the plot for a single page."""
         pass
 
     @abstractmethod
-    def _configure_ax(self, ax: mpl.axes.Axes, outcomes_on_page: List[str]):
+    def _configure_ax(self, ax: Axes, outcomes_on_page: List[str]):
         """Configure axis labels, ticks, legends, etc."""
         pass
 
@@ -188,13 +190,13 @@ class EffectSizePlotter(BasePlotter):
         return f"effect_sizes_plot_{page_num + 1}.png"
 
     def _draw_page_content(
-        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+        self, ax: Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
     ):
         for method in self.methods:
             self._draw_method_data(ax, method, page_df, outcomes_on_page)
         self._draw_true_effect(ax, page_df, outcomes_on_page)
 
-    def _configure_ax(self, ax: mpl.axes.Axes, outcomes_on_page: List[str]):
+    def _configure_ax(self, ax: Axes, outcomes_on_page: List[str]):
         ax.axhline(0, ls="--", color="grey")
         ax.set_xticks(range(len(outcomes_on_page)))
         ax.set_xticklabels(outcomes_on_page, fontsize=12)
@@ -230,7 +232,7 @@ class EffectSizePlotter(BasePlotter):
 
     def _draw_method_data(
         self,
-        ax: mpl.axes.Axes,
+        ax: Axes,
         method: str,
         page_df: pd.DataFrame,
         outcomes_on_page: List[str],
@@ -294,7 +296,7 @@ class EffectSizePlotter(BasePlotter):
             )
 
     def _draw_true_effect(
-        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+        self, ax: Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
     ):
         if EffectColumns.true_effect not in page_df.columns:
             return
@@ -350,7 +352,7 @@ class ContingencyTablePlotter(BasePlotter):
         return f"contingency_counts_{page_num + 1}.png"
 
     def _draw_page_content(
-        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+        self, ax: Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
     ):
         """Draws the grouped, stacked bars for the outcomes on the current page."""
         x = np.arange(len(outcomes_on_page))  # the label locations
@@ -407,7 +409,7 @@ class ContingencyTablePlotter(BasePlotter):
             color="firebrick",
         )
 
-    def _configure_ax(self, ax: mpl.axes.Axes, outcomes_on_page: List[str]):
+    def _configure_ax(self, ax: Axes, outcomes_on_page: List[str]):
         """Sets final aesthetics and saves the figure."""
         ax.set_ylabel("Number of Patients", fontsize=14)
         ax.set_xticks(np.arange(len(outcomes_on_page)))
@@ -436,7 +438,7 @@ class AdjustmentPlotter(BasePlotter):
         return f"detailed_adjustment_{page_num + 1}.png"
 
     def _draw_page_content(
-        self, ax: mpl.axes.Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
+        self, ax: Axes, page_df: pd.DataFrame, outcomes_on_page: List[str]
     ):
         """Draws the arrows, points, and difference bars for the page."""
         dodge = 0.15  # Offset for Y0 and Y1
@@ -514,7 +516,7 @@ class AdjustmentPlotter(BasePlotter):
                 y1_final, xmin=i - cap_width / 2, xmax=i + cap_width / 2, color="black"
             )
 
-    def _configure_ax(self, ax: mpl.axes.Axes, outcomes_on_page: List[str]):
+    def _configure_ax(self, ax: Axes, outcomes_on_page: List[str]):
         """Sets final aesthetics and saves the figure."""
         import matplotlib.lines as mlines
 

@@ -11,6 +11,7 @@ from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import umap
 from corebehrt.constants.data import PID_COL
+from corebehrt.azure.util import save_figure_with_azure_copy
 
 # Suppress common warnings from visualization libraries
 warnings.filterwarnings("ignore")
@@ -227,8 +228,7 @@ class EncodingAnalyzer:
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         save_path = os.path.join(self.save_dir, "patient_encodings_analysis.png")
-        plt.savefig(save_path, dpi=300)
-        plt.close(fig)
+        save_figure_with_azure_copy(fig, save_path, dpi=300)
         print(f"Saved main analysis plot to {save_path}")
 
     def _generate_detailed_visualization(self, n_dims_to_show=20):
@@ -276,8 +276,7 @@ class EncodingAnalyzer:
         save_path = os.path.join(
             self.save_dir, "patient_encodings_detailed_analysis.png"
         )
-        plt.savefig(save_path, dpi=300)
-        plt.close(fig)
+        save_figure_with_azure_copy(fig, save_path, dpi=300)
         print(f"Saved detailed analysis plot to {save_path}")
 
     def _save_numerical_results(self):

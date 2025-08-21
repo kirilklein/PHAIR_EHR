@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import norm
 
+from corebehrt.azure.util.azure import save_figure_with_azure_copy
 
 outcomes = ["death", "MI", "heart failure", "stroke"]
 methods = ["IPW", "TMLE", "unadjusted"]
@@ -58,7 +58,7 @@ ax.set_xlabel("Outcome", fontsize=12)
 ax.legend(title="Estimation type", fontsize=11)
 ax.set_title("Effect estimates for Semaglutide by outcome and method", fontsize=12)
 
-fig.savefig(
-    "outputs/figs/semaglutide/effect_estimates_sgl.png", bbox_inches="tight", dpi=200
+save_figure_with_azure_copy(
+    fig, "outputs/figs/semaglutide/effect_estimates_sgl.png", bbox_inches="tight", dpi=200
 )
 plt.show()

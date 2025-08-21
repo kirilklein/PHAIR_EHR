@@ -9,6 +9,9 @@ import pandas as pd
 import seaborn as sns
 import logging
 from corebehrt.constants.data import PID_COL, AGE_COL, TIMESTAMP_COL
+from corebehrt.azure.util.azure import save_figure_with_azure_copy
+from matplotlib.axes import Axes
+from matplotlib.container import BarContainer
 
 
 def plot_cohort_stats(
@@ -58,11 +61,9 @@ def plot_cohort_stats(
 
     if save_path:
         try:
-            # Ensure directory exists
-            import os
-
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            plt.savefig(save_path, dpi=300, bbox_inches="tight")
+            save_figure_with_azure_copy(
+                fig, save_path, dpi=300, bbox_inches="tight", close=False
+            )
             print(f"Plot saved to: {save_path}")
         except Exception as e:
             print(f"Error saving plot: {e}")
@@ -73,7 +74,7 @@ def plot_cohort_stats(
         plt.close()
 
 
-def _plot_step_by_step_flow(ax, stats: Dict) -> None:
+def _plot_step_by_step_flow(ax: Axes, stats: Dict) -> None:
     """Plot the step-by-step patient flow through the selection process."""
     initial = stats.get("initial_total", 0)
     final = stats.get("final_included", 0)
@@ -106,7 +107,7 @@ def _plot_step_by_step_flow(ax, stats: Dict) -> None:
 
     # Create bars
     x_positions = np.arange(len(stages))
-    bars = ax.bar(
+    bars: BarContainer = ax.bar(
         x_positions, counts, color=colors, alpha=0.8, edgecolor="black", linewidth=1.5
     )
 
@@ -193,7 +194,7 @@ def _plot_step_by_step_flow(ax, stats: Dict) -> None:
 
 
 def _plot_individual_criteria_breakdown(
-    ax_inclusion, ax_exclusion, stats: Dict
+    ax_inclusion: Axes, ax_exclusion: Axes, stats: Dict
 ) -> None:
     """Plot individual criteria showing how many patients MET each criterion."""
     inclusion_criteria = stats.get("excluded_by_inclusion_criteria", {})
@@ -222,7 +223,7 @@ def _plot_individual_criteria_breakdown(
 
 
 def _plot_criteria_met(
-    ax,
+    ax: Axes,
     criteria_stats: Dict,
     initial_total: int,
     criteria_type: str,
@@ -395,11 +396,9 @@ def plot_multiple_cohort_stats(
 
     if save_path:
         try:
-            # Ensure directory exists
-            import os
-
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            plt.savefig(save_path, dpi=300, bbox_inches="tight")
+            save_figure_with_azure_copy(
+                fig, save_path, dpi=300, bbox_inches="tight", close=False
+            )
             print(f"Comparison plot saved to: {save_path}")
         except Exception as e:
             print(f"Error saving plot: {e}")
@@ -436,8 +435,7 @@ def plot_age_distribution(
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
     plt.tight_layout()
 
-    plt.savefig(save_path, dpi=300)
-    plt.close()
+    save_figure_with_azure_copy(plt.gcf(), save_path, dpi=300)
 
     logger.info(f"Saved age distribution plot to {save_path}")
 
@@ -484,7 +482,6 @@ def plot_index_date_distribution(
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
     plt.tight_layout()
 
-    plt.savefig(save_path, dpi=300)
-    plt.close()
+    save_figure_with_azure_copy(plt.gcf(), save_path, dpi=300)
 
     logger.info(f"Saved index date distribution plot to {save_path}")
