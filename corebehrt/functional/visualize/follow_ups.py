@@ -15,6 +15,7 @@ from corebehrt.functional.utils.time import (
     get_datetime_from_hours_since_epoch,
     get_hours_since_epoch,
 )
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 
 def plot_followup_start_end_distribution(
@@ -124,12 +125,12 @@ def plot_followup_start_end_distribution(
 
     os.makedirs(out_dir, exist_ok=True)
     plt.tight_layout()
-    plt.savefig(
+    save_figure_with_azure_copy(
+        fig,
         join(out_dir, f"follow_up_start_end_distribution_{mode}.png"),
         dpi=dpi,
         bbox_inches="tight",
     )
-    plt.close()
 
     print(
         f"Plot saved to {join(out_dir, f'follow_up_start_end_distribution_{mode}.png')}"
@@ -291,7 +292,7 @@ def plot_followup_coverage(
     plt.tight_layout()
 
     save_path = join(out_dir, f"follow_up_coverage_curve_{mode}.png")
-    plt.savefig(save_path, dpi=dpi, bbox_inches="tight")
+    save_figure_with_azure_copy(fig, save_path, dpi=dpi, bbox_inches="tight")
     plt.close()
 
     print(f"Plot saved to {save_path}")
@@ -329,8 +330,7 @@ def plot_follow_up_duration_distribution(
     output_path = Path(out_dir) / "follow_up_distribution.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    plt.savefig(output_path)
-    plt.close()
+    save_figure_with_azure_copy(plt.gcf(), output_path, bbox_inches="tight")
 
 
 def _get_subject_groups(
@@ -636,7 +636,9 @@ def plot_followups_timeline(
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         path = join(save_dir, "follow_ups_timeline.png")
-        fig.savefig(path, dpi=200, bbox_inches="tight")
+        save_figure_with_azure_copy(
+            fig, path, dpi=200, bbox_inches="tight", close=False
+        )
         print(f"Plot saved to {path}")
     else:
         plt.show()

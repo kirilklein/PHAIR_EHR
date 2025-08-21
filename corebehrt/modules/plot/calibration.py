@@ -19,6 +19,10 @@ from corebehrt.functional.visualize.calibrate import (
 )
 from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from typing import List, Tuple
 
 
 class PlottingManager:
@@ -68,7 +72,9 @@ class PlottingManager:
             "Propensity Score Calibration",
             ax=ax,
         )
-        fig.savefig(cal_fig_dir / f"{PS_COL}.png", bbox_inches="tight")
+        save_figure_with_azure_copy(
+            fig, cal_fig_dir / f"{PS_COL}.png", bbox_inches="tight"
+        )
         plt.close(fig)
 
         if not self.outcomes_to_plot:
@@ -93,7 +99,9 @@ class PlottingManager:
 
         fig.suptitle("Outcome Probability Calibration", fontsize=16)
         fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-        fig.savefig(cal_fig_dir / "outcomes_calibration.png", bbox_inches="tight")
+        save_figure_with_azure_copy(
+            fig, cal_fig_dir / "outcomes_calibration.png", bbox_inches="tight"
+        )
         plt.close(fig)
 
     def _generate_distribution_plots(self, data: CalibrationArtifacts):
@@ -119,10 +127,9 @@ class PlottingManager:
             "Propensity Score",
             ax,
         )
-        fig.savefig(
-            hist_fig_dir / f"{PS_COL}_by_exposure_hist.png", bbox_inches="tight"
+        save_figure_with_azure_copy(
+            fig, hist_fig_dir / f"{PS_COL}_by_exposure_hist.png", bbox_inches="tight"
         )
-        plt.close(fig)
 
         # Pre-calculate diff columns
         for name in self.outcomes_to_plot:
@@ -142,14 +149,17 @@ class PlottingManager:
             "IPW",
             ax,
         )
-        fig.savefig(hist_fig_dir / "ipw_by_exposure_hist.png", bbox_inches="tight")
-        plt.close(fig)
+        save_figure_with_azure_copy(
+            fig, hist_fig_dir / "ipw_by_exposure_hist.png", bbox_inches="tight"
+        )
 
         # --- Subplot Grid Helpers ---
         cols = min(3, num_outcomes)
         rows = (num_outcomes + cols - 1) // cols
 
-        def create_grid(title, figsize=(6, 5)):
+        def create_grid(
+            title: str, figsize: Tuple[int, int] = (6, 5)
+        ) -> Tuple[Figure, List[Axes]]:
             fig, axes = plt.subplots(
                 rows,
                 cols,
@@ -159,12 +169,11 @@ class PlottingManager:
             fig.suptitle(title, fontsize=16)
             return fig, axes.flatten()
 
-        def save_grid(fig, axes, filename):
+        def save_grid(fig: Figure, axes: List[Axes], filename: str):
             for i in range(num_outcomes, len(axes)):
                 axes[i].set_visible(False)
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-            fig.savefig(filename, bbox_inches="tight")
-            plt.close(fig)
+            save_figure_with_azure_copy(fig, filename, bbox_inches="tight")
 
         # --- Plot Histograms ---
         plot_configs = [

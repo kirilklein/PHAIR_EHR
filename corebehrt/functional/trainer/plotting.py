@@ -9,9 +9,12 @@ import numpy as np
 import pandas as pd
 import torch
 
+from matplotlib.axes import Axes
 from corebehrt.constants.causal.data import EXPOSURE
 from corebehrt.functional.visualize.calibrate import plot_probas_hist
 from corebehrt.modules.trainer.causal.utils import CausalPredictionData
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
+
 
 # --- Configuration ---
 try:
@@ -250,12 +253,14 @@ def _create_metric_plot(
 
     # --- Saving and Closing ---
     try:
-        fig.savefig(fig_path, dpi=STYLE_CONFIG["dpi"], bbox_inches="tight")
+        save_figure_with_azure_copy(
+            fig, fig_path, dpi=STYLE_CONFIG["dpi"], bbox_inches="tight"
+        )
         log_func(f"✅ Plot saved to '{fig_path}'")
     except Exception as e:
         log_func(f"❌ Failed to save plot '{fig_path}'. Error: {e}")
     finally:
-        plt.close(fig)
+        pass
 
 
 def plot_prediction_histograms(
@@ -289,10 +294,11 @@ def plot_prediction_histograms(
             xlabel="Predicted Probability",
             ax=ax,
         )
-        fig.savefig(
-            os.path.join(hist_dir, "exposure_predictions_hist.png"), bbox_inches="tight"
+        save_figure_with_azure_copy(
+            fig,
+            os.path.join(hist_dir, "exposure_predictions_hist.png"),
+            bbox_inches="tight",
         )
-        plt.close(fig)
 
     # Plot for outcomes in a grid
     outcomes_to_plot = [
@@ -307,7 +313,7 @@ def plot_prediction_histograms(
     cols = min(3, num_outcomes)
     rows = (num_outcomes + cols - 1) // cols
     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 5 * rows), squeeze=False)
-    axes = axes.flatten()
+    axes: List[Axes] = axes.flatten()
 
     i = 0  # To keep track of the last used axis
     for i, outcome_name in enumerate(outcomes_to_plot):
@@ -332,7 +338,8 @@ def plot_prediction_histograms(
 
     fig.suptitle("Outcome Prediction Distributions", fontsize=16)
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    fig.savefig(
-        os.path.join(hist_dir, "outcomes_predictions_hist.png"), bbox_inches="tight"
+    save_figure_with_azure_copy(
+        fig,
+        os.path.join(hist_dir, "outcomes_predictions_hist.png"),
+        bbox_inches="tight",
     )
-    plt.close(fig)

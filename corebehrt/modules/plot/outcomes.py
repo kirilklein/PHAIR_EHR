@@ -1,13 +1,18 @@
-from dataclasses import dataclass
-from typing import Optional, List, Tuple
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
-from os.path import join
-import os
-from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 import logging
+import os
+from dataclasses import dataclass
+from os.path import join
+from typing import List, Optional, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
+
+from corebehrt.constants.data import PID_COL, TIMESTAMP_COL
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +111,7 @@ class OutcomePlotter:
         # Get the correct figure and axis
         fig, axes = self.patient_dist_figures[figure_idx]
         axis_idx = self.patient_subplot_idx % self.config.max_subplots_per_figure
-        ax = axes[axis_idx]
+        ax: Axes = axes[axis_idx]
 
         # Plot the data
         max_count = counts.max()
@@ -136,7 +141,7 @@ class OutcomePlotter:
 
         fig, axes = self.time_dist_figures[figure_idx]
         axis_idx = self.time_subplot_idx % self.config.max_subplots_per_figure
-        ax = axes[axis_idx]
+        ax: Axes = axes[axis_idx]
 
         if not timestamps.empty:
             ax.hist(timestamps, bins="auto", color="purple", alpha=0.7)
@@ -196,6 +201,6 @@ class OutcomePlotter:
 
         fig.suptitle(f"{title} (Part {page_index + 1}/{total_pages})", fontsize=16)
         fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-        fig.savefig(save_path)
-        plt.close(fig)
+
+        save_figure_with_azure_copy(fig, save_path, bbox_inches="tight")
         logger.info(f"Saved figure: {save_path}")

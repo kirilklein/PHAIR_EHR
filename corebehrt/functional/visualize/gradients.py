@@ -6,6 +6,9 @@ import torch.nn as nn
 from torch.optim import Optimizer
 from torch.cuda.amp import GradScaler
 from typing import Callable, Optional, Dict
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
+from matplotlib.axes import Axes
+from typing import List
 
 
 def _plot_distributions_for_group(
@@ -46,7 +49,7 @@ def _plot_distributions_for_group(
         fig, axes = plt.subplots(
             rows, cols, figsize=(cols * 4, rows * 1.5), constrained_layout=True
         )
-        axes = np.array(axes).flatten()
+        axes: List[Axes] = np.array(axes).flatten()
 
         for i, (name, data) in enumerate(chunk_items):
             ax = axes[i]
@@ -85,11 +88,13 @@ def _plot_distributions_for_group(
             # Matched file naming convention
             filename = f"{group_name.lower()}_part_{fig_num + 1}.png"
             save_path = os.path.join(save_dir, filename)
-            plt.savefig(save_path, dpi=200, bbox_inches="tight")
+            save_figure_with_azure_copy(
+                fig, save_path, dpi=200, bbox_inches="tight", close=False
+            )
             print(f"Saved figure to {save_path}")
-            plt.close(fig)
         else:
             plt.show()
+    plt.close()
 
 
 def plot_gradient_distributions(

@@ -223,7 +223,11 @@ def _prepare_control(
     if index_date_matching is None:
         control_pids = list(set(patients_info[PID_COL].unique()) - set(exposed_pids))
         if index_date_matching_cfg is None:
-            index_date_matching_cfg = {"birth_year_tolerance": 3, "redraw_attempts": 3}
+            index_date_matching_cfg = {
+                "birth_year_tolerance": 3,
+                "redraw_attempts": 3,
+                "age_adjusted": True,
+            }
         control_index_dates, index_date_matching = (
             draw_index_dates_for_control_with_redraw(
                 control_pids,
@@ -235,6 +239,9 @@ def _prepare_control(
                 redraw_attempts=index_date_matching_cfg.get("redraw_attempts"),
                 age_adjusted=index_date_matching_cfg.get("age_adjusted", True),
             )
+        )
+        logger.info(
+            f"Controls after index date matching: {index_date_matching[PID_COL].nunique()} / {len(control_pids)}"
         )
         index_date_matching[ABSPOS_COL] = get_hours_since_epoch(
             index_date_matching[TIMESTAMP_COL]
@@ -298,6 +305,9 @@ def _prepare_exposed(
     Return exposed criteria and index dates.
     """
     time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
+    logger.info(
+        f"Time eligible exposed pids: {len(time_eligible_exposed)} / {index_dates[PID_COL].nunique()}"
+    )
     criteria_exposed, included_pids_exposed, exposed_stats = filter_by_criteria(
         criteria_config,
         meds_path,

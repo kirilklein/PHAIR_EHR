@@ -1,8 +1,11 @@
 from os.path import join
-from typing import Dict
+from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.axes import Axes
+
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 
 def plot_hist(p_exposure, output_dir):
@@ -12,8 +15,9 @@ def plot_hist(p_exposure, output_dir):
     ax.set_xlabel("Predicted Probability")
     ax.set_ylabel("Count")
     ax.set_xlim(0, 1)
-    plt.savefig(join(output_dir, "exposure_probability_histogram.png"))
-    plt.close(fig)
+    save_figure_with_azure_copy(
+        fig, join(output_dir, "exposure_probability_histogram.png")
+    )
 
 
 def plot_probability_distributions(
@@ -32,10 +36,10 @@ def plot_probability_distributions(
     fig, axes = plt.subplots(
         nrows, ncols, figsize=(8 * ncols, 6 * nrows), squeeze=False
     )
-    axes = axes.flatten()
+    axes: List[Axes] = axes.flatten()
     bins = np.linspace(0, 1, bins)
     for i, (outcome_name, probas) in enumerate(all_probas.items()):
-        ax = axes[i]
+        ax: Axes = axes[i]
 
         # Histogram for treated (P1)
         ax.hist(
@@ -68,5 +72,4 @@ def plot_probability_distributions(
 
     plt.tight_layout()
     plot_path = join(output_dir, "probability_histograms.png")
-    plt.savefig(plot_path)
-    plt.close(fig)
+    save_figure_with_azure_copy(fig, plot_path)
