@@ -66,6 +66,7 @@ def draw_index_dates_for_control_with_redraw(
     birth_year_tolerance: int = 3,
     redraw_attempts: int = 3,
     seed: int = 42,
+    age_adjusted: bool = True,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Draws index dates for controls by sampling from cases matched on birth year.
@@ -80,11 +81,13 @@ def draw_index_dates_for_control_with_redraw(
     cases_df : DataFrame of cases index dates, must include PID_COL, TIMESTAMP_COL.
     patients_info : DataFrame with patient info, including PID_COL, BIRTHDATE_COL, and DEATHDATE_COL.
     birth_year_tolerance : int, default=3
-        The +/- range for matching birth years.
+        The +/- range for matching birth years. Ignored if age_adjusted=False.
     redraw_attempts : int, default=3
         Number of redraw attempts for invalid dates.
     seed : int, default=42
         Random seed for reproducibility.
+    age_adjusted : bool, default=True
+        If True, match controls to cases based on birth year. If False, sample from all cases.
 
     Returns
     -------
@@ -103,15 +106,24 @@ def draw_index_dates_for_control_with_redraw(
     cases_info = _prepare_cases_df(cases_df, patients_info)
     controls_info = _prepare_controls_info(patients_info, control_pids)
 
-    case_pools = _create_stratified_pools(
-        cases_info, controls_info, birth_year_tolerance
-    )
-
-    control_byears = controls_info.set_index(CONTROL_PID_COL).loc[
-        control_pids, BIRTH_YEAR_COL
-    ]
-
-    sampled_case_indices = _sample_stratified_indices(control_byears, case_pools)
+    if age_adjusted:
+        case_pools = _create_stratified_pools(
+            cases_info, controls_info, birth_year_tolerance
+        )
+        control_byears = controls_info.set_index(CONTROL_PID_COL).loc[
+            control_pids, BIRTH_YEAR_COL
+        ]
+        sampled_case_indices = _sample_stratified_indices(control_byears, case_pools)
+    else:
+        # Sample from all cases without age stratification
+        all_case_indices = cases_info.index.to_numpy()
+        sampled_case_indices = np.random.choice(
+            all_case_indices, size=len(control_pids)
+        )
+        control_byears = controls_info.set_index(CONTROL_PID_COL).loc[
+            control_pids, BIRTH_YEAR_COL
+        ]
+        case_pools = None  # No stratified pools for non-age-adjusted
 
     temp_df = _construct_initial_matching_df(
         cases_info, controls_info, control_byears, sampled_case_indices
@@ -120,9 +132,12 @@ def draw_index_dates_for_control_with_redraw(
     # 5. Iteratively redraw for invalid matches
     for i in range(redraw_attempts):
         print(f"Performing redraw attempt {i + 1}...")
-        temp_df, resampled = _resample_invalid_dates_stratified(
-            temp_df, case_pools, cases_info
-        )
+        if age_adjusted:
+            temp_df, resampled = _resample_invalid_dates_stratified(
+                temp_df, case_pools, cases_info
+            )
+        else:
+            temp_df, resampled = _resample_invalid_dates_random(temp_df, cases_info)
         if not resampled:
             print("No invalid dates to resample. Stopping.")
             break
@@ -158,6 +173,33 @@ def _resample_invalid_dates_stratified(
     new_pids = pd.Series(new_case_indices, index=invalid_byears.index).map(
         new_info_map[EXPOSED_PID_COL]
     )
+
+    # Update only the invalid rows with the new data
+    temp_df.loc[invalid_mask, TIMESTAMP_COL] = new_timestamps
+    temp_df.loc[invalid_mask, EXPOSED_PID_COL] = new_pids
+
+    return temp_df, True
+
+
+def _resample_invalid_dates_random(
+    temp_df: pd.DataFrame, cases_info: pd.DataFrame
+) -> Tuple[pd.DataFrame, bool]:
+    """Resamples invalid dates using random sampling from all cases."""
+    invalid_mask = _get_invalid_mask(temp_df)
+    if not invalid_mask.any():
+        return temp_df, False
+
+    # Randomly sample new case indices for invalid entries
+    all_case_indices = cases_info.index.to_numpy()
+    num_invalid = invalid_mask.sum()
+    new_case_indices = np.random.choice(all_case_indices, size=num_invalid)
+
+    # Update the case index for all invalid rows
+    temp_df.loc[invalid_mask, "case_idx"] = new_case_indices
+
+    # Get the new case information
+    new_timestamps = cases_info.loc[new_case_indices, TIMESTAMP_COL].values
+    new_pids = cases_info.loc[new_case_indices, EXPOSED_PID_COL].values
 
     # Update only the invalid rows with the new data
     temp_df.loc[invalid_mask, TIMESTAMP_COL] = new_timestamps
@@ -284,7 +326,7 @@ def _finalize_control(temp_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame
     Return index dates and matching.
     """
     invalid_mask = _get_invalid_mask(temp_df)
-    valid = temp_df.loc[~invalid_mask]
+    valid = temp_df.loc[~invalid_mask].copy()
     if not valid.empty:
         valid[EXPOSED_PID_COL] = valid[EXPOSED_PID_COL].astype(int)
 

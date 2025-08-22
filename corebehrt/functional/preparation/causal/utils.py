@@ -5,41 +5,59 @@ from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL, GR
 from corebehrt.constants.data import ABSPOS_COL, PID_COL
 
 
-def get_group_dict(index_date_matching: pd.DataFrame) -> dict:
+def assign_groups_to_followups(
+    follow_ups: pd.DataFrame, index_date_matching: pd.DataFrame
+) -> pd.DataFrame:
     """
-    In a cohort with matched index_dates, each exposed subject and their corresponding unexposed subjects
-    form a group. This function assigns a unique integer ID to each of these groups.
-    Both exposed and unexposed subjects within the same group will be mapped to the
-    same group ID.
+    Assigns a group ID to each patient based on the exposed patient ID.
 
-    Example:
-        >>> import pandas as pd
-        >>> matching_df = pd.DataFrame({
-        ...     'control_subject_id': [1, 2, 3, 5],
-        ...     'exposed_subject_id': [10, 10, 20, 30]
-        ... })
-        >>> # The returned dictionary is not guaranteed to be in a specific order.
-        >>> get_group_dict(matching_df)
-        {1: 0, 2: 0, 10: 0, 3: 1, 20: 1, 5: 2, 30: 2}
+    The group ID for all patients in a matched set (one exposed patient and all
+    their controls) is the ID of the exposed patient. Patients not in a matched
+    group (i.e., unmatched exposed patients) will have their own ID as their group ID.
+
+    This function is a direct, vectorized replacement for the combination of
+    get_group_dict and the subsequent loop for unmatched patients.
+
+    Args:
+        follow_ups: DataFrame containing a PID_COL for all patients in the cohort.
+        index_date_matching: DataFrame with CONTROL_PID_COL and EXPOSED_PID_COL.
+
+    Returns:
+        The `follow_ups` DataFrame with an added GROUP_COL.
     """
-    index_date_matching = index_date_matching.copy()
-    index_date_matching[GROUP_COL] = index_date_matching.groupby(
-        EXPOSED_PID_COL
-    ).ngroup()
-    # Melt the dataframe to get a single column of subject_ids with their corresponding group
-    id_to_group = pd.melt(
-        index_date_matching,
-        id_vars=[GROUP_COL],
-        value_vars=[CONTROL_PID_COL, EXPOSED_PID_COL],
-        value_name=PID_COL,
+    if index_date_matching is None or index_date_matching.empty:
+        # If there's no matching, every patient is in their own group.
+        follow_ups[GROUP_COL] = follow_ups[PID_COL]
+        return follow_ups
+
+    # Guard against duplicate control IDs to prevent ambiguous mapping
+    dupes = index_date_matching[CONTROL_PID_COL].duplicated()
+    if dupes.any():
+        raise ValueError(
+            "Duplicate control PIDs detected in index_date_matching: "
+            f"{index_date_matching.loc[dupes, CONTROL_PID_COL].unique()}"
+        )
+    # 1. Create a map from a control's ID to their matched exposed patient's ID.
+    #    This series will have control_pids as the index and exposed_pids as values.#
+    control_to_group_map = pd.Series(
+        index_date_matching[EXPOSED_PID_COL].values,
+        index=index_date_matching[CONTROL_PID_COL],
     )
-    # Create a map from subject_id to group
-    subject_to_group_map = (
-        id_to_group.drop(columns="variable")
-        .drop_duplicates()
-        .set_index(PID_COL)[GROUP_COL]
-    )
-    return subject_to_group_map.to_dict()
+
+    # 2. Use this map to assign group IDs to all patients in the follow_ups DataFrame.
+    #    - If a patient is a control, it will be mapped to its exposed_pid.
+    #    - If a patient is an exposed patient, it won't be in the map's index,
+    #      resulting in `NaN`.
+    follow_ups[GROUP_COL] = follow_ups[PID_COL].map(control_to_group_map)
+
+    # 3. Fill the `NaN` values. The NaNs correspond to exposed patients.
+    #    We fill the NaN with the patient's own ID, making the exposed_pid the group ID.
+    follow_ups[GROUP_COL] = follow_ups[GROUP_COL].fillna(follow_ups[PID_COL])
+
+    # Ensure the group column is an integer type.
+    follow_ups[GROUP_COL] = follow_ups[GROUP_COL].astype(int)
+
+    return follow_ups
 
 
 def get_non_compliance_abspos(

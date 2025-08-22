@@ -27,6 +27,7 @@ from corebehrt.constants.data import (
     PID_COL,
     TIMESTAMP_COL,
 )
+from corebehrt.functional.utils.filter import safe_control_pids
 from corebehrt.functional.utils.time import (
     get_hours_since_epoch,
 )
@@ -36,9 +37,9 @@ from corebehrt.modules.simulation.config import (
     SimulationConfig,
 )
 from corebehrt.modules.simulation.debug import (
+    analyze_peak_patients,
     debug_patient_history,
     f_save_weights,
-    analyze_peak_patients,
 )
 from corebehrt.modules.simulation.plot import plot_hist, plot_probability_distributions
 
@@ -657,13 +658,12 @@ class CausalSimulator:
     ) -> pd.DataFrame:
         """This function remains the same as the logic is already cohort-based."""
         exposed_pids = exposure_df[PID_COL].unique()
+        control_pids = safe_control_pids(all_pids, exposed_pids)
 
         if len(exposed_pids) == 0:
             return pd.DataFrame(
                 columns=[CONTROL_PID_COL, EXPOSED_PID_COL, TIMESTAMP_COL, ABSPOS_COL]
             )
-
-        control_pids = list(set(all_pids) - set(exposed_pids))
         if not control_pids:
             return pd.DataFrame(
                 columns=[CONTROL_PID_COL, EXPOSED_PID_COL, TIMESTAMP_COL, ABSPOS_COL]

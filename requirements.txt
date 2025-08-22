@@ -14,3 +14,4 @@ xgboost==3.0.0
 betacal==1.1.0
 matplotlib==3.10.0
 seaborn==0.13.2
+umap-learn

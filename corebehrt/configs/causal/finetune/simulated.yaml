@@ -12,17 +12,23 @@ paths:
   model: ./outputs/causal/finetune/models/simulated # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
+save_encodings: false
+visualize_encodings: false
+visualize_weight_distributions: false
+
 model:
   head:
-    shared_representation: true # whether to share the bigru representation for exposure and outcome
+    shared_representation: false # whether to share the bigru representation for exposure and outcome
     bidirectional: true
-    bottleneck_dim: 64
-    l1_lambda: 0.3
+    bottleneck_dim: 128
+    l1_lambda: 0 # .2
     temperature: 1
+    pooling_strategy: gru # cls or gru
   loss:
-    name: bce # bce by default
-    #params: # alpha is computed from pos_weight
-    # gamma: 2.0
+    name: focal # bce by default
+    params:
+      gamma: 2.0
+  initialize_sigmoid_bias: false
 
 trainer_args:
   loss_weight_function:
@@ -30,29 +36,32 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 9
+  epochs: 10
   info: true
   # gradient_clip:
   # clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
   early_stopping: 3
-  stopping_criterion: roc_auc
+  stopping_criterion: val_loss
   n_layers_to_freeze: 0
   freeze_encoder_on_plateau: true
   freeze_encoder_on_plateau_threshold: 0.01
-  freeze_encoder_on_plateau_patience: 4
+  freeze_encoder_on_plateau_patience: 5
 
   use_pcgrad: false
   plot_histograms: true
   save_curves: false
+  plot_gradients: false
+  plot_gradients_frequency: 20
 
 optimizer:
-  lr: 9e-4
+  lr: 5e-4
   eps: 1e-6
+  weight_decay: 0
 
 scheduler:
-  _target_: transformers.get_linear_schedule_with_warmup
+  _target_: transformers.get_cosine_schedule_with_warmup
   num_training_epochs: 15
   num_warmup_epochs: 2
 

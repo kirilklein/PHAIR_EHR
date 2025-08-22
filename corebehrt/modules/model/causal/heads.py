@@ -94,3 +94,47 @@ class MLPHead(nn.Module):
             torch.Tensor: The output logits of shape [batch_size, 1].
         """
         return self.classifier(x)
+
+
+class CLSPooler(nn.Module):
+    """
+    Pools the sequence output by simply selecting the hidden state corresponding
+    to the last valid token in the sequence.
+
+    This is designed to work with models where a special token (like [CLS])
+    is appended at the end to act as an aggregate sequence representation.
+    """
+
+    def __init__(self, **kwargs):
+        # The __init__ is simple as there are no layers to create.
+        # **kwargs is included to accept unused arguments if the config
+        # sends them, making it a flexible drop-in replacement.
+        super().__init__()
+
+    def forward(
+        self, hidden_states: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Args:
+            hidden_states (torch.Tensor): Token embeddings from the base model
+                                          [batch_size, seq_len, hidden_size].
+            attention_mask (torch.Tensor): The attention mask [batch_size, seq_len].
+
+        Returns:
+            torch.Tensor: The representation of the last token for each sequence
+                          [batch_size, hidden_size].
+        """
+        # Calculate the length of each sequence by summing the attention mask
+        lengths = attention_mask.sum(dim=1).long()
+
+        # Get the index of the last token for each sequence (length - 1)
+        last_token_indices = lengths - 1
+
+        # Create a tensor of batch indices [0, 1, 2, ...]
+        batch_indices = torch.arange(hidden_states.size(0), device=hidden_states.device)
+
+        # Use advanced indexing to select the hidden state of the last token
+        # for each item in the batch.
+        cls_representation = hidden_states[batch_indices, last_token_indices]
+
+        return cls_representation

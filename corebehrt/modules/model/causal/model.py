@@ -9,14 +9,18 @@ import logging
 
 import torch
 import torch.nn as nn
+from torch.nn import BCEWithLogitsLoss
 
 from corebehrt.constants.causal.data import EXPOSURE_TARGET
-from corebehrt.constants.data import ATTENTION_MASK
-from corebehrt.modules.model.causal.heads import MLPHead, PatientRepresentationPooler
+from corebehrt.constants.data import ATTENTION_MASK, CONCEPT_FEAT, PID_COL
+from corebehrt.modules.model.causal.heads import (
+    CLSPooler,
+    MLPHead,
+    PatientRepresentationPooler,
+)
+from corebehrt.modules.model.causal.loss import FocalLossWithLogits
 from corebehrt.modules.model.model import CorebehrtEncoder
 from corebehrt.modules.trainer.utils import limit_dict_for_logging, pos_weight_to_alpha
-from corebehrt.modules.model.causal.loss import FocalLossWithLogits
-from torch.nn import BCEWithLogitsLoss
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +54,6 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         self.temperature = self.head_config.get("temperature", 1.0)
         # Get outcome names from config
         self.outcome_names = config.outcome_names
-
         self._setup_pooling_layers(config)
         self._setup_bottleneck(config)
         self._setup_mlp_heads(config)
@@ -65,21 +68,32 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             )
 
     def _setup_pooling_layers(self, config):
+        pooling_strategy = self.head_config.get("pooling_strategy", "gru")
+        logger.info(f"Using pooling strategy: '{pooling_strategy}'")
+
+        if pooling_strategy == "cls":
+            PoolerClass = CLSPooler
+        elif pooling_strategy == "gru":
+            PoolerClass = PatientRepresentationPooler
+        else:
+            raise ValueError(
+                f"Unsupported pooling strategy: {pooling_strategy}. Choose 'cls' or 'gru'."
+            )
         if self.shared_representation:
             logger.info("Using shared patient representation")
             # A single pooler for all tasks
-            self.pooler = PatientRepresentationPooler(
+            self.pooler = PoolerClass(
                 hidden_size=config.hidden_size, bidirectional=self.bidirectional
             )
         else:
             logger.info("Using separate patient representations")
             # Separate poolers for exposure and each outcome
-            self.exposure_pooler = PatientRepresentationPooler(
+            self.exposure_pooler = PoolerClass(
                 hidden_size=config.hidden_size, bidirectional=self.bidirectional
             )
             self.outcome_poolers = nn.ModuleDict()
             for outcome_name in self.outcome_names:
-                self.outcome_poolers[outcome_name] = PatientRepresentationPooler(
+                self.outcome_poolers[outcome_name] = PoolerClass(
                     hidden_size=config.hidden_size, bidirectional=self.bidirectional
                 )
 
@@ -160,7 +174,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             return torch.tensor(pos_weight_value)
         return None
 
-    def forward(self, batch: dict, cf: bool = False):
+    def forward(self, batch: dict, cf: bool = False, return_encodings: bool = False):
         """Forward pass for causal inference."""
         outputs = super().forward(batch)
         sequence_output = outputs[0]
@@ -175,6 +189,8 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             outcome_reprs = {
                 outcome_name: bottleneck_repr for outcome_name in self.outcome_names
             }
+            if return_encodings:
+                outputs.patient_encodings = shared_repr
         else:
             exposure_repr = self.exposure_pooler(sequence_output, attention_mask)
             outcome_reprs = {
@@ -183,6 +199,13 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
                 )
                 for outcome_name in self.outcome_names
             }
+            if return_encodings:
+                outputs.patient_encodings = exposure_repr  # Or some combination
+
+        if return_encodings:
+            outputs.token_encodings = sequence_output
+            outputs.pids = batch[PID_COL]
+            outputs.token_ids = batch[CONCEPT_FEAT]
 
         # --- Exposure Prediction ---
         exposure_logits = self.exposure_head(exposure_repr)
@@ -192,7 +215,6 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         exposure_status = 2 * batch[EXPOSURE_TARGET] - 1  # Convert from 0/1 to -1/1
         if cf:
             exposure_status = -exposure_status  # Flip for counterfactual
-
         # Compute logits for each outcome using its specific representation
         outputs.outcome_logits = {}
         for outcome_name in self.outcome_names:
@@ -258,3 +280,21 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             total_loss += l1_loss
 
         outputs.loss = total_loss
+
+    @staticmethod
+    def _init_weights(module: nn.Module):
+        """Initializes weights of Linear and GRU layers with a more robust scheme."""
+        if isinstance(module, nn.Linear):
+            # Kaiming Normal is a good choice for layers followed by ReLU/GELU
+            nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.GRU):
+            # Xavier uniform is a common choice for RNNs
+            for name, param in module.named_parameters():
+                if "weight_ih" in name:
+                    nn.init.xavier_uniform_(param.data)
+                elif "weight_hh" in name:
+                    nn.init.xavier_uniform_(param.data)
+                elif "bias" in name:
+                    param.data.fill_(0)

@@ -8,7 +8,10 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import logging
-from corebehrt.constants.data import PID_COL, AGE_COL
+from corebehrt.constants.data import PID_COL, AGE_COL, TIMESTAMP_COL
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
+from matplotlib.axes import Axes
+from matplotlib.container import BarContainer
 
 
 def plot_cohort_stats(
@@ -58,11 +61,9 @@ def plot_cohort_stats(
 
     if save_path:
         try:
-            # Ensure directory exists
-            import os
-
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            plt.savefig(save_path, dpi=300, bbox_inches="tight")
+            save_figure_with_azure_copy(
+                fig, save_path, dpi=300, bbox_inches="tight", close=False
+            )
             print(f"Plot saved to: {save_path}")
         except Exception as e:
             print(f"Error saving plot: {e}")
@@ -73,37 +74,40 @@ def plot_cohort_stats(
         plt.close()
 
 
-def _plot_step_by_step_flow(ax, stats: Dict) -> None:
+def _plot_step_by_step_flow(ax: Axes, stats: Dict) -> None:
     """Plot the step-by-step patient flow through the selection process."""
     initial = stats.get("initial_total", 0)
     final = stats.get("final_included", 0)
 
-    # Get exclusion totals
+    # Get totals reported by the stats object
     inclusion_stats = stats.get("excluded_by_inclusion_criteria", {})
-    exclusion_stats = stats.get("excluded_by_exclusion_criteria", {})
-
     total_excluded_by_inclusion = inclusion_stats.get("total_excluded", 0)
-    total_excluded_by_exclusion = exclusion_stats.get("total_excluded", 0)
 
-    # Calculate intermediate counts
+    # Patients remaining after inclusion is simply those meeting the inclusion expression
     after_inclusion = initial - total_excluded_by_inclusion
-    after_exclusion = after_inclusion - total_excluded_by_exclusion
 
-    # Stages and counts
+    # Patients excluded at the exclusion step should be computed CONDITIONED on having
+    # passed inclusion. This automatically accounts for overlaps between inclusion-violators
+    # and exclusion-violators.
+    excluded_at_exclusion_step = max(0, after_inclusion - final)
+
+    # After exclusion equals the final included cohort
+    # after_exclusion = after_inclusion - excluded_at_exclusion_step  # equals `final`
+
+    # Use three bars to avoid confusion: Initial -> After Inclusion -> Final (After Exclusion)
     stages = [
         "Initial\nCohort",
         "After\nInclusion",
-        "After\nExclusion",
         "Final\nCohort",
     ]
-    counts = [initial, after_inclusion, after_exclusion, final]
+    counts = [initial, after_inclusion, final]
 
     # Colors: blue for kept, progressively darker
     colors = ["#4A90E2", "#357ABD", "#2E6B9E", "#1F4F79"]
 
     # Create bars
     x_positions = np.arange(len(stages))
-    bars = ax.bar(
+    bars: BarContainer = ax.bar(
         x_positions, counts, color=colors, alpha=0.8, edgecolor="black", linewidth=1.5
     )
 
@@ -141,10 +145,10 @@ def _plot_step_by_step_flow(ax, stats: Dict) -> None:
             ),
         )
 
-    # Exclusion exclusion arrow
-    if total_excluded_by_exclusion > 0:
+    # Exclusion arrow (conditioned on having passed inclusion)
+    if excluded_at_exclusion_step > 0:
         ax.annotate(
-            f"Excluded: {total_excluded_by_exclusion:,}",
+            f"Excluded: {excluded_at_exclusion_step:,}",
             xy=(1.5, arrow_height),
             xytext=(1.5, arrow_height + max_height * 0.15),
             arrowprops=dict(arrowstyle="->", color="red", lw=3),
@@ -190,7 +194,7 @@ def _plot_step_by_step_flow(ax, stats: Dict) -> None:
 
 
 def _plot_individual_criteria_breakdown(
-    ax_inclusion, ax_exclusion, stats: Dict
+    ax_inclusion: Axes, ax_exclusion: Axes, stats: Dict
 ) -> None:
     """Plot individual criteria showing how many patients MET each criterion."""
     inclusion_criteria = stats.get("excluded_by_inclusion_criteria", {})
@@ -219,7 +223,7 @@ def _plot_individual_criteria_breakdown(
 
 
 def _plot_criteria_met(
-    ax,
+    ax: Axes,
     criteria_stats: Dict,
     initial_total: int,
     criteria_type: str,
@@ -392,11 +396,9 @@ def plot_multiple_cohort_stats(
 
     if save_path:
         try:
-            # Ensure directory exists
-            import os
-
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            plt.savefig(save_path, dpi=300, bbox_inches="tight")
+            save_figure_with_azure_copy(
+                fig, save_path, dpi=300, bbox_inches="tight", close=False
+            )
             print(f"Comparison plot saved to: {save_path}")
         except Exception as e:
             print(f"Error saving plot: {e}")
@@ -433,7 +435,53 @@ def plot_age_distribution(
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
     plt.tight_layout()
 
-    plt.savefig(save_path, dpi=300)
-    plt.close()
+    save_figure_with_azure_copy(plt.gcf(), save_path, dpi=300)
 
     logger.info(f"Saved age distribution plot to {save_path}")
+
+
+def plot_index_date_distribution(
+    final_index_dates: pd.DataFrame,
+    control_pids: List[int],
+    save_path: str,
+    logger: logging.Logger,
+):
+    """Plots the index date distribution for exposed vs. control from a pre-calculated index date column."""
+    logger.info("Plotting index date distribution.")
+    plot_df = final_index_dates.copy()
+
+    # 1. Create a 'group' column by checking if a patient is in the control list
+    plot_df["group"] = np.where(
+        plot_df[PID_COL].isin(control_pids), "Control", "Exposed"
+    )
+
+    # 2. Create and save the histogram plot
+    plt.figure(figsize=(12, 7))
+    try:
+        sns.histplot(
+            data=plot_df,
+            x=TIMESTAMP_COL,
+            hue="group",
+            kde=True,
+            bins=40,
+            element="step",
+        )
+    except Exception as e:
+        print(f"Error plotting index date distribution: {e}")
+        sns.histplot(
+            data=plot_df,
+            x=TIMESTAMP_COL,
+            hue="group",
+            kde=False,
+            bins=40,
+            element="step",
+        )
+    plt.title("Index Date Distribution (Final Cohorts)")
+    plt.xlabel("Index Date")
+    plt.ylabel("Patient Count")
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+    plt.tight_layout()
+
+    save_figure_with_azure_copy(plt.gcf(), save_path, dpi=300)
+
+    logger.info(f"Saved index date distribution plot to {save_path}")

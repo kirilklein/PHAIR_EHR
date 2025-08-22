@@ -2,8 +2,10 @@ from corebehrt.functional.setup.args import get_args
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.features.loader import ShardLoader
-from corebehrt.modules.simulation.simulator import CausalSimulator
-from corebehrt.modules.simulation.config import SimulationConfig
+from corebehrt.modules.simulation.realistic_simulator import (
+    RealisticCausalSimulator as CausalSimulator,
+)
+from corebehrt.modules.simulation.config_realistic import create_simulation_config
 from collections import defaultdict
 import pandas as pd
 from os.path import join
@@ -13,7 +15,7 @@ from tqdm import tqdm
 logger = logging.getLogger("simulate")
 
 
-CONFIG_PATH = "./corebehrt/configs/causal/simulate.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/simulate_realistic.yaml"
 
 
 def main_simulate(config_path):
@@ -23,12 +25,12 @@ def main_simulate(config_path):
     CausalDirectoryPreparer(cfg).setup_simulate_from_sequence()
 
     shard_loader = ShardLoader(cfg.paths.data, cfg.paths.splits)
-    simulation_config = SimulationConfig(cfg)
+    simulation_config = create_simulation_config(cfg)
     simulator = CausalSimulator(simulation_config)
     simulate(shard_loader, simulator, cfg.paths.outcomes)
-    if simulation_config.debug:
-        logger.info("--- Saving weights ---")
-        simulator.save_weights()
+    # if simulation_config.debug:
+    #     logger.info("--- Saving weights ---")
+    #     simulator.save_weights()
 
 
 def simulate(shard_loader: ShardLoader, simulator: CausalSimulator, outcomes_dir: str):

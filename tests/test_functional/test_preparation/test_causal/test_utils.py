@@ -1,237 +1,109 @@
 import unittest
 import pandas as pd
 from corebehrt.functional.preparation.causal.utils import (
-    get_group_dict,
     get_non_compliance_abspos,
+    assign_groups_to_followups,
 )
-from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL
 from corebehrt.constants.data import PID_COL, ABSPOS_COL
+from corebehrt.constants.causal.data import CONTROL_PID_COL, EXPOSED_PID_COL, GROUP_COL
 
 
-class TestGetGroupDict(unittest.TestCase):
-    """Test cases for the get_group_dict function."""
+class TestAssignGroupsToFollowups(unittest.TestCase):
+    """
+    Test suite for the assign_groups_to_followups function.
+    """
 
-    def test_get_group_dict_basic(self):
-        """Test basic functionality with multiple exposed subjects."""
-        # 1. Setup sample data
-        index_date_matching = pd.DataFrame(
-            {CONTROL_PID_COL: [1, 2, 3, 5], EXPOSED_PID_COL: [10, 10, 20, 30]}
+    def test_standard_many_to_one_matching(self):
+        """
+        Tests the standard case with one exposed patient having multiple controls,
+        plus an unmatched exposed patient.
+        """
+        # PIDs 1, 2 are controls for exposed patient 10.
+        # PID 3 is a control for exposed patient 20.
+        # PID 30 is an unmatched exposed patient.
+        follow_ups = pd.DataFrame({PID_COL: [1, 2, 3, 10, 20, 30]})
+        matching = pd.DataFrame(
+            {CONTROL_PID_COL: [1, 2, 3], EXPOSED_PID_COL: [10, 10, 20]}
         )
+        result = assign_groups_to_followups(follow_ups, matching)
 
-        # 2. Execute function
-        result_dict = get_group_dict(index_date_matching.copy())
-
-        # 3. Expected results:
-        # Group 0: exposed_subject_id=10, control_subject_ids=[1, 2]
-        # Group 1: exposed_subject_id=20, control_subject_ids=[3]
-        # Group 2: exposed_subject_id=30, control_subject_ids=[5]
-        expected_data = {
-            1: 0,  # Control for exposed 10
-            2: 0,  # Control for exposed 10
-            3: 1,  # Control for exposed 20
-            5: 2,  # Control for exposed 30
-            10: 0,  # Exposed 10
-            20: 1,  # Exposed 20
-            30: 2,  # Exposed 30
+        expected_groups = {
+            1: 10,  # Control -> Exposed
+            2: 10,  # Control -> Exposed
+            3: 20,  # Control -> Exposed
+            10: 10,  # Exposed -> Self
+            20: 20,  # Exposed -> Self
+            30: 30,  # Unmatched Exposed -> Self
         }
 
-        # 4. Assertions
-        self.assertEqual(result_dict, expected_data)
+        result_map = result.set_index(PID_COL)[GROUP_COL].to_dict()
+        self.assertDictEqual(result_map, expected_groups)
+        self.assertTrue(pd.api.types.is_integer_dtype(result[GROUP_COL].dtype))
 
-    def test_get_group_dict_single_exposed(self):
-        """Test with only one exposed subject."""
-        # 1. Setup sample data
-        index_date_matching = pd.DataFrame(
-            {
-                CONTROL_PID_COL: [1, 2, 3],
-                EXPOSED_PID_COL: [10, 10, 10],  # All controls for same exposed
-            }
+    def test_one_to_one_matching(self):
+        """Tests a simple 1-to-1 matching scenario."""
+        follow_ups = pd.DataFrame({PID_COL: [1, 10, 2, 20]})
+        matching = pd.DataFrame({CONTROL_PID_COL: [1, 2], EXPOSED_PID_COL: [10, 20]})
+        result = assign_groups_to_followups(follow_ups, matching)
+
+        expected = {1: 10, 10: 10, 2: 20, 20: 20}
+        result_map = result.set_index(PID_COL)[GROUP_COL].to_dict()
+        self.assertDictEqual(result_map, expected)
+
+    def test_empty_matching_file(self):
+        """Tests that if no matching is provided, each patient is their own group."""
+        follow_ups = pd.DataFrame({PID_COL: [10, 20, 30]})
+        matching = pd.DataFrame(columns=[CONTROL_PID_COL, EXPOSED_PID_COL])
+
+        result = assign_groups_to_followups(follow_ups, matching)
+
+        # Each patient's group ID should be their own PID
+        pd.testing.assert_series_equal(
+            result[GROUP_COL].reset_index(drop=True),
+            follow_ups[PID_COL].reset_index(drop=True),
+            check_names=False,
         )
 
-        # 2. Execute function
-        result_dict = get_group_dict(index_date_matching.copy())
+    def test_none_matching_file(self):
+        """Tests that if the matching DataFrame is None, each patient is their own group."""
+        follow_ups = pd.DataFrame({PID_COL: [10, 20, 30]})
 
-        # 3. Expected results:
-        # Group 0: exposed_subject_id=10, control_subject_ids=[1, 2, 3]
-        expected_data = {
-            1: 0,  # Control for exposed 10
-            2: 0,  # Control for exposed 10
-            3: 0,  # Control for exposed 10
-            10: 0,  # Exposed 10
-        }
+        result = assign_groups_to_followups(follow_ups, index_date_matching=None)
 
-        # 4. Assertions
-        self.assertEqual(result_dict, expected_data)
-
-    def test_get_group_dict_one_to_one_matching(self):
-        """Test with one-to-one matching (no multiple controls per exposed)."""
-        # 1. Setup sample data
-        index_date_matching = pd.DataFrame(
-            {
-                CONTROL_PID_COL: [1, 2, 3],
-                EXPOSED_PID_COL: [10, 20, 30],  # Each exposed has one control
-            }
+        # Each patient's group ID should be their own PID
+        pd.testing.assert_series_equal(
+            result[GROUP_COL].reset_index(drop=True),
+            follow_ups[PID_COL].reset_index(drop=True),
+            check_names=False,
         )
 
-        # 2. Execute function
-        result_dict = get_group_dict(index_date_matching.copy())
+    def test_cohort_with_no_matching_controls(self):
+        """
+        Tests a cohort of only exposed patients, where controls from the matching
+        file are not present in the final cohort.
+        """
+        follow_ups = pd.DataFrame({PID_COL: [10, 20, 30]})
+        # Matching file exists but its controls (1, 2) aren't in the follow_ups DataFrame
+        matching = pd.DataFrame({CONTROL_PID_COL: [1, 2], EXPOSED_PID_COL: [10, 20]})
+        result = assign_groups_to_followups(follow_ups, matching)
 
-        # 3. Expected results:
-        # Group 0: exposed_subject_id=10, control_subject_id=1
-        # Group 1: exposed_subject_id=20, control_subject_id=2
-        # Group 2: exposed_subject_id=30, control_subject_id=3
-        expected_data = {
-            1: 0,  # Control for exposed 10
-            2: 1,  # Control for exposed 20
-            3: 2,  # Control for exposed 30
-            10: 0,  # Exposed 10
-            20: 1,  # Exposed 20
-            30: 2,  # Exposed 30
-        }
-
-        # 4. Assertions
-        self.assertEqual(result_dict, expected_data)
-
-    def test_get_group_dict_empty_input(self):
-        """Test with empty DataFrame."""
-        # 1. Setup empty data
-        index_date_matching = pd.DataFrame(columns=[CONTROL_PID_COL, EXPOSED_PID_COL])
-
-        # 2. Execute function
-        result_dict = get_group_dict(index_date_matching.copy())
-
-        # 3. Assertions
-        self.assertEqual(result_dict, {}, "Empty input should return empty dictionary")
-
-    def test_get_group_dict_single_row(self):
-        """Test with single row input."""
-        # 1. Setup sample data
-        index_date_matching = pd.DataFrame(
-            {CONTROL_PID_COL: [1], EXPOSED_PID_COL: [10]}
+        # The mapping has no effect on the present PIDs; each is their own group.
+        pd.testing.assert_series_equal(
+            result[GROUP_COL].reset_index(drop=True),
+            follow_ups[PID_COL].reset_index(drop=True),
+            check_names=False,
+            check_dtype=False,
         )
 
-        # 2. Execute function
-        result_dict = get_group_dict(index_date_matching.copy())
+    def test_empty_follow_ups_input(self):
+        """Tests that an empty cohort DataFrame results in an empty DataFrame."""
+        follow_ups = pd.DataFrame({PID_COL: pd.Series(dtype=int)})
+        matching = pd.DataFrame({CONTROL_PID_COL: [1, 2], EXPOSED_PID_COL: [10, 20]})
 
-        # 3. Expected results:
-        # Group 0: exposed_subject_id=10, control_subject_id=1
-        expected_data = {
-            1: 0,  # Control for exposed 10
-            10: 0,  # Exposed 10
-        }
+        result = assign_groups_to_followups(follow_ups, matching)
 
-        # 4. Assertions
-        self.assertEqual(result_dict, expected_data)
-
-    def test_get_group_dict_duplicate_controls(self):
-        """Test with duplicate control subjects for same exposed."""
-        # 1. Setup sample data
-        index_date_matching = pd.DataFrame(
-            {
-                CONTROL_PID_COL: [1, 1, 2],  # Control 1 appears twice
-                EXPOSED_PID_COL: [10, 10, 20],
-            }
-        )
-
-        # 2. Execute function
-        result_dict = get_group_dict(index_date_matching.copy())
-
-        # 3. Expected results:
-        # Group 0: exposed_subject_id=10, control_subject_ids=[1] (duplicates removed)
-        # Group 1: exposed_subject_id=20, control_subject_ids=[2]
-        expected_data = {
-            1: 0,  # Control for exposed 10 (duplicate removed)
-            2: 1,  # Control for exposed 20
-            10: 0,  # Exposed 10
-            20: 1,  # Exposed 20
-        }
-
-        # 4. Assertions
-        self.assertEqual(result_dict, expected_data)
-
-    def test_get_group_dict_large_numbers(self):
-        """Test with large subject ID numbers."""
-        # 1. Setup sample data
-        index_date_matching = pd.DataFrame(
-            {
-                CONTROL_PID_COL: [1000, 2000, 3000],
-                EXPOSED_PID_COL: [10000, 20000, 30000],
-            }
-        )
-
-        # 2. Execute function
-        result_dict = get_group_dict(index_date_matching.copy())
-
-        # 3. Expected results:
-        # Group 0: exposed_subject_id=10000, control_subject_id=1000
-        # Group 1: exposed_subject_id=20000, control_subject_id=2000
-        # Group 2: exposed_subject_id=30000, control_subject_id=3000
-        expected_data = {
-            1000: 0,  # Control for exposed 10000
-            2000: 1,  # Control for exposed 20000
-            3000: 2,  # Control for exposed 30000
-            10000: 0,  # Exposed 10000
-            20000: 1,  # Exposed 20000
-            30000: 2,  # Exposed 30000
-        }
-
-        # 4. Assertions
-        self.assertEqual(result_dict, expected_data)
-
-    def test_get_group_dict_group_numbering(self):
-        """Test that group numbers are assigned correctly based on exposed subject order."""
-        # 1. Setup sample data with specific exposed subject order
-        index_date_matching = pd.DataFrame(
-            {
-                CONTROL_PID_COL: [1, 2, 3],
-                EXPOSED_PID_COL: [30, 10, 20],  # Order: 30, 10, 20
-            }
-        )
-
-        # 2. Execute function
-        result_dict = get_group_dict(index_date_matching.copy())
-
-        # 3. Expected results:
-        # ngroup() assigns groups based on sorted unique exposed_subject_id values: 10, 20, 30
-        # Group 0: exposed_subject_id=10
-        # Group 1: exposed_subject_id=20
-        # Group 2: exposed_subject_id=30
-        expected_data = {
-            1: 2,  # Control for exposed 30 (group 2)
-            2: 0,  # Control for exposed 10 (group 0)
-            3: 1,  # Control for exposed 20 (group 1)
-            10: 0,  # Exposed 10 (group 0)
-            20: 1,  # Exposed 20 (group 1)
-            30: 2,  # Exposed 30 (group 2)
-        }
-
-        # 4. Assertions
-        self.assertEqual(result_dict, expected_data)
-
-    def test_get_group_dict_return_type(self):
-        """Test that the function returns correct type and structure."""
-        # 1. Setup sample data
-        index_date_matching = pd.DataFrame(
-            {CONTROL_PID_COL: [1, 2], EXPOSED_PID_COL: [10, 20]}
-        )
-
-        # 2. Execute function
-        result_dict = get_group_dict(index_date_matching.copy())
-
-        # 3. Assertions
-        self.assertIsInstance(result_dict, dict, "Should return a dictionary")
-        self.assertTrue(
-            all(isinstance(k, int) for k in result_dict.keys()),
-            "All keys should be integers",
-        )
-        self.assertTrue(
-            all(isinstance(v, int) for v in result_dict.values()),
-            "All values should be integers",
-        )
-        self.assertTrue(
-            all(v >= 0 for v in result_dict.values()),
-            "All group numbers should be non-negative",
-        )
+        self.assertTrue(result.empty)
+        self.assertIn(GROUP_COL, result.columns)
 
 
 class TestGetNonComplianceAbspos(unittest.TestCase):

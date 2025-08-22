@@ -6,22 +6,22 @@ REM -------------------------------
 
 :: Run the pipeline with inline error checking
 :: Run Preprocessing and Pretraining
-@REM echo ======================================
-@REM echo ==== Running Preprocessing and Pretraining... ====
-@REM echo ==== Deleting old features... ====
-@REM rmdir /s /q outputs\causal\data\features
+echo ======================================
+echo ==== Running Preprocessing and Pretraining... ====
+echo ==== Deleting old features... ====
+rmdir /s /q outputs\causal\data\features
 
-@REM echo ==== Running create_data... ====
-@REM python -m corebehrt.main.create_data --config_path corebehrt\configs\causal\prepare_and_pretrain\create_data.yaml
-@REM if errorlevel 1 goto :error
+echo ==== Running create_data... ====
+python -m corebehrt.main.create_data --config_path corebehrt\configs\causal\prepare_and_pretrain\create_data.yaml
+if errorlevel 1 goto :error
 
-@REM echo ==== Running prepare_training_data... ====
-@REM python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\prepare_and_pretrain\prepare_pretrain.yaml
-@REM if errorlevel 1 goto :error
+echo ==== Running prepare_training_data... ====
+python -m corebehrt.main.prepare_training_data --config_path corebehrt\configs\causal\prepare_and_pretrain\prepare_pretrain.yaml
+if errorlevel 1 goto :error
 
-@REM echo ==== Running pretrain... ====
-@REM python -m corebehrt.main.pretrain --config_path corebehrt\configs\causal\prepare_and_pretrain\pretrain.yaml
-@REM if errorlevel 1 goto :error
+echo ==== Running pretrain... ====
+python -m corebehrt.main.pretrain --config_path corebehrt\configs\causal\prepare_and_pretrain\pretrain.yaml
+if errorlevel 1 goto :error
 
 :: Run Outcomes and Cohort Selection
 echo ==== Running simulate_outcomes... ====

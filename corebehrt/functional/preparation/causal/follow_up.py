@@ -15,7 +15,7 @@ from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.functional.preparation.causal.utils import (
     filter_df_by_unique_values,
     get_non_compliance_abspos,
-    get_group_dict,
+    assign_groups_to_followups,
 )
 from corebehrt.modules.preparation.causal.config import OutcomeConfig
 
@@ -27,6 +27,7 @@ def get_combined_follow_ups(
     exposures: pd.DataFrame,
     data_end: pd.Timestamp,
     cfg: OutcomeConfig,
+    censor_by_death: bool = True,
 ) -> pd.DataFrame:
     """
     Create follow-up windows.
@@ -45,6 +46,7 @@ def get_combined_follow_ups(
         exposures: DataFrame with columns 'subject_id', 'abspos' (exposure events)
         data_end: Timestamp of the end of the data
         cfg: OutcomeConfig
+        censor_by_death: Whether to censor groupwise by death
 
     Returns:
         - adjusted_follow_ups: pd.DataFrame with final follow-up periods with following column
@@ -59,6 +61,7 @@ def get_combined_follow_ups(
         non_compliance_abspos,
         deaths,
         cfg.delay_death_hours,
+        censor_by_death=censor_by_death,
     )  # based on non-compliance, death, and group
 
     if cfg.group_wise_follow_up:  # make group-wise follow-up times shorter
@@ -67,16 +70,8 @@ def get_combined_follow_ups(
         index_date_matching = filter_df_by_unique_values(
             index_date_matching, index_dates, CONTROL_PID_COL, PID_COL
         )
-        all_pids = index_dates[PID_COL].unique()
-        group_dict = get_group_dict(index_date_matching)
-        max_group = max(group_dict.values(), default=0)
-        for pid in all_pids:
-            if pid not in group_dict:
-                group_dict[pid] = max_group + 1
-                max_group += 1
 
-        follow_ups[GROUP_COL] = follow_ups[PID_COL].map(group_dict)
-        follow_ups[GROUP_COL] = follow_ups[GROUP_COL].astype(int)
+        follow_ups = assign_groups_to_followups(follow_ups, index_date_matching)
         follow_ups = minimize_end_by_group(follow_ups)
 
     return follow_ups
@@ -114,6 +109,7 @@ def prepare_follow_ups_adjusted(
     non_compliance_abspos: pd.Series,
     deaths: pd.Series,
     delay_death_hours: int = 0,
+    censor_by_death: bool = True,
 ) -> pd.DataFrame:
     """
     Prepare the follow-ups for the patients.
@@ -129,13 +125,16 @@ def prepare_follow_ups_adjusted(
     follow_ups = follow_ups.copy()
 
     follow_ups[NON_COMPLIANCE_COL] = follow_ups[PID_COL].map(non_compliance_abspos)
-    follow_ups[DEATH_COL] = follow_ups[PID_COL].map(deaths)
-    follow_ups["delayed_death"] = (
-        follow_ups[DEATH_COL] + delay_death_hours
-    )  # for outcomes that are coded with a delay
-    follow_ups[END_COL] = follow_ups[
-        [END_COL, NON_COMPLIANCE_COL, "delayed_death"]
-    ].min(
+    cols_to_min = [END_COL, NON_COMPLIANCE_COL]
+
+    if censor_by_death:
+        follow_ups[DEATH_COL] = follow_ups[PID_COL].map(deaths)
+        follow_ups["delayed_death"] = (
+            follow_ups[DEATH_COL] + delay_death_hours
+        )  # for outcomes that are coded with a delay
+        cols_to_min.append("delayed_death")
+
+    follow_ups[END_COL] = follow_ups[cols_to_min].min(
         axis=1
     )  # end follow-up if patient dies, non-complies, or the follow-up period ends
     if follow_ups[END_COL].isna().all():
@@ -151,8 +150,25 @@ def prepare_follow_ups_adjusted(
 
 def minimize_end_by_group(follow_ups: pd.DataFrame) -> pd.DataFrame:
     """
-    Minimize the end time by group.
-    We get shorter follow-up times for patients in the same (index date) group.
+    Minimizes the follow-up time to be consistent within each group.
+    This is done by calculating the duration for each patient, finding the
+    minimum duration within a group, and then applying that minimum duration
+    to each patient's own start time.
     """
-    follow_ups[END_COL] = follow_ups.groupby(GROUP_COL)[END_COL].transform("min")
+    # 1. Calculate the potential follow-up duration for each patient
+    follow_ups["duration"] = follow_ups[END_COL] - follow_ups[START_COL]
+
+    # Ensure duration is not negative before this step (handles edge cases where
+    # censoring happens before follow-up starts)
+    follow_ups["duration"] = follow_ups["duration"].clip(lower=0)
+
+    # 2. Find the minimum duration within each group
+    min_duration_by_group = follow_ups.groupby(GROUP_COL)["duration"].transform("min")
+
+    # 3. Calculate the new END_COL based on each patient's START_COL and the group's min_duration
+    follow_ups[END_COL] = follow_ups[START_COL] + min_duration_by_group
+
+    # Clean up the temporary duration column
+    follow_ups = follow_ups.drop(columns=["duration"])
+
     return follow_ups

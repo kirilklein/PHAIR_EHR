@@ -1,6 +1,7 @@
 from os.path import exists, join
 
 import pandas as pd
+from pandas.testing import assert_frame_equal
 
 from corebehrt.constants.paths import DATA_CFG, OUTCOMES_CFG
 from corebehrt.main.create_outcomes import main_data
@@ -87,12 +88,11 @@ class TestCreateOutcomes(TestMainScript):
             expected_output = pd.read_csv(
                 join(f"./tests/data/outcomes/{file_name}.csv")
             )
-            for idx, ((_, row), (_, expected_row)) in enumerate(
-                zip(output.iterrows(), expected_output.iterrows())
-            ):
-                for column in output.columns:
-                    self.assertEqual(
-                        row[column],
-                        expected_row[column],
-                        f"Unexpected value at row {idx}, column {column}",
-                    )
+
+            for df in (output, expected_output):
+                df.sort_values(["subject_id", "time"], inplace=True)
+                df.reset_index(drop=True, inplace=True)
+
+            # Columns already checked above
+            self.assertEqual(len(output), len(expected_output), "Row count mismatch")
+            assert_frame_equal(output, expected_output, check_dtype=False)

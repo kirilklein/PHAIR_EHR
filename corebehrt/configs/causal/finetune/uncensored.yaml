@@ -12,11 +12,16 @@ paths:
   model: ./outputs/causal/finetune/models/uncensored # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
+save_encodings: false
+visualize_encodings: false
+visualize_weight_distributions: false
+
 model:
   head:
-    shared_representation: true # whether to share the bigru representation for exposure and outcome
+    shared_representation: false # whether to share the bigru representation for exposure and outcome
     bidirectional: true
-    bottleneck_dim: 32
+    bottleneck_dim: 16
+    pooling_strategy: gru # cls or gru
 
 trainer_args:
   loss_weight_function:
@@ -24,7 +29,7 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 8
+  epochs: 7
   info: true
   # gradient_clip:
   # clip_value: 1.0
@@ -34,16 +39,17 @@ trainer_args:
   stopping_criterion: roc_auc
   n_layers_to_freeze: 0
   freeze_encoder_on_plateau: false
-  use_pcgrad: true
+  use_pcgrad: false
+  plot_gradients: false
 
 optimizer:
-  lr: 8e-3
+  lr: 4e-3
   eps: 1e-6
 
 scheduler:
-  _target_: transformers.get_linear_schedule_with_warmup
-  num_training_epochs: 15
-  num_warmup_epochs: 3
+  _target_: transformers.get_cosine_schedule_with_warmup
+  num_training_epochs: 10
+  num_warmup_epochs: 2
 
 metrics:
   roc_auc:

@@ -10,9 +10,11 @@ from corebehrt.constants.data import (
     AGE_FEAT,
     ATTENTION_MASK,
     CONCEPT_FEAT,
+    PID_COL,
     SEGMENT_FEAT,
 )
 from corebehrt.modules.preparation.dataset import PatientData, PatientDataset
+from corebehrt.functional.trainer.collate import dynamic_padding
 
 
 @dataclass
@@ -27,9 +29,10 @@ class CausalPatientDataset(PatientDataset):
     See PatientDataset for more details.
     """
 
-    def __init__(self, patients):
+    def __init__(self, patients, vocab: dict | None = None):
         super().__init__(patients)
         self.patients: List[CausalPatientData] = patients
+        self.vocab = vocab
 
     def assign_attributes(self, attribute_name: str, values: pd.Series) -> None:
         """Assigns binary attributes (outcomes or exposures) to each patient in the dataset.
@@ -55,7 +58,9 @@ class CausalPatientDataset(PatientDataset):
 
     def filter_by_pids(self, pids: List[str]) -> "CausalPatientDataset":
         pids_set = set(pids)
-        return CausalPatientDataset([p for p in self.patients if p.pid in pids_set])
+        return CausalPatientDataset(
+            [p for p in self.patients if p.pid in pids_set], self.vocab
+        )
 
     def get_exposures(self):
         return [p.exposure for p in self.patients]
@@ -93,6 +98,7 @@ class ExposureOutcomesDataset:
 
     def __init__(self, patients: List[CausalPatientData]):
         self.patients = patients
+        self.collate_fn = dynamic_padding
 
     def __getitem__(self, index: int) -> dict:
         patient = self.patients[index]
@@ -105,6 +111,7 @@ class ExposureOutcomesDataset:
             SEGMENT_FEAT: torch.tensor(patient.segments, dtype=torch.long),
             AGE_FEAT: torch.tensor(patient.ages, dtype=torch.float),
             ATTENTION_MASK: attention_mask,
+            PID_COL: torch.tensor(patient.pid, dtype=torch.long),
         }
         sample[EXPOSURE_TARGET] = torch.tensor(patient.exposure, dtype=torch.float)
         for outcome_name, outcome_value in patient.outcomes.items():

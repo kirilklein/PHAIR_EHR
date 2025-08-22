@@ -33,6 +33,7 @@ from corebehrt.functional.cohort_handling.advanced.vis import (
     plot_cohort_stats,
     plot_multiple_cohort_stats,
     plot_age_distribution,
+    plot_index_date_distribution,
 )
 import shutil
 from corebehrt.constants.causal.paths import (
@@ -61,6 +62,7 @@ from corebehrt.functional.cohort_handling.advanced.index_dates import (
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
 from corebehrt.functional.preparation.filter import select_first_event
+from corebehrt.functional.utils.filter import safe_control_pids
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
 from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
@@ -131,7 +133,7 @@ def select_cohort(
     patients_info, exposures, index_dates, index_date_matching = _load_data(
         features_path, exposures_path, exposure, logger
     )
-
+    exposed_pids = index_dates[PID_COL].unique()
     criteria_config = load_config(criteria_definitions_path)
     shutil.copy(criteria_definitions_path, join(save_path, CRITERIA_DEFINITIONS_FILE))
     logger.info("Preparing exposed patients")
@@ -148,6 +150,7 @@ def select_cohort(
     criteria_control, index_dates_filtered_control, control_stats = _prepare_control(
         patients_info,
         index_dates_filtered_exposed,
+        exposed_pids,
         logger,
         criteria_config,
         meds_path,
@@ -163,7 +166,7 @@ def select_cohort(
     plot_multiple_cohort_stats(
         stats_dict=combined_stats,
         figsize=(20, 12),
-        save_path=join(save_path, STATS_PATH, "cohort_comparison.png"),
+        save_path=join(save_path, STATS_PATH, "figs", "cohort_comparison.png"),
         show_plot=False,
     )
     logger.info("Saving data")
@@ -186,7 +189,13 @@ def select_cohort(
     plot_age_distribution(
         final_index_dates_with_age=final_index_dates,
         control_pids=index_dates_filtered_control[PID_COL].unique(),
-        save_path=join(save_path, STATS_PATH, "age_distribution.png"),
+        save_path=join(save_path, STATS_PATH, "figs", "age_distribution.png"),
+        logger=logger,
+    )
+    plot_index_date_distribution(
+        final_index_dates,
+        control_pids=index_dates_filtered_control[PID_COL].unique(),
+        save_path=join(save_path, STATS_PATH, "figs", "index_date_distribution.png"),
         logger=logger,
     )
 
@@ -195,14 +204,15 @@ def select_cohort(
 
 def _prepare_control(
     patients_info: pd.DataFrame,
-    index_dates: pd.DataFrame,
+    filtered_exposed_index_dates: pd.DataFrame,
+    exposed_pids: List[str],
     logger: logging.Logger,
     criteria_config: dict,
     meds_path: str,
     splits: List[str],
     save_path: str,
-    index_date_matching: pd.DataFrame = None,
-    index_date_matching_cfg: dict = None,
+    index_date_matching: pd.DataFrame | None = None,
+    index_date_matching_cfg: dict | None = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare control patients for cohort selection.
@@ -212,21 +222,26 @@ def _prepare_control(
     """
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
     if index_date_matching is None:
-        control_pids = list(
-            set(patients_info[PID_COL].unique()) - set(index_dates[PID_COL].unique())
-        )
-        if index_date_matching_cfg is None:
-            index_date_matching_cfg = {"birth_year_tolerance": 3, "redraw_attempts": 3}
+        pid_series = patients_info[PID_COL]
+        control_pids = safe_control_pids(pid_series, exposed_pids)
+        default_cfg = {
+            "birth_year_tolerance": 3,
+            "redraw_attempts": 3,
+            "age_adjusted": True,
+        }
+        index_date_matching_cfg = {**default_cfg, **(index_date_matching_cfg or {})}
         control_index_dates, index_date_matching = (
             draw_index_dates_for_control_with_redraw(
                 control_pids,
-                index_dates,
+                filtered_exposed_index_dates,
                 patients_info,
-                birth_year_tolerance=index_date_matching_cfg.get(
-                    "birth_year_tolerance"
-                ),
-                redraw_attempts=index_date_matching_cfg.get("redraw_attempts"),
+                birth_year_tolerance=index_date_matching_cfg["birth_year_tolerance"],
+                redraw_attempts=index_date_matching_cfg["redraw_attempts"],
+                age_adjusted=index_date_matching_cfg["age_adjusted"],
             )
+        )
+        logger.info(
+            f"Controls after index date matching: {index_date_matching[CONTROL_PID_COL].nunique()} / {len(control_pids)}"
         )
         index_date_matching[ABSPOS_COL] = get_hours_since_epoch(
             index_date_matching[TIMESTAMP_COL]
@@ -265,7 +280,7 @@ def _prepare_control(
     plot_cohort_stats(
         stats=control_stats,
         title="Control Patients Cohort Selection",
-        save_path=join(save_path, STATS_PATH, "control_flow.png"),
+        save_path=join(save_path, STATS_PATH, "figs", "control_flow.png"),
         show_plot=False,
     )
     control_index_date_filtered = filter_df_by_pids(
@@ -290,6 +305,9 @@ def _prepare_exposed(
     Return exposed criteria and index dates.
     """
     time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
+    logger.info(
+        f"Time eligible exposed pids: {len(time_eligible_exposed)} / {index_dates[PID_COL].nunique()}"
+    )
     criteria_exposed, included_pids_exposed, exposed_stats = filter_by_criteria(
         criteria_config,
         meds_path,
@@ -303,7 +321,7 @@ def _prepare_exposed(
     plot_cohort_stats(
         stats=exposed_stats,
         title="Exposed Patients Cohort Selection",
-        save_path=join(save_path, STATS_PATH, "exposed_flow.png"),
+        save_path=join(save_path, STATS_PATH, "figs", "exposed_flow.png"),
         show_plot=False,
     )
     index_dates_filtered_exposed = filter_df_by_pids(index_dates, included_pids_exposed)

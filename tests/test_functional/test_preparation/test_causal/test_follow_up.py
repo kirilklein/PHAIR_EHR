@@ -660,5 +660,178 @@ class TestPrepareFollowUpsSimple(unittest.TestCase):
         )
 
 
+class TestGetCombinedFollowUpsRigorous(unittest.TestCase):
+    """
+    A rigorous test suite for get_combined_follow_ups, specifically targeting
+    the group-wise follow-up logic and its edge cases.
+    """
+
+    def setUp(self):
+        """Set up data designed to expose bugs in group-wise follow-up logic."""
+        self.index_dates = pd.DataFrame(
+            {
+                PID_COL: [101, 102, 201, 202, 301],
+                TIMESTAMP_COL: pd.to_datetime(
+                    [
+                        "2023-01-10",  # Patient 101 (Exposed): Early index date
+                        "2023-05-20",  # Patient 102 (Control): Late index date, matched to 101
+                        "2023-02-01",  # Patient 201 (Exposed)
+                        "2023-02-15",  # Patient 202 (Control), matched to 201
+                        "2023-03-01",  # Patient 301: Unmatched patient
+                    ]
+                ),
+            }
+        )
+        self.index_dates[ABSPOS_COL] = get_hours_since_epoch(
+            self.index_dates[TIMESTAMP_COL]
+        )
+
+        # This matching is crucial for the bug: 101 and 102 have very different index dates
+        self.index_date_matching = pd.DataFrame(
+            {
+                CONTROL_PID_COL: [102, 202],
+                EXPOSED_PID_COL: [101, 201],
+            }
+        )
+
+        # --- Censoring Events ---
+        pid_to_abspos = self.index_dates.set_index(PID_COL)[ABSPOS_COL]
+
+        # Patient 101 (Exposed) is censored early by non-compliance
+        # Patient 202 (Control) is censored early by death
+        self.exposures = pd.DataFrame(
+            {
+                PID_COL: [101, 201],
+                # Last exposure for 101 is 30 days after index
+                ABSPOS_COL: [
+                    pid_to_abspos[101] + 30 * 24,
+                    pid_to_abspos[201] + 500 * 24,
+                ],
+            }
+        )
+
+        self.deaths = pd.Series(
+            [np.nan, np.nan, np.nan, pid_to_abspos[202] + 45 * 24, np.nan],
+            index=[101, 102, 201, 202, 301],
+        )
+        self.data_end = pd.Timestamp("2025-01-01")
+
+    def test_group_wise_follow_up_avoids_negative_duration_bug(self):
+        """
+        THE KEY TEST: Ensures group-wise follow-up with disparate index dates
+        does not produce negative follow-up durations. This test will FAIL
+        with the old, buggy implementation.
+        """
+        cfg = OutcomeConfig(
+            n_hours_start_follow_up=24,  # Start follow-up 1 day after index
+            n_hours_end_follow_up=365 * 24,  # Max follow-up is 1 year
+            n_hours_compliance=10 * 24,  # Non-compliance after 10 days of no exposure
+            group_wise_follow_up=True,
+            delay_death_hours=0,
+        )
+
+        result = get_combined_follow_ups(
+            self.index_dates,
+            self.index_date_matching,
+            self.deaths,
+            self.exposures,
+            self.data_end,
+            cfg,
+        )
+
+        # --- Primary Assertion: No negative follow-up times ---
+        durations = result[END_COL] - result[START_COL]
+        self.assertTrue(
+            (durations >= 0).all(), "Follow-up duration should never be negative."
+        )
+
+        # --- Detailed Calculation and Assertions for Group 1 (101, 102) ---
+        p101 = result[result[PID_COL] == 101].iloc[0]
+        p102 = result[result[PID_COL] == 102].iloc[0]
+
+        # Individual durations BEFORE group minimization:
+        # P101: start=idx+1d. non-compliance=idx+30d+10d = idx+40d. Max_fu=idx+365d.
+        #       Censored by non-compliance. Duration = 40d - 1d = 39 days.
+        duration_101 = (30 + 10 - 1) * 24
+
+        # The minimum duration for the group is 39 days (from P101).
+        min_duration_group1 = duration_101
+
+        # Both patients in the group should now have a follow-up of 39 days from THEIR OWN start time.
+        self.assertAlmostEqual(p101[END_COL] - p101[START_COL], min_duration_group1)
+        self.assertAlmostEqual(p102[END_COL] - p102[START_COL], min_duration_group1)
+
+        # Explicitly check P102's end date
+        expected_end_102 = p102[START_COL] + min_duration_group1
+        self.assertAlmostEqual(p102[END_COL], expected_end_102)
+
+    def test_censoring_before_followup_start_produces_zero_duration(self):
+        """
+        Tests that if a censoring event occurs before the follow-up starts,
+        the duration is correctly set to zero (and not negative).
+        """
+        cfg = OutcomeConfig(
+            n_hours_start_follow_up=60 * 24,  # Start follow-up 60 days after index
+            n_hours_end_follow_up=365 * 24,
+            n_hours_compliance=np.inf,
+            group_wise_follow_up=True,
+            delay_death_hours=0,
+        )
+        # P202 dies 45 days after index, but follow-up starts at 60 days.
+        # This patient should have a follow-up duration of 0.
+
+        result = get_combined_follow_ups(
+            self.index_dates,
+            self.index_date_matching,
+            self.deaths,
+            self.exposures,
+            self.data_end,
+            cfg,
+        )
+
+        p202 = result[result[PID_COL] == 202].iloc[0]
+        duration_202 = p202[END_COL] - p202[START_COL]
+
+        self.assertAlmostEqual(
+            duration_202, 0, "Duration must be 0 if censoring is before start."
+        )
+
+        # Now check the matched patient, P201
+        p201 = result[result[PID_COL] == 201].iloc[0]
+        duration_201 = p201[END_COL] - p201[START_COL]
+
+        # Since P202's duration is 0, P201's duration must also be 0 due to group minimization.
+        self.assertAlmostEqual(
+            duration_201, 0, "Matched patient's duration should also be 0."
+        )
+
+    def test_unmatched_patient_is_unaffected_by_grouping(self):
+        """
+        Tests that an unmatched patient's follow-up is not altered in group-wise mode.
+        """
+        cfg = OutcomeConfig(
+            n_hours_start_follow_up=0,
+            n_hours_end_follow_up=100 * 24,
+            n_hours_compliance=np.inf,  # No non-compliance censoring
+            group_wise_follow_up=True,
+            delay_death_hours=0,
+        )
+
+        result = get_combined_follow_ups(
+            self.index_dates,
+            self.index_date_matching,
+            self.deaths,
+            pd.DataFrame({PID_COL: [], ABSPOS_COL: []}),  # No exposure censoring
+            self.data_end,
+            cfg,
+        )
+
+        p301 = result[result[PID_COL] == 301].iloc[0]
+        duration_301 = p301[END_COL] - p301[START_COL]
+
+        # Patient 301 has no censoring and is unmatched, so should have the max duration.
+        self.assertAlmostEqual(duration_301, 100 * 24)
+
+
 if __name__ == "__main__":
     unittest.main()

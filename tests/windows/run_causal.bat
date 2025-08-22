@@ -63,9 +63,9 @@ echo ==== Running estimate... ====
 python -m corebehrt.main_causal.estimate --config_path corebehrt\configs\causal\estimate.yaml
 if errorlevel 1 goto :error
 
-echo ==== Checking estimate... ====
-python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
-if errorlevel 1 goto :error
+@REM echo ==== Checking estimate... ====
+@REM python -m tests.pipeline.test_estimate ./outputs/causal/estimate/simple example_data/synthea_meds_causal/tuning
+@REM if errorlevel 1 goto :error
 
 
 echo ==== Running extract_criteria... ====

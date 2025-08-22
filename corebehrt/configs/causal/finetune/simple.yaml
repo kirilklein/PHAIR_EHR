@@ -12,13 +12,17 @@ paths:
   model: ./outputs/causal/finetune/models/simple # Save model/outputs to this folder
   #runs: ./outputs/pretraining # Use for generating a new model folder
 
+save_encodings: false
+visualize_encodings: false
+visualize_weight_distributions: false
+
 model:
   head:
     shared_representation: true # whether to share the bigru representation for exposure and outcome
     bidirectional: true
     bottleneck_dim: 64
     l1_lambda: 0.2
-
+    pooling_strategy: gru # cls or gru
 trainer_args:
   loss_weight_function:
     _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt # function to calculate positive weights. Possible options: sqrt and effective_n_samples

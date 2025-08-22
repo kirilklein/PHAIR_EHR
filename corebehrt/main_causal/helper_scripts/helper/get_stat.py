@@ -39,6 +39,7 @@ from corebehrt.functional.cohort_handling.stats import (
     get_stratified_stats,
 )
 from corebehrt.functional.utils.log import log_table
+from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 logger = logging.getLogger("get_stat")
 
@@ -64,7 +65,7 @@ def ps_plot(criteria: pd.DataFrame, save_path: str, filename: str):
         normalize=True,
         alpha=0.5,
     )
-    fig.savefig(join(save_path, filename), dpi=200)
+    save_figure_with_azure_copy(fig, join(save_path, filename), dpi=200)
 
 
 def analyze_cohort(

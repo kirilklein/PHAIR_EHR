@@ -30,6 +30,7 @@ from corebehrt.modules.trainer.causal.utils import CausalPredictionData, EpochMe
 from corebehrt.modules.trainer.pcgrad import PCGrad
 from corebehrt.modules.trainer.trainer import EHRTrainer
 from corebehrt.modules.trainer.utils import limit_dict_for_logging
+from corebehrt.functional.visualize.gradients import plot_gradient_distributions
 
 yaml.add_representer(Config, lambda dumper, data: data.yaml_repr(dumper))
 
@@ -50,9 +51,11 @@ class CausalEHRTrainer(EHRTrainer):
         self.best_exposure_auc = None
         self.use_pcgrad = self.args.get("use_pcgrad", False)
         self.plot_histograms = self.args.get("plot_histograms", False)
+        self.plot_gradients = self.args.get("plot_gradients", False)
+        self.plot_gradients_frequency = self.args.get("plot_gradients_frequency", 100)
         self._set_plateau_parameters()
         self._set_logging_parameters()
-
+        self.global_step = 0
         if self.use_pcgrad:
             self.optimizer = PCGrad(self.optimizer)
 
@@ -84,7 +87,47 @@ class CausalEHRTrainer(EHRTrainer):
                 f"Logging metrics for a subset of {self.num_targets_to_log} \n outcomes: {self.outcome_names_to_log}"
             )
 
+    def train(self, **kwargs):
+        self.log(f"Torch version {torch.__version__}")
+        self._update_attributes(**kwargs)
+
+        self.accumulation_steps: int = (
+            self.args["effective_batch_size"] // self.args["batch_size"]
+        )
+        dataloader = self.setup_training()
+        self.log("Test validation before starting training")
+        self.validate_and_log(0, [0], dataloader)
+        for epoch in range(self.continue_epoch, self.args["epochs"]):
+            self._train_epoch(epoch, dataloader)
+            if self.stop_training:
+                break
+
+    def _train_epoch(self, epoch: int, dataloader) -> None:
+        if self._should_unfreeze_at_epoch(epoch):
+            self._unfreeze_model(f"Reached epoch {epoch}!")
+
+        train_loop = get_tqdm(dataloader)
+        train_loop.set_description(f"Train {epoch}")
+        epoch_loss = []
+        step_loss = 0
+        metrics = []
+        for i, batch in enumerate(train_loop):
+            step_loss += self._train_step(batch).item()
+            if (i + 1) % self.accumulation_steps == 0:
+                self._clip_gradients()
+                self._update()
+                self._accumulate_metrics(
+                    metrics, step_loss, epoch_loss, step=(epoch * len(train_loop)) + i
+                )
+                step_loss = 0
+        self._log_batch(metrics)
+        self.validate_and_log(epoch, epoch_loss, train_loop)
+        torch.cuda.empty_cache()
+        del train_loop
+        del epoch_loss
+
     def _train_step(self, batch: dict):
+        self.global_step += 1
         self.optimizer.zero_grad()
         self.batch_to_device(batch)
 
@@ -146,6 +189,17 @@ class CausalEHRTrainer(EHRTrainer):
         self._clip_gradients()
         self.scaler.step(self.optimizer)
         self.scaler.update()
+        if (
+            self.global_step % self.plot_gradients_frequency == 0
+        ) and self.plot_gradients:
+            plot_gradient_distributions(
+                self.model,
+                self.optimizer,
+                self.scaler,
+                self.log,
+                self.run_folder,
+                self.global_step,
+            )
 
         if self.scheduler is not None:
             self.scheduler.step()
@@ -163,7 +217,7 @@ class CausalEHRTrainer(EHRTrainer):
             f"Epoch {epoch} metrics: {limit_dict_for_logging(val_metrics, self.num_targets_to_log)}\n"
         )
 
-    def _evaluate(self, mode="val") -> tuple:
+    def evaluate(self, mode="val") -> tuple:
         """Returns the validation/test loss and metrics for exposure and all outcomes."""
         if mode == "val":
             if self.val_dataset is None:
@@ -462,9 +516,9 @@ class CausalEHRTrainer(EHRTrainer):
             val_exposure_loss,
             val_outcome_loss,
             val_prediction_data,
-        ) = self._evaluate(mode="val")
+        ) = self.evaluate(mode="val")
         _, test_metrics, test_exposure_loss, test_outcome_loss, test_prediction_data = (
-            self._evaluate(mode="test")
+            self.evaluate(mode="test")
         )
 
         current_metric_value = val_metrics.get(
