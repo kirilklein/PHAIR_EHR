@@ -210,8 +210,8 @@ def _prepare_control(
     meds_path: str,
     splits: List[str],
     save_path: str,
-    index_date_matching: pd.DataFrame = None,
-    index_date_matching_cfg: dict = None,
+    index_date_matching: pd.DataFrame | None = None,
+    index_date_matching_cfg: dict | None = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare control patients for cohort selection.
@@ -222,22 +222,20 @@ def _prepare_control(
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
     if index_date_matching is None:
         control_pids = list(set(patients_info[PID_COL].unique()) - set(exposed_pids))
-        if index_date_matching_cfg is None:
-            index_date_matching_cfg = {
-                "birth_year_tolerance": 3,
-                "redraw_attempts": 3,
-                "age_adjusted": True,
-            }
+        default_cfg = {
+            "birth_year_tolerance": 3,
+            "redraw_attempts": 3,
+            "age_adjusted": True,
+        }
+        index_date_matching_cfg = {**default_cfg, **(index_date_matching_cfg or {})}
         control_index_dates, index_date_matching = (
             draw_index_dates_for_control_with_redraw(
                 control_pids,
                 filtered_exposed_index_dates,
                 patients_info,
-                birth_year_tolerance=index_date_matching_cfg.get(
-                    "birth_year_tolerance"
-                ),
-                redraw_attempts=index_date_matching_cfg.get("redraw_attempts"),
-                age_adjusted=index_date_matching_cfg.get("age_adjusted", True),
+                birth_year_tolerance=index_date_matching_cfg["birth_year_tolerance"],
+                redraw_attempts=index_date_matching_cfg["redraw_attempts"],
+                age_adjusted=index_date_matching_cfg["age_adjusted"],
             )
         )
         logger.info(
