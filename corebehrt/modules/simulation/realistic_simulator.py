@@ -27,6 +27,7 @@ from corebehrt.constants.data import (
     PID_COL,
     TIMESTAMP_COL,
 )
+from corebehrt.functional.utils.filter import safe_control_pids
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.simulation.plot import plot_hist, plot_probability_distributions
 
@@ -449,7 +450,7 @@ class RealisticCausalSimulator:
         self, exposure_df: pd.DataFrame, all_pids: list
     ) -> pd.DataFrame:
         exposed_pids = exposure_df[PID_COL].unique()
-        control_pids = list(set(all_pids) - set(exposed_pids))
+        control_pids = safe_control_pids(all_pids, exposed_pids)
         if len(exposed_pids) == 0 or len(control_pids) == 0:
             return pd.DataFrame(
                 columns=[CONTROL_PID_COL, EXPOSED_PID_COL, TIMESTAMP_COL, ABSPOS_COL]

@@ -62,6 +62,7 @@ from corebehrt.functional.cohort_handling.advanced.index_dates import (
 from corebehrt.functional.features.split import create_folds, split_test
 from corebehrt.functional.io_operations.meds import iterate_splits_and_shards
 from corebehrt.functional.preparation.filter import select_first_event
+from corebehrt.functional.utils.filter import safe_control_pids
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
 from corebehrt.modules.cohort_handling.advanced.extract import CohortExtractor
@@ -221,7 +222,8 @@ def _prepare_control(
     """
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
     if index_date_matching is None:
-        control_pids = list(set(patients_info[PID_COL].unique()) - set(exposed_pids))
+        pid_series = patients_info[PID_COL]
+        control_pids = safe_control_pids(pid_series, exposed_pids)
         default_cfg = {
             "birth_year_tolerance": 3,
             "redraw_attempts": 3,
