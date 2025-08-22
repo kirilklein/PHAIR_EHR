@@ -38,7 +38,7 @@ def main_finetune(config_path):
     loaded_data = torch.load(join(cfg.paths.prepared_data, PREPARED_ALL_PATIENTS))
     vocab = load_vocabulary(cfg.paths.prepared_data)
     data = CausalPatientDataset(loaded_data, vocab)
-    test_data = CausalPatientDataset([])
+    test_data = CausalPatientDataset([], vocab)
 
     # Initialize test and train/val pid lists
     test_pids = []

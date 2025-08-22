@@ -133,7 +133,7 @@ if __name__ == "__main__":
         type=float,
         required=False,
         default=0.05,
-        help="Tolerance for mismatch rate (default: 0.05 = 5%%)",
+        help="Tolerance for mismatch rate (default: 0.05 = 5%)",
     )
     args = parser.parse_args()
     main(args.processed_data_dir, args.exposure_code, args.tolerance)
