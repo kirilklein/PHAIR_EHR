@@ -241,7 +241,7 @@ def _prepare_control(
             )
         )
         logger.info(
-            f"Controls after index date matching: {index_date_matching[PID_COL].nunique()} / {len(control_pids)}"
+            f"Controls after index date matching: {index_date_matching[CONTROL_PID_COL].nunique()} / {len(control_pids)}"
         )
         index_date_matching[ABSPOS_COL] = get_hours_since_epoch(
             index_date_matching[TIMESTAMP_COL]
