@@ -201,7 +201,9 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
                 )
 
         # Adjust x-axis limit for labels
-        plt.xlim(right=subset_df["count"].max() * 1.15)
+        max_count = subset_df["count"].max()
+        safe_right = 1 if pd.isna(max_count) or max_count <= 0 else max_count * 1.15
+        plt.xlim(right=safe_right)
         plt.tight_layout()
 
         # Determine save path
