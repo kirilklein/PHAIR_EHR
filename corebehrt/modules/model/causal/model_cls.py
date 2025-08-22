@@ -143,7 +143,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
     def _get_pos_weight_tensor(self, pos_weight_value):
         """Helper method to convert pos_weight value to tensor if not None."""
         if pos_weight_value is not None:
-            return torch.tensor(pos_weight_value, device=self.device)
+            return torch.tensor(pos_weight_value)
         return None
 
     def forward(self, batch: dict, cf: bool = False, return_encodings: bool = False):
