@@ -1,0 +1,14 @@
+{
+  "TEST_CENSOR": {
+    "total_outcomes": 4,
+    "unique_subjects": 4
+  },
+  "TEST_COMBINED": {
+    "total_outcomes": 5,
+    "unique_subjects": 2
+  },
+  "TEST_OUTCOME": {
+    "total_outcomes": 0,
+    "unique_subjects": 0
+  }
+}
