@@ -119,7 +119,7 @@ class OutcomePlotter:
             ax.hist(counts, bins=25, color="teal", alpha=0.7)
             ax.set_title(f"{outcome_name} (Wide Dist.)", fontsize=12)
         else:
-            bins = np.arange(1, max_count + 3) - 0.5
+            bins = np.arange(1, max(max_count + 2, 3)) - 0.5
             ax.hist(counts, bins=bins, color="teal", alpha=0.7)
             ax.set_title(f"{outcome_name}", fontsize=12)
             if max_count > 0:
