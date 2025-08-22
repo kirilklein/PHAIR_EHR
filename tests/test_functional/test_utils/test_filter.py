@@ -92,7 +92,7 @@ class TestSafeControlPids(unittest.TestCase):
         # This should work even with complex/datetime types
         from datetime import datetime
 
-        dt1, dt2 = datetime(2024, 1, 1), datetime(2024, 1, 2)
+        dt1 = datetime(2024, 1, 1)
         self.assertEqual(
             safe_control_pids([1, "a", dt1], [dt1]),
             [1, "a"],
