@@ -5,7 +5,14 @@ import pandas as pd
 
 @dataclass
 class PathsConfig:
-    """Configuration for file paths."""
+    """
+    Configuration for file paths used in the simulation.
+
+    Attributes:
+        data: Path to the input directory containing real patient sequence data (MEDS format)
+        splits: List of data splits to use (e.g., ["train", "tuning", "held_out"])
+        outcomes: Path to the output directory where simulation results will be saved
+    """
 
     data: str
     splits: List[str]
@@ -14,7 +21,20 @@ class PathsConfig:
 
 @dataclass
 class ModelWeightsConfig:
-    """Configuration for sampling model weights."""
+    """
+    Configuration for sampling model weights that map medical codes to latent factors.
+
+    This controls how individual medical codes in a patient's history contribute to
+    the underlying latent health factors that drive exposure and outcome probabilities.
+
+    Attributes:
+        mean: Mean of the normal distribution used to sample code-to-factor weights
+        scale: Standard deviation of the normal distribution for sampling weights.
+               Smaller values mean individual codes have smaller effects on factors.
+        sparsity_factor: Probability that a code-factor weight is set to zero (0.0-1.0).
+                        Higher values create sparser connections, meaning each code
+                        only influences a few factors rather than all factors.
+    """
 
     mean: float
     scale: float
@@ -23,7 +43,18 @@ class ModelWeightsConfig:
 
 @dataclass
 class InfluenceScalesConfig:
-    """Parameters to control the influence of each latent factor group."""
+    """
+    Configuration for scaling the influence of each latent factor group.
+
+    This controls how much each latent factor group contributes to the overall
+    exposure and outcome probabilities.
+
+    Attributes:
+        shared_to_exposure: Scaling factor for the shared latent factors' influence on exposure
+        shared_to_outcome: Scaling factor for the shared latent factors' influence on outcomes
+        exposure_only_to_exposure: Scaling factor for the exposure-only latent factors' influence on exposure
+        outcome_only_to_outcome: Scaling factor for the outcome-only latent factors' influence on outcomes
+    """
 
     shared_to_exposure: float = 1.0
     shared_to_outcome: float = 1.0
@@ -33,7 +64,13 @@ class InfluenceScalesConfig:
 
 @dataclass
 class ExposureConfig:
-    """Configuration for simulating exposure probability."""
+    """
+    Configuration for simulating exposure probability.
+
+    Attributes:
+        p_base: Base probability of exposure (before any effects)
+        age_effect: Optional effect of age on exposure probability (if None, no age effect)
+    """
 
     p_base: float
     age_effect: Optional[float] = None
@@ -41,7 +78,15 @@ class ExposureConfig:
 
 @dataclass
 class OutcomeConfig:
-    """Configuration for simulating a single outcome."""
+    """
+    Configuration for simulating a single outcome.
+
+    Attributes:
+        run_in_days: Number of days between the index date and the first day of the outcome
+        p_base: Base probability of the outcome (before any effects)
+        exposure_effect: Effect of exposure on the outcome probability
+        age_effect: Optional effect of age on the outcome probability (if None, no age effect)
+    """
 
     run_in_days: int
     p_base: float
@@ -51,7 +96,14 @@ class OutcomeConfig:
 
 @dataclass
 class UnobservedConfounderConfig:
-    """Configuration for an optional unobserved confounder."""
+    """
+    Configuration for an optional unobserved confounder.
+
+    Attributes:
+        p_occurrence: Probability of the confounder occurring in a patient
+        exposure_effect: Effect of the confounder on exposure probability
+        outcome_effects: Dictionary mapping outcome names to their effects on that outcome
+    """
 
     p_occurrence: float
     exposure_effect: float
@@ -60,7 +112,17 @@ class UnobservedConfounderConfig:
 
 @dataclass
 class RealisticSimulationModelConfig:
-    """Configuration for the realistic simulation model based on latent factors."""
+    """
+    Configuration for the realistic simulation model based on latent factors.
+
+    Attributes:
+        num_shared_factors: Number of shared latent factors
+        num_exposure_only_factors: Number of exposure-only latent factors
+        num_outcome_only_factors: Number of outcome-only latent factors
+        factor_mapping: Configuration for how medical codes map to latent factors
+        influence_scales: Configuration for scaling the influence of each latent factor group
+        time_decay_halflife_days: Optional half-life for time-dependent effects (if None, no time decay)
+    """
 
     num_shared_factors: int
     num_exposure_only_factors: int
