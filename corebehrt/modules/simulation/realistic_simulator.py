@@ -1,6 +1,7 @@
 import logging
 from os.path import join
 from typing import Dict, List, Set, Tuple
+import os
 
 import numpy as np
 import pandas as pd
@@ -421,6 +422,67 @@ class RealisticCausalSimulator:
             }
         )
 
+    def _calculate_and_save_simulation_stats(
+        self, pids, is_exposed, cf_records, output_dir
+    ):
+        """Calculate and save simple simulation statistics."""
+        total_patients = len(pids)
+        num_exposed = np.sum(is_exposed)
+        num_control = total_patients - num_exposed
+
+        # Calculate outcome statistics
+        outcome_stats = {}
+        for outcome_name in self.config.outcomes.keys():
+            outcome_col = f"{OUTCOME_COL}_{outcome_name}"
+            if outcome_col in cf_records:
+                num_with_outcome = np.sum(cf_records[outcome_col])
+                outcome_stats[outcome_name] = {
+                    "total_with_outcome": int(num_with_outcome),
+                    "percentage_with_outcome": float(
+                        num_with_outcome / total_patients * 100
+                    ),
+                }
+
+        # Save as CSV for easy reading
+        stats_rows = [
+            ["Statistic", "Value"],
+            ["Total Patients", total_patients],
+            ["Number Exposed", num_exposed],
+            ["Number Control", num_control],
+            ["Exposure Rate (%)", f"{num_exposed / total_patients * 100:.2f}"],
+        ]
+
+        # Add outcome statistics
+        for outcome_name, outcome_data in outcome_stats.items():
+            stats_rows.append(
+                [
+                    f"{outcome_name} - Total with Outcome",
+                    outcome_data["total_with_outcome"],
+                ]
+            )
+            stats_rows.append(
+                [
+                    f"{outcome_name} - Percentage with Outcome (%)",
+                    f"{outcome_data['percentage_with_outcome']:.2f}",
+                ]
+            )
+
+        stats_df = pd.DataFrame(stats_rows[1:], columns=stats_rows[0])
+
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        stats_path = join(output_dir, "simulation_stats.csv")
+        stats_df.to_csv(stats_path, index=False)
+
+        logger.info(f"Simulation statistics saved to {stats_path}")
+        logger.info(
+            f"Total patients: {total_patients}, Exposed: {num_exposed}, Control: {num_control}"
+        )
+        for outcome_name, outcome_data in outcome_stats.items():
+            logger.info(
+                f"{outcome_name}: {outcome_data['total_with_outcome']} patients ({outcome_data['percentage_with_outcome']:.2f}%)"
+            )
+
     def _package_results(
         self,
         pids,
@@ -431,6 +493,12 @@ class RealisticCausalSimulator:
         p_exposure,
         is_exposed,
     ) -> Dict[str, pd.DataFrame]:
+        # --- Calculate and save simulation statistics ---
+        logger.info("Calculating and saving simulation statistics...")
+        self._calculate_and_save_simulation_stats(
+            pids, is_exposed, cf_records, self.config.paths.outcomes
+        )
+
         # --- Plotting integrated here ---
         logger.info("Plotting ground truth probability distributions...")
         plot_hist(p_exposure, join(self.config.paths.outcomes, "figs"), is_exposed)
