@@ -3,7 +3,10 @@ from pathlib import Path
 import shutil
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+import logging
 from corebehrt.azure.util import is_azure_available
+
+logger = logging.getLogger(__name__)
 
 
 def is_running_in_azure_ml() -> bool:
@@ -29,7 +32,7 @@ def save_figure_with_azure_copy(
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Save locally
-    print(f"Saving figure to: {save_path.absolute()}")
+    logger.info(f"Saving figure to: {save_path.absolute()}")
     fig.savefig(save_path, **savefig_kwargs)
     if close:
         plt.close(fig)
@@ -61,20 +64,20 @@ def save_figure_with_azure_copy(
             dest_path = out_dir / rel_path
             dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-            print(f"Copying from {save_path.absolute()} to {dest_path.absolute()}")
-
             if not save_path.exists():
-                print(f"Error: Source file does not exist: {save_path.absolute()}")
+                logger.warning(
+                    f"Skip copying to Azure: Source file does not exist: {save_path.absolute()}"
+                )
                 return
 
             shutil.copy2(save_path, dest_path)
 
             if dest_path.exists():
-                print(f"Successfully copied to Azure: {dest_path.absolute()}")
+                logger.info(f"Successfully copied to Azure: {dest_path.absolute()}")
             else:
                 pass
 
         except Exception as e:
-            print(f"Error copying to Azure outputs: {e}")
+            logger.warning(f"Error copying to Azure outputs: {e}")
     else:
-        print("Skipping Azure copy - not in Azure environment")
+        logger.warning("Skipping Azure copy - not in Azure environment")
