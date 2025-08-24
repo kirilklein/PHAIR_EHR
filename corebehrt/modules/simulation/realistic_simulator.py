@@ -1,4 +1,5 @@
 import logging
+from os.path import join
 from typing import Dict, List, Set, Tuple
 
 import numpy as np
@@ -30,6 +31,10 @@ from corebehrt.constants.data import (
 from corebehrt.functional.utils.filter import safe_control_pids
 from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.simulation.plot import plot_hist, plot_probability_distributions
+from corebehrt.modules.simulation.config_realistic import (
+    SimulationConfig,
+    RealisticSimulationModelConfig,
+)
 
 logger = logging.getLogger("simulate")
 WEIGHT_COL = "weight"
@@ -45,7 +50,9 @@ class RealisticCausalSimulator:
     3. Latent Factors (Z) + Exposure (A) -> Outcomes (Y)
     """
 
-    def __init__(self, config):  # config should be an instance of SimulationConfig
+    def __init__(
+        self, config: SimulationConfig
+    ):  # config should be an instance of SimulationConfig
         self.config = config
         self.index_date = config.index_date
         self.rng = np.random.default_rng(config.seed)
@@ -58,7 +65,7 @@ class RealisticCausalSimulator:
         self.code_to_idx: Dict[str, int] = {}
         self.vocabulary: List[str] = []
 
-        model_cfg = self.config.simulation_model
+        model_cfg: RealisticSimulationModelConfig = self.config.simulation_model
         self.num_shared_factors = model_cfg.num_shared_factors
         self.num_exposure_only_factors = model_cfg.num_exposure_only_factors
         self.num_outcome_only_factors = model_cfg.num_outcome_only_factors
@@ -355,7 +362,7 @@ class RealisticCausalSimulator:
             return np.zeros(
                 (len(all_pids), len(self.vocabulary)), dtype=np.float32
             ), all_pids
-        latest_events_df = history_df.loc[
+        latest_events_df: pd.DataFrame = history_df.loc[
             history_df.groupby([PID_COL, CONCEPT_COL])[TIMESTAMP_COL].idxmax()
         ].copy()
         latest_events_df["diff_days"] = (
@@ -424,14 +431,14 @@ class RealisticCausalSimulator:
     ) -> Dict[str, pd.DataFrame]:
         # --- Plotting integrated here ---
         logger.info("Plotting ground truth probability distributions...")
-        plot_hist(p_exposure, self.config.paths.outcomes)
+        plot_hist(p_exposure, join(self.config.paths.outcomes, "figs"))
         plot_probability_distributions(
-            all_probas_for_plotting, self.config.paths.outcomes
+            all_probas_for_plotting, join(self.config.paths.outcomes, "figs")
         )
 
         output_dfs = {}
         if all_factual_events:
-            events_df = pd.concat(all_factual_events, ignore_index=True)
+            events_df: pd.DataFrame = pd.concat(all_factual_events, ignore_index=True)
             events_df[ABSPOS_COL] = get_hours_since_epoch(events_df[TIMESTAMP_COL])
             for code, group in events_df.groupby(CONCEPT_COL):
                 output_dfs[str(code)] = group[
