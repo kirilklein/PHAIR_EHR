@@ -1,12 +1,17 @@
-import pandas as pd
-import matplotlib.pyplot as plt
-from os.path import join
 import os
+from os.path import join
+from typing import List
+
+import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
+from matplotlib.container import BarContainer
+from matplotlib.patches import Rectangle
+
 from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 
-def plot_outcome_distribution(
+def plot_target_distribution(
     df: pd.DataFrame, outcome_dir: str, max_outcomes_per_plot: int = 100
 ) -> None:
     """
@@ -28,7 +33,7 @@ def plot_outcome_distribution(
         plt.figure(
             figsize=(10, max(6, num_outcomes * 0.3))
         )  # Adjust height dynamically
-        bars = plt.barh(
+        bars: List[Rectangle] = plt.barh(
             outcome_proportions.index, outcome_proportions.values, color="skyblue"
         )
         plt.xlabel("Proportion of Positive Outcomes")
@@ -46,7 +51,7 @@ def plot_outcome_distribution(
             )
 
         plt.tight_layout()
-        save_path = join(outcome_dir, "outcome_distribution.png")
+        save_path = join(outcome_dir, "target_distribution.png")
 
         save_figure_with_azure_copy(plt.gcf(), save_path)
         print(f"Plot saved to '{save_path}'")
@@ -61,7 +66,9 @@ def plot_outcome_distribution(
         for i in range(num_plots):
             start_index = i * max_outcomes_per_plot
             end_index = start_index + max_outcomes_per_plot
-            subset_proportions = outcome_proportions.iloc[start_index:end_index]
+            subset_proportions: pd.Series = outcome_proportions.iloc[
+                start_index:end_index
+            ]
 
             num_outcomes_in_plot = len(subset_proportions)
 
@@ -173,7 +180,7 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
         plt.figure(figsize=(12, fig_height))
         sns.set_style("whitegrid")
 
-        bar_plot = sns.barplot(
+        bar_plot: BarContainer = sns.barplot(
             x="count", y="name", hue="status", data=subset_df, orient="h"
         )
 

@@ -47,7 +47,7 @@ from corebehrt.functional.visualize.follow_ups import (
     plot_followup_start_end_distribution,
 )
 from corebehrt.functional.visualize.outcomes import (
-    plot_outcome_distribution,
+    plot_target_distribution,
     plot_filtering_stats,
 )
 from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
@@ -171,7 +171,13 @@ class CausalDatasetPreparer:
             plot_followup_start_end_distribution(
                 follow_ups, binary_exposure, fig_dir, mode="absolute"
             )
-            plot_outcome_distribution(binary_outcomes, fig_dir)
+
+            all_targets = pd.merge(
+                binary_outcomes, binary_exposure, left_index=True, right_index=True
+            )
+            all_targets.rename(columns={binary_exposure.name: "exposure"}, inplace=True)
+            plot_target_distribution(all_targets, fig_dir)
+
             plot_filtering_stats(filtering_stats, fig_dir)
             plot_followups_timeline(
                 exposures=exposures,
