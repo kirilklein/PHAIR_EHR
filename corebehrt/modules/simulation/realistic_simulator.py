@@ -220,6 +220,7 @@ class RealisticCausalSimulator:
             all_factual_events,
             all_probas_for_plotting,
             p_exposure,
+            is_exposed,
         )
 
     def _simulate_exposure(
@@ -428,10 +429,11 @@ class RealisticCausalSimulator:
         all_factual_events,
         all_probas_for_plotting,
         p_exposure,
+        is_exposed,
     ) -> Dict[str, pd.DataFrame]:
         # --- Plotting integrated here ---
         logger.info("Plotting ground truth probability distributions...")
-        plot_hist(p_exposure, join(self.config.paths.outcomes, "figs"))
+        plot_hist(p_exposure, join(self.config.paths.outcomes, "figs"), is_exposed)
         plot_probability_distributions(
             all_probas_for_plotting, join(self.config.paths.outcomes, "figs")
         )

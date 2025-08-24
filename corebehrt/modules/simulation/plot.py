@@ -1,5 +1,5 @@
 from os.path import join
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,13 +8,58 @@ from matplotlib.axes import Axes
 from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 
-def plot_hist(p_exposure, output_dir):
+def plot_hist(p_exposure, output_dir, is_exposed: Optional[np.ndarray] = None):
+    """
+    Plot histogram of exposure probabilities, optionally colored by actual exposure status.
+
+    Args:
+        p_exposure: Array of predicted exposure probabilities
+        output_dir: Directory to save the plot
+        is_exposed: Optional array of actual exposure status (boolean)
+    """
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.hist(p_exposure, bins=50)
-    ax.set_title("Exposure Probability Histogram")
+
+    if is_exposed is not None:
+        # Split probabilities by actual exposure status
+        p_control = p_exposure[~is_exposed]  # Not exposed (control)
+        p_treated = p_exposure[is_exposed]  # Exposed (treated)
+
+        # Create overlaid histograms with different colors
+        bins = np.linspace(0, 1, 51)
+        ax.hist(
+            p_control,
+            bins=bins,
+            alpha=0.7,
+            label="Control (Not Exposed)",
+            color="#3498db",  # Blue
+            density=True,
+            edgecolor="black",
+            linewidth=0.5,
+        )
+        ax.hist(
+            p_treated,
+            bins=bins,
+            alpha=0.7,
+            label="Treated (Exposed)",
+            color="#e74c3c",  # Red
+            density=True,
+            edgecolor="black",
+            linewidth=0.5,
+        )
+        ax.legend()
+        ax.set_ylabel("Density")
+        ax.set_title("Exposure Probability Distribution by Actual Exposure Status")
+    else:
+        # Original single histogram
+        ax.hist(p_exposure, bins=50)
+        ax.set_ylabel("Count")
+        ax.set_title("Exposure Probability Histogram")
+
     ax.set_xlabel("Predicted Probability")
-    ax.set_ylabel("Count")
     ax.set_xlim(0, 1)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+
     save_figure_with_azure_copy(
         fig, join(output_dir, "exposure_probability_histogram.png")
     )
