@@ -290,4 +290,140 @@ The data preparation step produces:
 
 ---
 
-*Next: Finetuning Configuration (coming soon)*
+## Step 3: Joint Exposure-Outcome Finetuning
+
+**Script:** `finetune_exp_y.py`  
+**Config:** `finetune/simple.yaml` (or variants)
+
+The finetuning step trains a transformer model to jointly predict both exposure propensity and outcome probabilities. This approach enables counterfactual reasoning by learning shared representations while predicting both treatment assignment and outcomes.
+
+### Main Configuration Parameters (finetune_exp_y.py)
+
+#### Logging & Paths (finetune_exp_y.py)
+
+```yaml
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  pretrain_model: ./outputs/causal/pretrain/model      # Pre-trained transformer model
+  prepared_data: ./outputs/causal/finetune/prepared_data  # Prepared dataset
+  
+  ## OUTPUTS
+  model: ./outputs/causal/finetune/models/simple       # Output model directory
+```
+
+#### Model Architecture
+
+```yaml
+model:
+  head:
+    shared_representation: true       # Share representations between exposure/outcome
+    bidirectional: true              # Use bidirectional GRU for sequence pooling
+    bottleneck_dim: 64               # Dimensionality of bottleneck layer
+    l1_lambda: 0.2                   # L1 regularization strength
+    pooling_strategy: gru            # Pooling method: 'gru' or 'cls'
+```
+
+- **shared_representation**: Whether exposure and outcome heads share representations
+- **bidirectional**: Use bidirectional GRU for sequence encoding
+- **bottleneck_dim**: Hidden dimension of prediction head bottleneck
+- **l1_lambda**: L1 regularization to encourage sparsity
+- **pooling_strategy**: How to pool sequence representations (`gru` or `cls` token)
+
+#### Training Configuration
+
+```yaml
+trainer_args:
+  batch_size: 128                    # Training batch size
+  val_batch_size: 256               # Validation batch size
+  effective_batch_size: 128         # Effective batch size for gradient accumulation
+  epochs: 5                         # Maximum training epochs
+  early_stopping: 3                 # Early stopping patience
+  stopping_criterion: roc_auc       # Metric for early stopping
+  
+  # Layer freezing
+  n_layers_to_freeze: 1             # Number of transformer layers to freeze
+  freeze_encoder_on_plateau: true   # Freeze encoder when validation plateaus
+  freeze_encoder_on_plateau_threshold: 0.01  # Threshold for plateau detection
+  freeze_encoder_on_plateau_patience: 4      # Patience before freezing
+  
+  # Multi-task learning
+  use_pcgrad: true                  # Use PCGrad for multi-task optimization/ doesn't scale well, turn off for >10 outcomes
+```
+
+**Key Training Features:**
+
+- **Gradient-based multi-task learning**: PCGrad helps balance exposure and outcome learning
+- **Progressive freezing**: Freeze transformer layers when validation plateaus
+- **Early stopping**: Prevents overfitting using validation metrics
+
+#### Loss & Optimization
+
+```yaml
+trainer_args:
+  loss_weight_function:
+    _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt
+
+optimizer:
+  lr: 3e-3                          # Learning rate
+  eps: 1e-6                         # Adam epsilon
+
+scheduler:
+  _target_: transformers.get_linear_schedule_with_warmup
+  num_training_epochs: 15
+  num_warmup_epochs: 2
+```
+
+- **loss_weight_function**: Handle class imbalance (sqrt weighting)
+- **scheduler**: Linear warmup followed by linear decay
+
+#### Metrics & Monitoring
+
+```yaml
+metrics:
+  roc_auc:
+    _target_: corebehrt.modules.monitoring.metrics.ROC_AUC
+  pr_auc:
+    _target_: corebehrt.modules.monitoring.metrics.PR_AUC
+
+trainer_args:
+  plot_histograms: true             # Plot prediction distributions
+  plot_all_targets: false           # Plot metrics for all outcomes
+  num_targets_to_log: 3            # Number of outcome targets to visualize
+```
+
+### Usage Example (finetune_exp_y.py)
+
+```bash
+# Run finetuning with default config
+python -m corebehrt.main_causal.finetune_exp_y
+
+# Run with simulated data config
+python -m corebehrt.main_causal.finetune_exp_y --config_path ./corebehrt/configs/causal/finetune/simulated.yaml
+```
+
+### Outputs (finetune_exp_y.py)
+
+The finetuning step produces:
+
+- **Cross-validation models**: Separate model for each CV fold
+- **`outcome_names.pt`**: List of outcome names for reference
+- **Performance metrics**: ROC-AUC, PR-AUC for exposure and outcomes
+- **Training curves**: Loss and metric plots for monitoring
+- **Model checkpoints**: Best models based on validation performance
+
+### Multi-Task Learning Strategy
+
+The joint modeling approach offers several advantages:
+
+1. **Shared representations**: Learn common patterns between exposure and outcome
+2. **Regularization**: Exposure prediction acts as auxiliary task
+3. **Counterfactual reasoning**: Model can predict outcomes under different exposures
+4. **Efficiency**: Single model instead of separate exposure/outcome models
+
+---
+
+*Next: Calibration Configuration (coming soon)*
