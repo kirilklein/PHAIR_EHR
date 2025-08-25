@@ -2,6 +2,7 @@ import logging
 from os.path import join
 from typing import Dict, List, Set, Tuple
 import os
+from sklearn.metrics import roc_auc_score
 
 import numpy as np
 import pandas as pd
@@ -517,6 +518,114 @@ class RealisticCausalSimulator:
                 f"{outcome_name}: {outcome_data['total_with_outcome']} patients ({outcome_data['percentage_with_outcome']:.2f}%)"
             )
 
+    def _calculate_theoretical_roc_auc(
+        self,
+        cf_records: Dict[str, np.ndarray],
+        is_exposed: np.ndarray,
+        output_dir: str,
+    ) -> Dict[str, float]:
+        """
+        Calculate the theoretical maximum ROC AUC using the true simulated probabilities.
+
+        This represents the best possible ROC AUC that any model could achieve
+        if it had perfect knowledge of the data generating process.
+
+        Args:
+            cf_records: Dictionary containing counterfactual records with true probabilities
+            is_exposed: Binary array indicating exposure status
+            output_dir: Directory to save results
+
+        Returns:
+            Dictionary mapping outcome names to their theoretical max ROC AUC values
+        """
+
+        theoretical_aucs = {}
+        results_data = []
+
+        logger.info(
+            "Calculating theoretical maximum ROC AUC from true probabilities..."
+        )
+
+        for outcome_name in self.config.outcomes.keys():
+            # Get the factual outcomes (ground truth labels)
+            outcome_col = f"{OUTCOME_COL}_{outcome_name}"
+            if outcome_col not in cf_records:
+                logger.warning(f"Outcome {outcome_name} not found in cf_records")
+                continue
+
+            y_true = cf_records[outcome_col]
+
+            # Get the true probabilities based on actual exposure status
+            p_exposed_col = f"{SIMULATED_PROBAS_EXPOSED}_{outcome_name}"
+            p_control_col = f"{SIMULATED_PROBAS_CONTROL}_{outcome_name}"
+
+            if p_exposed_col not in cf_records or p_control_col not in cf_records:
+                logger.warning(f"Simulated probabilities not found for {outcome_name}")
+                continue
+
+            p_exposed = cf_records[p_exposed_col]
+            p_control = cf_records[p_control_col]
+
+            # Calculate factual probabilities (the true DGP probabilities)
+            # For each patient, use the probability corresponding to their actual exposure status
+            y_prob_factual = np.where(is_exposed, p_exposed, p_control)
+
+            # Calculate ROC AUC using true DGP probabilities
+            if len(np.unique(y_true)) > 1:  # Need both classes for ROC AUC
+                auc_factual = roc_auc_score(y_true, y_prob_factual)
+                theoretical_aucs[outcome_name] = auc_factual
+
+                # Also calculate AUC using counterfactual probabilities for comparison
+                auc_treated = (
+                    roc_auc_score(y_true, p_exposed)
+                    if len(np.unique(y_true)) > 1
+                    else np.nan
+                )
+                auc_control = (
+                    roc_auc_score(y_true, p_control)
+                    if len(np.unique(y_true)) > 1
+                    else np.nan
+                )
+
+                results_data.append(
+                    {
+                        "outcome": outcome_name,
+                        "auc_factual_dgp": auc_factual,
+                        "auc_if_all_treated": auc_treated,
+                        "auc_if_all_control": auc_control,
+                        "n_positive": int(np.sum(y_true)),
+                        "n_total": len(y_true),
+                        "prevalence": np.mean(y_true),
+                    }
+                )
+
+                logger.info(
+                    f"{outcome_name}: Theoretical max ROC AUC = {auc_factual:.4f}"
+                )
+            else:
+                logger.warning(
+                    f"Cannot calculate ROC AUC for {outcome_name}: only one class present"
+                )
+                theoretical_aucs[outcome_name] = np.nan
+
+        # Save results to CSV
+        if results_data:
+            results_df = pd.DataFrame(results_data)
+            os.makedirs(output_dir, exist_ok=True)
+            results_path = join(output_dir, "theoretical_max_roc_auc.csv")
+            results_df.to_csv(results_path, index=False)
+            logger.info(f"Theoretical ROC AUC results saved to {results_path}")
+
+            # Print summary
+            logger.info("=== THEORETICAL MAXIMUM ROC AUC SUMMARY ===")
+            for _, row in results_df.iterrows():
+                logger.info(
+                    f"{row['outcome']}: {row['auc_factual_dgp']:.4f} "
+                    f"(prevalence: {row['prevalence']:.3f}, n={row['n_total']})"
+                )
+
+        return theoretical_aucs
+
     def _package_results(
         self,
         pids,
@@ -533,6 +642,12 @@ class RealisticCausalSimulator:
             pids, is_exposed, cf_records, self.config.paths.outcomes
         )
 
+        # --- Calculate theoretical maximum ROC AUC ---
+        logger.info("Calculating theoretical maximum ROC AUC...")
+        theoretical_aucs = self._calculate_theoretical_roc_auc(
+            cf_records, is_exposed, self.config.paths.outcomes
+        )
+        logger.info(f"Theoretical maximum ROC AUC: {theoretical_aucs}")
         # --- Plotting integrated here ---
         logger.info("Plotting ground truth probability distributions...")
         plot_hist(p_exposure, join(self.config.paths.outcomes, "figs"), is_exposed)
