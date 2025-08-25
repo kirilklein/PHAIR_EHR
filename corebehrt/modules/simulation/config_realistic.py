@@ -39,11 +39,11 @@ class NoiseConfig:
     Configuration for random noise added to probability calculations.
 
     Attributes:
-        probability_noise_scale: Standard deviation of Gaussian noise added to logit probabilities
+        logit_noise_scale: Standard deviation of Gaussian noise added to logit probabilities
                                 to introduce realistic variability in individual predictions
     """
 
-    probability_noise_scale: float = 0.1
+    logit_noise_scale: float = 0.1
 
 
 @dataclass

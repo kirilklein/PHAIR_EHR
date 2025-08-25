@@ -34,6 +34,7 @@ from corebehrt.functional.utils.time import get_hours_since_epoch
 from corebehrt.modules.simulation.plot import (
     plot_hist,
     plot_probability_distributions,
+    plot_true_effects_vs_risk_differences,
 )
 from corebehrt.modules.simulation.config_realistic import (
     SimulationConfig,
@@ -189,7 +190,7 @@ class RealisticCausalSimulator:
             logit_p_array += event_cfg.age_effect * ages
         logit_p_array += additional_logit_effect
 
-        noise_scale = self.config.simulation_model.noise.probability_noise_scale
+        noise_scale = self.config.simulation_model.noise.logit_noise_scale
         logit_p_array += self.rng.normal(0, noise_scale, n_patients)
         return expit(logit_p_array)
 
@@ -539,6 +540,27 @@ class RealisticCausalSimulator:
             all_probas_for_plotting, join(self.config.paths.outcomes, "figs")
         )
 
+        # Create dataframes for effect comparison plotting
+        ite_df = pd.DataFrame(ite_records)
+        cf_df = pd.DataFrame(cf_records)
+
+        # Extract true effects configuration from the config
+        true_effects_config = {}
+        for outcome_name, outcome_cfg in self.config.outcomes.items():
+            true_effects_config[outcome_name] = {
+                "exposure_effect": outcome_cfg.exposure_effect,
+                "p_base": outcome_cfg.p_base,
+            }
+
+        # Plot true effects vs observed effects
+        logger.info("Plotting true effects vs observed risk differences...")
+        plot_true_effects_vs_risk_differences(
+            ite_df=ite_df,
+            cf_df=cf_df,
+            true_effects_config=true_effects_config,
+            output_dir=join(self.config.paths.outcomes, "figs"),
+        )
+
         output_dfs = {}
         if all_factual_events:
             events_df: pd.DataFrame = pd.concat(all_factual_events, ignore_index=True)
@@ -548,9 +570,7 @@ class RealisticCausalSimulator:
                     [PID_COL, TIMESTAMP_COL, ABSPOS_COL]
                 ].copy()
 
-        ite_df = pd.DataFrame(ite_records)
         output_dfs["ite"] = ite_df
-        cf_df = pd.DataFrame(cf_records)
         output_dfs[COUNTERFACTUALS_FILE.split(".")[0]] = cf_df
         if EXPOSURE_COL in output_dfs:
             output_dfs[INDEX_DATE_MATCHING_FILE.split(".")[0]] = (
