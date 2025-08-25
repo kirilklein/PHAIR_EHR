@@ -269,7 +269,7 @@ def _prepare_control(
         logger.info(
             f"Potential control patients (excluding exposed): {len(control_pids)}"
         )
-        logger.debug(
+        logger.info(
             f"Control pool reduction: {total_patients_available - len(control_pids)} patients excluded (exposed)"
         )
 
@@ -370,10 +370,10 @@ def _prepare_control(
         control_index_dates, included_pids_control
     )
 
-    logger.debug(
+    logger.info(
         f"Final control index dates after filtering: {len(control_index_date_filtered)}"
     )
-    logger.debug(
+    logger.info(
         f"Final unique control patients: {control_index_date_filtered[PID_COL].nunique()}"
     )
 
@@ -397,7 +397,7 @@ def _prepare_exposed(
     logger.info(f"Initial exposed patients: {initial_exposed_count}")
 
     logger.info("Applying time window eligibility criteria...")
-    logger.debug(f"Time windows: {time_windows}")
+    logger.info(f"Time windows: {time_windows}")
 
     time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
     logger.info(
@@ -446,10 +446,10 @@ def _prepare_exposed(
     )
     index_dates_filtered_exposed = filter_df_by_pids(index_dates, included_pids_exposed)
 
-    logger.debug(
+    logger.info(
         f"Final exposed index dates after filtering: {len(index_dates_filtered_exposed)}"
     )
-    logger.debug(
+    logger.info(
         f"Final unique exposed patients: {index_dates_filtered_exposed[PID_COL].nunique()}"
     )
 
@@ -599,8 +599,10 @@ def extract_criteria_from_shards(
 ) -> pd.DataFrame:
     """Extract criteria from medical event data across multiple shards."""
     logger.info("Starting criteria extraction from medical data shards")
-    logger.debug(f"Target patient count for extraction: {len(pids) if pids else 'All'}")
-    logger.debug(f"Processing splits: {splits}")
+    logger.info(
+        f"Target patient count for extraction: {len(pids) if pids is not None else 'All'}"
+    )
+    logger.info(f"Processing splits: {splits}")
     logger.debug(
         f"Criteria definitions: {list(criteria_definitions_cfg.keys()) if criteria_definitions_cfg else 'None'}"
     )
