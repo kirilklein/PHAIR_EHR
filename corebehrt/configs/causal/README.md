@@ -731,3 +731,179 @@ Key diagnostics for evaluating causal estimates:
 - **Common Support**: Adequate overlap in propensity score distributions
 - **Bias Sensitivity**: Robustness to modeling assumptions (when applicable)
 
+---
+
+## Optional: Realistic Outcome Simulation
+
+**Script:** `simulate_from_sequence.py`  
+**Config:** `simulate_realistic.yaml`
+
+The simulation functionality allows researchers to generate synthetic outcomes with known causal effects while preserving the complexity of real patient data. This enables validation of causal inference methods against ground truth and supports methodological development.
+
+### Purpose and Design
+
+The realistic simulator creates synthetic exposure and outcome data by:
+
+1. **Leveraging Real Patient Sequences**: Uses actual medical histories as foundation
+2. **Modeling Latent Confounding Structure**: Creates hidden factors that influence both treatment and outcomes
+3. **Generating Known Causal Effects**: Simulates outcomes with predetermined treatment effects
+4. **Preserving Data Complexity**: Maintains the high-dimensional, temporal nature of EHR data
+
+This approach combines the methodological rigor of controlled simulation with the complexity and realism of actual patient data.
+
+### Main Configuration Parameters (simulate_from_sequence.py)
+
+#### General Settings
+
+```yaml
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  data: ./example_data/synthea_meds_causal     # Real patient sequence data
+  splits: ["tuning"]                          # Data splits to use
+  outcomes: ./outputs/causal/simulated_outcomes  # Output directory
+
+seed: 42                                      # Random seed for reproducibility
+min_num_codes: 3                             # Minimum codes per patient. Patient with less than this number of codes will be excluded.
+include_code_prefixes: ["D/"]                # Medical code types to include. List all relevant prefixes here.
+index_date_str: "2020-01-01"                # Reference date for simulation. Everyone get the same index date for simplicity.
+```
+
+#### Latent Factor Structure
+
+```yaml
+simulation_model:
+  # Hidden layer defining causal relationships
+  num_shared_factors: 30              # Confounding factors (affect both exposure and outcome). Higher -> more confounding.
+  num_exposure_only_factors: 3        # Instrumental factors (affect exposure only). Higher -> more instruments.
+  num_outcome_only_factors: 3         # Independent risk factors (affect outcome only). Higher -> more independent risks.
+```
+
+**Latent Factor Design:**
+
+- **Shared factors**: Create confounding by influencing both treatment assignment and outcomes. Higher -> more confounding.
+- **Exposure-only factors**: Act as instruments, affecting treatment but not outcomes directly. Higher -> more instruments.
+- **Outcome-only factors**: Independent risk factors unrelated to treatment. Higher -> more independent risks.
+
+#### Factor-to-Code Mapping
+
+```yaml
+simulation_model:
+  factor_mapping:
+    mean: 0.0                        # Center of factor loading distribution. Higher -> more positive confounding.
+    scale: 1.0                       # Scale of individual code effects. Higher -> more confounding.
+    sparsity_factor: 0.95            # Proportion of zero loadings (creates sparse structure). Higher -> more sparse.
+```
+
+- **sparsity_factor**: High values (0.95) mean each medical code relates to only a few latent factors
+- **scale**: Controls how strongly individual codes influence latent factors
+
+#### Causal Structure Control
+
+```yaml
+simulation_model:
+  influence_scales:
+    shared_to_exposure: 1.5          # Confounder → exposure strength. Higher -> more confounding.
+    shared_to_outcome: 1.5           # Confounder → outcome strength. Higher -> more confounding.  
+    exposure_only_to_exposure: 0.25  # Instrument → exposure strength. Higher -> more instruments.
+    outcome_only_to_outcome: 0.25    # Independent risk → outcome strength. Higher -> more independent risks.
+  
+  time_decay_halflife_days: 3000     # Temporal decay of code influence. Higher -> more temporal decay.
+```
+
+**Critical Parameters:**
+
+- **shared_to_exposure/outcome**: Control confounding strength (set to 0 to remove confounding). Higher -> more confounding.
+- **exposure_only_to_exposure**: Instrumental variable strength. Higher -> more instruments.
+- **outcome_only_to_outcome**: Independent risk factor strength. Higher -> more independent risks.
+- **time_decay_halflife_days**: How quickly historical codes lose influence. Higher -> more temporal decay.
+
+#### Exposure and Outcome Definitions
+
+```yaml
+exposure:
+  p_base: 0.3                        # Baseline exposure probability. Higher -> more exposure.
+  age_effect: 0.005                  # Age coefficient. Higher -> more age effect.
+
+outcomes:
+  OUTCOME:
+    run_in_days: 1                   # Minimum follow-up before outcome can occur
+    p_base: 0.2                      # Baseline outcome probability. Higher -> more outcome.
+    exposure_effect: 3.0             # True causal effect (logit scale)
+    age_effect: -0.005               # Age coefficient
+    
+  OUTCOME_2:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 2.0             # Weaker positive effect
+    
+  OUTCOME_3:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 1.0             # Even weaker effect
+    
+  OUTCOME_4:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 0.0             # True null effect
+```
+
+**Outcome Configuration:**
+
+- **exposure_effect**: True causal effect size (known ground truth)
+- **p_base**: Baseline risk in unexposed population
+- **run_in_days**: Minimum time before outcome can occur (prevents immediate effects)
+- **age_effect**: Additional age-related risk
+
+### Simulation Process
+
+The realistic simulator works through several steps:
+
+1. **Load Real Patient Data**: Process actual medical sequences from MEDS format
+2. **Build Latent Factor Model**: Map medical codes to hidden confounding structure
+3. **Generate Exposure Status**: Simulate treatment assignment based on patient history and latent factors
+4. **Simulate Outcomes**: Generate outcomes using known causal effects plus confounding
+5. **Apply Temporal Constraints**: Respect follow-up periods and temporal ordering
+6. **Save Ground Truth**: Store true causal effects for validation
+
+### Usage Example (simulate_from_sequence.py)
+
+```bash
+# Run realistic simulation with default config
+python -m corebehrt.main_causal.simulate_from_sequence
+
+# Run with custom simulation parameters
+python -m corebehrt.main_causal.simulate_from_sequence --config_path custom_simulate.yaml
+```
+
+### Outputs (simulate_from_sequence.py)
+
+The simulation produces:
+
+- **`exposure.csv`**: Simulated treatment assignments with timestamps
+- **`OUTCOME.csv`**: Primary outcome events with known causal effect
+- **`OUTCOME_2.csv`, etc.**: Additional outcomes with varying effect sizes
+- **`counterfactuals.csv`**: True potential outcomes for validation
+- **Visualization plots**: Histograms of exposure probabilities and outcome rates
+
+### Validation Applications
+
+The simulated data enables several important analyses:
+
+1. **Method Validation**: Compare estimated effects against known truth
+2. **Bias Assessment**: Evaluate performance under different confounding scenarios
+3. **Method Comparison**: Benchmark different causal inference approaches
+4. **Robustness Testing**: Assess sensitivity to modeling choices
+5. **Power Analysis**: Determine sample size requirements for effect detection
+
+### Advantages of Realistic Simulation
+
+This approach offers key benefits over traditional simulation:
+
+- **Preserves Medical Complexity**: Uses real patient sequences with natural correlation patterns
+- **Maintains Temporal Structure**: Respects actual timing and sequencing of medical events  
+- **Realistic Confounding**: Creates plausible relationships between patient history and outcomes
+- **Known Ground Truth**: Enables definitive validation of causal inference methods
+- **Flexible Effect Sizes**: Supports investigation of different causal effect magnitudes
