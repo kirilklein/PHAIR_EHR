@@ -6,7 +6,7 @@ paths:
   ### Inputs
   features: researcher_data:AKK/shared/features/semaglutide/training/v03/features
   meds: researcher_data:AKK/shared/MEDS/SEMAGLUTIDE/cohort_selection/data
-  criteria_config: azure_configs/semaglutide/cohort_sustain/def.yaml
+  criteria_config: experiments/azure_configs/semaglutide/cohort_sustain/def.yaml
   splits: [train, tuning]
   exposures: "researcher-data:AKK/shared/outcomes/semaglutide/semaglutide/v01"
   exposure: semaglutide.csv

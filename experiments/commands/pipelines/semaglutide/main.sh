@@ -1,4 +1,4 @@
-python -m corebehrt.azure pipeline FINETUNE_ESTIMATE CPU-300 azure_configs/semaglutide/pipeline \
+python -m corebehrt.azure pipeline FINETUNE_ESTIMATE CPU-300 experiments/azure_configs/semaglutide/pipeline \
   --meds           researcher_data:AKK/shared/MEDS/SEMAGLUTIDE/training/data \
   --pretrain_model researcher_data:AKK/shared/pretrain/models/semaglutide/small/len_512/no_sep_no_cls/v01 \
   --features       researcher_data:AKK/shared/features/semaglutide/training/v03/features \
