@@ -9,7 +9,7 @@ REM -------------------------------
 
 :: Run Outcomes and Cohort Selection
 echo ==== Running simulate_outcomes... ====
-python -m corebehrt.main_causal.simulate_from_sequence --config_path corebehrt\configs\causal\simulate.yaml
+python -m corebehrt.main_causal.simulate_from_sequence --config_path corebehrt\configs\causal\simulate_realistic.yaml
 if errorlevel 1 goto :error
 
 echo ==== Running select_cohort... ====
