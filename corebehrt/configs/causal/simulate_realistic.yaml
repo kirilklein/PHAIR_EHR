@@ -41,14 +41,15 @@ simulation_model:
     # How strongly shared factors affect exposure (Path 1 of Confounding)
     shared_to_exposure: 1.5
     # How strongly shared factors affect outcomes (Path 2 of Confounding)
-    shared_to_outcome: 1.5
+    shared_to_outcome: 2
     # How strongly non-confounding factors predict treatment
     exposure_only_to_exposure: 0.25
     # How strongly non-confounding factors predict outcomes
     outcome_only_to_outcome: 0.25
 
   time_decay_halflife_days: 3000
-
+  noise:
+    logit_noise_scale: 0
 # --------------------------------------------------------------------------
 # Exposure and Outcome Settings
 # --------------------------------------------------------------------------
