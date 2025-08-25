@@ -62,7 +62,7 @@ paths:
 
 ```yaml
 time_windows:
-  data_end:                    # End of available data period
+  data_end:                    # End of available data period. Used to filter for sufficient follow-up time.
     year: 2020
     month: 01  
     day: 01
@@ -232,13 +232,13 @@ data:
   truncation_len: 64                  # Maximum sequence length
   min_len: 2                         # Minimum sequence length
   cv_folds: 2                        # Cross-validation folds
-  min_instances_per_class: 10        # Minimum samples per outcome class
+  min_instances_per_class: 10        # Minimum required positive samples for each outcome class. Ignore targets with less than this number of positive samples. Useful for one-to-many.
 ```
 
 - **truncation_len**: Maximum number of tokens in patient sequences
 - **min_len**: Filter out sequences shorter than this
 - **cv_folds**: Number of cross-validation folds for training
-- **min_instances_per_class**: Minimum required samples for each outcome class
+- **min_instances_per_class**: Minimum required positive samples for each outcome class. Ignore targets with less than this number of positive samples. Useful for one-to-many.
 
 #### Exposure Configuration
 
@@ -320,18 +320,18 @@ paths:
 ```yaml
 model:
   head:
-    shared_representation: true       # Share representations between exposure/outcome
+    shared_representation: true       # Share representations between exposure/outcome. Shared-> more focus on confounders -> less adjustment for instruments and outcome only-> might reduce performance but more accurate causal estimates in theory.
     bidirectional: true              # Use bidirectional GRU for sequence pooling
-    bottleneck_dim: 64               # Dimensionality of bottleneck layer
-    l1_lambda: 0.2                   # L1 regularization strength
-    pooling_strategy: gru            # Pooling method: 'gru' or 'cls'
+    bottleneck_dim: 64               # Dimensionality of bottleneck layer. Lower -> more focus on confounders.
+    l1_lambda: 0.2                   # L1 regularization strength. Higher -> more focus on confounders.
+    pooling_strategy: gru            # Pooling method: 'gru' or 'cls'. GRU gives better performance but also more expensive. Use for smaller experiments. Set to cls for many outcomes.
 ```
 
-- **shared_representation**: Whether exposure and outcome heads share representations
+- **shared_representation**: Whether exposure and outcome heads share representations. Shared-> more focus on confounders -> less adjustment for instruments and outcome only-> might reduce performance but more accurate causal estimates in theory.
 - **bidirectional**: Use bidirectional GRU for sequence encoding
-- **bottleneck_dim**: Hidden dimension of prediction head bottleneck
-- **l1_lambda**: L1 regularization to encourage sparsity
-- **pooling_strategy**: How to pool sequence representations (`gru` or `cls` token)
+- **bottleneck_dim**: Hidden dimension of prediction head bottleneck. Lower -> more focus on confounders.
+- **l1_lambda**: L1 regularization to encourage sparsity. Higher -> more focus on confounders.
+- **pooling_strategy**: How to pool sequence representations (`gru` or `cls` token). GRU gives better performance but also more expensive. Use for smaller experiments. Set to cls for many outcomes.
 
 #### Training Configuration
 
@@ -426,4 +426,308 @@ The joint modeling approach offers several advantages:
 
 ---
 
-*Next: Calibration Configuration (coming soon)*
+## Step 4: Probability Calibration
+
+**Script:** `calibrate_exp_y.py`  
+**Config:** `finetune/calibrate.yaml` (or variants)
+
+The calibration step adjusts the predicted probabilities from the finetuned model to ensure they are well-calibrated. This is crucial for causal inference methods that rely on accurate probability estimates, such as propensity score weighting and outcome regression.
+
+### Main Configuration Parameters (calibrate_exp_y.py)
+
+#### Logging & Paths (calibrate_exp_y.py)
+
+```yaml
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  finetune_model: ./outputs/causal/finetune/models/simple  # Trained model directory
+  
+  ## OUTPUTS
+  calibrated_predictions: ./outputs/causal/finetune/models/simple/calibrated  # Calibrated outputs
+```
+
+- **finetune_model**: Directory containing the trained model from Step 3
+- **calibrated_predictions**: Output directory for calibrated predictions and artifacts
+
+#### Plotting Configuration
+
+Be carefull with plotting when run on many outcomes.
+
+```yaml
+plotting:
+  plot_all_outcomes: true           # Generate calibration plots for all outcomes
+  num_outcomes_to_plot: 5          # Limit number of outcomes to plot (optional)
+```
+
+- **plot_all_outcomes**: Whether to create calibration plots for every outcome
+- **num_outcomes_to_plot**: Limit plotting to top N outcomes (by frequency/importance)
+
+### Calibration Process
+
+The calibration step performs several key operations:
+
+1. **Prediction Collection**: Gather raw predictions from all CV folds
+2. **Calibration Fitting**: Fit calibration functions (e.g., Platt scaling, isotonic regression)
+3. **Probability Adjustment**: Apply calibration to transform raw probabilities
+4. **Validation**: Generate calibration plots and reliability diagrams
+
+### Usage Example (calibrate_exp_y.py)
+
+```bash
+# Run calibration with default config
+python -m corebehrt.main_causal.calibrate_exp_y
+
+# Run with simulated data config
+python -m corebehrt.main_causal.calibrate_exp_y --config_path ./corebehrt/configs/causal/finetune/calibrate_simulated.yaml
+```
+
+### Outputs (calibrate_exp_y.py)
+
+The calibration step produces:
+
+- **Calibrated predictions**: Adjusted probability estimates for all patients
+- **Calibration models**: Fitted calibration functions for each outcome
+- **Reliability diagrams**: Plots showing calibration quality before/after adjustment
+- **Calibration metrics**: Brier score, calibration error, and other diagnostic metrics
+- **Cross-fold consistency**: Calibration performance across different CV folds
+
+### Calibration Methods
+
+The pipeline supports multiple calibration approaches:
+
+1. **Platt Scaling**: Sigmoid function fitting for binary outcomes
+2. **Isotonic Regression**: Non-parametric monotonic calibration
+3. **Temperature Scaling**: Single parameter adjustment for neural networks
+
+### Quality Assessment
+
+Key metrics for evaluating calibration quality:
+
+- **Calibration Error**: Mean absolute difference between predicted and observed frequencies
+- **Brier Score**: Proper scoring rule combining calibration and discrimination
+- **Reliability Diagrams**: Visual assessment of probability-frequency correspondence
+- **Sharpness**: Distribution of predicted probabilities (resolution)
+
+### Importance for Causal Inference
+
+Well-calibrated probabilities are essential for:
+
+- **Propensity Score Methods**: Accurate treatment probability estimates
+- **Outcome Regression**: Reliable counterfactual outcome predictions
+- **Doubly Robust Methods**: Both propensity and outcome model accuracy
+- **Uncertainty Quantification**: Confident interval estimation
+
+---
+
+## Step 5: Causal Effect Estimation
+
+**Script:** `estimate.py`  
+**Config:** `estimate.yaml` (or variants)
+
+The effect estimation step implements various causal inference methods to estimate treatment effects using the calibrated predictions from previous steps. It supports multiple estimators and provides comprehensive analysis with statistical inference and visualization.
+
+### Main Configuration Parameters (estimate.py)
+
+#### Logging & Paths (estimate.py)
+
+```yaml
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  calibrated_predictions: ./outputs/causal/finetune/models/simple/calibrated/  # Calibrated model predictions
+  counterfactual_outcomes: ./outputs/causal/simulated_outcomes                 # True effects (optional, for validation)
+  
+  ## OUTPUTS
+  estimate: ./outputs/causal/estimate/simple                                   # Effect estimation results
+```
+
+- **calibrated_predictions**: Directory with calibrated probabilities from Step 4
+- **counterfactual_outcomes**: Optional true counterfactual outcomes for validation (simulated data)
+- **estimate**: Output directory for effect estimates and analysis
+
+#### Estimator Configuration
+
+```yaml
+estimator:
+  methods: ["IPW", "TMLE"]          # Causal inference methods to use
+  effect_type: "ATE"                # Type of causal effect to estimate
+  n_bootstrap: 30                   # Number of bootstrap samples for confidence intervals
+  common_support_threshold: 0.001   # Threshold for common support filtering
+```
+
+**Estimation Methods:**
+
+- **IPW**: Inverse Probability Weighting using propensity scores
+- **TMLE**: Targeted Maximum Likelihood Estimation (doubly robust)
+- **AIPW**: Augmented Inverse Probability Weighting (doubly robust)
+
+**Effect Types:**
+
+- **ATE**: Average Treatment Effect (population-level effect)
+- **ATT**: Average Treatment Effect on the Treated
+- **ATC**: Average Treatment Effect on the Controls
+
+**Bootstrap Configuration:**
+
+- **n_bootstrap**: Number of bootstrap resamples for uncertainty quantification
+- **common_support_threshold**: Minimum propensity score for inclusion (avoids extreme weights)
+
+#### Plotting Configuration (estimate.py)
+
+```yaml
+plot:
+  contingency_table:
+    max_outcomes_per_figure: 10     # Outcomes per contingency table plot
+    max_number_of_figures: 10       # Maximum number of figures to generate
+  effect_size:
+    max_outcomes_per_figure: 10     # Outcomes per effect size plot
+    max_number_of_figures: 10       # Maximum number of effect plots
+    plot_individual_effects: true   # Create individual effect plots
+  adjustment:
+    max_outcomes_per_figure: 8      # Outcomes per adjustment analysis plot
+    max_number_of_figures: 10       # Maximum adjustment plots
+```
+
+- **contingency_table**: Patient count visualizations by treatment/outcome status
+- **effect_size**: Treatment effect magnitude comparisons across methods
+- **adjustment**: Analysis of covariate balance and adjustment quality
+
+#### Bias Simulation (`estimate_simulated_with_bias.yaml`)
+
+This should help investigate how applying a bias to ps or outcome probas affects the final effect estimates.
+
+```yaml
+estimator:
+  methods: ["IPW", "TMLE"]
+  effect_type: "ATE"
+  n_bootstrap: 30
+  common_support_threshold: 0.001
+  bias:                             # Systematic bias simulation
+    ps_bias_type: additive          # Propensity score bias type
+    y_bias_type: additive           # Outcome model bias type  
+    ps_values: [0.0, 0.5, 1.0]      # Propensity bias magnitudes
+    y_values: [0.0, 0.5, 1.0]       # Outcome bias magnitudes
+```
+
+**Bias Simulation Parameters:**
+
+- **ps_bias_type**: How to introduce propensity score bias (`additive`, `multiplicative`)
+- **y_bias_type**: How to introduce outcome model bias  
+- **ps_values**: Range of propensity score bias magnitudes to test
+- **y_values**: Range of outcome model bias magnitudes to test
+
+This configuration runs a systematic robustness analysis across different bias scenarios.
+
+### Causal Inference Methods
+
+#### Inverse Probability Weighting (IPW)
+
+Uses propensity scores to reweight observations, creating a pseudo-population where treatment is randomized.
+
+**Advantages:**
+
+- Simple and interpretable
+- Only requires propensity score model
+- Efficient for large datasets
+
+**Limitations:**
+
+- Sensitive to propensity score misspecification
+- Can have high variance with extreme weights
+
+#### Targeted Maximum Likelihood Estimation (TMLE)
+
+Doubly robust method that combines propensity scores and outcome regression with targeted bias reduction.
+
+**Advantages:**
+
+- Doubly robust (consistent if either propensity or outcome model is correct)
+- Efficient and less sensitive to model misspecification
+- Provides valid confidence intervals
+
+**Limitations:**
+
+- More complex than IPW
+- Requires both propensity and outcome models
+
+#### Augmented Inverse Probability Weighting (AIPW)
+
+Another doubly robust method that augments IPW with outcome regression predictions.
+
+**Advantages:**
+
+- Doubly robust like TMLE
+- Often more stable than plain IPW
+- Straightforward implementation
+
+**Limitations:**
+
+- Can be less efficient than TMLE
+- Still sensitive to extreme propensity scores
+
+### Usage Example (estimate.py)
+
+```bash
+# Run effect estimation with default config  
+python -m corebehrt.main_causal.estimate
+
+# Run with simulated data validation
+python -m corebehrt.main_causal.estimate --config_path ./corebehrt/configs/causal/estimate_simulated.yaml
+
+# Run bias sensitivity analysis
+python -m corebehrt.main_causal.estimate --config_path ./corebehrt/configs/causal/estimate_simulated_with_bias.yaml
+```
+
+### Outputs (estimate.py)
+
+The effect estimation step produces:
+
+#### Core Results
+
+- **`estimate_results.csv`**: Treatment effect estimates with confidence intervals
+- **`experiment_stats.csv`**: Cohort statistics and covariate balance
+- **`tmle_analysis.csv`**: Detailed TMLE adjustment analysis
+- **`patients.pt`**: Final analysis cohort patient IDs
+
+#### Visualizations
+
+- **`effects.png`**: Heatmap of treatment effects across outcomes and methods
+- **`contingency_table/`**: Patient count tables by treatment/outcome status  
+- **`effects_scatter/`**: Effect magnitude comparisons across methods
+- **`adjustment_analysis/`**: Covariate balance and adjustment quality plots
+
+#### Validation (Simulated Data)
+
+- **`true_effects.png`**: True effect magnitudes for comparison
+- **`diff.png`**: Differences between estimated and true effects
+
+#### Bias Analysis
+
+- **`bias_simulation_results.csv`**: Effect estimates across bias scenarios
+
+### Statistical Inference
+
+The pipeline provides comprehensive uncertainty quantification:
+
+1. **Bootstrap Confidence Intervals**: Non-parametric uncertainty estimation
+2. **Common Support Analysis**: Overlap assessment and extreme weight handling  
+3. **Covariate Balance**: Pre/post-adjustment balance evaluation
+4. **Sensitivity Analysis**: Robustness to model misspecification (with bias simulation)
+
+### Quality Assessment (estimate.py)
+
+Key diagnostics for evaluating causal estimates:
+
+- **Effect Consistency**: Agreement across different methods (IPW, TMLE, AIPW)
+- **Confidence Interval Coverage**: Appropriate uncertainty quantification
+- **Covariate Balance**: Successful confounder adjustment
+- **Common Support**: Adequate overlap in propensity score distributions
+- **Bias Sensitivity**: Robustness to modeling assumptions (when applicable)
+
