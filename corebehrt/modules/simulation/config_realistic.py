@@ -20,6 +20,33 @@ class PathsConfig:
 
 
 @dataclass
+class AgeConfig:
+    """
+    Configuration for age-related calculations in the simulation.
+
+    Attributes:
+        default_age: Default age (in years) to assign to patients when birth information is missing
+        days_per_year: Number of days per year used for age calculations (accounts for leap years)
+    """
+
+    default_age: float = 40.0
+    days_per_year: float = 365.25
+
+
+@dataclass
+class NoiseConfig:
+    """
+    Configuration for random noise added to probability calculations.
+
+    Attributes:
+        probability_noise_scale: Standard deviation of Gaussian noise added to logit probabilities
+                                to introduce realistic variability in individual predictions
+    """
+
+    probability_noise_scale: float = 0.1
+
+
+@dataclass
 class ModelWeightsConfig:
     """
     Configuration for sampling model weights that map medical codes to latent factors.
@@ -34,11 +61,28 @@ class ModelWeightsConfig:
         sparsity_factor: Probability that a code-factor weight is set to zero (0.0-1.0).
                         Higher values create sparser connections, meaning each code
                         only influences a few factors rather than all factors.
+        exposure_factor_mean: Mean for sampling weights from latent factors to exposure probability.
+                             Controls the baseline strength of factor-to-exposure connections.
+        exposure_factor_scale: Standard deviation for sampling factor-to-exposure weights.
+                              Higher values create more variable exposure effects across factors.
+        outcome_factor_mean: Mean for sampling weights from latent factors to outcome probabilities.
+                            Controls the baseline strength of factor-to-outcome connections.
+        outcome_factor_scale: Standard deviation for sampling factor-to-outcome weights.
+                             Higher values create more variable outcome effects across factors.
+        outcome_influence_probability: Probability that a latent factor influences a given outcome (0.0-1.0).
+                                     Lower values create sparser factor-outcome connections, meaning
+                                     each factor only affects a subset of outcomes rather than all outcomes.
     """
 
     mean: float
     scale: float
     sparsity_factor: float = 0.0
+
+    exposure_factor_mean: float = 0.0
+    exposure_factor_scale: float = 0.5
+    outcome_factor_mean: float = 0.0
+    outcome_factor_scale: float = 0.75
+    outcome_influence_probability: float = 0.4
 
 
 @dataclass
@@ -88,8 +132,8 @@ class OutcomeConfig:
         age_effect: Optional effect of age on the outcome probability (if None, no age effect)
     """
 
-    run_in_days: int
     p_base: float
+    run_in_days: int
     exposure_effect: float
     age_effect: Optional[float] = None
 
@@ -122,6 +166,8 @@ class RealisticSimulationModelConfig:
         factor_mapping: Configuration for how medical codes map to latent factors
         influence_scales: Configuration for scaling the influence of each latent factor group
         time_decay_halflife_days: Optional half-life for time-dependent effects (if None, no time decay)
+        noise: Configuration for random noise in probability calculations
+        age: Configuration for age-related calculations
     """
 
     num_shared_factors: int
@@ -132,6 +178,8 @@ class RealisticSimulationModelConfig:
         default_factory=InfluenceScalesConfig
     )
     time_decay_halflife_days: Optional[float] = 365
+    noise: NoiseConfig = field(default_factory=NoiseConfig)
+    age: AgeConfig = field(default_factory=AgeConfig)
 
 
 @dataclass
@@ -177,6 +225,10 @@ def create_simulation_config(cfg: dict) -> SimulationConfig:
         **cfg["simulation_model"].get("influence_scales", {})
     )
 
+    # Parse new config sections with defaults
+    noise_config = NoiseConfig(**cfg["simulation_model"].get("noise", {}))
+    age_config = AgeConfig(**cfg["simulation_model"].get("age", {}))
+
     sim_model_config = RealisticSimulationModelConfig(
         num_shared_factors=cfg["simulation_model"]["num_shared_factors"],
         num_exposure_only_factors=cfg["simulation_model"]["num_exposure_only_factors"],
@@ -184,6 +236,8 @@ def create_simulation_config(cfg: dict) -> SimulationConfig:
         factor_mapping=model_weights_config,
         influence_scales=influence_scales_config,
         time_decay_halflife_days=cfg["simulation_model"]["time_decay_halflife_days"],
+        noise=noise_config,
+        age=age_config,
     )
 
     exposure_config = ExposureConfig(**cfg["exposure"])

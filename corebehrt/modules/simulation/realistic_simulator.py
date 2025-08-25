@@ -31,10 +31,17 @@ from corebehrt.constants.data import (
 )
 from corebehrt.functional.utils.filter import safe_control_pids
 from corebehrt.functional.utils.time import get_hours_since_epoch
-from corebehrt.modules.simulation.plot import plot_hist, plot_probability_distributions
+from corebehrt.modules.simulation.plot import (
+    plot_hist,
+    plot_probability_distributions,
+)
 from corebehrt.modules.simulation.config_realistic import (
     SimulationConfig,
     RealisticSimulationModelConfig,
+    ExposureConfig,
+    OutcomeConfig,
+    InfluenceScalesConfig,
+    ModelWeightsConfig,
 )
 
 logger = logging.getLogger("simulate")
@@ -76,12 +83,15 @@ class RealisticCausalSimulator:
             + self.num_outcome_only_factors
         )
 
-        self.influence = model_cfg.influence_scales
+        self.influence: InfluenceScalesConfig = model_cfg.influence_scales
 
+        factor_config: ModelWeightsConfig = model_cfg.factor_mapping
         self.weights = {
             "factor_weights": np.zeros((0, self.total_latent_factors)),
             "exposure_factor_weights": self.rng.normal(
-                0, 0.5, self.num_shared_factors + self.num_exposure_only_factors
+                factor_config.exposure_factor_mean,
+                factor_config.exposure_factor_scale,
+                self.num_shared_factors + self.num_exposure_only_factors,
             ),
             "outcomes_factor_weights": self._create_correlated_outcome_weights(),
         }
@@ -92,10 +102,15 @@ class RealisticCausalSimulator:
         num_relevant_factors = self.num_shared_factors + self.num_outcome_only_factors
         weights = np.zeros((num_relevant_factors, num_outcomes))
 
+        factor_config = self.config.simulation_model.factor_mapping
         for i in range(num_relevant_factors):
-            prob_influence = 0.4
+            prob_influence = factor_config.outcome_influence_probability
             influenced_outcomes = self.rng.random(num_outcomes) < prob_influence
-            factor_weights = self.rng.normal(0, 0.75, np.sum(influenced_outcomes))
+            factor_weights = self.rng.normal(
+                factor_config.outcome_factor_mean,
+                factor_config.outcome_factor_scale,
+                np.sum(influenced_outcomes),
+            )
             weights[i, influenced_outcomes] = factor_weights
         return weights
 
@@ -132,7 +147,7 @@ class RealisticCausalSimulator:
     def _calculate_probabilities_decomposed(
         self,
         event_name: str,
-        event_cfg,
+        event_cfg: ExposureConfig | OutcomeConfig,
         latent_factors: np.ndarray,
         ages: np.ndarray,
         is_exposed: bool = False,
@@ -173,7 +188,9 @@ class RealisticCausalSimulator:
         if hasattr(event_cfg, "age_effect") and event_cfg.age_effect is not None:
             logit_p_array += event_cfg.age_effect * ages
         logit_p_array += additional_logit_effect
-        logit_p_array += self.rng.normal(0, 0.01, n_patients)
+
+        noise_scale = self.config.simulation_model.noise.probability_noise_scale
+        logit_p_array += self.rng.normal(0, noise_scale, n_patients)
         return expit(logit_p_array)
 
     def simulate_dataset(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
@@ -198,7 +215,7 @@ class RealisticCausalSimulator:
         )
 
         is_exposed, p_exposure = self._simulate_exposure(
-            patient_history_matrix, final_ages, pids, confounder_exposure_effect
+            patient_history_matrix, final_ages, confounder_exposure_effect
         )
 
         ite_records, cf_records, all_factual_events, all_probas_for_plotting = (
@@ -225,8 +242,12 @@ class RealisticCausalSimulator:
         )
 
     def _simulate_exposure(
-        self, patient_history_matrix, final_ages, pids, confounder_exposure_effect
+        self,
+        patient_history_matrix: np.ndarray,
+        final_ages: np.ndarray,
+        confounder_exposure_effect: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
+        """Simulates exposure probabilities based on patient history and confounder effects."""
         latent_factors = self._calculate_latent_factors(patient_history_matrix)
         p_exposure = self._calculate_probabilities_decomposed(
             "exposure",
@@ -240,11 +261,11 @@ class RealisticCausalSimulator:
 
     def _simulate_outcomes(
         self,
-        patient_history_matrix,
-        final_ages,
-        pids,
-        is_exposed,
-        confounder_outcome_effects,
+        patient_history_matrix: np.ndarray,
+        final_ages: np.ndarray,
+        pids: np.ndarray,
+        is_exposed: np.ndarray,
+        confounder_outcome_effects: Dict[str, np.ndarray],
     ) -> Tuple[Dict, Dict, list, Dict]:
         latent_factors = self._calculate_latent_factors(patient_history_matrix)
         n_patients = len(pids)
@@ -305,6 +326,9 @@ class RealisticCausalSimulator:
     def _filter_initial_history(
         self, df: pd.DataFrame
     ) -> Tuple[pd.DataFrame, np.ndarray]:
+        """
+        Filters the dataframe to only include patients with history before the index date.
+        """
         history_df = df[df[TIMESTAMP_COL] <= self.index_date].copy()
         pids_with_history = history_df[PID_COL].unique()
         if len(pids_with_history) == 0:
@@ -320,17 +344,22 @@ class RealisticCausalSimulator:
     def _calculate_ages(
         self, history_df: pd.DataFrame, all_pids: np.ndarray
     ) -> pd.Series:
+        """
+        Calculates the ages of patients on index date based on their birth dates.
+        """
         dob_events = history_df[history_df[CONCEPT_COL] == BIRTH_CODE]
         patient_dobs = dob_events.groupby(PID_COL)[TIMESTAMP_COL].first()
         ages = pd.Series(np.nan, index=all_pids, dtype=float)
         if not patient_dobs.empty:
-            ages.update((self.index_date - patient_dobs).dt.days / 365.25)
+            days_per_year = self.config.simulation_model.age.days_per_year
+            ages.update((self.index_date - patient_dobs).dt.days / days_per_year)
         mean_age = ages.mean()
         if np.isnan(mean_age):
-            mean_age = 40
+            mean_age = self.config.simulation_model.age.default_age
         return ages.fillna(mean_age)
 
     def _filter_by_codes(self, history_df: pd.DataFrame) -> pd.DataFrame:
+        """Only use certain codes for simulation."""
         if self.config.include_code_prefixes:
             history_df = history_df[
                 history_df[CONCEPT_COL].str.startswith(
@@ -423,7 +452,11 @@ class RealisticCausalSimulator:
         )
 
     def _calculate_and_save_simulation_stats(
-        self, pids, is_exposed, cf_records, output_dir
+        self,
+        pids: np.ndarray,
+        is_exposed: np.ndarray,
+        cf_records: Dict[str, np.ndarray],
+        output_dir: str,
     ):
         """Calculate and save simple simulation statistics."""
         total_patients = len(pids)
@@ -515,12 +548,15 @@ class RealisticCausalSimulator:
                     [PID_COL, TIMESTAMP_COL, ABSPOS_COL]
                 ].copy()
 
-        output_dfs["ite"] = pd.DataFrame(ite_records)
-        output_dfs[COUNTERFACTUALS_FILE.split(".")[0]] = pd.DataFrame(cf_records)
+        ite_df = pd.DataFrame(ite_records)
+        output_dfs["ite"] = ite_df
+        cf_df = pd.DataFrame(cf_records)
+        output_dfs[COUNTERFACTUALS_FILE.split(".")[0]] = cf_df
         if EXPOSURE_COL in output_dfs:
             output_dfs[INDEX_DATE_MATCHING_FILE.split(".")[0]] = (
                 self._create_index_date_matching_df(output_dfs[EXPOSURE_COL], pids)
             )
+
         return output_dfs
 
     def _create_index_date_matching_df(
