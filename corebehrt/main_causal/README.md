@@ -167,4 +167,24 @@ Two-step process for comprehensive cohort analysis and covariate balance assessm
 - **Balance assessment**: Evaluate covariate balance before/after adjustment
 - **Method validation**: Assess overlap, effective sample sizes, and adjustment quality
 
-## Data Flow Overview
+### Large Scale Outcomes Analysis
+
+**Documentation:** [`multitarget/README.md`](multitarget/README.md)
+
+For large scale adverse event detection involving systematic analysis of multiple outcomes (e.g., all ATC codes, comprehensive diagnosis codes), the pipeline supports hierarchical outcome organization and automated configuration generation.
+
+**Key Features:**
+
+- **Hierarchical code organization**: Systematic grouping of medical codes by therapeutic class or diagnostic category
+- **Automated config generation**: Streamlined creation of multi-outcome YAML configurations
+- **Scalable analysis**: Efficient processing of hundreds to thousands of outcome definitions
+- **Tree-based structure**: Preserves medical code hierarchies for interpretable results
+
+**Workflow:**
+
+1. **Build hierarchical trees** from diagnosis or medication codes
+2. **Generate outcome configurations** for multi-task learning
+3. **Run standard pipeline** with generated multi-outcome configs
+
+This approach enables comprehensive safety profiling and systematic adverse event detection across entire therapeutic classes or diagnostic categories.
+
