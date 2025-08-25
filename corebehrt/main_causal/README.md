@@ -39,6 +39,7 @@ graph TD
 **Script:** [`select_cohort_full.py`](select_cohort_full.py)
 
 Identifies exposed and control patients, applies inclusion/exclusion criteria, and performs index date matching to create balanced cohorts for causal analysis.
+! important: Run select cohort without lab test normalization, if lab test values are used as selection criteria. !
 
 **Key Features:**
 

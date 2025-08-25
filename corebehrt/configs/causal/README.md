@@ -19,6 +19,7 @@ The causal analysis pipeline consists of several sequential steps:
 **Criteria Config:** `select_cohort_full/definitions.yaml`
 
 The cohort selection step identifies exposed and control patients, applies inclusion/exclusion criteria, and performs index date matching to create balanced cohorts for causal analysis.
+! Important: Run select cohort without lab test normalization, if lab test values are used as selection criteria. !
 
 ### Main Configuration (`extract.yaml`)
 
