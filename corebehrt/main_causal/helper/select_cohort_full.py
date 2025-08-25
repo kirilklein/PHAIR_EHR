@@ -166,7 +166,9 @@ def select_cohort(
     exposed_final_count = len(index_dates_filtered_exposed[PID_COL].unique())
     logger.info(f"Final exposed patients after all filtering: {exposed_final_count}")
     exposed_loss = len(exposed_pids) - exposed_final_count
-    exposed_loss_pct = exposed_loss / len(exposed_pids) * 100
+    exposed_loss_pct = (
+        (exposed_loss / len(exposed_pids) * 100) if len(exposed_pids) else 0.0
+    )
     logger.info(f"Exposed patient exclusions: {exposed_loss} ({exposed_loss_pct:.1f}%)")
 
     logger.info("=" * 50)
@@ -354,7 +356,11 @@ def _prepare_control(
     logger.info(f"Control patients after criteria filtering: {post_criteria_count}")
     excluded_by_criteria = pre_criteria_count - post_criteria_count
     if excluded_by_criteria > 0:
-        criteria_loss_pct = excluded_by_criteria / pre_criteria_count * 100
+        criteria_loss_pct = (
+            (excluded_by_criteria / pre_criteria_count * 100)
+            if pre_criteria_count
+            else 0.0
+        )
         logger.info(
             f"Controls excluded by criteria: {excluded_by_criteria} ({criteria_loss_pct:.1f}%)"
         )
