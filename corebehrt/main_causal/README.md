@@ -1,5 +1,7 @@
 # Causal Analysis Pipeline for Transformer-based EHR Models
 
+![Overview](../../docs/causal_COREBEHRT_overview.jpg)
+
 This pipeline enables rigorous causal inference analysis for patient outcomes by combining transformer-based representation learning with established causal inference methodologies. It provides a complete workflow from cohort selection through effect estimation with ground truth validation capabilities.
 
 ## Prerequisites: Main Pipeline Steps
