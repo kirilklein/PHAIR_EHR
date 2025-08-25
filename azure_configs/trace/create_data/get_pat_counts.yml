@@ -1,0 +1,10 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ## INPUTS
+  data: researcher-data:AKK/shared/MEDS/TRACE/v02/data
+  ## OUTPUTS
+  counts: researcher-data:AKK/shared/MEDS/TRACE/v02/pat_counts/tuning # Save counts to this folder
+  splits: [tuning]

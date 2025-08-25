@@ -1,0 +1,28 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+description: "We omit sep and cls tokens and use fewer bins for labtests."
+
+paths:
+  data: researcher_data:AKK/shared/MEDS/SEMAGLUTIDE/all_ft/cohort_selection/v01/data
+  # data: azureml://subscriptions/f8c5aac3-29fc-4387-858a-1f61722fb57a/resourcegroups/forskerpl-n0ybkr-rg/workspaces/forskerpl-n0ybkr-mlw/datastores/workspaceblobstore/paths/MEDS/data/MEDS_data/data/
+  tokenized: "researcher_data:AKK/shared/features/semaglutide/cohort_selection/all_ft/v01/tokenized/"
+  features: "researcher_data:AKK/shared/features/semaglutide/cohort_selection/all_ft/v01/features/"
+
+  # code_mapping: researcher-data:AKK/shared/MEDS/SEMAGLUTIDE/training/mapping_rare_10/rare_code_mapping.pt
+
+features:
+  values:
+    value_creator_kwargs:
+      num_bins: 10
+  agg_func: "first"
+  agg_window: 1 # expand aggreation window to aggreate over x hours
+
+tokenizer:
+  sep_tokens: false
+  cls_token: false
+
+excluder:
+  min_age: -1
+  max_age: 120

@@ -1,0 +1,30 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ## INPUTS
+  exposure: lung_cancer.csv
+  outcome_files: null
+# Save model/outputs to this folder
+#runs: ./outputs/pretraining # Use for generating a new model folder
+
+data:
+  type: "finetune"
+  truncation_len: 512
+  min_len: 0 # 0 by default
+
+exposure: # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
+  n_hours_censoring: -168 # 2160 # censor time after index date (negative means before)
+  n_hours_start_follow_up: -1 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+
+outcome:
+  n_hours_start_follow_up: 0 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: 17520 # 2years # end follow up (considering outcomes) time after index date (negative means before)
+  n_hours_compliance: null # follow up time is adjusted based on compliance
+  group_wise_follow_up: false
+#concept_pattern_hours_delay:
+# Diagnosis concepts (matching strings starting with "D")
+# "^D/": 336 # censoring delayed by 72 hours
+# "^RD/" : 336

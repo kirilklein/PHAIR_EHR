@@ -1,0 +1,7595 @@
+paths:
+  data: researcher-data:AKK/shared/MEDS/TRACE/v01/data #azureml:AKK-OZEMPIC-MEDS:2
+  features: researcher-data:AKK/shared/features/trace/v01/features
+  splits: [tuning]
+  outcomes: researcher-data:AKK/shared/outcomes/trace/atc_level_6
+
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+outcomes:
+  A01AA:
+    case_sensitive: false
+    match:
+      - - M/A01AA
+        - RM/A01AA
+    match_how: startswith
+    type:
+      - code
+  A01AB:
+    case_sensitive: false
+    match:
+      - - M/A01AB
+        - RM/A01AB
+    match_how: startswith
+    type:
+      - code
+  A01AC:
+    case_sensitive: false
+    match:
+      - - M/A01AC
+        - RM/A01AC
+    match_how: startswith
+    type:
+      - code
+  A01AD:
+    case_sensitive: false
+    match:
+      - - M/A01AD
+        - RM/A01AD
+    match_how: startswith
+    type:
+      - code
+  A02AA:
+    case_sensitive: false
+    match:
+      - - M/A02AA
+        - RM/A02AA
+    match_how: startswith
+    type:
+      - code
+  A02AB:
+    case_sensitive: false
+    match:
+      - - M/A02AB
+        - RM/A02AB
+    match_how: startswith
+    type:
+      - code
+  A02AC:
+    case_sensitive: false
+    match:
+      - - M/A02AC
+        - RM/A02AC
+    match_how: startswith
+    type:
+      - code
+  A02AD:
+    case_sensitive: false
+    match:
+      - - M/A02AD
+        - RM/A02AD
+    match_how: startswith
+    type:
+      - code
+  A02AF:
+    case_sensitive: false
+    match:
+      - - M/A02AF
+        - RM/A02AF
+    match_how: startswith
+    type:
+      - code
+  A02AG:
+    case_sensitive: false
+    match:
+      - - M/A02AG
+        - RM/A02AG
+    match_how: startswith
+    type:
+      - code
+  A02AH:
+    case_sensitive: false
+    match:
+      - - M/A02AH
+        - RM/A02AH
+    match_how: startswith
+    type:
+      - code
+  A02AX:
+    case_sensitive: false
+    match:
+      - - M/A02AX
+        - RM/A02AX
+    match_how: startswith
+    type:
+      - code
+  A02BA:
+    case_sensitive: false
+    match:
+      - - M/A02BA
+        - RM/A02BA
+    match_how: startswith
+    type:
+      - code
+  A02BB:
+    case_sensitive: false
+    match:
+      - - M/A02BB
+        - RM/A02BB
+    match_how: startswith
+    type:
+      - code
+  A02BC:
+    case_sensitive: false
+    match:
+      - - M/A02BC
+        - RM/A02BC
+    match_how: startswith
+    type:
+      - code
+  A02BD:
+    case_sensitive: false
+    match:
+      - - M/A02BD
+        - RM/A02BD
+    match_how: startswith
+    type:
+      - code
+  A02BX:
+    case_sensitive: false
+    match:
+      - - M/A02BX
+        - RM/A02BX
+    match_how: startswith
+    type:
+      - code
+  A02X:
+    case_sensitive: false
+    match:
+      - - M/A02X
+        - RM/A02X
+    match_how: startswith
+    type:
+      - code
+  A03AA:
+    case_sensitive: false
+    match:
+      - - M/A03AA
+        - RM/A03AA
+    match_how: startswith
+    type:
+      - code
+  A03AB:
+    case_sensitive: false
+    match:
+      - - M/A03AB
+        - RM/A03AB
+    match_how: startswith
+    type:
+      - code
+  A03AC:
+    case_sensitive: false
+    match:
+      - - M/A03AC
+        - RM/A03AC
+    match_how: startswith
+    type:
+      - code
+  A03AD:
+    case_sensitive: false
+    match:
+      - - M/A03AD
+        - RM/A03AD
+    match_how: startswith
+    type:
+      - code
+  A03AE:
+    case_sensitive: false
+    match:
+      - - M/A03AE
+        - RM/A03AE
+    match_how: startswith
+    type:
+      - code
+  A03AX:
+    case_sensitive: false
+    match:
+      - - M/A03AX
+        - RM/A03AX
+    match_how: startswith
+    type:
+      - code
+  A03BA:
+    case_sensitive: false
+    match:
+      - - M/A03BA
+        - RM/A03BA
+    match_how: startswith
+    type:
+      - code
+  A03BB:
+    case_sensitive: false
+    match:
+      - - M/A03BB
+        - RM/A03BB
+    match_how: startswith
+    type:
+      - code
+  A03CA:
+    case_sensitive: false
+    match:
+      - - M/A03CA
+        - RM/A03CA
+    match_how: startswith
+    type:
+      - code
+  A03CB:
+    case_sensitive: false
+    match:
+      - - M/A03CB
+        - RM/A03CB
+    match_how: startswith
+    type:
+      - code
+  A03CC:
+    case_sensitive: false
+    match:
+      - - M/A03CC
+        - RM/A03CC
+    match_how: startswith
+    type:
+      - code
+  A03DA:
+    case_sensitive: false
+    match:
+      - - M/A03DA
+        - RM/A03DA
+    match_how: startswith
+    type:
+      - code
+  A03DB:
+    case_sensitive: false
+    match:
+      - - M/A03DB
+        - RM/A03DB
+    match_how: startswith
+    type:
+      - code
+  A03DC:
+    case_sensitive: false
+    match:
+      - - M/A03DC
+        - RM/A03DC
+    match_how: startswith
+    type:
+      - code
+  A03EA:
+    case_sensitive: false
+    match:
+      - - M/A03EA
+        - RM/A03EA
+    match_how: startswith
+    type:
+      - code
+  A03ED:
+    case_sensitive: false
+    match:
+      - - M/A03ED
+        - RM/A03ED
+    match_how: startswith
+    type:
+      - code
+  A03FA:
+    case_sensitive: false
+    match:
+      - - M/A03FA
+        - RM/A03FA
+    match_how: startswith
+    type:
+      - code
+  A04AA:
+    case_sensitive: false
+    match:
+      - - M/A04AA
+        - RM/A04AA
+    match_how: startswith
+    type:
+      - code
+  A04AD:
+    case_sensitive: false
+    match:
+      - - M/A04AD
+        - RM/A04AD
+    match_how: startswith
+    type:
+      - code
+  A05AA:
+    case_sensitive: false
+    match:
+      - - M/A05AA
+        - RM/A05AA
+    match_how: startswith
+    type:
+      - code
+  A05AB:
+    case_sensitive: false
+    match:
+      - - M/A05AB
+        - RM/A05AB
+    match_how: startswith
+    type:
+      - code
+  A05AX:
+    case_sensitive: false
+    match:
+      - - M/A05AX
+        - RM/A05AX
+    match_how: startswith
+    type:
+      - code
+  A05BA:
+    case_sensitive: false
+    match:
+      - - M/A05BA
+        - RM/A05BA
+    match_how: startswith
+    type:
+      - code
+  A05C:
+    case_sensitive: false
+    match:
+      - - M/A05C
+        - RM/A05C
+    match_how: startswith
+    type:
+      - code
+  A06AA:
+    case_sensitive: false
+    match:
+      - - M/A06AA
+        - RM/A06AA
+    match_how: startswith
+    type:
+      - code
+  A06AB:
+    case_sensitive: false
+    match:
+      - - M/A06AB
+        - RM/A06AB
+    match_how: startswith
+    type:
+      - code
+  A06AC:
+    case_sensitive: false
+    match:
+      - - M/A06AC
+        - RM/A06AC
+    match_how: startswith
+    type:
+      - code
+  A06AD:
+    case_sensitive: false
+    match:
+      - - M/A06AD
+        - RM/A06AD
+    match_how: startswith
+    type:
+      - code
+  A06AG:
+    case_sensitive: false
+    match:
+      - - M/A06AG
+        - RM/A06AG
+    match_how: startswith
+    type:
+      - code
+  A06AH:
+    case_sensitive: false
+    match:
+      - - M/A06AH
+        - RM/A06AH
+    match_how: startswith
+    type:
+      - code
+  A06AX:
+    case_sensitive: false
+    match:
+      - - M/A06AX
+        - RM/A06AX
+    match_how: startswith
+    type:
+      - code
+  A07AA:
+    case_sensitive: false
+    match:
+      - - M/A07AA
+        - RM/A07AA
+    match_how: startswith
+    type:
+      - code
+  A07AB:
+    case_sensitive: false
+    match:
+      - - M/A07AB
+        - RM/A07AB
+    match_how: startswith
+    type:
+      - code
+  A07AC:
+    case_sensitive: false
+    match:
+      - - M/A07AC
+        - RM/A07AC
+    match_how: startswith
+    type:
+      - code
+  A07AX:
+    case_sensitive: false
+    match:
+      - - M/A07AX
+        - RM/A07AX
+    match_how: startswith
+    type:
+      - code
+  A07BA:
+    case_sensitive: false
+    match:
+      - - M/A07BA
+        - RM/A07BA
+    match_how: startswith
+    type:
+      - code
+  A07BB:
+    case_sensitive: false
+    match:
+      - - M/A07BB
+        - RM/A07BB
+    match_how: startswith
+    type:
+      - code
+  A07BC:
+    case_sensitive: false
+    match:
+      - - M/A07BC
+        - RM/A07BC
+    match_how: startswith
+    type:
+      - code
+  A07CA:
+    case_sensitive: false
+    match:
+      - - M/A07CA
+        - RM/A07CA
+    match_how: startswith
+    type:
+      - code
+  A07DA:
+    case_sensitive: false
+    match:
+      - - M/A07DA
+        - RM/A07DA
+    match_how: startswith
+    type:
+      - code
+  A07EA:
+    case_sensitive: false
+    match:
+      - - M/A07EA
+        - RM/A07EA
+    match_how: startswith
+    type:
+      - code
+  A07EB:
+    case_sensitive: false
+    match:
+      - - M/A07EB
+        - RM/A07EB
+    match_how: startswith
+    type:
+      - code
+  A07EC:
+    case_sensitive: false
+    match:
+      - - M/A07EC
+        - RM/A07EC
+    match_how: startswith
+    type:
+      - code
+  A07FA:
+    case_sensitive: false
+    match:
+      - - M/A07FA
+        - RM/A07FA
+    match_how: startswith
+    type:
+      - code
+  A07XA:
+    case_sensitive: false
+    match:
+      - - M/A07XA
+        - RM/A07XA
+    match_how: startswith
+    type:
+      - code
+  A08AA:
+    case_sensitive: false
+    match:
+      - - M/A08AA
+        - RM/A08AA
+    match_how: startswith
+    type:
+      - code
+  A08AB:
+    case_sensitive: false
+    match:
+      - - M/A08AB
+        - RM/A08AB
+    match_how: startswith
+    type:
+      - code
+  A08AX:
+    case_sensitive: false
+    match:
+      - - M/A08AX
+        - RM/A08AX
+    match_how: startswith
+    type:
+      - code
+  A09AA:
+    case_sensitive: false
+    match:
+      - - M/A09AA
+        - RM/A09AA
+    match_how: startswith
+    type:
+      - code
+  A09AB:
+    case_sensitive: false
+    match:
+      - - M/A09AB
+        - RM/A09AB
+    match_how: startswith
+    type:
+      - code
+  A09AC:
+    case_sensitive: false
+    match:
+      - - M/A09AC
+        - RM/A09AC
+    match_how: startswith
+    type:
+      - code
+  A10AB:
+    case_sensitive: false
+    match:
+      - - M/A10AB
+        - RM/A10AB
+    match_how: startswith
+    type:
+      - code
+  A10AC:
+    case_sensitive: false
+    match:
+      - - M/A10AC
+        - RM/A10AC
+    match_how: startswith
+    type:
+      - code
+  A10AD:
+    case_sensitive: false
+    match:
+      - - M/A10AD
+        - RM/A10AD
+    match_how: startswith
+    type:
+      - code
+  A10AE:
+    case_sensitive: false
+    match:
+      - - M/A10AE
+        - RM/A10AE
+    match_how: startswith
+    type:
+      - code
+  A10AF:
+    case_sensitive: false
+    match:
+      - - M/A10AF
+        - RM/A10AF
+    match_how: startswith
+    type:
+      - code
+  A10BA:
+    case_sensitive: false
+    match:
+      - - M/A10BA
+        - RM/A10BA
+    match_how: startswith
+    type:
+      - code
+  A10BB:
+    case_sensitive: false
+    match:
+      - - M/A10BB
+        - RM/A10BB
+    match_how: startswith
+    type:
+      - code
+  A10BC:
+    case_sensitive: false
+    match:
+      - - M/A10BC
+        - RM/A10BC
+    match_how: startswith
+    type:
+      - code
+  A10BD:
+    case_sensitive: false
+    match:
+      - - M/A10BD
+        - RM/A10BD
+    match_how: startswith
+    type:
+      - code
+  A10BF:
+    case_sensitive: false
+    match:
+      - - M/A10BF
+        - RM/A10BF
+    match_how: startswith
+    type:
+      - code
+  A10BG:
+    case_sensitive: false
+    match:
+      - - M/A10BG
+        - RM/A10BG
+    match_how: startswith
+    type:
+      - code
+  A10BH:
+    case_sensitive: false
+    match:
+      - - M/A10BH
+        - RM/A10BH
+    match_how: startswith
+    type:
+      - code
+  A10BJ:
+    case_sensitive: false
+    match:
+      - - M/A10BJ
+        - RM/A10BJ
+    match_how: startswith
+    type:
+      - code
+  A10BK:
+    case_sensitive: false
+    match:
+      - - M/A10BK
+        - RM/A10BK
+    match_how: startswith
+    type:
+      - code
+  A10BX:
+    case_sensitive: false
+    match:
+      - - M/A10BX
+        - RM/A10BX
+    match_how: startswith
+    type:
+      - code
+  A10XA:
+    case_sensitive: false
+    match:
+      - - M/A10XA
+        - RM/A10XA
+    match_how: startswith
+    type:
+      - code
+  A10XX:
+    case_sensitive: false
+    match:
+      - - M/A10XX
+        - RM/A10XX
+    match_how: startswith
+    type:
+      - code
+  A11AA:
+    case_sensitive: false
+    match:
+      - - M/A11AA
+        - RM/A11AA
+    match_how: startswith
+    type:
+      - code
+  A11AB:
+    case_sensitive: false
+    match:
+      - - M/A11AB
+        - RM/A11AB
+    match_how: startswith
+    type:
+      - code
+  A11BA:
+    case_sensitive: false
+    match:
+      - - M/A11BA
+        - RM/A11BA
+    match_how: startswith
+    type:
+      - code
+  A11CA:
+    case_sensitive: false
+    match:
+      - - M/A11CA
+        - RM/A11CA
+    match_how: startswith
+    type:
+      - code
+  A11CB:
+    case_sensitive: false
+    match:
+      - - M/A11CB
+        - RM/A11CB
+    match_how: startswith
+    type:
+      - code
+  A11CC:
+    case_sensitive: false
+    match:
+      - - M/A11CC
+        - RM/A11CC
+    match_how: startswith
+    type:
+      - code
+  A11DA:
+    case_sensitive: false
+    match:
+      - - M/A11DA
+        - RM/A11DA
+    match_how: startswith
+    type:
+      - code
+  A11DB:
+    case_sensitive: false
+    match:
+      - - M/A11DB
+        - RM/A11DB
+    match_how: startswith
+    type:
+      - code
+  A11EA:
+    case_sensitive: false
+    match:
+      - - M/A11EA
+        - RM/A11EA
+    match_how: startswith
+    type:
+      - code
+  A11EB:
+    case_sensitive: false
+    match:
+      - - M/A11EB
+        - RM/A11EB
+    match_how: startswith
+    type:
+      - code
+  A11EC:
+    case_sensitive: false
+    match:
+      - - M/A11EC
+        - RM/A11EC
+    match_how: startswith
+    type:
+      - code
+  A11ED:
+    case_sensitive: false
+    match:
+      - - M/A11ED
+        - RM/A11ED
+    match_how: startswith
+    type:
+      - code
+  A11EX:
+    case_sensitive: false
+    match:
+      - - M/A11EX
+        - RM/A11EX
+    match_how: startswith
+    type:
+      - code
+  A11GA:
+    case_sensitive: false
+    match:
+      - - M/A11GA
+        - RM/A11GA
+    match_how: startswith
+    type:
+      - code
+  A11GB:
+    case_sensitive: false
+    match:
+      - - M/A11GB
+        - RM/A11GB
+    match_how: startswith
+    type:
+      - code
+  A11HA:
+    case_sensitive: false
+    match:
+      - - M/A11HA
+        - RM/A11HA
+    match_how: startswith
+    type:
+      - code
+  A11JA:
+    case_sensitive: false
+    match:
+      - - M/A11JA
+        - RM/A11JA
+    match_how: startswith
+    type:
+      - code
+  A11JB:
+    case_sensitive: false
+    match:
+      - - M/A11JB
+        - RM/A11JB
+    match_how: startswith
+    type:
+      - code
+  A11JC:
+    case_sensitive: false
+    match:
+      - - M/A11JC
+        - RM/A11JC
+    match_how: startswith
+    type:
+      - code
+  A12AA:
+    case_sensitive: false
+    match:
+      - - M/A12AA
+        - RM/A12AA
+    match_how: startswith
+    type:
+      - code
+  A12AX:
+    case_sensitive: false
+    match:
+      - - M/A12AX
+        - RM/A12AX
+    match_how: startswith
+    type:
+      - code
+  A12BA:
+    case_sensitive: false
+    match:
+      - - M/A12BA
+        - RM/A12BA
+    match_how: startswith
+    type:
+      - code
+  A12CA:
+    case_sensitive: false
+    match:
+      - - M/A12CA
+        - RM/A12CA
+    match_how: startswith
+    type:
+      - code
+  A12CB:
+    case_sensitive: false
+    match:
+      - - M/A12CB
+        - RM/A12CB
+    match_how: startswith
+    type:
+      - code
+  A12CC:
+    case_sensitive: false
+    match:
+      - - M/A12CC
+        - RM/A12CC
+    match_how: startswith
+    type:
+      - code
+  A12CD:
+    case_sensitive: false
+    match:
+      - - M/A12CD
+        - RM/A12CD
+    match_how: startswith
+    type:
+      - code
+  A12CE:
+    case_sensitive: false
+    match:
+      - - M/A12CE
+        - RM/A12CE
+    match_how: startswith
+    type:
+      - code
+  A12CX:
+    case_sensitive: false
+    match:
+      - - M/A12CX
+        - RM/A12CX
+    match_how: startswith
+    type:
+      - code
+  A13A:
+    case_sensitive: false
+    match:
+      - - M/A13A
+        - RM/A13A
+    match_how: startswith
+    type:
+      - code
+  A14AA:
+    case_sensitive: false
+    match:
+      - - M/A14AA
+        - RM/A14AA
+    match_how: startswith
+    type:
+      - code
+  A14AB:
+    case_sensitive: false
+    match:
+      - - M/A14AB
+        - RM/A14AB
+    match_how: startswith
+    type:
+      - code
+  A14B:
+    case_sensitive: false
+    match:
+      - - M/A14B
+        - RM/A14B
+    match_how: startswith
+    type:
+      - code
+  A15:
+    case_sensitive: false
+    match:
+      - - M/A15
+        - RM/A15
+    match_how: startswith
+    type:
+      - code
+  A16AA:
+    case_sensitive: false
+    match:
+      - - M/A16AA
+        - RM/A16AA
+    match_how: startswith
+    type:
+      - code
+  A16AB:
+    case_sensitive: false
+    match:
+      - - M/A16AB
+        - RM/A16AB
+    match_how: startswith
+    type:
+      - code
+  A16AX:
+    case_sensitive: false
+    match:
+      - - M/A16AX
+        - RM/A16AX
+    match_how: startswith
+    type:
+      - code
+  B01AA:
+    case_sensitive: false
+    match:
+      - - M/B01AA
+        - RM/B01AA
+    match_how: startswith
+    type:
+      - code
+  B01AB:
+    case_sensitive: false
+    match:
+      - - M/B01AB
+        - RM/B01AB
+    match_how: startswith
+    type:
+      - code
+  B01AC:
+    case_sensitive: false
+    match:
+      - - M/B01AC
+        - RM/B01AC
+    match_how: startswith
+    type:
+      - code
+  B01AD:
+    case_sensitive: false
+    match:
+      - - M/B01AD
+        - RM/B01AD
+    match_how: startswith
+    type:
+      - code
+  B01AE:
+    case_sensitive: false
+    match:
+      - - M/B01AE
+        - RM/B01AE
+    match_how: startswith
+    type:
+      - code
+  B01AF:
+    case_sensitive: false
+    match:
+      - - M/B01AF
+        - RM/B01AF
+    match_how: startswith
+    type:
+      - code
+  B01AX:
+    case_sensitive: false
+    match:
+      - - M/B01AX
+        - RM/B01AX
+    match_how: startswith
+    type:
+      - code
+  B02AA:
+    case_sensitive: false
+    match:
+      - - M/B02AA
+        - RM/B02AA
+    match_how: startswith
+    type:
+      - code
+  B02AB:
+    case_sensitive: false
+    match:
+      - - M/B02AB
+        - RM/B02AB
+    match_how: startswith
+    type:
+      - code
+  B02BA:
+    case_sensitive: false
+    match:
+      - - M/B02BA
+        - RM/B02BA
+    match_how: startswith
+    type:
+      - code
+  B02BB:
+    case_sensitive: false
+    match:
+      - - M/B02BB
+        - RM/B02BB
+    match_how: startswith
+    type:
+      - code
+  B02BC:
+    case_sensitive: false
+    match:
+      - - M/B02BC
+        - RM/B02BC
+    match_how: startswith
+    type:
+      - code
+  B02BD:
+    case_sensitive: false
+    match:
+      - - M/B02BD
+        - RM/B02BD
+    match_how: startswith
+    type:
+      - code
+  B02BX:
+    case_sensitive: false
+    match:
+      - - M/B02BX
+        - RM/B02BX
+    match_how: startswith
+    type:
+      - code
+  B03AA:
+    case_sensitive: false
+    match:
+      - - M/B03AA
+        - RM/B03AA
+    match_how: startswith
+    type:
+      - code
+  B03AB:
+    case_sensitive: false
+    match:
+      - - M/B03AB
+        - RM/B03AB
+    match_how: startswith
+    type:
+      - code
+  B03AC:
+    case_sensitive: false
+    match:
+      - - M/B03AC
+        - RM/B03AC
+    match_how: startswith
+    type:
+      - code
+  B03AD:
+    case_sensitive: false
+    match:
+      - - M/B03AD
+        - RM/B03AD
+    match_how: startswith
+    type:
+      - code
+  B03AE:
+    case_sensitive: false
+    match:
+      - - M/B03AE
+        - RM/B03AE
+    match_how: startswith
+    type:
+      - code
+  B03BA:
+    case_sensitive: false
+    match:
+      - - M/B03BA
+        - RM/B03BA
+    match_how: startswith
+    type:
+      - code
+  B03BB:
+    case_sensitive: false
+    match:
+      - - M/B03BB
+        - RM/B03BB
+    match_how: startswith
+    type:
+      - code
+  B03XA:
+    case_sensitive: false
+    match:
+      - - M/B03XA
+        - RM/B03XA
+    match_how: startswith
+    type:
+      - code
+  B05AA:
+    case_sensitive: false
+    match:
+      - - M/B05AA
+        - RM/B05AA
+    match_how: startswith
+    type:
+      - code
+  B05AX:
+    case_sensitive: false
+    match:
+      - - M/B05AX
+        - RM/B05AX
+    match_how: startswith
+    type:
+      - code
+  B05BA:
+    case_sensitive: false
+    match:
+      - - M/B05BA
+        - RM/B05BA
+    match_how: startswith
+    type:
+      - code
+  B05BB:
+    case_sensitive: false
+    match:
+      - - M/B05BB
+        - RM/B05BB
+    match_how: startswith
+    type:
+      - code
+  B05BC:
+    case_sensitive: false
+    match:
+      - - M/B05BC
+        - RM/B05BC
+    match_how: startswith
+    type:
+      - code
+  B05CA:
+    case_sensitive: false
+    match:
+      - - M/B05CA
+        - RM/B05CA
+    match_how: startswith
+    type:
+      - code
+  B05CB:
+    case_sensitive: false
+    match:
+      - - M/B05CB
+        - RM/B05CB
+    match_how: startswith
+    type:
+      - code
+  B05CX:
+    case_sensitive: false
+    match:
+      - - M/B05CX
+        - RM/B05CX
+    match_how: startswith
+    type:
+      - code
+  B05DA:
+    case_sensitive: false
+    match:
+      - - M/B05DA
+        - RM/B05DA
+    match_how: startswith
+    type:
+      - code
+  B05DB:
+    case_sensitive: false
+    match:
+      - - M/B05DB
+        - RM/B05DB
+    match_how: startswith
+    type:
+      - code
+  B05XA:
+    case_sensitive: false
+    match:
+      - - M/B05XA
+        - RM/B05XA
+    match_how: startswith
+    type:
+      - code
+  B05XB:
+    case_sensitive: false
+    match:
+      - - M/B05XB
+        - RM/B05XB
+    match_how: startswith
+    type:
+      - code
+  B05XC:
+    case_sensitive: false
+    match:
+      - - M/B05XC
+        - RM/B05XC
+    match_how: startswith
+    type:
+      - code
+  B05XX:
+    case_sensitive: false
+    match:
+      - - M/B05XX
+        - RM/B05XX
+    match_how: startswith
+    type:
+      - code
+  B05ZA:
+    case_sensitive: false
+    match:
+      - - M/B05ZA
+        - RM/B05ZA
+    match_how: startswith
+    type:
+      - code
+  B05ZB:
+    case_sensitive: false
+    match:
+      - - M/B05ZB
+        - RM/B05ZB
+    match_how: startswith
+    type:
+      - code
+  B06AA:
+    case_sensitive: false
+    match:
+      - - M/B06AA
+        - RM/B06AA
+    match_how: startswith
+    type:
+      - code
+  B06AB:
+    case_sensitive: false
+    match:
+      - - M/B06AB
+        - RM/B06AB
+    match_how: startswith
+    type:
+      - code
+  B06AC:
+    case_sensitive: false
+    match:
+      - - M/B06AC
+        - RM/B06AC
+    match_how: startswith
+    type:
+      - code
+  B06AX:
+    case_sensitive: false
+    match:
+      - - M/B06AX
+        - RM/B06AX
+    match_how: startswith
+    type:
+      - code
+  C01AA:
+    case_sensitive: false
+    match:
+      - - M/C01AA
+        - RM/C01AA
+    match_how: startswith
+    type:
+      - code
+  C01AB:
+    case_sensitive: false
+    match:
+      - - M/C01AB
+        - RM/C01AB
+    match_how: startswith
+    type:
+      - code
+  C01AC:
+    case_sensitive: false
+    match:
+      - - M/C01AC
+        - RM/C01AC
+    match_how: startswith
+    type:
+      - code
+  C01AX:
+    case_sensitive: false
+    match:
+      - - M/C01AX
+        - RM/C01AX
+    match_how: startswith
+    type:
+      - code
+  C01BA:
+    case_sensitive: false
+    match:
+      - - M/C01BA
+        - RM/C01BA
+    match_how: startswith
+    type:
+      - code
+  C01BB:
+    case_sensitive: false
+    match:
+      - - M/C01BB
+        - RM/C01BB
+    match_how: startswith
+    type:
+      - code
+  C01BC:
+    case_sensitive: false
+    match:
+      - - M/C01BC
+        - RM/C01BC
+    match_how: startswith
+    type:
+      - code
+  C01BD:
+    case_sensitive: false
+    match:
+      - - M/C01BD
+        - RM/C01BD
+    match_how: startswith
+    type:
+      - code
+  C01BG:
+    case_sensitive: false
+    match:
+      - - M/C01BG
+        - RM/C01BG
+    match_how: startswith
+    type:
+      - code
+  C01CA:
+    case_sensitive: false
+    match:
+      - - M/C01CA
+        - RM/C01CA
+    match_how: startswith
+    type:
+      - code
+  C01CE:
+    case_sensitive: false
+    match:
+      - - M/C01CE
+        - RM/C01CE
+    match_how: startswith
+    type:
+      - code
+  C01CX:
+    case_sensitive: false
+    match:
+      - - M/C01CX
+        - RM/C01CX
+    match_how: startswith
+    type:
+      - code
+  C01DA:
+    case_sensitive: false
+    match:
+      - - M/C01DA
+        - RM/C01DA
+    match_how: startswith
+    type:
+      - code
+  C01DB:
+    case_sensitive: false
+    match:
+      - - M/C01DB
+        - RM/C01DB
+    match_how: startswith
+    type:
+      - code
+  C01DX:
+    case_sensitive: false
+    match:
+      - - M/C01DX
+        - RM/C01DX
+    match_how: startswith
+    type:
+      - code
+  C01EA:
+    case_sensitive: false
+    match:
+      - - M/C01EA
+        - RM/C01EA
+    match_how: startswith
+    type:
+      - code
+  C01EB:
+    case_sensitive: false
+    match:
+      - - M/C01EB
+        - RM/C01EB
+    match_how: startswith
+    type:
+      - code
+  C01EX:
+    case_sensitive: false
+    match:
+      - - M/C01EX
+        - RM/C01EX
+    match_how: startswith
+    type:
+      - code
+  C02AA:
+    case_sensitive: false
+    match:
+      - - M/C02AA
+        - RM/C02AA
+    match_how: startswith
+    type:
+      - code
+  C02AB:
+    case_sensitive: false
+    match:
+      - - M/C02AB
+        - RM/C02AB
+    match_how: startswith
+    type:
+      - code
+  C02AC:
+    case_sensitive: false
+    match:
+      - - M/C02AC
+        - RM/C02AC
+    match_how: startswith
+    type:
+      - code
+  C02BA:
+    case_sensitive: false
+    match:
+      - - M/C02BA
+        - RM/C02BA
+    match_how: startswith
+    type:
+      - code
+  C02BB:
+    case_sensitive: false
+    match:
+      - - M/C02BB
+        - RM/C02BB
+    match_how: startswith
+    type:
+      - code
+  C02BC:
+    case_sensitive: false
+    match:
+      - - M/C02BC
+        - RM/C02BC
+    match_how: startswith
+    type:
+      - code
+  C02CA:
+    case_sensitive: false
+    match:
+      - - M/C02CA
+        - RM/C02CA
+    match_how: startswith
+    type:
+      - code
+  C02CC:
+    case_sensitive: false
+    match:
+      - - M/C02CC
+        - RM/C02CC
+    match_how: startswith
+    type:
+      - code
+  C02DA:
+    case_sensitive: false
+    match:
+      - - M/C02DA
+        - RM/C02DA
+    match_how: startswith
+    type:
+      - code
+  C02DB:
+    case_sensitive: false
+    match:
+      - - M/C02DB
+        - RM/C02DB
+    match_how: startswith
+    type:
+      - code
+  C02DC:
+    case_sensitive: false
+    match:
+      - - M/C02DC
+        - RM/C02DC
+    match_how: startswith
+    type:
+      - code
+  C02DD:
+    case_sensitive: false
+    match:
+      - - M/C02DD
+        - RM/C02DD
+    match_how: startswith
+    type:
+      - code
+  C02DG:
+    case_sensitive: false
+    match:
+      - - M/C02DG
+        - RM/C02DG
+    match_how: startswith
+    type:
+      - code
+  C02KA:
+    case_sensitive: false
+    match:
+      - - M/C02KA
+        - RM/C02KA
+    match_how: startswith
+    type:
+      - code
+  C02KB:
+    case_sensitive: false
+    match:
+      - - M/C02KB
+        - RM/C02KB
+    match_how: startswith
+    type:
+      - code
+  C02KC:
+    case_sensitive: false
+    match:
+      - - M/C02KC
+        - RM/C02KC
+    match_how: startswith
+    type:
+      - code
+  C02KD:
+    case_sensitive: false
+    match:
+      - - M/C02KD
+        - RM/C02KD
+    match_how: startswith
+    type:
+      - code
+  C02KN:
+    case_sensitive: false
+    match:
+      - - M/C02KN
+        - RM/C02KN
+    match_how: startswith
+    type:
+      - code
+  C02KX:
+    case_sensitive: false
+    match:
+      - - M/C02KX
+        - RM/C02KX
+    match_how: startswith
+    type:
+      - code
+  C02LA:
+    case_sensitive: false
+    match:
+      - - M/C02LA
+        - RM/C02LA
+    match_how: startswith
+    type:
+      - code
+  C02LB:
+    case_sensitive: false
+    match:
+      - - M/C02LB
+        - RM/C02LB
+    match_how: startswith
+    type:
+      - code
+  C02LC:
+    case_sensitive: false
+    match:
+      - - M/C02LC
+        - RM/C02LC
+    match_how: startswith
+    type:
+      - code
+  C02LE:
+    case_sensitive: false
+    match:
+      - - M/C02LE
+        - RM/C02LE
+    match_how: startswith
+    type:
+      - code
+  C02LF:
+    case_sensitive: false
+    match:
+      - - M/C02LF
+        - RM/C02LF
+    match_how: startswith
+    type:
+      - code
+  C02LG:
+    case_sensitive: false
+    match:
+      - - M/C02LG
+        - RM/C02LG
+    match_how: startswith
+    type:
+      - code
+  C02LK:
+    case_sensitive: false
+    match:
+      - - M/C02LK
+        - RM/C02LK
+    match_how: startswith
+    type:
+      - code
+  C02LL:
+    case_sensitive: false
+    match:
+      - - M/C02LL
+        - RM/C02LL
+    match_how: startswith
+    type:
+      - code
+  C02LN:
+    case_sensitive: false
+    match:
+      - - M/C02LN
+        - RM/C02LN
+    match_how: startswith
+    type:
+      - code
+  C02LX:
+    case_sensitive: false
+    match:
+      - - M/C02LX
+        - RM/C02LX
+    match_how: startswith
+    type:
+      - code
+  C02N:
+    case_sensitive: false
+    match:
+      - - M/C02N
+        - RM/C02N
+    match_how: startswith
+    type:
+      - code
+  C03AA:
+    case_sensitive: false
+    match:
+      - - M/C03AA
+        - RM/C03AA
+    match_how: startswith
+    type:
+      - code
+  C03AB:
+    case_sensitive: false
+    match:
+      - - M/C03AB
+        - RM/C03AB
+    match_how: startswith
+    type:
+      - code
+  C03AH:
+    case_sensitive: false
+    match:
+      - - M/C03AH
+        - RM/C03AH
+    match_how: startswith
+    type:
+      - code
+  C03AX:
+    case_sensitive: false
+    match:
+      - - M/C03AX
+        - RM/C03AX
+    match_how: startswith
+    type:
+      - code
+  C03BA:
+    case_sensitive: false
+    match:
+      - - M/C03BA
+        - RM/C03BA
+    match_how: startswith
+    type:
+      - code
+  C03BB:
+    case_sensitive: false
+    match:
+      - - M/C03BB
+        - RM/C03BB
+    match_how: startswith
+    type:
+      - code
+  C03BC:
+    case_sensitive: false
+    match:
+      - - M/C03BC
+        - RM/C03BC
+    match_how: startswith
+    type:
+      - code
+  C03BD:
+    case_sensitive: false
+    match:
+      - - M/C03BD
+        - RM/C03BD
+    match_how: startswith
+    type:
+      - code
+  C03BK:
+    case_sensitive: false
+    match:
+      - - M/C03BK
+        - RM/C03BK
+    match_how: startswith
+    type:
+      - code
+  C03BX:
+    case_sensitive: false
+    match:
+      - - M/C03BX
+        - RM/C03BX
+    match_how: startswith
+    type:
+      - code
+  C03CA:
+    case_sensitive: false
+    match:
+      - - M/C03CA
+        - RM/C03CA
+    match_how: startswith
+    type:
+      - code
+  C03CB:
+    case_sensitive: false
+    match:
+      - - M/C03CB
+        - RM/C03CB
+    match_how: startswith
+    type:
+      - code
+  C03CC:
+    case_sensitive: false
+    match:
+      - - M/C03CC
+        - RM/C03CC
+    match_how: startswith
+    type:
+      - code
+  C03CD:
+    case_sensitive: false
+    match:
+      - - M/C03CD
+        - RM/C03CD
+    match_how: startswith
+    type:
+      - code
+  C03CX:
+    case_sensitive: false
+    match:
+      - - M/C03CX
+        - RM/C03CX
+    match_how: startswith
+    type:
+      - code
+  C03DA:
+    case_sensitive: false
+    match:
+      - - M/C03DA
+        - RM/C03DA
+    match_how: startswith
+    type:
+      - code
+  C03DB:
+    case_sensitive: false
+    match:
+      - - M/C03DB
+        - RM/C03DB
+    match_how: startswith
+    type:
+      - code
+  C03EA:
+    case_sensitive: false
+    match:
+      - - M/C03EA
+        - RM/C03EA
+    match_how: startswith
+    type:
+      - code
+  C03EB:
+    case_sensitive: false
+    match:
+      - - M/C03EB
+        - RM/C03EB
+    match_how: startswith
+    type:
+      - code
+  C03XA:
+    case_sensitive: false
+    match:
+      - - M/C03XA
+        - RM/C03XA
+    match_how: startswith
+    type:
+      - code
+  C04AA:
+    case_sensitive: false
+    match:
+      - - M/C04AA
+        - RM/C04AA
+    match_how: startswith
+    type:
+      - code
+  C04AB:
+    case_sensitive: false
+    match:
+      - - M/C04AB
+        - RM/C04AB
+    match_how: startswith
+    type:
+      - code
+  C04AC:
+    case_sensitive: false
+    match:
+      - - M/C04AC
+        - RM/C04AC
+    match_how: startswith
+    type:
+      - code
+  C04AD:
+    case_sensitive: false
+    match:
+      - - M/C04AD
+        - RM/C04AD
+    match_how: startswith
+    type:
+      - code
+  C04AE:
+    case_sensitive: false
+    match:
+      - - M/C04AE
+        - RM/C04AE
+    match_how: startswith
+    type:
+      - code
+  C04AF:
+    case_sensitive: false
+    match:
+      - - M/C04AF
+        - RM/C04AF
+    match_how: startswith
+    type:
+      - code
+  C04AX:
+    case_sensitive: false
+    match:
+      - - M/C04AX
+        - RM/C04AX
+    match_how: startswith
+    type:
+      - code
+  C05AA:
+    case_sensitive: false
+    match:
+      - - M/C05AA
+        - RM/C05AA
+    match_how: startswith
+    type:
+      - code
+  C05AB:
+    case_sensitive: false
+    match:
+      - - M/C05AB
+        - RM/C05AB
+    match_how: startswith
+    type:
+      - code
+  C05AD:
+    case_sensitive: false
+    match:
+      - - M/C05AD
+        - RM/C05AD
+    match_how: startswith
+    type:
+      - code
+  C05AE:
+    case_sensitive: false
+    match:
+      - - M/C05AE
+        - RM/C05AE
+    match_how: startswith
+    type:
+      - code
+  C05AX:
+    case_sensitive: false
+    match:
+      - - M/C05AX
+        - RM/C05AX
+    match_how: startswith
+    type:
+      - code
+  C05BA:
+    case_sensitive: false
+    match:
+      - - M/C05BA
+        - RM/C05BA
+    match_how: startswith
+    type:
+      - code
+  C05BB:
+    case_sensitive: false
+    match:
+      - - M/C05BB
+        - RM/C05BB
+    match_how: startswith
+    type:
+      - code
+  C05BX:
+    case_sensitive: false
+    match:
+      - - M/C05BX
+        - RM/C05BX
+    match_how: startswith
+    type:
+      - code
+  C05CA:
+    case_sensitive: false
+    match:
+      - - M/C05CA
+        - RM/C05CA
+    match_how: startswith
+    type:
+      - code
+  C05CX:
+    case_sensitive: false
+    match:
+      - - M/C05CX
+        - RM/C05CX
+    match_how: startswith
+    type:
+      - code
+  C05XX:
+    case_sensitive: false
+    match:
+      - - M/C05XX
+        - RM/C05XX
+    match_how: startswith
+    type:
+      - code
+  C07AA:
+    case_sensitive: false
+    match:
+      - - M/C07AA
+        - RM/C07AA
+    match_how: startswith
+    type:
+      - code
+  C07AB:
+    case_sensitive: false
+    match:
+      - - M/C07AB
+        - RM/C07AB
+    match_how: startswith
+    type:
+      - code
+  C07AG:
+    case_sensitive: false
+    match:
+      - - M/C07AG
+        - RM/C07AG
+    match_how: startswith
+    type:
+      - code
+  C07BA:
+    case_sensitive: false
+    match:
+      - - M/C07BA
+        - RM/C07BA
+    match_how: startswith
+    type:
+      - code
+  C07BB:
+    case_sensitive: false
+    match:
+      - - M/C07BB
+        - RM/C07BB
+    match_how: startswith
+    type:
+      - code
+  C07BG:
+    case_sensitive: false
+    match:
+      - - M/C07BG
+        - RM/C07BG
+    match_how: startswith
+    type:
+      - code
+  C07CA:
+    case_sensitive: false
+    match:
+      - - M/C07CA
+        - RM/C07CA
+    match_how: startswith
+    type:
+      - code
+  C07CB:
+    case_sensitive: false
+    match:
+      - - M/C07CB
+        - RM/C07CB
+    match_how: startswith
+    type:
+      - code
+  C07CG:
+    case_sensitive: false
+    match:
+      - - M/C07CG
+        - RM/C07CG
+    match_how: startswith
+    type:
+      - code
+  C07DA:
+    case_sensitive: false
+    match:
+      - - M/C07DA
+        - RM/C07DA
+    match_how: startswith
+    type:
+      - code
+  C07DB:
+    case_sensitive: false
+    match:
+      - - M/C07DB
+        - RM/C07DB
+    match_how: startswith
+    type:
+      - code
+  C07EA:
+    case_sensitive: false
+    match:
+      - - M/C07EA
+        - RM/C07EA
+    match_how: startswith
+    type:
+      - code
+  C07EB:
+    case_sensitive: false
+    match:
+      - - M/C07EB
+        - RM/C07EB
+    match_how: startswith
+    type:
+      - code
+  C07FB:
+    case_sensitive: false
+    match:
+      - - M/C07FB
+        - RM/C07FB
+    match_how: startswith
+    type:
+      - code
+  C07FX:
+    case_sensitive: false
+    match:
+      - - M/C07FX
+        - RM/C07FX
+    match_how: startswith
+    type:
+      - code
+  C08CA:
+    case_sensitive: false
+    match:
+      - - M/C08CA
+        - RM/C08CA
+    match_how: startswith
+    type:
+      - code
+  C08CX:
+    case_sensitive: false
+    match:
+      - - M/C08CX
+        - RM/C08CX
+    match_how: startswith
+    type:
+      - code
+  C08DA:
+    case_sensitive: false
+    match:
+      - - M/C08DA
+        - RM/C08DA
+    match_how: startswith
+    type:
+      - code
+  C08DB:
+    case_sensitive: false
+    match:
+      - - M/C08DB
+        - RM/C08DB
+    match_how: startswith
+    type:
+      - code
+  C08EA:
+    case_sensitive: false
+    match:
+      - - M/C08EA
+        - RM/C08EA
+    match_how: startswith
+    type:
+      - code
+  C08EX:
+    case_sensitive: false
+    match:
+      - - M/C08EX
+        - RM/C08EX
+    match_how: startswith
+    type:
+      - code
+  C08GA:
+    case_sensitive: false
+    match:
+      - - M/C08GA
+        - RM/C08GA
+    match_how: startswith
+    type:
+      - code
+  C09AA:
+    case_sensitive: false
+    match:
+      - - M/C09AA
+        - RM/C09AA
+    match_how: startswith
+    type:
+      - code
+  C09BA:
+    case_sensitive: false
+    match:
+      - - M/C09BA
+        - RM/C09BA
+    match_how: startswith
+    type:
+      - code
+  C09BB:
+    case_sensitive: false
+    match:
+      - - M/C09BB
+        - RM/C09BB
+    match_how: startswith
+    type:
+      - code
+  C09BX:
+    case_sensitive: false
+    match:
+      - - M/C09BX
+        - RM/C09BX
+    match_how: startswith
+    type:
+      - code
+  C09CA:
+    case_sensitive: false
+    match:
+      - - M/C09CA
+        - RM/C09CA
+    match_how: startswith
+    type:
+      - code
+  C09DA:
+    case_sensitive: false
+    match:
+      - - M/C09DA
+        - RM/C09DA
+    match_how: startswith
+    type:
+      - code
+  C09DB:
+    case_sensitive: false
+    match:
+      - - M/C09DB
+        - RM/C09DB
+    match_how: startswith
+    type:
+      - code
+  C09DX:
+    case_sensitive: false
+    match:
+      - - M/C09DX
+        - RM/C09DX
+    match_how: startswith
+    type:
+      - code
+  C09XA:
+    case_sensitive: false
+    match:
+      - - M/C09XA
+        - RM/C09XA
+    match_how: startswith
+    type:
+      - code
+  C09XX:
+    case_sensitive: false
+    match:
+      - - M/C09XX
+        - RM/C09XX
+    match_how: startswith
+    type:
+      - code
+  C10AA:
+    case_sensitive: false
+    match:
+      - - M/C10AA
+        - RM/C10AA
+    match_how: startswith
+    type:
+      - code
+  C10AB:
+    case_sensitive: false
+    match:
+      - - M/C10AB
+        - RM/C10AB
+    match_how: startswith
+    type:
+      - code
+  C10AC:
+    case_sensitive: false
+    match:
+      - - M/C10AC
+        - RM/C10AC
+    match_how: startswith
+    type:
+      - code
+  C10AD:
+    case_sensitive: false
+    match:
+      - - M/C10AD
+        - RM/C10AD
+    match_how: startswith
+    type:
+      - code
+  C10AX:
+    case_sensitive: false
+    match:
+      - - M/C10AX
+        - RM/C10AX
+    match_how: startswith
+    type:
+      - code
+  C10BA:
+    case_sensitive: false
+    match:
+      - - M/C10BA
+        - RM/C10BA
+    match_how: startswith
+    type:
+      - code
+  C10BX:
+    case_sensitive: false
+    match:
+      - - M/C10BX
+        - RM/C10BX
+    match_how: startswith
+    type:
+      - code
+  D01AA:
+    case_sensitive: false
+    match:
+      - - M/D01AA
+        - RM/D01AA
+    match_how: startswith
+    type:
+      - code
+  D01AC:
+    case_sensitive: false
+    match:
+      - - M/D01AC
+        - RM/D01AC
+    match_how: startswith
+    type:
+      - code
+  D01AE:
+    case_sensitive: false
+    match:
+      - - M/D01AE
+        - RM/D01AE
+    match_how: startswith
+    type:
+      - code
+  D01BA:
+    case_sensitive: false
+    match:
+      - - M/D01BA
+        - RM/D01BA
+    match_how: startswith
+    type:
+      - code
+  D02AA:
+    case_sensitive: false
+    match:
+      - - M/D02AA
+        - RM/D02AA
+    match_how: startswith
+    type:
+      - code
+  D02AB:
+    case_sensitive: false
+    match:
+      - - M/D02AB
+        - RM/D02AB
+    match_how: startswith
+    type:
+      - code
+  D02AC:
+    case_sensitive: false
+    match:
+      - - M/D02AC
+        - RM/D02AC
+    match_how: startswith
+    type:
+      - code
+  D02AD:
+    case_sensitive: false
+    match:
+      - - M/D02AD
+        - RM/D02AD
+    match_how: startswith
+    type:
+      - code
+  D02AE:
+    case_sensitive: false
+    match:
+      - - M/D02AE
+        - RM/D02AE
+    match_how: startswith
+    type:
+      - code
+  D02AF:
+    case_sensitive: false
+    match:
+      - - M/D02AF
+        - RM/D02AF
+    match_how: startswith
+    type:
+      - code
+  D02AX:
+    case_sensitive: false
+    match:
+      - - M/D02AX
+        - RM/D02AX
+    match_how: startswith
+    type:
+      - code
+  D02BA:
+    case_sensitive: false
+    match:
+      - - M/D02BA
+        - RM/D02BA
+    match_how: startswith
+    type:
+      - code
+  D02BB:
+    case_sensitive: false
+    match:
+      - - M/D02BB
+        - RM/D02BB
+    match_how: startswith
+    type:
+      - code
+  D03AA:
+    case_sensitive: false
+    match:
+      - - M/D03AA
+        - RM/D03AA
+    match_how: startswith
+    type:
+      - code
+  D03AX:
+    case_sensitive: false
+    match:
+      - - M/D03AX
+        - RM/D03AX
+    match_how: startswith
+    type:
+      - code
+  D03BA:
+    case_sensitive: false
+    match:
+      - - M/D03BA
+        - RM/D03BA
+    match_how: startswith
+    type:
+      - code
+  D04AA:
+    case_sensitive: false
+    match:
+      - - M/D04AA
+        - RM/D04AA
+    match_how: startswith
+    type:
+      - code
+  D04AB:
+    case_sensitive: false
+    match:
+      - - M/D04AB
+        - RM/D04AB
+    match_how: startswith
+    type:
+      - code
+  D04AX:
+    case_sensitive: false
+    match:
+      - - M/D04AX
+        - RM/D04AX
+    match_how: startswith
+    type:
+      - code
+  D05AA:
+    case_sensitive: false
+    match:
+      - - M/D05AA
+        - RM/D05AA
+    match_how: startswith
+    type:
+      - code
+  D05AC:
+    case_sensitive: false
+    match:
+      - - M/D05AC
+        - RM/D05AC
+    match_how: startswith
+    type:
+      - code
+  D05AD:
+    case_sensitive: false
+    match:
+      - - M/D05AD
+        - RM/D05AD
+    match_how: startswith
+    type:
+      - code
+  D05AX:
+    case_sensitive: false
+    match:
+      - - M/D05AX
+        - RM/D05AX
+    match_how: startswith
+    type:
+      - code
+  D05BA:
+    case_sensitive: false
+    match:
+      - - M/D05BA
+        - RM/D05BA
+    match_how: startswith
+    type:
+      - code
+  D05BB:
+    case_sensitive: false
+    match:
+      - - M/D05BB
+        - RM/D05BB
+    match_how: startswith
+    type:
+      - code
+  D05BX:
+    case_sensitive: false
+    match:
+      - - M/D05BX
+        - RM/D05BX
+    match_how: startswith
+    type:
+      - code
+  D06AA:
+    case_sensitive: false
+    match:
+      - - M/D06AA
+        - RM/D06AA
+    match_how: startswith
+    type:
+      - code
+  D06AX:
+    case_sensitive: false
+    match:
+      - - M/D06AX
+        - RM/D06AX
+    match_how: startswith
+    type:
+      - code
+  D06BA:
+    case_sensitive: false
+    match:
+      - - M/D06BA
+        - RM/D06BA
+    match_how: startswith
+    type:
+      - code
+  D06BB:
+    case_sensitive: false
+    match:
+      - - M/D06BB
+        - RM/D06BB
+    match_how: startswith
+    type:
+      - code
+  D06BX:
+    case_sensitive: false
+    match:
+      - - M/D06BX
+        - RM/D06BX
+    match_how: startswith
+    type:
+      - code
+  D06C:
+    case_sensitive: false
+    match:
+      - - M/D06C
+        - RM/D06C
+    match_how: startswith
+    type:
+      - code
+  D07AA:
+    case_sensitive: false
+    match:
+      - - M/D07AA
+        - RM/D07AA
+    match_how: startswith
+    type:
+      - code
+  D07AB:
+    case_sensitive: false
+    match:
+      - - M/D07AB
+        - RM/D07AB
+    match_how: startswith
+    type:
+      - code
+  D07AC:
+    case_sensitive: false
+    match:
+      - - M/D07AC
+        - RM/D07AC
+    match_how: startswith
+    type:
+      - code
+  D07AD:
+    case_sensitive: false
+    match:
+      - - M/D07AD
+        - RM/D07AD
+    match_how: startswith
+    type:
+      - code
+  D07BA:
+    case_sensitive: false
+    match:
+      - - M/D07BA
+        - RM/D07BA
+    match_how: startswith
+    type:
+      - code
+  D07BB:
+    case_sensitive: false
+    match:
+      - - M/D07BB
+        - RM/D07BB
+    match_how: startswith
+    type:
+      - code
+  D07BC:
+    case_sensitive: false
+    match:
+      - - M/D07BC
+        - RM/D07BC
+    match_how: startswith
+    type:
+      - code
+  D07BD:
+    case_sensitive: false
+    match:
+      - - M/D07BD
+        - RM/D07BD
+    match_how: startswith
+    type:
+      - code
+  D07CA:
+    case_sensitive: false
+    match:
+      - - M/D07CA
+        - RM/D07CA
+    match_how: startswith
+    type:
+      - code
+  D07CB:
+    case_sensitive: false
+    match:
+      - - M/D07CB
+        - RM/D07CB
+    match_how: startswith
+    type:
+      - code
+  D07CC:
+    case_sensitive: false
+    match:
+      - - M/D07CC
+        - RM/D07CC
+    match_how: startswith
+    type:
+      - code
+  D07CD:
+    case_sensitive: false
+    match:
+      - - M/D07CD
+        - RM/D07CD
+    match_how: startswith
+    type:
+      - code
+  D07XA:
+    case_sensitive: false
+    match:
+      - - M/D07XA
+        - RM/D07XA
+    match_how: startswith
+    type:
+      - code
+  D07XB:
+    case_sensitive: false
+    match:
+      - - M/D07XB
+        - RM/D07XB
+    match_how: startswith
+    type:
+      - code
+  D07XC:
+    case_sensitive: false
+    match:
+      - - M/D07XC
+        - RM/D07XC
+    match_how: startswith
+    type:
+      - code
+  D07XD:
+    case_sensitive: false
+    match:
+      - - M/D07XD
+        - RM/D07XD
+    match_how: startswith
+    type:
+      - code
+  D08AA:
+    case_sensitive: false
+    match:
+      - - M/D08AA
+        - RM/D08AA
+    match_how: startswith
+    type:
+      - code
+  D08AB:
+    case_sensitive: false
+    match:
+      - - M/D08AB
+        - RM/D08AB
+    match_how: startswith
+    type:
+      - code
+  D08AC:
+    case_sensitive: false
+    match:
+      - - M/D08AC
+        - RM/D08AC
+    match_how: startswith
+    type:
+      - code
+  D08AD:
+    case_sensitive: false
+    match:
+      - - M/D08AD
+        - RM/D08AD
+    match_how: startswith
+    type:
+      - code
+  D08AE:
+    case_sensitive: false
+    match:
+      - - M/D08AE
+        - RM/D08AE
+    match_how: startswith
+    type:
+      - code
+  D08AF:
+    case_sensitive: false
+    match:
+      - - M/D08AF
+        - RM/D08AF
+    match_how: startswith
+    type:
+      - code
+  D08AG:
+    case_sensitive: false
+    match:
+      - - M/D08AG
+        - RM/D08AG
+    match_how: startswith
+    type:
+      - code
+  D08AH:
+    case_sensitive: false
+    match:
+      - - M/D08AH
+        - RM/D08AH
+    match_how: startswith
+    type:
+      - code
+  D08AJ:
+    case_sensitive: false
+    match:
+      - - M/D08AJ
+        - RM/D08AJ
+    match_how: startswith
+    type:
+      - code
+  D08AK:
+    case_sensitive: false
+    match:
+      - - M/D08AK
+        - RM/D08AK
+    match_how: startswith
+    type:
+      - code
+  D08AL:
+    case_sensitive: false
+    match:
+      - - M/D08AL
+        - RM/D08AL
+    match_how: startswith
+    type:
+      - code
+  D08AX:
+    case_sensitive: false
+    match:
+      - - M/D08AX
+        - RM/D08AX
+    match_how: startswith
+    type:
+      - code
+  D09AA:
+    case_sensitive: false
+    match:
+      - - M/D09AA
+        - RM/D09AA
+    match_how: startswith
+    type:
+      - code
+  D09AB:
+    case_sensitive: false
+    match:
+      - - M/D09AB
+        - RM/D09AB
+    match_how: startswith
+    type:
+      - code
+  D09AX:
+    case_sensitive: false
+    match:
+      - - M/D09AX
+        - RM/D09AX
+    match_how: startswith
+    type:
+      - code
+  D10AA:
+    case_sensitive: false
+    match:
+      - - M/D10AA
+        - RM/D10AA
+    match_how: startswith
+    type:
+      - code
+  D10AB:
+    case_sensitive: false
+    match:
+      - - M/D10AB
+        - RM/D10AB
+    match_how: startswith
+    type:
+      - code
+  D10AD:
+    case_sensitive: false
+    match:
+      - - M/D10AD
+        - RM/D10AD
+    match_how: startswith
+    type:
+      - code
+  D10AE:
+    case_sensitive: false
+    match:
+      - - M/D10AE
+        - RM/D10AE
+    match_how: startswith
+    type:
+      - code
+  D10AF:
+    case_sensitive: false
+    match:
+      - - M/D10AF
+        - RM/D10AF
+    match_how: startswith
+    type:
+      - code
+  D10AX:
+    case_sensitive: false
+    match:
+      - - M/D10AX
+        - RM/D10AX
+    match_how: startswith
+    type:
+      - code
+  D10BA:
+    case_sensitive: false
+    match:
+      - - M/D10BA
+        - RM/D10BA
+    match_how: startswith
+    type:
+      - code
+  D10BX:
+    case_sensitive: false
+    match:
+      - - M/D10BX
+        - RM/D10BX
+    match_how: startswith
+    type:
+      - code
+  D11AA:
+    case_sensitive: false
+    match:
+      - - M/D11AA
+        - RM/D11AA
+    match_how: startswith
+    type:
+      - code
+  D11AC:
+    case_sensitive: false
+    match:
+      - - M/D11AC
+        - RM/D11AC
+    match_how: startswith
+    type:
+      - code
+  D11AE:
+    case_sensitive: false
+    match:
+      - - M/D11AE
+        - RM/D11AE
+    match_how: startswith
+    type:
+      - code
+  D11AF:
+    case_sensitive: false
+    match:
+      - - M/D11AF
+        - RM/D11AF
+    match_how: startswith
+    type:
+      - code
+  D11AH:
+    case_sensitive: false
+    match:
+      - - M/D11AH
+        - RM/D11AH
+    match_how: startswith
+    type:
+      - code
+  D11AX:
+    case_sensitive: false
+    match:
+      - - M/D11AX
+        - RM/D11AX
+    match_how: startswith
+    type:
+      - code
+  G01AA:
+    case_sensitive: false
+    match:
+      - - M/G01AA
+        - RM/G01AA
+    match_how: startswith
+    type:
+      - code
+  G01AB:
+    case_sensitive: false
+    match:
+      - - M/G01AB
+        - RM/G01AB
+    match_how: startswith
+    type:
+      - code
+  G01AC:
+    case_sensitive: false
+    match:
+      - - M/G01AC
+        - RM/G01AC
+    match_how: startswith
+    type:
+      - code
+  G01AD:
+    case_sensitive: false
+    match:
+      - - M/G01AD
+        - RM/G01AD
+    match_how: startswith
+    type:
+      - code
+  G01AE:
+    case_sensitive: false
+    match:
+      - - M/G01AE
+        - RM/G01AE
+    match_how: startswith
+    type:
+      - code
+  G01AF:
+    case_sensitive: false
+    match:
+      - - M/G01AF
+        - RM/G01AF
+    match_how: startswith
+    type:
+      - code
+  G01AG:
+    case_sensitive: false
+    match:
+      - - M/G01AG
+        - RM/G01AG
+    match_how: startswith
+    type:
+      - code
+  G01AX:
+    case_sensitive: false
+    match:
+      - - M/G01AX
+        - RM/G01AX
+    match_how: startswith
+    type:
+      - code
+  G01BA:
+    case_sensitive: false
+    match:
+      - - M/G01BA
+        - RM/G01BA
+    match_how: startswith
+    type:
+      - code
+  G01BC:
+    case_sensitive: false
+    match:
+      - - M/G01BC
+        - RM/G01BC
+    match_how: startswith
+    type:
+      - code
+  G01BD:
+    case_sensitive: false
+    match:
+      - - M/G01BD
+        - RM/G01BD
+    match_how: startswith
+    type:
+      - code
+  G01BE:
+    case_sensitive: false
+    match:
+      - - M/G01BE
+        - RM/G01BE
+    match_how: startswith
+    type:
+      - code
+  G01BF:
+    case_sensitive: false
+    match:
+      - - M/G01BF
+        - RM/G01BF
+    match_how: startswith
+    type:
+      - code
+  G02AB:
+    case_sensitive: false
+    match:
+      - - M/G02AB
+        - RM/G02AB
+    match_how: startswith
+    type:
+      - code
+  G02AC:
+    case_sensitive: false
+    match:
+      - - M/G02AC
+        - RM/G02AC
+    match_how: startswith
+    type:
+      - code
+  G02AD:
+    case_sensitive: false
+    match:
+      - - M/G02AD
+        - RM/G02AD
+    match_how: startswith
+    type:
+      - code
+  G02AX:
+    case_sensitive: false
+    match:
+      - - M/G02AX
+        - RM/G02AX
+    match_how: startswith
+    type:
+      - code
+  G02BA:
+    case_sensitive: false
+    match:
+      - - M/G02BA
+        - RM/G02BA
+    match_how: startswith
+    type:
+      - code
+  G02BB:
+    case_sensitive: false
+    match:
+      - - M/G02BB
+        - RM/G02BB
+    match_how: startswith
+    type:
+      - code
+  G02CA:
+    case_sensitive: false
+    match:
+      - - M/G02CA
+        - RM/G02CA
+    match_how: startswith
+    type:
+      - code
+  G02CB:
+    case_sensitive: false
+    match:
+      - - M/G02CB
+        - RM/G02CB
+    match_how: startswith
+    type:
+      - code
+  G02CC:
+    case_sensitive: false
+    match:
+      - - M/G02CC
+        - RM/G02CC
+    match_how: startswith
+    type:
+      - code
+  G02CX:
+    case_sensitive: false
+    match:
+      - - M/G02CX
+        - RM/G02CX
+    match_how: startswith
+    type:
+      - code
+  G03AA:
+    case_sensitive: false
+    match:
+      - - M/G03AA
+        - RM/G03AA
+    match_how: startswith
+    type:
+      - code
+  G03AB:
+    case_sensitive: false
+    match:
+      - - M/G03AB
+        - RM/G03AB
+    match_how: startswith
+    type:
+      - code
+  G03AC:
+    case_sensitive: false
+    match:
+      - - M/G03AC
+        - RM/G03AC
+    match_how: startswith
+    type:
+      - code
+  G03AD:
+    case_sensitive: false
+    match:
+      - - M/G03AD
+        - RM/G03AD
+    match_how: startswith
+    type:
+      - code
+  G03BA:
+    case_sensitive: false
+    match:
+      - - M/G03BA
+        - RM/G03BA
+    match_how: startswith
+    type:
+      - code
+  G03BB:
+    case_sensitive: false
+    match:
+      - - M/G03BB
+        - RM/G03BB
+    match_how: startswith
+    type:
+      - code
+  G03CA:
+    case_sensitive: false
+    match:
+      - - M/G03CA
+        - RM/G03CA
+    match_how: startswith
+    type:
+      - code
+  G03CB:
+    case_sensitive: false
+    match:
+      - - M/G03CB
+        - RM/G03CB
+    match_how: startswith
+    type:
+      - code
+  G03CC:
+    case_sensitive: false
+    match:
+      - - M/G03CC
+        - RM/G03CC
+    match_how: startswith
+    type:
+      - code
+  G03CX:
+    case_sensitive: false
+    match:
+      - - M/G03CX
+        - RM/G03CX
+    match_how: startswith
+    type:
+      - code
+  G03DA:
+    case_sensitive: false
+    match:
+      - - M/G03DA
+        - RM/G03DA
+    match_how: startswith
+    type:
+      - code
+  G03DB:
+    case_sensitive: false
+    match:
+      - - M/G03DB
+        - RM/G03DB
+    match_how: startswith
+    type:
+      - code
+  G03DC:
+    case_sensitive: false
+    match:
+      - - M/G03DC
+        - RM/G03DC
+    match_how: startswith
+    type:
+      - code
+  G03EA:
+    case_sensitive: false
+    match:
+      - - M/G03EA
+        - RM/G03EA
+    match_how: startswith
+    type:
+      - code
+  G03EB:
+    case_sensitive: false
+    match:
+      - - M/G03EB
+        - RM/G03EB
+    match_how: startswith
+    type:
+      - code
+  G03EK:
+    case_sensitive: false
+    match:
+      - - M/G03EK
+        - RM/G03EK
+    match_how: startswith
+    type:
+      - code
+  G03FA:
+    case_sensitive: false
+    match:
+      - - M/G03FA
+        - RM/G03FA
+    match_how: startswith
+    type:
+      - code
+  G03FB:
+    case_sensitive: false
+    match:
+      - - M/G03FB
+        - RM/G03FB
+    match_how: startswith
+    type:
+      - code
+  G03GA:
+    case_sensitive: false
+    match:
+      - - M/G03GA
+        - RM/G03GA
+    match_how: startswith
+    type:
+      - code
+  G03GB:
+    case_sensitive: false
+    match:
+      - - M/G03GB
+        - RM/G03GB
+    match_how: startswith
+    type:
+      - code
+  G03HA:
+    case_sensitive: false
+    match:
+      - - M/G03HA
+        - RM/G03HA
+    match_how: startswith
+    type:
+      - code
+  G03HB:
+    case_sensitive: false
+    match:
+      - - M/G03HB
+        - RM/G03HB
+    match_how: startswith
+    type:
+      - code
+  G03XA:
+    case_sensitive: false
+    match:
+      - - M/G03XA
+        - RM/G03XA
+    match_how: startswith
+    type:
+      - code
+  G03XB:
+    case_sensitive: false
+    match:
+      - - M/G03XB
+        - RM/G03XB
+    match_how: startswith
+    type:
+      - code
+  G03XC:
+    case_sensitive: false
+    match:
+      - - M/G03XC
+        - RM/G03XC
+    match_how: startswith
+    type:
+      - code
+  G03XX:
+    case_sensitive: false
+    match:
+      - - M/G03XX
+        - RM/G03XX
+    match_how: startswith
+    type:
+      - code
+  G04BA:
+    case_sensitive: false
+    match:
+      - - M/G04BA
+        - RM/G04BA
+    match_how: startswith
+    type:
+      - code
+  G04BC:
+    case_sensitive: false
+    match:
+      - - M/G04BC
+        - RM/G04BC
+    match_how: startswith
+    type:
+      - code
+  G04BD:
+    case_sensitive: false
+    match:
+      - - M/G04BD
+        - RM/G04BD
+    match_how: startswith
+    type:
+      - code
+  G04BE:
+    case_sensitive: false
+    match:
+      - - M/G04BE
+        - RM/G04BE
+    match_how: startswith
+    type:
+      - code
+  G04BX:
+    case_sensitive: false
+    match:
+      - - M/G04BX
+        - RM/G04BX
+    match_how: startswith
+    type:
+      - code
+  G04CA:
+    case_sensitive: false
+    match:
+      - - M/G04CA
+        - RM/G04CA
+    match_how: startswith
+    type:
+      - code
+  G04CB:
+    case_sensitive: false
+    match:
+      - - M/G04CB
+        - RM/G04CB
+    match_how: startswith
+    type:
+      - code
+  G04CX:
+    case_sensitive: false
+    match:
+      - - M/G04CX
+        - RM/G04CX
+    match_how: startswith
+    type:
+      - code
+  H01AA:
+    case_sensitive: false
+    match:
+      - - M/H01AA
+        - RM/H01AA
+    match_how: startswith
+    type:
+      - code
+  H01AB:
+    case_sensitive: false
+    match:
+      - - M/H01AB
+        - RM/H01AB
+    match_how: startswith
+    type:
+      - code
+  H01AC:
+    case_sensitive: false
+    match:
+      - - M/H01AC
+        - RM/H01AC
+    match_how: startswith
+    type:
+      - code
+  H01AX:
+    case_sensitive: false
+    match:
+      - - M/H01AX
+        - RM/H01AX
+    match_how: startswith
+    type:
+      - code
+  H01BA:
+    case_sensitive: false
+    match:
+      - - M/H01BA
+        - RM/H01BA
+    match_how: startswith
+    type:
+      - code
+  H01BB:
+    case_sensitive: false
+    match:
+      - - M/H01BB
+        - RM/H01BB
+    match_how: startswith
+    type:
+      - code
+  H01CA:
+    case_sensitive: false
+    match:
+      - - M/H01CA
+        - RM/H01CA
+    match_how: startswith
+    type:
+      - code
+  H01CB:
+    case_sensitive: false
+    match:
+      - - M/H01CB
+        - RM/H01CB
+    match_how: startswith
+    type:
+      - code
+  H01CC:
+    case_sensitive: false
+    match:
+      - - M/H01CC
+        - RM/H01CC
+    match_how: startswith
+    type:
+      - code
+  H02AA:
+    case_sensitive: false
+    match:
+      - - M/H02AA
+        - RM/H02AA
+    match_how: startswith
+    type:
+      - code
+  H02AB:
+    case_sensitive: false
+    match:
+      - - M/H02AB
+        - RM/H02AB
+    match_how: startswith
+    type:
+      - code
+  H02BX:
+    case_sensitive: false
+    match:
+      - - M/H02BX
+        - RM/H02BX
+    match_how: startswith
+    type:
+      - code
+  H02CA:
+    case_sensitive: false
+    match:
+      - - M/H02CA
+        - RM/H02CA
+    match_how: startswith
+    type:
+      - code
+  H03AA:
+    case_sensitive: false
+    match:
+      - - M/H03AA
+        - RM/H03AA
+    match_how: startswith
+    type:
+      - code
+  H03BA:
+    case_sensitive: false
+    match:
+      - - M/H03BA
+        - RM/H03BA
+    match_how: startswith
+    type:
+      - code
+  H03BB:
+    case_sensitive: false
+    match:
+      - - M/H03BB
+        - RM/H03BB
+    match_how: startswith
+    type:
+      - code
+  H03BC:
+    case_sensitive: false
+    match:
+      - - M/H03BC
+        - RM/H03BC
+    match_how: startswith
+    type:
+      - code
+  H03BX:
+    case_sensitive: false
+    match:
+      - - M/H03BX
+        - RM/H03BX
+    match_how: startswith
+    type:
+      - code
+  H03CA:
+    case_sensitive: false
+    match:
+      - - M/H03CA
+        - RM/H03CA
+    match_how: startswith
+    type:
+      - code
+  H04AA:
+    case_sensitive: false
+    match:
+      - - M/H04AA
+        - RM/H04AA
+    match_how: startswith
+    type:
+      - code
+  H05AA:
+    case_sensitive: false
+    match:
+      - - M/H05AA
+        - RM/H05AA
+    match_how: startswith
+    type:
+      - code
+  H05BA:
+    case_sensitive: false
+    match:
+      - - M/H05BA
+        - RM/H05BA
+    match_how: startswith
+    type:
+      - code
+  H05BX:
+    case_sensitive: false
+    match:
+      - - M/H05BX
+        - RM/H05BX
+    match_how: startswith
+    type:
+      - code
+  J01AA:
+    case_sensitive: false
+    match:
+      - - M/J01AA
+        - RM/J01AA
+    match_how: startswith
+    type:
+      - code
+  J01BA:
+    case_sensitive: false
+    match:
+      - - M/J01BA
+        - RM/J01BA
+    match_how: startswith
+    type:
+      - code
+  J01CA:
+    case_sensitive: false
+    match:
+      - - M/J01CA
+        - RM/J01CA
+    match_how: startswith
+    type:
+      - code
+  J01CE:
+    case_sensitive: false
+    match:
+      - - M/J01CE
+        - RM/J01CE
+    match_how: startswith
+    type:
+      - code
+  J01CF:
+    case_sensitive: false
+    match:
+      - - M/J01CF
+        - RM/J01CF
+    match_how: startswith
+    type:
+      - code
+  J01CG:
+    case_sensitive: false
+    match:
+      - - M/J01CG
+        - RM/J01CG
+    match_how: startswith
+    type:
+      - code
+  J01CR:
+    case_sensitive: false
+    match:
+      - - M/J01CR
+        - RM/J01CR
+    match_how: startswith
+    type:
+      - code
+  J01DB:
+    case_sensitive: false
+    match:
+      - - M/J01DB
+        - RM/J01DB
+    match_how: startswith
+    type:
+      - code
+  J01DC:
+    case_sensitive: false
+    match:
+      - - M/J01DC
+        - RM/J01DC
+    match_how: startswith
+    type:
+      - code
+  J01DD:
+    case_sensitive: false
+    match:
+      - - M/J01DD
+        - RM/J01DD
+    match_how: startswith
+    type:
+      - code
+  J01DE:
+    case_sensitive: false
+    match:
+      - - M/J01DE
+        - RM/J01DE
+    match_how: startswith
+    type:
+      - code
+  J01DF:
+    case_sensitive: false
+    match:
+      - - M/J01DF
+        - RM/J01DF
+    match_how: startswith
+    type:
+      - code
+  J01DH:
+    case_sensitive: false
+    match:
+      - - M/J01DH
+        - RM/J01DH
+    match_how: startswith
+    type:
+      - code
+  J01DI:
+    case_sensitive: false
+    match:
+      - - M/J01DI
+        - RM/J01DI
+    match_how: startswith
+    type:
+      - code
+  J01EA:
+    case_sensitive: false
+    match:
+      - - M/J01EA
+        - RM/J01EA
+    match_how: startswith
+    type:
+      - code
+  J01EB:
+    case_sensitive: false
+    match:
+      - - M/J01EB
+        - RM/J01EB
+    match_how: startswith
+    type:
+      - code
+  J01EC:
+    case_sensitive: false
+    match:
+      - - M/J01EC
+        - RM/J01EC
+    match_how: startswith
+    type:
+      - code
+  J01ED:
+    case_sensitive: false
+    match:
+      - - M/J01ED
+        - RM/J01ED
+    match_how: startswith
+    type:
+      - code
+  J01EE:
+    case_sensitive: false
+    match:
+      - - M/J01EE
+        - RM/J01EE
+    match_how: startswith
+    type:
+      - code
+  J01FA:
+    case_sensitive: false
+    match:
+      - - M/J01FA
+        - RM/J01FA
+    match_how: startswith
+    type:
+      - code
+  J01FF:
+    case_sensitive: false
+    match:
+      - - M/J01FF
+        - RM/J01FF
+    match_how: startswith
+    type:
+      - code
+  J01FG:
+    case_sensitive: false
+    match:
+      - - M/J01FG
+        - RM/J01FG
+    match_how: startswith
+    type:
+      - code
+  J01GA:
+    case_sensitive: false
+    match:
+      - - M/J01GA
+        - RM/J01GA
+    match_how: startswith
+    type:
+      - code
+  J01GB:
+    case_sensitive: false
+    match:
+      - - M/J01GB
+        - RM/J01GB
+    match_how: startswith
+    type:
+      - code
+  J01MA:
+    case_sensitive: false
+    match:
+      - - M/J01MA
+        - RM/J01MA
+    match_how: startswith
+    type:
+      - code
+  J01MB:
+    case_sensitive: false
+    match:
+      - - M/J01MB
+        - RM/J01MB
+    match_how: startswith
+    type:
+      - code
+  J01RA:
+    case_sensitive: false
+    match:
+      - - M/J01RA
+        - RM/J01RA
+    match_how: startswith
+    type:
+      - code
+  J01XA:
+    case_sensitive: false
+    match:
+      - - M/J01XA
+        - RM/J01XA
+    match_how: startswith
+    type:
+      - code
+  J01XB:
+    case_sensitive: false
+    match:
+      - - M/J01XB
+        - RM/J01XB
+    match_how: startswith
+    type:
+      - code
+  J01XC:
+    case_sensitive: false
+    match:
+      - - M/J01XC
+        - RM/J01XC
+    match_how: startswith
+    type:
+      - code
+  J01XD:
+    case_sensitive: false
+    match:
+      - - M/J01XD
+        - RM/J01XD
+    match_how: startswith
+    type:
+      - code
+  J01XE:
+    case_sensitive: false
+    match:
+      - - M/J01XE
+        - RM/J01XE
+    match_how: startswith
+    type:
+      - code
+  J01XX:
+    case_sensitive: false
+    match:
+      - - M/J01XX
+        - RM/J01XX
+    match_how: startswith
+    type:
+      - code
+  J02AA:
+    case_sensitive: false
+    match:
+      - - M/J02AA
+        - RM/J02AA
+    match_how: startswith
+    type:
+      - code
+  J02AB:
+    case_sensitive: false
+    match:
+      - - M/J02AB
+        - RM/J02AB
+    match_how: startswith
+    type:
+      - code
+  J02AC:
+    case_sensitive: false
+    match:
+      - - M/J02AC
+        - RM/J02AC
+    match_how: startswith
+    type:
+      - code
+  J02AX:
+    case_sensitive: false
+    match:
+      - - M/J02AX
+        - RM/J02AX
+    match_how: startswith
+    type:
+      - code
+  J04AA:
+    case_sensitive: false
+    match:
+      - - M/J04AA
+        - RM/J04AA
+    match_how: startswith
+    type:
+      - code
+  J04AB:
+    case_sensitive: false
+    match:
+      - - M/J04AB
+        - RM/J04AB
+    match_how: startswith
+    type:
+      - code
+  J04AC:
+    case_sensitive: false
+    match:
+      - - M/J04AC
+        - RM/J04AC
+    match_how: startswith
+    type:
+      - code
+  J04AD:
+    case_sensitive: false
+    match:
+      - - M/J04AD
+        - RM/J04AD
+    match_how: startswith
+    type:
+      - code
+  J04AK:
+    case_sensitive: false
+    match:
+      - - M/J04AK
+        - RM/J04AK
+    match_how: startswith
+    type:
+      - code
+  J04AM:
+    case_sensitive: false
+    match:
+      - - M/J04AM
+        - RM/J04AM
+    match_how: startswith
+    type:
+      - code
+  J04BA:
+    case_sensitive: false
+    match:
+      - - M/J04BA
+        - RM/J04BA
+    match_how: startswith
+    type:
+      - code
+  J05AA:
+    case_sensitive: false
+    match:
+      - - M/J05AA
+        - RM/J05AA
+    match_how: startswith
+    type:
+      - code
+  J05AB:
+    case_sensitive: false
+    match:
+      - - M/J05AB
+        - RM/J05AB
+    match_how: startswith
+    type:
+      - code
+  J05AC:
+    case_sensitive: false
+    match:
+      - - M/J05AC
+        - RM/J05AC
+    match_how: startswith
+    type:
+      - code
+  J05AD:
+    case_sensitive: false
+    match:
+      - - M/J05AD
+        - RM/J05AD
+    match_how: startswith
+    type:
+      - code
+  J05AE:
+    case_sensitive: false
+    match:
+      - - M/J05AE
+        - RM/J05AE
+    match_how: startswith
+    type:
+      - code
+  J05AF:
+    case_sensitive: false
+    match:
+      - - M/J05AF
+        - RM/J05AF
+    match_how: startswith
+    type:
+      - code
+  J05AG:
+    case_sensitive: false
+    match:
+      - - M/J05AG
+        - RM/J05AG
+    match_how: startswith
+    type:
+      - code
+  J05AH:
+    case_sensitive: false
+    match:
+      - - M/J05AH
+        - RM/J05AH
+    match_how: startswith
+    type:
+      - code
+  J05AJ:
+    case_sensitive: false
+    match:
+      - - M/J05AJ
+        - RM/J05AJ
+    match_how: startswith
+    type:
+      - code
+  J05AP:
+    case_sensitive: false
+    match:
+      - - M/J05AP
+        - RM/J05AP
+    match_how: startswith
+    type:
+      - code
+  J05AR:
+    case_sensitive: false
+    match:
+      - - M/J05AR
+        - RM/J05AR
+    match_how: startswith
+    type:
+      - code
+  J05AX:
+    case_sensitive: false
+    match:
+      - - M/J05AX
+        - RM/J05AX
+    match_how: startswith
+    type:
+      - code
+  J06AA:
+    case_sensitive: false
+    match:
+      - - M/J06AA
+        - RM/J06AA
+    match_how: startswith
+    type:
+      - code
+  J06BA:
+    case_sensitive: false
+    match:
+      - - M/J06BA
+        - RM/J06BA
+    match_how: startswith
+    type:
+      - code
+  J06BB:
+    case_sensitive: false
+    match:
+      - - M/J06BB
+        - RM/J06BB
+    match_how: startswith
+    type:
+      - code
+  J06BC:
+    case_sensitive: false
+    match:
+      - - M/J06BC
+        - RM/J06BC
+    match_how: startswith
+    type:
+      - code
+  J06BD:
+    case_sensitive: false
+    match:
+      - - M/J06BD
+        - RM/J06BD
+    match_how: startswith
+    type:
+      - code
+  J07AC:
+    case_sensitive: false
+    match:
+      - - M/J07AC
+        - RM/J07AC
+    match_how: startswith
+    type:
+      - code
+  J07AD:
+    case_sensitive: false
+    match:
+      - - M/J07AD
+        - RM/J07AD
+    match_how: startswith
+    type:
+      - code
+  J07AE:
+    case_sensitive: false
+    match:
+      - - M/J07AE
+        - RM/J07AE
+    match_how: startswith
+    type:
+      - code
+  J07AF:
+    case_sensitive: false
+    match:
+      - - M/J07AF
+        - RM/J07AF
+    match_how: startswith
+    type:
+      - code
+  J07AG:
+    case_sensitive: false
+    match:
+      - - M/J07AG
+        - RM/J07AG
+    match_how: startswith
+    type:
+      - code
+  J07AH:
+    case_sensitive: false
+    match:
+      - - M/J07AH
+        - RM/J07AH
+    match_how: startswith
+    type:
+      - code
+  J07AJ:
+    case_sensitive: false
+    match:
+      - - M/J07AJ
+        - RM/J07AJ
+    match_how: startswith
+    type:
+      - code
+  J07AK:
+    case_sensitive: false
+    match:
+      - - M/J07AK
+        - RM/J07AK
+    match_how: startswith
+    type:
+      - code
+  J07AL:
+    case_sensitive: false
+    match:
+      - - M/J07AL
+        - RM/J07AL
+    match_how: startswith
+    type:
+      - code
+  J07AM:
+    case_sensitive: false
+    match:
+      - - M/J07AM
+        - RM/J07AM
+    match_how: startswith
+    type:
+      - code
+  J07AN:
+    case_sensitive: false
+    match:
+      - - M/J07AN
+        - RM/J07AN
+    match_how: startswith
+    type:
+      - code
+  J07AP:
+    case_sensitive: false
+    match:
+      - - M/J07AP
+        - RM/J07AP
+    match_how: startswith
+    type:
+      - code
+  J07AR:
+    case_sensitive: false
+    match:
+      - - M/J07AR
+        - RM/J07AR
+    match_how: startswith
+    type:
+      - code
+  J07AX:
+    case_sensitive: false
+    match:
+      - - M/J07AX
+        - RM/J07AX
+    match_how: startswith
+    type:
+      - code
+  J07BA:
+    case_sensitive: false
+    match:
+      - - M/J07BA
+        - RM/J07BA
+    match_how: startswith
+    type:
+      - code
+  J07BB:
+    case_sensitive: false
+    match:
+      - - M/J07BB
+        - RM/J07BB
+    match_how: startswith
+    type:
+      - code
+  J07BC:
+    case_sensitive: false
+    match:
+      - - M/J07BC
+        - RM/J07BC
+    match_how: startswith
+    type:
+      - code
+  J07BD:
+    case_sensitive: false
+    match:
+      - - M/J07BD
+        - RM/J07BD
+    match_how: startswith
+    type:
+      - code
+  J07BE:
+    case_sensitive: false
+    match:
+      - - M/J07BE
+        - RM/J07BE
+    match_how: startswith
+    type:
+      - code
+  J07BF:
+    case_sensitive: false
+    match:
+      - - M/J07BF
+        - RM/J07BF
+    match_how: startswith
+    type:
+      - code
+  J07BG:
+    case_sensitive: false
+    match:
+      - - M/J07BG
+        - RM/J07BG
+    match_how: startswith
+    type:
+      - code
+  J07BH:
+    case_sensitive: false
+    match:
+      - - M/J07BH
+        - RM/J07BH
+    match_how: startswith
+    type:
+      - code
+  J07BJ:
+    case_sensitive: false
+    match:
+      - - M/J07BJ
+        - RM/J07BJ
+    match_how: startswith
+    type:
+      - code
+  J07BK:
+    case_sensitive: false
+    match:
+      - - M/J07BK
+        - RM/J07BK
+    match_how: startswith
+    type:
+      - code
+  J07BL:
+    case_sensitive: false
+    match:
+      - - M/J07BL
+        - RM/J07BL
+    match_how: startswith
+    type:
+      - code
+  J07BM:
+    case_sensitive: false
+    match:
+      - - M/J07BM
+        - RM/J07BM
+    match_how: startswith
+    type:
+      - code
+  J07BN:
+    case_sensitive: false
+    match:
+      - - M/J07BN
+        - RM/J07BN
+    match_how: startswith
+    type:
+      - code
+  J07BX:
+    case_sensitive: false
+    match:
+      - - M/J07BX
+        - RM/J07BX
+    match_how: startswith
+    type:
+      - code
+  J07CA:
+    case_sensitive: false
+    match:
+      - - M/J07CA
+        - RM/J07CA
+    match_how: startswith
+    type:
+      - code
+  J07XA:
+    case_sensitive: false
+    match:
+      - - M/J07XA
+        - RM/J07XA
+    match_how: startswith
+    type:
+      - code
+  L01AA:
+    case_sensitive: false
+    match:
+      - - M/L01AA
+        - RM/L01AA
+    match_how: startswith
+    type:
+      - code
+  L01AB:
+    case_sensitive: false
+    match:
+      - - M/L01AB
+        - RM/L01AB
+    match_how: startswith
+    type:
+      - code
+  L01AC:
+    case_sensitive: false
+    match:
+      - - M/L01AC
+        - RM/L01AC
+    match_how: startswith
+    type:
+      - code
+  L01AD:
+    case_sensitive: false
+    match:
+      - - M/L01AD
+        - RM/L01AD
+    match_how: startswith
+    type:
+      - code
+  L01AG:
+    case_sensitive: false
+    match:
+      - - M/L01AG
+        - RM/L01AG
+    match_how: startswith
+    type:
+      - code
+  L01AX:
+    case_sensitive: false
+    match:
+      - - M/L01AX
+        - RM/L01AX
+    match_how: startswith
+    type:
+      - code
+  L01BA:
+    case_sensitive: false
+    match:
+      - - M/L01BA
+        - RM/L01BA
+    match_how: startswith
+    type:
+      - code
+  L01BB:
+    case_sensitive: false
+    match:
+      - - M/L01BB
+        - RM/L01BB
+    match_how: startswith
+    type:
+      - code
+  L01BC:
+    case_sensitive: false
+    match:
+      - - M/L01BC
+        - RM/L01BC
+    match_how: startswith
+    type:
+      - code
+  L01CA:
+    case_sensitive: false
+    match:
+      - - M/L01CA
+        - RM/L01CA
+    match_how: startswith
+    type:
+      - code
+  L01CB:
+    case_sensitive: false
+    match:
+      - - M/L01CB
+        - RM/L01CB
+    match_how: startswith
+    type:
+      - code
+  L01CC:
+    case_sensitive: false
+    match:
+      - - M/L01CC
+        - RM/L01CC
+    match_how: startswith
+    type:
+      - code
+  L01CD:
+    case_sensitive: false
+    match:
+      - - M/L01CD
+        - RM/L01CD
+    match_how: startswith
+    type:
+      - code
+  L01CE:
+    case_sensitive: false
+    match:
+      - - M/L01CE
+        - RM/L01CE
+    match_how: startswith
+    type:
+      - code
+  L01CX:
+    case_sensitive: false
+    match:
+      - - M/L01CX
+        - RM/L01CX
+    match_how: startswith
+    type:
+      - code
+  L01DA:
+    case_sensitive: false
+    match:
+      - - M/L01DA
+        - RM/L01DA
+    match_how: startswith
+    type:
+      - code
+  L01DB:
+    case_sensitive: false
+    match:
+      - - M/L01DB
+        - RM/L01DB
+    match_how: startswith
+    type:
+      - code
+  L01DC:
+    case_sensitive: false
+    match:
+      - - M/L01DC
+        - RM/L01DC
+    match_how: startswith
+    type:
+      - code
+  L01EA:
+    case_sensitive: false
+    match:
+      - - M/L01EA
+        - RM/L01EA
+    match_how: startswith
+    type:
+      - code
+  L01EB:
+    case_sensitive: false
+    match:
+      - - M/L01EB
+        - RM/L01EB
+    match_how: startswith
+    type:
+      - code
+  L01EC:
+    case_sensitive: false
+    match:
+      - - M/L01EC
+        - RM/L01EC
+    match_how: startswith
+    type:
+      - code
+  L01ED:
+    case_sensitive: false
+    match:
+      - - M/L01ED
+        - RM/L01ED
+    match_how: startswith
+    type:
+      - code
+  L01EE:
+    case_sensitive: false
+    match:
+      - - M/L01EE
+        - RM/L01EE
+    match_how: startswith
+    type:
+      - code
+  L01EF:
+    case_sensitive: false
+    match:
+      - - M/L01EF
+        - RM/L01EF
+    match_how: startswith
+    type:
+      - code
+  L01EG:
+    case_sensitive: false
+    match:
+      - - M/L01EG
+        - RM/L01EG
+    match_how: startswith
+    type:
+      - code
+  L01EH:
+    case_sensitive: false
+    match:
+      - - M/L01EH
+        - RM/L01EH
+    match_how: startswith
+    type:
+      - code
+  L01EJ:
+    case_sensitive: false
+    match:
+      - - M/L01EJ
+        - RM/L01EJ
+    match_how: startswith
+    type:
+      - code
+  L01EK:
+    case_sensitive: false
+    match:
+      - - M/L01EK
+        - RM/L01EK
+    match_how: startswith
+    type:
+      - code
+  L01EL:
+    case_sensitive: false
+    match:
+      - - M/L01EL
+        - RM/L01EL
+    match_how: startswith
+    type:
+      - code
+  L01EM:
+    case_sensitive: false
+    match:
+      - - M/L01EM
+        - RM/L01EM
+    match_how: startswith
+    type:
+      - code
+  L01EN:
+    case_sensitive: false
+    match:
+      - - M/L01EN
+        - RM/L01EN
+    match_how: startswith
+    type:
+      - code
+  L01EX:
+    case_sensitive: false
+    match:
+      - - M/L01EX
+        - RM/L01EX
+    match_how: startswith
+    type:
+      - code
+  L01FA:
+    case_sensitive: false
+    match:
+      - - M/L01FA
+        - RM/L01FA
+    match_how: startswith
+    type:
+      - code
+  L01FB:
+    case_sensitive: false
+    match:
+      - - M/L01FB
+        - RM/L01FB
+    match_how: startswith
+    type:
+      - code
+  L01FC:
+    case_sensitive: false
+    match:
+      - - M/L01FC
+        - RM/L01FC
+    match_how: startswith
+    type:
+      - code
+  L01FD:
+    case_sensitive: false
+    match:
+      - - M/L01FD
+        - RM/L01FD
+    match_how: startswith
+    type:
+      - code
+  L01FE:
+    case_sensitive: false
+    match:
+      - - M/L01FE
+        - RM/L01FE
+    match_how: startswith
+    type:
+      - code
+  L01FF:
+    case_sensitive: false
+    match:
+      - - M/L01FF
+        - RM/L01FF
+    match_how: startswith
+    type:
+      - code
+  L01FG:
+    case_sensitive: false
+    match:
+      - - M/L01FG
+        - RM/L01FG
+    match_how: startswith
+    type:
+      - code
+  L01FX:
+    case_sensitive: false
+    match:
+      - - M/L01FX
+        - RM/L01FX
+    match_how: startswith
+    type:
+      - code
+  L01FY:
+    case_sensitive: false
+    match:
+      - - M/L01FY
+        - RM/L01FY
+    match_how: startswith
+    type:
+      - code
+  L01XA:
+    case_sensitive: false
+    match:
+      - - M/L01XA
+        - RM/L01XA
+    match_how: startswith
+    type:
+      - code
+  L01XB:
+    case_sensitive: false
+    match:
+      - - M/L01XB
+        - RM/L01XB
+    match_how: startswith
+    type:
+      - code
+  L01XD:
+    case_sensitive: false
+    match:
+      - - M/L01XD
+        - RM/L01XD
+    match_how: startswith
+    type:
+      - code
+  L01XF:
+    case_sensitive: false
+    match:
+      - - M/L01XF
+        - RM/L01XF
+    match_how: startswith
+    type:
+      - code
+  L01XG:
+    case_sensitive: false
+    match:
+      - - M/L01XG
+        - RM/L01XG
+    match_how: startswith
+    type:
+      - code
+  L01XH:
+    case_sensitive: false
+    match:
+      - - M/L01XH
+        - RM/L01XH
+    match_how: startswith
+    type:
+      - code
+  L01XJ:
+    case_sensitive: false
+    match:
+      - - M/L01XJ
+        - RM/L01XJ
+    match_how: startswith
+    type:
+      - code
+  L01XK:
+    case_sensitive: false
+    match:
+      - - M/L01XK
+        - RM/L01XK
+    match_how: startswith
+    type:
+      - code
+  L01XL:
+    case_sensitive: false
+    match:
+      - - M/L01XL
+        - RM/L01XL
+    match_how: startswith
+    type:
+      - code
+  L01XM:
+    case_sensitive: false
+    match:
+      - - M/L01XM
+        - RM/L01XM
+    match_how: startswith
+    type:
+      - code
+  L01XX:
+    case_sensitive: false
+    match:
+      - - M/L01XX
+        - RM/L01XX
+    match_how: startswith
+    type:
+      - code
+  L01XY:
+    case_sensitive: false
+    match:
+      - - M/L01XY
+        - RM/L01XY
+    match_how: startswith
+    type:
+      - code
+  L02AA:
+    case_sensitive: false
+    match:
+      - - M/L02AA
+        - RM/L02AA
+    match_how: startswith
+    type:
+      - code
+  L02AB:
+    case_sensitive: false
+    match:
+      - - M/L02AB
+        - RM/L02AB
+    match_how: startswith
+    type:
+      - code
+  L02AE:
+    case_sensitive: false
+    match:
+      - - M/L02AE
+        - RM/L02AE
+    match_how: startswith
+    type:
+      - code
+  L02AX:
+    case_sensitive: false
+    match:
+      - - M/L02AX
+        - RM/L02AX
+    match_how: startswith
+    type:
+      - code
+  L02BA:
+    case_sensitive: false
+    match:
+      - - M/L02BA
+        - RM/L02BA
+    match_how: startswith
+    type:
+      - code
+  L02BB:
+    case_sensitive: false
+    match:
+      - - M/L02BB
+        - RM/L02BB
+    match_how: startswith
+    type:
+      - code
+  L02BG:
+    case_sensitive: false
+    match:
+      - - M/L02BG
+        - RM/L02BG
+    match_how: startswith
+    type:
+      - code
+  L02BX:
+    case_sensitive: false
+    match:
+      - - M/L02BX
+        - RM/L02BX
+    match_how: startswith
+    type:
+      - code
+  L03AA:
+    case_sensitive: false
+    match:
+      - - M/L03AA
+        - RM/L03AA
+    match_how: startswith
+    type:
+      - code
+  L03AB:
+    case_sensitive: false
+    match:
+      - - M/L03AB
+        - RM/L03AB
+    match_how: startswith
+    type:
+      - code
+  L03AC:
+    case_sensitive: false
+    match:
+      - - M/L03AC
+        - RM/L03AC
+    match_how: startswith
+    type:
+      - code
+  L03AX:
+    case_sensitive: false
+    match:
+      - - M/L03AX
+        - RM/L03AX
+    match_how: startswith
+    type:
+      - code
+  L04AA:
+    case_sensitive: false
+    match:
+      - - M/L04AA
+        - RM/L04AA
+    match_how: startswith
+    type:
+      - code
+  L04AB:
+    case_sensitive: false
+    match:
+      - - M/L04AB
+        - RM/L04AB
+    match_how: startswith
+    type:
+      - code
+  L04AC:
+    case_sensitive: false
+    match:
+      - - M/L04AC
+        - RM/L04AC
+    match_how: startswith
+    type:
+      - code
+  L04AD:
+    case_sensitive: false
+    match:
+      - - M/L04AD
+        - RM/L04AD
+    match_how: startswith
+    type:
+      - code
+  L04AE:
+    case_sensitive: false
+    match:
+      - - M/L04AE
+        - RM/L04AE
+    match_how: startswith
+    type:
+      - code
+  L04AF:
+    case_sensitive: false
+    match:
+      - - M/L04AF
+        - RM/L04AF
+    match_how: startswith
+    type:
+      - code
+  L04AG:
+    case_sensitive: false
+    match:
+      - - M/L04AG
+        - RM/L04AG
+    match_how: startswith
+    type:
+      - code
+  L04AH:
+    case_sensitive: false
+    match:
+      - - M/L04AH
+        - RM/L04AH
+    match_how: startswith
+    type:
+      - code
+  L04AJ:
+    case_sensitive: false
+    match:
+      - - M/L04AJ
+        - RM/L04AJ
+    match_how: startswith
+    type:
+      - code
+  L04AK:
+    case_sensitive: false
+    match:
+      - - M/L04AK
+        - RM/L04AK
+    match_how: startswith
+    type:
+      - code
+  L04AX:
+    case_sensitive: false
+    match:
+      - - M/L04AX
+        - RM/L04AX
+    match_how: startswith
+    type:
+      - code
+  M01AA:
+    case_sensitive: false
+    match:
+      - - M/M01AA
+        - RM/M01AA
+    match_how: startswith
+    type:
+      - code
+  M01AB:
+    case_sensitive: false
+    match:
+      - - M/M01AB
+        - RM/M01AB
+    match_how: startswith
+    type:
+      - code
+  M01AC:
+    case_sensitive: false
+    match:
+      - - M/M01AC
+        - RM/M01AC
+    match_how: startswith
+    type:
+      - code
+  M01AE:
+    case_sensitive: false
+    match:
+      - - M/M01AE
+        - RM/M01AE
+    match_how: startswith
+    type:
+      - code
+  M01AG:
+    case_sensitive: false
+    match:
+      - - M/M01AG
+        - RM/M01AG
+    match_how: startswith
+    type:
+      - code
+  M01AH:
+    case_sensitive: false
+    match:
+      - - M/M01AH
+        - RM/M01AH
+    match_how: startswith
+    type:
+      - code
+  M01AX:
+    case_sensitive: false
+    match:
+      - - M/M01AX
+        - RM/M01AX
+    match_how: startswith
+    type:
+      - code
+  M01BA:
+    case_sensitive: false
+    match:
+      - - M/M01BA
+        - RM/M01BA
+    match_how: startswith
+    type:
+      - code
+  M01BX:
+    case_sensitive: false
+    match:
+      - - M/M01BX
+        - RM/M01BX
+    match_how: startswith
+    type:
+      - code
+  M01CA:
+    case_sensitive: false
+    match:
+      - - M/M01CA
+        - RM/M01CA
+    match_how: startswith
+    type:
+      - code
+  M01CB:
+    case_sensitive: false
+    match:
+      - - M/M01CB
+        - RM/M01CB
+    match_how: startswith
+    type:
+      - code
+  M01CC:
+    case_sensitive: false
+    match:
+      - - M/M01CC
+        - RM/M01CC
+    match_how: startswith
+    type:
+      - code
+  M01CX:
+    case_sensitive: false
+    match:
+      - - M/M01CX
+        - RM/M01CX
+    match_how: startswith
+    type:
+      - code
+  M02AA:
+    case_sensitive: false
+    match:
+      - - M/M02AA
+        - RM/M02AA
+    match_how: startswith
+    type:
+      - code
+  M02AB:
+    case_sensitive: false
+    match:
+      - - M/M02AB
+        - RM/M02AB
+    match_how: startswith
+    type:
+      - code
+  M02AC:
+    case_sensitive: false
+    match:
+      - - M/M02AC
+        - RM/M02AC
+    match_how: startswith
+    type:
+      - code
+  M02AX:
+    case_sensitive: false
+    match:
+      - - M/M02AX
+        - RM/M02AX
+    match_how: startswith
+    type:
+      - code
+  M03AA:
+    case_sensitive: false
+    match:
+      - - M/M03AA
+        - RM/M03AA
+    match_how: startswith
+    type:
+      - code
+  M03AB:
+    case_sensitive: false
+    match:
+      - - M/M03AB
+        - RM/M03AB
+    match_how: startswith
+    type:
+      - code
+  M03AC:
+    case_sensitive: false
+    match:
+      - - M/M03AC
+        - RM/M03AC
+    match_how: startswith
+    type:
+      - code
+  M03AX:
+    case_sensitive: false
+    match:
+      - - M/M03AX
+        - RM/M03AX
+    match_how: startswith
+    type:
+      - code
+  M03BA:
+    case_sensitive: false
+    match:
+      - - M/M03BA
+        - RM/M03BA
+    match_how: startswith
+    type:
+      - code
+  M03BB:
+    case_sensitive: false
+    match:
+      - - M/M03BB
+        - RM/M03BB
+    match_how: startswith
+    type:
+      - code
+  M03BC:
+    case_sensitive: false
+    match:
+      - - M/M03BC
+        - RM/M03BC
+    match_how: startswith
+    type:
+      - code
+  M03BX:
+    case_sensitive: false
+    match:
+      - - M/M03BX
+        - RM/M03BX
+    match_how: startswith
+    type:
+      - code
+  M03CA:
+    case_sensitive: false
+    match:
+      - - M/M03CA
+        - RM/M03CA
+    match_how: startswith
+    type:
+      - code
+  M04AA:
+    case_sensitive: false
+    match:
+      - - M/M04AA
+        - RM/M04AA
+    match_how: startswith
+    type:
+      - code
+  M04AB:
+    case_sensitive: false
+    match:
+      - - M/M04AB
+        - RM/M04AB
+    match_how: startswith
+    type:
+      - code
+  M04AC:
+    case_sensitive: false
+    match:
+      - - M/M04AC
+        - RM/M04AC
+    match_how: startswith
+    type:
+      - code
+  M04AX:
+    case_sensitive: false
+    match:
+      - - M/M04AX
+        - RM/M04AX
+    match_how: startswith
+    type:
+      - code
+  M05BA:
+    case_sensitive: false
+    match:
+      - - M/M05BA
+        - RM/M05BA
+    match_how: startswith
+    type:
+      - code
+  M05BB:
+    case_sensitive: false
+    match:
+      - - M/M05BB
+        - RM/M05BB
+    match_how: startswith
+    type:
+      - code
+  M05BC:
+    case_sensitive: false
+    match:
+      - - M/M05BC
+        - RM/M05BC
+    match_how: startswith
+    type:
+      - code
+  M05BX:
+    case_sensitive: false
+    match:
+      - - M/M05BX
+        - RM/M05BX
+    match_how: startswith
+    type:
+      - code
+  M09AA:
+    case_sensitive: false
+    match:
+      - - M/M09AA
+        - RM/M09AA
+    match_how: startswith
+    type:
+      - code
+  M09AB:
+    case_sensitive: false
+    match:
+      - - M/M09AB
+        - RM/M09AB
+    match_how: startswith
+    type:
+      - code
+  M09AX:
+    case_sensitive: false
+    match:
+      - - M/M09AX
+        - RM/M09AX
+    match_how: startswith
+    type:
+      - code
+  N01AA:
+    case_sensitive: false
+    match:
+      - - M/N01AA
+        - RM/N01AA
+    match_how: startswith
+    type:
+      - code
+  N01AB:
+    case_sensitive: false
+    match:
+      - - M/N01AB
+        - RM/N01AB
+    match_how: startswith
+    type:
+      - code
+  N01AF:
+    case_sensitive: false
+    match:
+      - - M/N01AF
+        - RM/N01AF
+    match_how: startswith
+    type:
+      - code
+  N01AG:
+    case_sensitive: false
+    match:
+      - - M/N01AG
+        - RM/N01AG
+    match_how: startswith
+    type:
+      - code
+  N01AH:
+    case_sensitive: false
+    match:
+      - - M/N01AH
+        - RM/N01AH
+    match_how: startswith
+    type:
+      - code
+  N01AX:
+    case_sensitive: false
+    match:
+      - - M/N01AX
+        - RM/N01AX
+    match_how: startswith
+    type:
+      - code
+  N01BA:
+    case_sensitive: false
+    match:
+      - - M/N01BA
+        - RM/N01BA
+    match_how: startswith
+    type:
+      - code
+  N01BB:
+    case_sensitive: false
+    match:
+      - - M/N01BB
+        - RM/N01BB
+    match_how: startswith
+    type:
+      - code
+  N01BC:
+    case_sensitive: false
+    match:
+      - - M/N01BC
+        - RM/N01BC
+    match_how: startswith
+    type:
+      - code
+  N01BX:
+    case_sensitive: false
+    match:
+      - - M/N01BX
+        - RM/N01BX
+    match_how: startswith
+    type:
+      - code
+  N02AA:
+    case_sensitive: false
+    match:
+      - - M/N02AA
+        - RM/N02AA
+    match_how: startswith
+    type:
+      - code
+  N02AB:
+    case_sensitive: false
+    match:
+      - - M/N02AB
+        - RM/N02AB
+    match_how: startswith
+    type:
+      - code
+  N02AC:
+    case_sensitive: false
+    match:
+      - - M/N02AC
+        - RM/N02AC
+    match_how: startswith
+    type:
+      - code
+  N02AD:
+    case_sensitive: false
+    match:
+      - - M/N02AD
+        - RM/N02AD
+    match_how: startswith
+    type:
+      - code
+  N02AE:
+    case_sensitive: false
+    match:
+      - - M/N02AE
+        - RM/N02AE
+    match_how: startswith
+    type:
+      - code
+  N02AF:
+    case_sensitive: false
+    match:
+      - - M/N02AF
+        - RM/N02AF
+    match_how: startswith
+    type:
+      - code
+  N02AG:
+    case_sensitive: false
+    match:
+      - - M/N02AG
+        - RM/N02AG
+    match_how: startswith
+    type:
+      - code
+  N02AJ:
+    case_sensitive: false
+    match:
+      - - M/N02AJ
+        - RM/N02AJ
+    match_how: startswith
+    type:
+      - code
+  N02AX:
+    case_sensitive: false
+    match:
+      - - M/N02AX
+        - RM/N02AX
+    match_how: startswith
+    type:
+      - code
+  N02BA:
+    case_sensitive: false
+    match:
+      - - M/N02BA
+        - RM/N02BA
+    match_how: startswith
+    type:
+      - code
+  N02BB:
+    case_sensitive: false
+    match:
+      - - M/N02BB
+        - RM/N02BB
+    match_how: startswith
+    type:
+      - code
+  N02BE:
+    case_sensitive: false
+    match:
+      - - M/N02BE
+        - RM/N02BE
+    match_how: startswith
+    type:
+      - code
+  N02BF:
+    case_sensitive: false
+    match:
+      - - M/N02BF
+        - RM/N02BF
+    match_how: startswith
+    type:
+      - code
+  N02BG:
+    case_sensitive: false
+    match:
+      - - M/N02BG
+        - RM/N02BG
+    match_how: startswith
+    type:
+      - code
+  N02CA:
+    case_sensitive: false
+    match:
+      - - M/N02CA
+        - RM/N02CA
+    match_how: startswith
+    type:
+      - code
+  N02CB:
+    case_sensitive: false
+    match:
+      - - M/N02CB
+        - RM/N02CB
+    match_how: startswith
+    type:
+      - code
+  N02CC:
+    case_sensitive: false
+    match:
+      - - M/N02CC
+        - RM/N02CC
+    match_how: startswith
+    type:
+      - code
+  N02CD:
+    case_sensitive: false
+    match:
+      - - M/N02CD
+        - RM/N02CD
+    match_how: startswith
+    type:
+      - code
+  N02CX:
+    case_sensitive: false
+    match:
+      - - M/N02CX
+        - RM/N02CX
+    match_how: startswith
+    type:
+      - code
+  N03AA:
+    case_sensitive: false
+    match:
+      - - M/N03AA
+        - RM/N03AA
+    match_how: startswith
+    type:
+      - code
+  N03AB:
+    case_sensitive: false
+    match:
+      - - M/N03AB
+        - RM/N03AB
+    match_how: startswith
+    type:
+      - code
+  N03AC:
+    case_sensitive: false
+    match:
+      - - M/N03AC
+        - RM/N03AC
+    match_how: startswith
+    type:
+      - code
+  N03AD:
+    case_sensitive: false
+    match:
+      - - M/N03AD
+        - RM/N03AD
+    match_how: startswith
+    type:
+      - code
+  N03AE:
+    case_sensitive: false
+    match:
+      - - M/N03AE
+        - RM/N03AE
+    match_how: startswith
+    type:
+      - code
+  N03AF:
+    case_sensitive: false
+    match:
+      - - M/N03AF
+        - RM/N03AF
+    match_how: startswith
+    type:
+      - code
+  N03AG:
+    case_sensitive: false
+    match:
+      - - M/N03AG
+        - RM/N03AG
+    match_how: startswith
+    type:
+      - code
+  N03AX:
+    case_sensitive: false
+    match:
+      - - M/N03AX
+        - RM/N03AX
+    match_how: startswith
+    type:
+      - code
+  N04AA:
+    case_sensitive: false
+    match:
+      - - M/N04AA
+        - RM/N04AA
+    match_how: startswith
+    type:
+      - code
+  N04AB:
+    case_sensitive: false
+    match:
+      - - M/N04AB
+        - RM/N04AB
+    match_how: startswith
+    type:
+      - code
+  N04AC:
+    case_sensitive: false
+    match:
+      - - M/N04AC
+        - RM/N04AC
+    match_how: startswith
+    type:
+      - code
+  N04BA:
+    case_sensitive: false
+    match:
+      - - M/N04BA
+        - RM/N04BA
+    match_how: startswith
+    type:
+      - code
+  N04BB:
+    case_sensitive: false
+    match:
+      - - M/N04BB
+        - RM/N04BB
+    match_how: startswith
+    type:
+      - code
+  N04BC:
+    case_sensitive: false
+    match:
+      - - M/N04BC
+        - RM/N04BC
+    match_how: startswith
+    type:
+      - code
+  N04BD:
+    case_sensitive: false
+    match:
+      - - M/N04BD
+        - RM/N04BD
+    match_how: startswith
+    type:
+      - code
+  N04BX:
+    case_sensitive: false
+    match:
+      - - M/N04BX
+        - RM/N04BX
+    match_how: startswith
+    type:
+      - code
+  N04CX:
+    case_sensitive: false
+    match:
+      - - M/N04CX
+        - RM/N04CX
+    match_how: startswith
+    type:
+      - code
+  N05AA:
+    case_sensitive: false
+    match:
+      - - M/N05AA
+        - RM/N05AA
+    match_how: startswith
+    type:
+      - code
+  N05AB:
+    case_sensitive: false
+    match:
+      - - M/N05AB
+        - RM/N05AB
+    match_how: startswith
+    type:
+      - code
+  N05AC:
+    case_sensitive: false
+    match:
+      - - M/N05AC
+        - RM/N05AC
+    match_how: startswith
+    type:
+      - code
+  N05AD:
+    case_sensitive: false
+    match:
+      - - M/N05AD
+        - RM/N05AD
+    match_how: startswith
+    type:
+      - code
+  N05AE:
+    case_sensitive: false
+    match:
+      - - M/N05AE
+        - RM/N05AE
+    match_how: startswith
+    type:
+      - code
+  N05AF:
+    case_sensitive: false
+    match:
+      - - M/N05AF
+        - RM/N05AF
+    match_how: startswith
+    type:
+      - code
+  N05AG:
+    case_sensitive: false
+    match:
+      - - M/N05AG
+        - RM/N05AG
+    match_how: startswith
+    type:
+      - code
+  N05AH:
+    case_sensitive: false
+    match:
+      - - M/N05AH
+        - RM/N05AH
+    match_how: startswith
+    type:
+      - code
+  N05AK:
+    case_sensitive: false
+    match:
+      - - M/N05AK
+        - RM/N05AK
+    match_how: startswith
+    type:
+      - code
+  N05AL:
+    case_sensitive: false
+    match:
+      - - M/N05AL
+        - RM/N05AL
+    match_how: startswith
+    type:
+      - code
+  N05AN:
+    case_sensitive: false
+    match:
+      - - M/N05AN
+        - RM/N05AN
+    match_how: startswith
+    type:
+      - code
+  N05AX:
+    case_sensitive: false
+    match:
+      - - M/N05AX
+        - RM/N05AX
+    match_how: startswith
+    type:
+      - code
+  N05BA:
+    case_sensitive: false
+    match:
+      - - M/N05BA
+        - RM/N05BA
+    match_how: startswith
+    type:
+      - code
+  N05BB:
+    case_sensitive: false
+    match:
+      - - M/N05BB
+        - RM/N05BB
+    match_how: startswith
+    type:
+      - code
+  N05BC:
+    case_sensitive: false
+    match:
+      - - M/N05BC
+        - RM/N05BC
+    match_how: startswith
+    type:
+      - code
+  N05BD:
+    case_sensitive: false
+    match:
+      - - M/N05BD
+        - RM/N05BD
+    match_how: startswith
+    type:
+      - code
+  N05BE:
+    case_sensitive: false
+    match:
+      - - M/N05BE
+        - RM/N05BE
+    match_how: startswith
+    type:
+      - code
+  N05BX:
+    case_sensitive: false
+    match:
+      - - M/N05BX
+        - RM/N05BX
+    match_how: startswith
+    type:
+      - code
+  N05CA:
+    case_sensitive: false
+    match:
+      - - M/N05CA
+        - RM/N05CA
+    match_how: startswith
+    type:
+      - code
+  N05CB:
+    case_sensitive: false
+    match:
+      - - M/N05CB
+        - RM/N05CB
+    match_how: startswith
+    type:
+      - code
+  N05CC:
+    case_sensitive: false
+    match:
+      - - M/N05CC
+        - RM/N05CC
+    match_how: startswith
+    type:
+      - code
+  N05CD:
+    case_sensitive: false
+    match:
+      - - M/N05CD
+        - RM/N05CD
+    match_how: startswith
+    type:
+      - code
+  N05CE:
+    case_sensitive: false
+    match:
+      - - M/N05CE
+        - RM/N05CE
+    match_how: startswith
+    type:
+      - code
+  N05CF:
+    case_sensitive: false
+    match:
+      - - M/N05CF
+        - RM/N05CF
+    match_how: startswith
+    type:
+      - code
+  N05CH:
+    case_sensitive: false
+    match:
+      - - M/N05CH
+        - RM/N05CH
+    match_how: startswith
+    type:
+      - code
+  N05CJ:
+    case_sensitive: false
+    match:
+      - - M/N05CJ
+        - RM/N05CJ
+    match_how: startswith
+    type:
+      - code
+  N05CM:
+    case_sensitive: false
+    match:
+      - - M/N05CM
+        - RM/N05CM
+    match_how: startswith
+    type:
+      - code
+  N05CX:
+    case_sensitive: false
+    match:
+      - - M/N05CX
+        - RM/N05CX
+    match_how: startswith
+    type:
+      - code
+  N06AA:
+    case_sensitive: false
+    match:
+      - - M/N06AA
+        - RM/N06AA
+    match_how: startswith
+    type:
+      - code
+  N06AB:
+    case_sensitive: false
+    match:
+      - - M/N06AB
+        - RM/N06AB
+    match_how: startswith
+    type:
+      - code
+  N06AF:
+    case_sensitive: false
+    match:
+      - - M/N06AF
+        - RM/N06AF
+    match_how: startswith
+    type:
+      - code
+  N06AG:
+    case_sensitive: false
+    match:
+      - - M/N06AG
+        - RM/N06AG
+    match_how: startswith
+    type:
+      - code
+  N06AX:
+    case_sensitive: false
+    match:
+      - - M/N06AX
+        - RM/N06AX
+    match_how: startswith
+    type:
+      - code
+  N06BA:
+    case_sensitive: false
+    match:
+      - - M/N06BA
+        - RM/N06BA
+    match_how: startswith
+    type:
+      - code
+  N06BC:
+    case_sensitive: false
+    match:
+      - - M/N06BC
+        - RM/N06BC
+    match_how: startswith
+    type:
+      - code
+  N06BX:
+    case_sensitive: false
+    match:
+      - - M/N06BX
+        - RM/N06BX
+    match_how: startswith
+    type:
+      - code
+  N06CA:
+    case_sensitive: false
+    match:
+      - - M/N06CA
+        - RM/N06CA
+    match_how: startswith
+    type:
+      - code
+  N06CB:
+    case_sensitive: false
+    match:
+      - - M/N06CB
+        - RM/N06CB
+    match_how: startswith
+    type:
+      - code
+  N06DA:
+    case_sensitive: false
+    match:
+      - - M/N06DA
+        - RM/N06DA
+    match_how: startswith
+    type:
+      - code
+  N06DX:
+    case_sensitive: false
+    match:
+      - - M/N06DX
+        - RM/N06DX
+    match_how: startswith
+    type:
+      - code
+  N07AA:
+    case_sensitive: false
+    match:
+      - - M/N07AA
+        - RM/N07AA
+    match_how: startswith
+    type:
+      - code
+  N07AB:
+    case_sensitive: false
+    match:
+      - - M/N07AB
+        - RM/N07AB
+    match_how: startswith
+    type:
+      - code
+  N07AX:
+    case_sensitive: false
+    match:
+      - - M/N07AX
+        - RM/N07AX
+    match_how: startswith
+    type:
+      - code
+  N07BA:
+    case_sensitive: false
+    match:
+      - - M/N07BA
+        - RM/N07BA
+    match_how: startswith
+    type:
+      - code
+  N07BB:
+    case_sensitive: false
+    match:
+      - - M/N07BB
+        - RM/N07BB
+    match_how: startswith
+    type:
+      - code
+  N07BC:
+    case_sensitive: false
+    match:
+      - - M/N07BC
+        - RM/N07BC
+    match_how: startswith
+    type:
+      - code
+  N07CA:
+    case_sensitive: false
+    match:
+      - - M/N07CA
+        - RM/N07CA
+    match_how: startswith
+    type:
+      - code
+  N07XA:
+    case_sensitive: false
+    match:
+      - - M/N07XA
+        - RM/N07XA
+    match_how: startswith
+    type:
+      - code
+  N07XX:
+    case_sensitive: false
+    match:
+      - - M/N07XX
+        - RM/N07XX
+    match_how: startswith
+    type:
+      - code
+  P01AA:
+    case_sensitive: false
+    match:
+      - - M/P01AA
+        - RM/P01AA
+    match_how: startswith
+    type:
+      - code
+  P01AB:
+    case_sensitive: false
+    match:
+      - - M/P01AB
+        - RM/P01AB
+    match_how: startswith
+    type:
+      - code
+  P01AC:
+    case_sensitive: false
+    match:
+      - - M/P01AC
+        - RM/P01AC
+    match_how: startswith
+    type:
+      - code
+  P01AR:
+    case_sensitive: false
+    match:
+      - - M/P01AR
+        - RM/P01AR
+    match_how: startswith
+    type:
+      - code
+  P01AX:
+    case_sensitive: false
+    match:
+      - - M/P01AX
+        - RM/P01AX
+    match_how: startswith
+    type:
+      - code
+  P01BA:
+    case_sensitive: false
+    match:
+      - - M/P01BA
+        - RM/P01BA
+    match_how: startswith
+    type:
+      - code
+  P01BB:
+    case_sensitive: false
+    match:
+      - - M/P01BB
+        - RM/P01BB
+    match_how: startswith
+    type:
+      - code
+  P01BC:
+    case_sensitive: false
+    match:
+      - - M/P01BC
+        - RM/P01BC
+    match_how: startswith
+    type:
+      - code
+  P01BD:
+    case_sensitive: false
+    match:
+      - - M/P01BD
+        - RM/P01BD
+    match_how: startswith
+    type:
+      - code
+  P01BE:
+    case_sensitive: false
+    match:
+      - - M/P01BE
+        - RM/P01BE
+    match_how: startswith
+    type:
+      - code
+  P01BF:
+    case_sensitive: false
+    match:
+      - - M/P01BF
+        - RM/P01BF
+    match_how: startswith
+    type:
+      - code
+  P01BX:
+    case_sensitive: false
+    match:
+      - - M/P01BX
+        - RM/P01BX
+    match_how: startswith
+    type:
+      - code
+  P01CA:
+    case_sensitive: false
+    match:
+      - - M/P01CA
+        - RM/P01CA
+    match_how: startswith
+    type:
+      - code
+  P01CB:
+    case_sensitive: false
+    match:
+      - - M/P01CB
+        - RM/P01CB
+    match_how: startswith
+    type:
+      - code
+  P01CC:
+    case_sensitive: false
+    match:
+      - - M/P01CC
+        - RM/P01CC
+    match_how: startswith
+    type:
+      - code
+  P01CD:
+    case_sensitive: false
+    match:
+      - - M/P01CD
+        - RM/P01CD
+    match_how: startswith
+    type:
+      - code
+  P01CX:
+    case_sensitive: false
+    match:
+      - - M/P01CX
+        - RM/P01CX
+    match_how: startswith
+    type:
+      - code
+  P02BA:
+    case_sensitive: false
+    match:
+      - - M/P02BA
+        - RM/P02BA
+    match_how: startswith
+    type:
+      - code
+  P02BB:
+    case_sensitive: false
+    match:
+      - - M/P02BB
+        - RM/P02BB
+    match_how: startswith
+    type:
+      - code
+  P02BX:
+    case_sensitive: false
+    match:
+      - - M/P02BX
+        - RM/P02BX
+    match_how: startswith
+    type:
+      - code
+  P02CA:
+    case_sensitive: false
+    match:
+      - - M/P02CA
+        - RM/P02CA
+    match_how: startswith
+    type:
+      - code
+  P02CB:
+    case_sensitive: false
+    match:
+      - - M/P02CB
+        - RM/P02CB
+    match_how: startswith
+    type:
+      - code
+  P02CC:
+    case_sensitive: false
+    match:
+      - - M/P02CC
+        - RM/P02CC
+    match_how: startswith
+    type:
+      - code
+  P02CE:
+    case_sensitive: false
+    match:
+      - - M/P02CE
+        - RM/P02CE
+    match_how: startswith
+    type:
+      - code
+  P02CF:
+    case_sensitive: false
+    match:
+      - - M/P02CF
+        - RM/P02CF
+    match_how: startswith
+    type:
+      - code
+  P02CX:
+    case_sensitive: false
+    match:
+      - - M/P02CX
+        - RM/P02CX
+    match_how: startswith
+    type:
+      - code
+  P02DA:
+    case_sensitive: false
+    match:
+      - - M/P02DA
+        - RM/P02DA
+    match_how: startswith
+    type:
+      - code
+  P02DX:
+    case_sensitive: false
+    match:
+      - - M/P02DX
+        - RM/P02DX
+    match_how: startswith
+    type:
+      - code
+  P03AA:
+    case_sensitive: false
+    match:
+      - - M/P03AA
+        - RM/P03AA
+    match_how: startswith
+    type:
+      - code
+  P03AB:
+    case_sensitive: false
+    match:
+      - - M/P03AB
+        - RM/P03AB
+    match_how: startswith
+    type:
+      - code
+  P03AC:
+    case_sensitive: false
+    match:
+      - - M/P03AC
+        - RM/P03AC
+    match_how: startswith
+    type:
+      - code
+  P03AX:
+    case_sensitive: false
+    match:
+      - - M/P03AX
+        - RM/P03AX
+    match_how: startswith
+    type:
+      - code
+  P03BA:
+    case_sensitive: false
+    match:
+      - - M/P03BA
+        - RM/P03BA
+    match_how: startswith
+    type:
+      - code
+  P03BX:
+    case_sensitive: false
+    match:
+      - - M/P03BX
+        - RM/P03BX
+    match_how: startswith
+    type:
+      - code
+  R01AA:
+    case_sensitive: false
+    match:
+      - - M/R01AA
+        - RM/R01AA
+    match_how: startswith
+    type:
+      - code
+  R01AB:
+    case_sensitive: false
+    match:
+      - - M/R01AB
+        - RM/R01AB
+    match_how: startswith
+    type:
+      - code
+  R01AC:
+    case_sensitive: false
+    match:
+      - - M/R01AC
+        - RM/R01AC
+    match_how: startswith
+    type:
+      - code
+  R01AD:
+    case_sensitive: false
+    match:
+      - - M/R01AD
+        - RM/R01AD
+    match_how: startswith
+    type:
+      - code
+  R01AX:
+    case_sensitive: false
+    match:
+      - - M/R01AX
+        - RM/R01AX
+    match_how: startswith
+    type:
+      - code
+  R01BA:
+    case_sensitive: false
+    match:
+      - - M/R01BA
+        - RM/R01BA
+    match_how: startswith
+    type:
+      - code
+  R02AA:
+    case_sensitive: false
+    match:
+      - - M/R02AA
+        - RM/R02AA
+    match_how: startswith
+    type:
+      - code
+  R02AB:
+    case_sensitive: false
+    match:
+      - - M/R02AB
+        - RM/R02AB
+    match_how: startswith
+    type:
+      - code
+  R02AD:
+    case_sensitive: false
+    match:
+      - - M/R02AD
+        - RM/R02AD
+    match_how: startswith
+    type:
+      - code
+  R02AX:
+    case_sensitive: false
+    match:
+      - - M/R02AX
+        - RM/R02AX
+    match_how: startswith
+    type:
+      - code
+  R03AA:
+    case_sensitive: false
+    match:
+      - - M/R03AA
+        - RM/R03AA
+    match_how: startswith
+    type:
+      - code
+  R03AB:
+    case_sensitive: false
+    match:
+      - - M/R03AB
+        - RM/R03AB
+    match_how: startswith
+    type:
+      - code
+  R03AC:
+    case_sensitive: false
+    match:
+      - - M/R03AC
+        - RM/R03AC
+    match_how: startswith
+    type:
+      - code
+  R03AH:
+    case_sensitive: false
+    match:
+      - - M/R03AH
+        - RM/R03AH
+    match_how: startswith
+    type:
+      - code
+  R03AK:
+    case_sensitive: false
+    match:
+      - - M/R03AK
+        - RM/R03AK
+    match_how: startswith
+    type:
+      - code
+  R03AL:
+    case_sensitive: false
+    match:
+      - - M/R03AL
+        - RM/R03AL
+    match_how: startswith
+    type:
+      - code
+  R03BA:
+    case_sensitive: false
+    match:
+      - - M/R03BA
+        - RM/R03BA
+    match_how: startswith
+    type:
+      - code
+  R03BB:
+    case_sensitive: false
+    match:
+      - - M/R03BB
+        - RM/R03BB
+    match_how: startswith
+    type:
+      - code
+  R03BC:
+    case_sensitive: false
+    match:
+      - - M/R03BC
+        - RM/R03BC
+    match_how: startswith
+    type:
+      - code
+  R03BX:
+    case_sensitive: false
+    match:
+      - - M/R03BX
+        - RM/R03BX
+    match_how: startswith
+    type:
+      - code
+  R03CA:
+    case_sensitive: false
+    match:
+      - - M/R03CA
+        - RM/R03CA
+    match_how: startswith
+    type:
+      - code
+  R03CB:
+    case_sensitive: false
+    match:
+      - - M/R03CB
+        - RM/R03CB
+    match_how: startswith
+    type:
+      - code
+  R03CC:
+    case_sensitive: false
+    match:
+      - - M/R03CC
+        - RM/R03CC
+    match_how: startswith
+    type:
+      - code
+  R03CK:
+    case_sensitive: false
+    match:
+      - - M/R03CK
+        - RM/R03CK
+    match_how: startswith
+    type:
+      - code
+  R03DA:
+    case_sensitive: false
+    match:
+      - - M/R03DA
+        - RM/R03DA
+    match_how: startswith
+    type:
+      - code
+  R03DB:
+    case_sensitive: false
+    match:
+      - - M/R03DB
+        - RM/R03DB
+    match_how: startswith
+    type:
+      - code
+  R03DC:
+    case_sensitive: false
+    match:
+      - - M/R03DC
+        - RM/R03DC
+    match_how: startswith
+    type:
+      - code
+  R03DX:
+    case_sensitive: false
+    match:
+      - - M/R03DX
+        - RM/R03DX
+    match_how: startswith
+    type:
+      - code
+  R05CA:
+    case_sensitive: false
+    match:
+      - - M/R05CA
+        - RM/R05CA
+    match_how: startswith
+    type:
+      - code
+  R05CB:
+    case_sensitive: false
+    match:
+      - - M/R05CB
+        - RM/R05CB
+    match_how: startswith
+    type:
+      - code
+  R05DA:
+    case_sensitive: false
+    match:
+      - - M/R05DA
+        - RM/R05DA
+    match_how: startswith
+    type:
+      - code
+  R05DB:
+    case_sensitive: false
+    match:
+      - - M/R05DB
+        - RM/R05DB
+    match_how: startswith
+    type:
+      - code
+  R05FA:
+    case_sensitive: false
+    match:
+      - - M/R05FA
+        - RM/R05FA
+    match_how: startswith
+    type:
+      - code
+  R05FB:
+    case_sensitive: false
+    match:
+      - - M/R05FB
+        - RM/R05FB
+    match_how: startswith
+    type:
+      - code
+  R05X:
+    case_sensitive: false
+    match:
+      - - M/R05X
+        - RM/R05X
+    match_how: startswith
+    type:
+      - code
+  R06AA:
+    case_sensitive: false
+    match:
+      - - M/R06AA
+        - RM/R06AA
+    match_how: startswith
+    type:
+      - code
+  R06AB:
+    case_sensitive: false
+    match:
+      - - M/R06AB
+        - RM/R06AB
+    match_how: startswith
+    type:
+      - code
+  R06AC:
+    case_sensitive: false
+    match:
+      - - M/R06AC
+        - RM/R06AC
+    match_how: startswith
+    type:
+      - code
+  R06AD:
+    case_sensitive: false
+    match:
+      - - M/R06AD
+        - RM/R06AD
+    match_how: startswith
+    type:
+      - code
+  R06AE:
+    case_sensitive: false
+    match:
+      - - M/R06AE
+        - RM/R06AE
+    match_how: startswith
+    type:
+      - code
+  R06AK:
+    case_sensitive: false
+    match:
+      - - M/R06AK
+        - RM/R06AK
+    match_how: startswith
+    type:
+      - code
+  R06AX:
+    case_sensitive: false
+    match:
+      - - M/R06AX
+        - RM/R06AX
+    match_how: startswith
+    type:
+      - code
+  R07AA:
+    case_sensitive: false
+    match:
+      - - M/R07AA
+        - RM/R07AA
+    match_how: startswith
+    type:
+      - code
+  R07AB:
+    case_sensitive: false
+    match:
+      - - M/R07AB
+        - RM/R07AB
+    match_how: startswith
+    type:
+      - code
+  R07AX:
+    case_sensitive: false
+    match:
+      - - M/R07AX
+        - RM/R07AX
+    match_how: startswith
+    type:
+      - code
+  S01AA:
+    case_sensitive: false
+    match:
+      - - M/S01AA
+        - RM/S01AA
+    match_how: startswith
+    type:
+      - code
+  S01AB:
+    case_sensitive: false
+    match:
+      - - M/S01AB
+        - RM/S01AB
+    match_how: startswith
+    type:
+      - code
+  S01AD:
+    case_sensitive: false
+    match:
+      - - M/S01AD
+        - RM/S01AD
+    match_how: startswith
+    type:
+      - code
+  S01AE:
+    case_sensitive: false
+    match:
+      - - M/S01AE
+        - RM/S01AE
+    match_how: startswith
+    type:
+      - code
+  S01AX:
+    case_sensitive: false
+    match:
+      - - M/S01AX
+        - RM/S01AX
+    match_how: startswith
+    type:
+      - code
+  S01BA:
+    case_sensitive: false
+    match:
+      - - M/S01BA
+        - RM/S01BA
+    match_how: startswith
+    type:
+      - code
+  S01BB:
+    case_sensitive: false
+    match:
+      - - M/S01BB
+        - RM/S01BB
+    match_how: startswith
+    type:
+      - code
+  S01BC:
+    case_sensitive: false
+    match:
+      - - M/S01BC
+        - RM/S01BC
+    match_how: startswith
+    type:
+      - code
+  S01CA:
+    case_sensitive: false
+    match:
+      - - M/S01CA
+        - RM/S01CA
+    match_how: startswith
+    type:
+      - code
+  S01CB:
+    case_sensitive: false
+    match:
+      - - M/S01CB
+        - RM/S01CB
+    match_how: startswith
+    type:
+      - code
+  S01CC:
+    case_sensitive: false
+    match:
+      - - M/S01CC
+        - RM/S01CC
+    match_how: startswith
+    type:
+      - code
+  S01EA:
+    case_sensitive: false
+    match:
+      - - M/S01EA
+        - RM/S01EA
+    match_how: startswith
+    type:
+      - code
+  S01EB:
+    case_sensitive: false
+    match:
+      - - M/S01EB
+        - RM/S01EB
+    match_how: startswith
+    type:
+      - code
+  S01EC:
+    case_sensitive: false
+    match:
+      - - M/S01EC
+        - RM/S01EC
+    match_how: startswith
+    type:
+      - code
+  S01ED:
+    case_sensitive: false
+    match:
+      - - M/S01ED
+        - RM/S01ED
+    match_how: startswith
+    type:
+      - code
+  S01EE:
+    case_sensitive: false
+    match:
+      - - M/S01EE
+        - RM/S01EE
+    match_how: startswith
+    type:
+      - code
+  S01EX:
+    case_sensitive: false
+    match:
+      - - M/S01EX
+        - RM/S01EX
+    match_how: startswith
+    type:
+      - code
+  S01FA:
+    case_sensitive: false
+    match:
+      - - M/S01FA
+        - RM/S01FA
+    match_how: startswith
+    type:
+      - code
+  S01FB:
+    case_sensitive: false
+    match:
+      - - M/S01FB
+        - RM/S01FB
+    match_how: startswith
+    type:
+      - code
+  S01GA:
+    case_sensitive: false
+    match:
+      - - M/S01GA
+        - RM/S01GA
+    match_how: startswith
+    type:
+      - code
+  S01GX:
+    case_sensitive: false
+    match:
+      - - M/S01GX
+        - RM/S01GX
+    match_how: startswith
+    type:
+      - code
+  S01HA:
+    case_sensitive: false
+    match:
+      - - M/S01HA
+        - RM/S01HA
+    match_how: startswith
+    type:
+      - code
+  S01JA:
+    case_sensitive: false
+    match:
+      - - M/S01JA
+        - RM/S01JA
+    match_how: startswith
+    type:
+      - code
+  S01JX:
+    case_sensitive: false
+    match:
+      - - M/S01JX
+        - RM/S01JX
+    match_how: startswith
+    type:
+      - code
+  S01KA:
+    case_sensitive: false
+    match:
+      - - M/S01KA
+        - RM/S01KA
+    match_how: startswith
+    type:
+      - code
+  S01KX:
+    case_sensitive: false
+    match:
+      - - M/S01KX
+        - RM/S01KX
+    match_how: startswith
+    type:
+      - code
+  S01LA:
+    case_sensitive: false
+    match:
+      - - M/S01LA
+        - RM/S01LA
+    match_how: startswith
+    type:
+      - code
+  S01XA:
+    case_sensitive: false
+    match:
+      - - M/S01XA
+        - RM/S01XA
+    match_how: startswith
+    type:
+      - code
+  S02AA:
+    case_sensitive: false
+    match:
+      - - M/S02AA
+        - RM/S02AA
+    match_how: startswith
+    type:
+      - code
+  S02BA:
+    case_sensitive: false
+    match:
+      - - M/S02BA
+        - RM/S02BA
+    match_how: startswith
+    type:
+      - code
+  S02CA:
+    case_sensitive: false
+    match:
+      - - M/S02CA
+        - RM/S02CA
+    match_how: startswith
+    type:
+      - code
+  S02DA:
+    case_sensitive: false
+    match:
+      - - M/S02DA
+        - RM/S02DA
+    match_how: startswith
+    type:
+      - code
+  S02DC:
+    case_sensitive: false
+    match:
+      - - M/S02DC
+        - RM/S02DC
+    match_how: startswith
+    type:
+      - code
+  S03AA:
+    case_sensitive: false
+    match:
+      - - M/S03AA
+        - RM/S03AA
+    match_how: startswith
+    type:
+      - code
+  S03BA:
+    case_sensitive: false
+    match:
+      - - M/S03BA
+        - RM/S03BA
+    match_how: startswith
+    type:
+      - code
+  S03CA:
+    case_sensitive: false
+    match:
+      - - M/S03CA
+        - RM/S03CA
+    match_how: startswith
+    type:
+      - code
+  S03D:
+    case_sensitive: false
+    match:
+      - - M/S03D
+        - RM/S03D
+    match_how: startswith
+    type:
+      - code
+  V01AA:
+    case_sensitive: false
+    match:
+      - - M/V01AA
+        - RM/V01AA
+    match_how: startswith
+    type:
+      - code
+  V03AB:
+    case_sensitive: false
+    match:
+      - - M/V03AB
+        - RM/V03AB
+    match_how: startswith
+    type:
+      - code
+  V03AC:
+    case_sensitive: false
+    match:
+      - - M/V03AC
+        - RM/V03AC
+    match_how: startswith
+    type:
+      - code
+  V03AE:
+    case_sensitive: false
+    match:
+      - - M/V03AE
+        - RM/V03AE
+    match_how: startswith
+    type:
+      - code
+  V03AF:
+    case_sensitive: false
+    match:
+      - - M/V03AF
+        - RM/V03AF
+    match_how: startswith
+    type:
+      - code
+  V03AG:
+    case_sensitive: false
+    match:
+      - - M/V03AG
+        - RM/V03AG
+    match_how: startswith
+    type:
+      - code
+  V03AH:
+    case_sensitive: false
+    match:
+      - - M/V03AH
+        - RM/V03AH
+    match_how: startswith
+    type:
+      - code
+  V03AK:
+    case_sensitive: false
+    match:
+      - - M/V03AK
+        - RM/V03AK
+    match_how: startswith
+    type:
+      - code
+  V03AM:
+    case_sensitive: false
+    match:
+      - - M/V03AM
+        - RM/V03AM
+    match_how: startswith
+    type:
+      - code
+  V03AN:
+    case_sensitive: false
+    match:
+      - - M/V03AN
+        - RM/V03AN
+    match_how: startswith
+    type:
+      - code
+  V03AX:
+    case_sensitive: false
+    match:
+      - - M/V03AX
+        - RM/V03AX
+    match_how: startswith
+    type:
+      - code
+  V03AZ:
+    case_sensitive: false
+    match:
+      - - M/V03AZ
+        - RM/V03AZ
+    match_how: startswith
+    type:
+      - code
+  V04B:
+    case_sensitive: false
+    match:
+      - - M/V04B
+        - RM/V04B
+    match_how: startswith
+    type:
+      - code
+  V04CA:
+    case_sensitive: false
+    match:
+      - - M/V04CA
+        - RM/V04CA
+    match_how: startswith
+    type:
+      - code
+  V04CB:
+    case_sensitive: false
+    match:
+      - - M/V04CB
+        - RM/V04CB
+    match_how: startswith
+    type:
+      - code
+  V04CC:
+    case_sensitive: false
+    match:
+      - - M/V04CC
+        - RM/V04CC
+    match_how: startswith
+    type:
+      - code
+  V04CD:
+    case_sensitive: false
+    match:
+      - - M/V04CD
+        - RM/V04CD
+    match_how: startswith
+    type:
+      - code
+  V04CE:
+    case_sensitive: false
+    match:
+      - - M/V04CE
+        - RM/V04CE
+    match_how: startswith
+    type:
+      - code
+  V04CF:
+    case_sensitive: false
+    match:
+      - - M/V04CF
+        - RM/V04CF
+    match_how: startswith
+    type:
+      - code
+  V04CG:
+    case_sensitive: false
+    match:
+      - - M/V04CG
+        - RM/V04CG
+    match_how: startswith
+    type:
+      - code
+  V04CH:
+    case_sensitive: false
+    match:
+      - - M/V04CH
+        - RM/V04CH
+    match_how: startswith
+    type:
+      - code
+  V04CJ:
+    case_sensitive: false
+    match:
+      - - M/V04CJ
+        - RM/V04CJ
+    match_how: startswith
+    type:
+      - code
+  V04CK:
+    case_sensitive: false
+    match:
+      - - M/V04CK
+        - RM/V04CK
+    match_how: startswith
+    type:
+      - code
+  V04CL:
+    case_sensitive: false
+    match:
+      - - M/V04CL
+        - RM/V04CL
+    match_how: startswith
+    type:
+      - code
+  V04CM:
+    case_sensitive: false
+    match:
+      - - M/V04CM
+        - RM/V04CM
+    match_how: startswith
+    type:
+      - code
+  V04CX:
+    case_sensitive: false
+    match:
+      - - M/V04CX
+        - RM/V04CX
+    match_how: startswith
+    type:
+      - code
+  V06AA:
+    case_sensitive: false
+    match:
+      - - M/V06AA
+        - RM/V06AA
+    match_how: startswith
+    type:
+      - code
+  V06B:
+    case_sensitive: false
+    match:
+      - - M/V06B
+        - RM/V06B
+    match_how: startswith
+    type:
+      - code
+  V06CA:
+    case_sensitive: false
+    match:
+      - - M/V06CA
+        - RM/V06CA
+    match_how: startswith
+    type:
+      - code
+  V06DA:
+    case_sensitive: false
+    match:
+      - - M/V06DA
+        - RM/V06DA
+    match_how: startswith
+    type:
+      - code
+  V06DB:
+    case_sensitive: false
+    match:
+      - - M/V06DB
+        - RM/V06DB
+    match_how: startswith
+    type:
+      - code
+  V06DC:
+    case_sensitive: false
+    match:
+      - - M/V06DC
+        - RM/V06DC
+    match_how: startswith
+    type:
+      - code
+  V06DD:
+    case_sensitive: false
+    match:
+      - - M/V06DD
+        - RM/V06DD
+    match_how: startswith
+    type:
+      - code
+  V06DE:
+    case_sensitive: false
+    match:
+      - - M/V06DE
+        - RM/V06DE
+    match_how: startswith
+    type:
+      - code
+  V06DF:
+    case_sensitive: false
+    match:
+      - - M/V06DF
+        - RM/V06DF
+    match_how: startswith
+    type:
+      - code
+  V06DX:
+    case_sensitive: false
+    match:
+      - - M/V06DX
+        - RM/V06DX
+    match_how: startswith
+    type:
+      - code
+  V07AA:
+    case_sensitive: false
+    match:
+      - - M/V07AA
+        - RM/V07AA
+    match_how: startswith
+    type:
+      - code
+  V07AB:
+    case_sensitive: false
+    match:
+      - - M/V07AB
+        - RM/V07AB
+    match_how: startswith
+    type:
+      - code
+  V07AC:
+    case_sensitive: false
+    match:
+      - - M/V07AC
+        - RM/V07AC
+    match_how: startswith
+    type:
+      - code
+  V07AD:
+    case_sensitive: false
+    match:
+      - - M/V07AD
+        - RM/V07AD
+    match_how: startswith
+    type:
+      - code
+  V07AN:
+    case_sensitive: false
+    match:
+      - - M/V07AN
+        - RM/V07AN
+    match_how: startswith
+    type:
+      - code
+  V07AR:
+    case_sensitive: false
+    match:
+      - - M/V07AR
+        - RM/V07AR
+    match_how: startswith
+    type:
+      - code
+  V07AS:
+    case_sensitive: false
+    match:
+      - - M/V07AS
+        - RM/V07AS
+    match_how: startswith
+    type:
+      - code
+  V07AT:
+    case_sensitive: false
+    match:
+      - - M/V07AT
+        - RM/V07AT
+    match_how: startswith
+    type:
+      - code
+  V07AV:
+    case_sensitive: false
+    match:
+      - - M/V07AV
+        - RM/V07AV
+    match_how: startswith
+    type:
+      - code
+  V07AX:
+    case_sensitive: false
+    match:
+      - - M/V07AX
+        - RM/V07AX
+    match_how: startswith
+    type:
+      - code
+  V07AY:
+    case_sensitive: false
+    match:
+      - - M/V07AY
+        - RM/V07AY
+    match_how: startswith
+    type:
+      - code
+  V07AZ:
+    case_sensitive: false
+    match:
+      - - M/V07AZ
+        - RM/V07AZ
+    match_how: startswith
+    type:
+      - code
+  V08AA:
+    case_sensitive: false
+    match:
+      - - M/V08AA
+        - RM/V08AA
+    match_how: startswith
+    type:
+      - code
+  V08AB:
+    case_sensitive: false
+    match:
+      - - M/V08AB
+        - RM/V08AB
+    match_how: startswith
+    type:
+      - code
+  V08AC:
+    case_sensitive: false
+    match:
+      - - M/V08AC
+        - RM/V08AC
+    match_how: startswith
+    type:
+      - code
+  V08AD:
+    case_sensitive: false
+    match:
+      - - M/V08AD
+        - RM/V08AD
+    match_how: startswith
+    type:
+      - code
+  V08BA:
+    case_sensitive: false
+    match:
+      - - M/V08BA
+        - RM/V08BA
+    match_how: startswith
+    type:
+      - code
+  V08CA:
+    case_sensitive: false
+    match:
+      - - M/V08CA
+        - RM/V08CA
+    match_how: startswith
+    type:
+      - code
+  V08CB:
+    case_sensitive: false
+    match:
+      - - M/V08CB
+        - RM/V08CB
+    match_how: startswith
+    type:
+      - code
+  V08CX:
+    case_sensitive: false
+    match:
+      - - M/V08CX
+        - RM/V08CX
+    match_how: startswith
+    type:
+      - code
+  V08DA:
+    case_sensitive: false
+    match:
+      - - M/V08DA
+        - RM/V08DA
+    match_how: startswith
+    type:
+      - code
+  V09AA:
+    case_sensitive: false
+    match:
+      - - M/V09AA
+        - RM/V09AA
+    match_how: startswith
+    type:
+      - code
+  V09AB:
+    case_sensitive: false
+    match:
+      - - M/V09AB
+        - RM/V09AB
+    match_how: startswith
+    type:
+      - code
+  V09AX:
+    case_sensitive: false
+    match:
+      - - M/V09AX
+        - RM/V09AX
+    match_how: startswith
+    type:
+      - code
+  V09BA:
+    case_sensitive: false
+    match:
+      - - M/V09BA
+        - RM/V09BA
+    match_how: startswith
+    type:
+      - code
+  V09CA:
+    case_sensitive: false
+    match:
+      - - M/V09CA
+        - RM/V09CA
+    match_how: startswith
+    type:
+      - code
+  V09CX:
+    case_sensitive: false
+    match:
+      - - M/V09CX
+        - RM/V09CX
+    match_how: startswith
+    type:
+      - code
+  V09DA:
+    case_sensitive: false
+    match:
+      - - M/V09DA
+        - RM/V09DA
+    match_how: startswith
+    type:
+      - code
+  V09DB:
+    case_sensitive: false
+    match:
+      - - M/V09DB
+        - RM/V09DB
+    match_how: startswith
+    type:
+      - code
+  V09DX:
+    case_sensitive: false
+    match:
+      - - M/V09DX
+        - RM/V09DX
+    match_how: startswith
+    type:
+      - code
+  V09EA:
+    case_sensitive: false
+    match:
+      - - M/V09EA
+        - RM/V09EA
+    match_how: startswith
+    type:
+      - code
+  V09EB:
+    case_sensitive: false
+    match:
+      - - M/V09EB
+        - RM/V09EB
+    match_how: startswith
+    type:
+      - code
+  V09EX:
+    case_sensitive: false
+    match:
+      - - M/V09EX
+        - RM/V09EX
+    match_how: startswith
+    type:
+      - code
+  V09FX:
+    case_sensitive: false
+    match:
+      - - M/V09FX
+        - RM/V09FX
+    match_how: startswith
+    type:
+      - code
+  V09GA:
+    case_sensitive: false
+    match:
+      - - M/V09GA
+        - RM/V09GA
+    match_how: startswith
+    type:
+      - code
+  V09GB:
+    case_sensitive: false
+    match:
+      - - M/V09GB
+        - RM/V09GB
+    match_how: startswith
+    type:
+      - code
+  V09GX:
+    case_sensitive: false
+    match:
+      - - M/V09GX
+        - RM/V09GX
+    match_how: startswith
+    type:
+      - code
+  V09HA:
+    case_sensitive: false
+    match:
+      - - M/V09HA
+        - RM/V09HA
+    match_how: startswith
+    type:
+      - code
+  V09HB:
+    case_sensitive: false
+    match:
+      - - M/V09HB
+        - RM/V09HB
+    match_how: startswith
+    type:
+      - code
+  V09HX:
+    case_sensitive: false
+    match:
+      - - M/V09HX
+        - RM/V09HX
+    match_how: startswith
+    type:
+      - code
+  V09IA:
+    case_sensitive: false
+    match:
+      - - M/V09IA
+        - RM/V09IA
+    match_how: startswith
+    type:
+      - code
+  V09IB:
+    case_sensitive: false
+    match:
+      - - M/V09IB
+        - RM/V09IB
+    match_how: startswith
+    type:
+      - code
+  V09IX:
+    case_sensitive: false
+    match:
+      - - M/V09IX
+        - RM/V09IX
+    match_how: startswith
+    type:
+      - code
+  V09XA:
+    case_sensitive: false
+    match:
+      - - M/V09XA
+        - RM/V09XA
+    match_how: startswith
+    type:
+      - code
+  V09XX:
+    case_sensitive: false
+    match:
+      - - M/V09XX
+        - RM/V09XX
+    match_how: startswith
+    type:
+      - code
+  V10AA:
+    case_sensitive: false
+    match:
+      - - M/V10AA
+        - RM/V10AA
+    match_how: startswith
+    type:
+      - code
+  V10AX:
+    case_sensitive: false
+    match:
+      - - M/V10AX
+        - RM/V10AX
+    match_how: startswith
+    type:
+      - code
+  V10BX:
+    case_sensitive: false
+    match:
+      - - M/V10BX
+        - RM/V10BX
+    match_how: startswith
+    type:
+      - code
+  V10XA:
+    case_sensitive: false
+    match:
+      - - M/V10XA
+        - RM/V10XA
+    match_how: startswith
+    type:
+      - code
+  V10XX:
+    case_sensitive: false
+    match:
+      - - M/V10XX
+        - RM/V10XX
+    match_how: startswith
+    type:
+      - code
+  V20:
+    case_sensitive: false
+    match:
+      - - M/V20
+        - RM/V20
+    match_how: startswith
+    type:
+      - code

@@ -1,0 +1,21 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+estimator:
+  methods: ["IPW", "TMLE"]
+  effect_type: "ATT"
+  n_bootstrap: 100
+  common_support_threshold: 0.001
+
+plot:
+  contingency_table:
+    max_outcomes_per_figure: 10
+    max_number_of_figures: 10
+  effect_size:
+    max_outcomes_per_figure: 10
+    max_number_of_figures: 10
+    plot_individual_effects: true
+  adjustment:
+    max_outcomes_per_figure: 8
+    max_number_of_figures: 10

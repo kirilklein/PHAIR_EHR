@@ -1,0 +1,32 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ### Inputs
+  splits: [tuning]
+  exposure: lung_cancer.csv # Exposure, optional, set to outcome if not provided. For multiple exposures, create a joint exposure file.
+  criteria_config: ./azure_configs/trace/pipeline/lung_cancer/cohort/above_50.yaml
+
+time_windows:
+  data_end:
+    year: 2024
+    month: 9
+    day: 10
+  data_start: # we include patients if they have only bg information
+    year: 1900
+    month: 1
+    day: 1
+  min_follow_up: # minimum interval between index date and end of data
+    days: 365
+  min_lookback: # minimum interval between start of data and index date
+    days: 0
+
+cv_folds: 5 # can be set to 1 if only a simple train/val split is needed
+val_ratio: 0.1 # only used if cv_folds is set to 1
+test_ratio: 0 # can be set to 1 for test set creation only
+
+index_date_matching:
+  birth_year_tolerance: 5
+  redraw_attempts: 2
+  age_adjusted: true # Set to false for non-age-adjusted sampling/ true by default
