@@ -509,7 +509,7 @@ Key metrics for evaluating calibration quality:
 
 - **Calibration Error**: Mean absolute difference between predicted and observed frequencies
 - **Brier Score**: Proper scoring rule combining calibration and discrimination
-- **Reliability Diagrams**: Visual assessment of probability-frequency correspondence
+- **Reliability diagrams**: Visual assessment of probability-frequency correspondence
 - **Sharpness**: Distribution of predicted probabilities (resolution)
 
 ### Importance for Causal Inference
@@ -730,6 +730,193 @@ Key diagnostics for evaluating causal estimates:
 - **Covariate Balance**: Successful confounder adjustment
 - **Common Support**: Adequate overlap in propensity score distributions
 - **Bias Sensitivity**: Robustness to modeling assumptions (when applicable)
+
+---
+
+## Optional: Cohort Characterization and Balance Analysis
+
+**Scripts:** `extract_criteria.py` + `get_stats.py`  
+**Configs:** `helper/extract_criteria.yaml` + `helper/get_stats.yaml`
+
+These helper scripts work together to provide comprehensive cohort characterization and covariate balance analysis. They enable detailed examination of patient characteristics before and after propensity score weighting, supporting both exploratory analysis and methodological validation.
+
+### Purpose and Workflow
+
+1. **Extract Criteria** (`extract_criteria.py`): Extract patient-level criteria flags and numeric variables based on medical codes and timing windows. Unlike the cohort selection process, this step extracts criteria for all patients without applying inclusion/exclusion filtering.
+2. **Analyze Statistics** (`get_stats.py`): Generate comprehensive descriptive statistics and balance analysis, with optional propensity score weighting and common support filtering.
+
+This two-step process separates data extraction from analysis, allowing flexible reuse of extracted criteria for different statistical analyses.
+
+### Step 1: Extract Criteria
+
+**Script:** `extract_criteria.py`  
+**Config:** `helper/extract_criteria.yaml`
+
+Extracts patient-level criteria flags and numeric variables based on medical codes and timing windows. Unlike the cohort selection process, this step extracts criteria for all patients without applying inclusion/exclusion filtering.
+
+#### Main Configuration Parameters (extract_criteria.py)
+
+```yaml
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ### Inputs
+  cohort: ./outputs/causal/finetune/cohorts/full        # Cohort directory (for patient IDs and index dates)
+  meds: ./example_data/synthea_meds_causal             # Medical data in MEDS format
+  splits: [tuning]                                     # Data splits to process
+  criteria_definitions_config: ./corebehrt/configs/causal/helper/criteria_definitions.yaml
+  
+  ### Outputs
+  criteria: ./outputs/causal/finetune/criteria_for_stats  # Extracted criteria output
+```
+
+- **cohort**: Directory containing patient IDs and index dates from cohort selection
+- **meds**: Source medical data for criteria extraction
+- **criteria_definitions_config**: Criteria definitions (same format as cohort selection)
+- **criteria**: Output directory for extracted patient-level criteria
+
+### Step 2: Analyze Statistics
+
+**Script:** `get_stats.py`  
+**Config:** `helper/get_stats.yaml`
+
+Generates comprehensive descriptive statistics and balance analysis, with optional propensity score weighting and common support filtering.
+
+#### Main Configuration Parameters (get_stats.py)
+
+```yaml
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ### Inputs
+  criteria: ./outputs/causal/finetune/criteria_for_stats  # Extracted criteria (required)
+  
+  #### Optional Inputs
+  cohort: ./outputs/causal/finetune/cohorts/full         # Cohort filtering (optional)
+  ps_calibrated_predictions: ./outputs/causal/finetune/models/simple/calibrated/predictions_exposure  # Propensity scores
+  outcome_model: ./outputs/causal/finetune/models/simple/calibrated/predictions_outcome/OUTCOME       # Outcome predictions
+  
+  ### Outputs
+  stats: ./outputs/causal/finetune/stats                 # Analysis results
+```
+
+#### Analysis Configuration
+
+```yaml
+# Optional weighting scheme
+weights: ATE                         # Weight type: 'ATE', 'ATT', 'ATC', or null
+common_support_threshold: 0.001      # Common support filtering threshold
+plot_ps: true                        # Generate propensity score plots
+```
+
+**Weighting Options:**
+
+- **ATE**: Average Treatment Effect weights (inverse propensity weighting)
+- **ATT**: Average Treatment Effect on Treated weights
+- **ATC**: Average Treatment Effect on Controls weights
+- **null**: No weighting (crude analysis only)
+
+**Analysis Features:**
+
+- **common_support_threshold**: Filter patients with extreme propensity scores
+- **plot_ps**: Generate propensity score distribution plots
+- **clip_ps**: Clip propensity scores to avoid extreme values
+
+### Statistical Outputs
+
+The analysis generates comprehensive statistics tables and diagnostics:
+
+#### Descriptive Statistics
+
+- **Binary Variables**: Counts and percentages by exposure group
+- **Numeric Variables**: Means, standard deviations, and medians by exposure group
+- **Overall Statistics**: Population-level summaries
+
+#### Propensity Score Diagnostics
+
+```yaml
+# Overlap and positivity assessment
+- Common support interval bounds
+- Percentage of patients outside common support  
+- Overlap coefficient between exposure groups
+- Kolmogorov-Smirnov test statistics
+- Standardized mean differences
+```
+
+#### Weighted Analysis (when applicable)
+
+- **Weighted Statistics**: Covariate balance after propensity score weighting
+- **Effective Sample Size**: Actual information content after weighting
+- **Balance Assessment**: Pre/post-weighting covariate standardized differences
+
+### Usage Examples
+
+```bash
+# Step 1: Extract criteria for all patients
+python -m corebehrt.main_causal.helper_scripts.extract_criteria
+
+# Step 2: Basic descriptive analysis
+python -m corebehrt.main_causal.helper_scripts.get_stats
+
+# Step 2: Analysis with propensity score weighting
+python -m corebehrt.main_causal.helper_scripts.get_stats --config_path helper/get_stats_with_weighting.yaml
+```
+
+### Key Use Cases
+
+#### Exploratory Cohort Analysis
+
+- **Baseline Characteristics**: Understand patient population before analysis
+- **Exposure Patterns**: Examine treatment assignment across covariates  
+- **Covariate Distributions**: Identify potential confounders and effect modifiers
+
+#### Balance Assessment
+
+- **Pre-adjustment Balance**: Quantify covariate imbalances between exposure groups
+- **Post-adjustment Balance**: Evaluate success of propensity score weighting
+- **Overlap Diagnostics**: Assess positivity assumption and common support
+
+#### Method Validation
+
+- **Effective Sample Size**: Understand information loss from weighting
+- **Extreme Weight Detection**: Identify problematic propensity score regions
+- **Balance Improvement**: Quantify covariate balance gains from adjustment
+
+### Generated Outputs
+
+#### Statistical Tables
+
+- **`stats_binary.csv`**: Binary covariate statistics by exposure group
+- **`stats_numeric.csv`**: Continuous covariate statistics by exposure group
+- **`weighted_stats_binary.csv`**: Weighted binary statistics (if weighting applied)
+- **`weighted_stats_numeric.csv`**: Weighted continuous statistics (if weighting applied)
+
+#### Propensity Score Analysis
+
+- **`ps_summary.csv`**: Overlap and positivity diagnostics
+- **`ps_summary_filtered.csv`**: Diagnostics after common support filtering
+- **`effective_sample_size.csv`**: Sample size after weighting
+- **`ps_plot.png`**: Propensity score distribution plots
+
+#### Raw Data
+
+- **`stats_raw_binary.csv`**: Unformatted binary statistics for further analysis
+- **`stats_raw_numeric.csv`**: Unformatted continuous statistics for further analysis
+
+### Integration with Main Pipeline
+
+These helper scripts integrate naturally with the main causal analysis pipeline:
+
+1. **After Cohort Selection**: Extract criteria using selected cohort and index dates
+2. **After Calibration**: Include propensity scores for weighted analysis  
+3. **Before Effect Estimation**: Assess balance and overlap for method selection
+4. **After Effect Estimation**: Validate assumptions and interpret results
+
+The flexible design allows these tools to be used at multiple stages for both exploratory analysis and methodological validation.
 
 ---
 
