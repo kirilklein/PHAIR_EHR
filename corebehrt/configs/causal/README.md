@@ -189,4 +189,105 @@ The cohort selection step produces:
 
 ---
 
-*Next: Data Preparation Configuration (coming soon)*
+## Step 2: Data Preparation
+
+**Script:** `prepare_ft_exp_y.py`  
+**Config:** `finetune/prepare/simple.yaml` (or variants)
+
+The data preparation step creates datasets for joint exposure and outcome modeling. It processes the selected cohort to generate training sequences with both exposure and outcome targets, preparing the data for the finetuning stage.
+
+### Main Configuration Parameters
+
+#### Logging & Paths
+
+```yaml
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  features: ./outputs/causal/data/features             # Preprocessed patient features
+  tokenized: ./outputs/causal/data/tokenized          # Tokenized sequences
+  cohort: ./outputs/causal/finetune/cohorts/full      # Selected cohort directory
+  
+  outcomes: ./outputs/causal/finetune/outcomes        # Outcome definitions
+  outcome_files:                                      # List of outcome CSV files
+    - OUTCOME.csv
+    - OUTCOME_2.csv
+    - OUTCOME_3.csv
+    
+  exposures: ./outputs/causal/finetune/outcomes       # Exposure definitions  
+  exposure: EXPOSURE.csv                              # Main exposure file
+  
+  ## OUTPUTS
+  prepared_data: ./outputs/causal/finetune/prepared_data  # Output directory
+```
+
+#### Data Configuration
+
+```yaml
+data:
+  type: finetune                      # Dataset type
+  truncation_len: 64                  # Maximum sequence length
+  min_len: 2                         # Minimum sequence length
+  cv_folds: 2                        # Cross-validation folds
+  min_instances_per_class: 10        # Minimum samples per outcome class
+```
+
+- **truncation_len**: Maximum number of tokens in patient sequences
+- **min_len**: Filter out sequences shorter than this
+- **cv_folds**: Number of cross-validation folds for training
+- **min_instances_per_class**: Minimum required samples for each outcome class
+
+#### Exposure Configuration
+
+```yaml
+exposure:
+  n_hours_censoring: -1              # Censoring time relative to index date
+  n_hours_start_follow_up: -1        # Follow-up start time 
+  n_hours_end_follow_up: 10          # Follow-up end time
+```
+
+- **n_hours_censoring**: When to censor data (negative = before index date)
+- **n_hours_start_follow_up**: Start of exposure observation window
+- **n_hours_end_follow_up**: End of exposure observation window
+
+#### Outcome Configuration
+
+```yaml
+outcome:
+  n_hours_start_follow_up: 1         # Outcome observation start
+  n_hours_end_follow_up: null        # Outcome observation end (null = no limit)
+  n_hours_compliance: null           # Compliance-based follow-up adjustment
+  group_wise_follow_up: true         # Use group-specific follow-up times
+  delay_death_hours: 336             # Death coding delay adjustment (hours)
+```
+
+- **n_hours_start_follow_up**: Start observing outcomes after index date
+- **n_hours_end_follow_up**: Stop observing outcomes (null = until data end)
+- **group_wise_follow_up**: Whether to use treatment-group specific follow-up
+- **delay_death_hours**: Account for delayed death coding (e.g., 2 weeks = 336h)
+
+### Usage Example (Prepare_ft_exp_y.py)
+
+```bash
+# Run data preparation with default config
+python -m corebehrt.main_causal.prepare_ft_exp_y
+
+# Run with specific variant
+python -m corebehrt.main_causal.prepare_ft_exp_y --config_path ./corebehrt/configs/causal/finetune/prepare/simulated.yaml
+```
+
+### Outputs (Prepare_ft_exp_y.py)
+
+The data preparation step produces:
+
+- **`folds.json`**: Cross-validation fold assignments for prepared data
+- **`cohort_config.yaml`**: Copy of cohort configuration for reference
+- **Prepared datasets**: Tokenized sequences with exposure and outcome labels
+- **Data splits**: Train/validation splits ready for model training
+
+---
+
+*Next: Finetuning Configuration (coming soon)*
