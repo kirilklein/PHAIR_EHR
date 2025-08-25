@@ -27,7 +27,7 @@ model:
   loss:
     name: focal # bce by default
     params:
-      gamma: 2.0
+      gamma: 4.0
   initialize_sigmoid_bias: false
 
 trainer_args:
@@ -56,7 +56,7 @@ trainer_args:
   plot_gradients_frequency: 20
 
 optimizer:
-  lr: 5e-4
+  lr: 2e-4
   eps: 1e-6
   weight_decay: 0
 
