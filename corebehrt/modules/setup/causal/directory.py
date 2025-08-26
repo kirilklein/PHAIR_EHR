@@ -17,6 +17,7 @@ from corebehrt.constants.paths import (
     FINETUNE_CFG,
     PREPARE_FINETUNE_CFG,
     PRETRAIN_CFG,
+    TRAIN_BASELINE_CFG,
 )
 from corebehrt.modules.setup.config import Config
 from corebehrt.modules.setup.directory import DirectoryPreparer
@@ -299,3 +300,21 @@ class CausalDirectoryPreparer(DirectoryPreparer):
 
         except OSError as e:
             raise ValueError(f"Could not read outcomes directory {outcomes_dir}: {e}")
+
+    def setup_train_baseline(self) -> None:
+        """
+        Validates path config and sets up directories for train_baseline.
+        """
+        # Setup logging
+        self.setup_logging("train_baseline")
+
+        # Validate and create directories
+        self.check_directory("prepared_data")
+        self.create_run_directory("model", base="runs")
+
+        # Write config in output directory.
+        self.write_config("model", name=TRAIN_BASELINE_CFG)
+
+        # Add pretrain info to config
+        data_cfg = self.get_config("prepared_data", name=DATA_CFG)
+        self.cfg.paths.data = data_cfg.paths.data
