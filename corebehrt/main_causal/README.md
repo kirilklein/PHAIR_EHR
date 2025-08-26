@@ -187,4 +187,3 @@ For large scale adverse event detection involving systematic analysis of multipl
 3. **Run standard pipeline** with generated multi-outcome configs
 
 This approach enables comprehensive safety profiling and systematic adverse event detection across entire therapeutic classes or diagnostic categories.
-
