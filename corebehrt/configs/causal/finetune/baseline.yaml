@@ -1,33 +1,70 @@
 logging:
+  # Logging verbosity level (e.g., DEBUG, INFO, WARNING, ERROR)
   level: INFO
-  path: ./outputs/logs/causal
+  # Optional: path to a log file. If omitted, logs to console.
+  path: ./outputs/logs/causal_baseline.log
 
 paths:
-  ## INPUTS
+  # --- INPUTS ---
+  # Path to the directory containing the prepared patient data and vocabulary.
   prepared_data: ./outputs/causal/finetune/prepared_data
 
-  ## OUTPUTS
-  model: ./outputs/causal/baseline/models/xgb # Save model/outputs to this folder
+  # --- OUTPUTS ---
+  # Main directory where all outputs for this baseline run will be saved.
+  # This includes models, results, and fold definitions.
+  model: ./outputs/causal/baseline/models/catboost
 
-# Baseline-specific configuration
-multihot: false  # Use one-hot (binary) instead of multi-hot (count) encoding
-include_age: true  # Include age features (mean, min, max, std, range)
+# ==============================================================================
+# Feature Engineering Settings
+# ==============================================================================
+# These settings control how patient data is converted into a feature matrix.
+multihot: false # If true, use feature counts (multi-hot). If false, use binary presence (one-hot).
+include_age: true # If true, include age-based features (mean, min, max, std, range).
 
+# ==============================================================================
+# Model Parameters (CatBoost)
+# ==============================================================================
+# These are the base parameters for the CatBoost model.
+# They are used directly if tuning is disabled, or as a starting point for tuning.
 catboost:
-  n_estimators: 1000       # Higher number, will be stopped early
-  learning_rate: 0.05
-  max_depth: 6
-  subsample: 0.8           # Row sampling
-  colsample_bylevel: 0.8   # Column sampling (like colsample_bytree in XGB)
-  l2_leaf_reg: 3           # L2 regularization
-  early_stopping_rounds: 50 # Stop if validation metric doesn't improve for 50 rounds
+  n_estimators: 100 # Max number of trees. Training will likely stop early.
+  learning_rate: 0.05 # Step size shrinkage to prevent overfitting.
+  max_depth: 5 # Maximum depth of each tree.
+  subsample: 0.8 # Fraction of objects to sample for each tree (row sampling).
+  colsample_bylevel: 0.8 # Fraction of features to sample for each level (column sampling).
+  l2_leaf_reg: 3 # L2 regularization term on weights.
+  early_stopping_rounds: 20 # Stop training if the validation score doesn't improve for this many rounds.
 
+# ==============================================================================
+# Hyperparameter Tuning Settings (Optuna)
+# ==============================================================================
+# Settings for the inner loop of the nested cross-validation.
 tuning:
-  tune_hyperparameters: True  # Set to False to disable tuning and use base params
-  n_trials: 50                # Number of different hyperparameter sets to try
+  # Master switch to enable or disable hyperparameter tuning.
+  # If false, the base `catboost` parameters above will be used for all folds.
+  tune_hyperparameters: True
 
-# Targets to train (if not specified, trains on all available targets)
-# targets: ["exposure", "outcome_1", "outcome_2"]
+  # Number of different hyperparameter combinations to try in the Optuna search.
+  n_trials: 10
 
-# Evaluation settings
-evaluate: false  # Set to true if you want to evaluate on test set
+  # [NEW] The proportion of the outer training set to use for validation in the inner loop.
+  # For example, 0.2 means an 80/20 split for inner training/validation.
+  inner_val_size: 0.2
+
+  # [NEW] If true, tune hyperparameters only on the first fold and reuse them for
+  # all subsequent folds. This provides a significant speed-up at the cost of
+  # slightly less robust hyperparameter selection. Recommended for faster experiments.
+  reuse_hyperparameters: True
+
+# ==============================================================================
+# Target and Evaluation Settings
+# ==============================================================================
+
+# Optional: Specify which targets to train models for.
+# If this section is commented out, the script will automatically train a model
+# for the exposure and all outcomes found in the dataset.
+# targets: ["exposure", "OUTCOME", "OUTCOME_2"]
+
+# This setting is for a final evaluation step, which is not part of the current
+# nested cross-validation script. You can ignore it or use it for a future test set evaluation.
+evaluate: true
