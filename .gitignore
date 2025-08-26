@@ -17,3 +17,4 @@ linux_install/
 corebehrt/main_causal/helper_data/sks_trees/
 mlruns/
 results/
+catboost_info/
