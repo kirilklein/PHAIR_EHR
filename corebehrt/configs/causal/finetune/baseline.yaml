@@ -1,0 +1,33 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  prepared_data: ./outputs/causal/finetune/prepared_data
+
+  ## OUTPUTS
+  model: ./outputs/causal/baseline/models/xgb # Save model/outputs to this folder
+
+# Baseline-specific configuration
+multihot: false  # Use one-hot (binary) instead of multi-hot (count) encoding
+include_age: true  # Include age features (mean, min, max, std, range)
+
+catboost:
+  n_estimators: 1000       # Higher number, will be stopped early
+  learning_rate: 0.05
+  max_depth: 6
+  subsample: 0.8           # Row sampling
+  colsample_bylevel: 0.8   # Column sampling (like colsample_bytree in XGB)
+  l2_leaf_reg: 3           # L2 regularization
+  early_stopping_rounds: 50 # Stop if validation metric doesn't improve for 50 rounds
+
+tuning:
+  tune_hyperparameters: True  # Set to False to disable tuning and use base params
+  n_trials: 50                # Number of different hyperparameter sets to try
+
+# Targets to train (if not specified, trains on all available targets)
+# targets: ["exposure", "outcome_1", "outcome_2"]
+
+# Evaluation settings
+evaluate: false  # Set to true if you want to evaluate on test set
