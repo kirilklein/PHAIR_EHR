@@ -35,7 +35,9 @@ def run_hyperparameter_tuning(
     Returns the best set of parameters found.
     """
     logging.info(f"  Starting hyperparameter tuning with {n_trials} trials...")
-    logging.info(f"  Inner train set size: {len(X_train)}, Inner val set size: {len(X_val)}")
+    logging.info(
+        f"  Inner train set size: {len(X_train)}, Inner val set size: {len(X_val)}"
+    )
     logging.info(f"  Train class distribution: {np.bincount(y_train)}")
     logging.info(f"  Val class distribution: {np.bincount(y_val)}")
     logging.info(f"  Scale pos weight: {scale_pos_weight:.4f}")
@@ -75,11 +77,11 @@ def run_hyperparameter_tuning(
 
         preds = model.predict_proba(X_val)[:, 1]
         auc = roc_auc_score(y_val, preds)
-        
+
         # Log progress every 10 trials
         if trial.number % 10 == 0:
             logging.info(f"    Trial {trial.number + 1}/{n_trials}: AUC = {auc:.4f}")
-            
+
         return auc
 
     logging.info(f"  Running Optuna optimization...")
@@ -89,10 +91,10 @@ def run_hyperparameter_tuning(
     logging.info(f"  Hyperparameter tuning completed!")
     logging.info(f"  Best trial AUC: {study.best_value:.4f}")
     logging.info(f"  Best parameters: {study.best_params}")
-    
+
     final_params = {**base_params, **study.best_params}
     logging.info(f"  Final merged parameters: {final_params}")
-    
+
     return final_params
 
 
@@ -160,7 +162,7 @@ def _get_best_params_for_fold(
     """Performs inner-loop splitting and hyperparameter tuning."""
     logger = logging.getLogger("train_baseline")
     logger.info("  Starting hyperparameter tuning for this fold...")
-    
+
     inner_val_size = tuning_cfg.get("inner_val_size", 0.2)
     n_trials = tuning_cfg.get("n_trials", 50)
     logger.info(f"  Inner validation size: {inner_val_size}")
@@ -171,9 +173,11 @@ def _get_best_params_for_fold(
         test_size=inner_val_size,
         random_state=42,
     )
-    
-    logger.info(f"  Split outer train into inner train ({len(inner_train_pids)} patients) and inner val ({len(inner_val_pids)} patients)")
-    
+
+    logger.info(
+        f"  Split outer train into inner train ({len(inner_train_pids)} patients) and inner val ({len(inner_val_pids)} patients)"
+    )
+
     inner_train_data = data.filter_by_pids(inner_train_pids)
     inner_val_data = data.filter_by_pids(inner_val_pids)
 
@@ -192,7 +196,7 @@ def _get_best_params_for_fold(
         n_trials,
         scale_pos_weight,
     )
-    
+
     logger.info("  Hyperparameter tuning completed for this fold")
     return tuned_params
 
@@ -208,7 +212,7 @@ def _train_and_evaluate_fold(
     """Trains a final model and evaluates it on the holdout test set."""
     logger.info(f"  Training final model with outer train set size: {len(X_train)}")
     logger.info(f"  Outer test set size: {len(X_test)}")
-    
+
     if np.unique(y_test).size < 2:
         logger.warning("  Only one class in outer test set. Skipping scoring.")
         return np.nan
@@ -219,14 +223,14 @@ def _train_and_evaluate_fold(
     final_model = CatBoostClassifier(
         scale_pos_weight=scale_pos_weight, random_state=42, **best_params
     )
-    
+
     logger.info("  Fitting final model...")
     final_model.fit(X_train, y_train, verbose=0)
-    
+
     logger.info("  Generating predictions on test set...")
     y_pred_proba = final_model.predict_proba(X_test)[:, 1]
     unbiased_auc = roc_auc_score(y_test, y_pred_proba)
-    
+
     logger.info(f"  Final model evaluation complete. AUC: {unbiased_auc:.4f}")
 
     return unbiased_auc
@@ -274,7 +278,7 @@ def nested_cv_loop(
     base_params, tuning_cfg = _setup_model_parameters(cfg)
     should_tune = tuning_cfg.get("tune_hyperparameters", True)
     reuse_hyperparameters = tuning_cfg.get("reuse_hyperparameters", True)
-    
+
     logger.info(f"Hyperparameter tuning enabled: {should_tune}")
     if should_tune:
         logger.info(f"Reuse hyperparameters across folds: {reuse_hyperparameters}")
@@ -309,7 +313,9 @@ def nested_cv_loop(
                     best_params = tuned_params
                     if reuse_hyperparameters:
                         best_params_for_target = tuned_params
-                        logger.info("  Saved hyperparameters for reuse in subsequent folds")
+                        logger.info(
+                            "  Saved hyperparameters for reuse in subsequent folds"
+                        )
                 else:
                     logger.info("  Reusing hyperparameters from the first fold")
                     logger.info(f"  Reused parameters: {best_params_for_target}")
@@ -338,7 +344,7 @@ def nested_cv_loop(
                 logger.info(
                     f"  UNBIASED AUC on outer test set (Fold {i + 1}): {unbiased_auc:.4f}"
                 )
-            
+
             logger.info(f"--- Completed Outer Fold {i + 1}/{len(folds)} ---\n")
 
         _report_and_save_target_results(
