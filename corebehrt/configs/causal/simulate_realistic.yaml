@@ -25,8 +25,8 @@ simulation_model:
   # --- 1. Define the Latent Space Structure ---
   # These parameters define the "hidden layer" of the simulation.
   num_shared_factors: 30 # Factors that cause BOTH exposure and outcome (confounders)
-  num_exposure_only_factors: 3 # Factors that ONLY cause exposure (instruments)
-  num_outcome_only_factors: 3 # Factors that ONLY cause outcomes (independent risks)
+  num_exposure_only_factors: 2 # Factors that ONLY cause exposure (instruments)
+  num_outcome_only_factors: 2 # Factors that ONLY cause outcomes (independent risks)
 
   # --- 2. Define How Medical Codes Map to Latent Factors ---
   factor_mapping:
@@ -39,13 +39,13 @@ simulation_model:
   # Set a value to 0 to remove that pathway entirely.
   influence_scales:
     # How strongly shared factors affect exposure (Path 1 of Confounding)
-    shared_to_exposure: 1.5
+    shared_to_exposure: 3.5
     # How strongly shared factors affect outcomes (Path 2 of Confounding)
-    shared_to_outcome: 2
+    shared_to_outcome: 3.5
     # How strongly non-confounding factors predict treatment
-    exposure_only_to_exposure: 0.25
+    exposure_only_to_exposure: 0.1
     # How strongly non-confounding factors predict outcomes
-    outcome_only_to_outcome: 0.25
+    outcome_only_to_outcome: 0.1
 
   time_decay_halflife_days: 3000
   noise:
