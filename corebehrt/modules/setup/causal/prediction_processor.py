@@ -18,6 +18,8 @@ from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
 from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
 
+ROUND_DIGIT = 7
+
 
 class CalibrationProcessor:
     """
@@ -40,6 +42,7 @@ class CalibrationProcessor:
         # Load the pre-combined predictions from finetune
         combined_predictions_path = join(self.finetune_dir, COMBINED_PREDICTIONS_FILE)
         combined_df = pd.read_csv(combined_predictions_path)
+        combined_df = combined_df.round(ROUND_DIGIT)
 
         # Extract and save exposure predictions
         self._extract_and_save_exposure_predictions(combined_df)
@@ -61,7 +64,7 @@ class CalibrationProcessor:
         # Load the pre-combined predictions from finetune
         combined_predictions_path = join(self.finetune_dir, COMBINED_PREDICTIONS_FILE)
         combined_df = pd.read_csv(combined_predictions_path)
-
+        combined_df = combined_df.round(ROUND_DIGIT)
         # Calibrate exposure
         df_exp, df_exp_calibrated = self._calibrate_exposure_from_combined(combined_df)
 

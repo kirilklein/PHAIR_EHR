@@ -26,6 +26,8 @@ from corebehrt.constants.data import PID_COL, VAL_KEY
 from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
 from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
 
+ROUND_DIGIT = 7
+
 
 class PredictionAccumulator:
     """
@@ -70,6 +72,7 @@ class PredictionAccumulator:
 
         # Save combined predictions
         output_path = join(self.finetune_dir, COMBINED_PREDICTIONS_FILE)
+        combined_df = combined_df.round(ROUND_DIGIT)
         combined_df.to_csv(output_path, index=False)
 
         self.logger.info(f"Combined predictions saved to: {output_path}")

@@ -43,6 +43,7 @@ from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.config import load_config
 
 CONFIG_PATH = "./corebehrt/configs/causal/finetune/baseline.yaml"
+ROUND_DIGIT = 7
 
 
 class FoldPredictions(NamedTuple):
@@ -140,6 +141,7 @@ def save_combined_predictions(
     # Create DataFrame and save
     combined_df = pd.DataFrame(all_data)
     output_path = join(baseline_folder, COMBINED_PREDICTIONS_FILE)
+    combined_df = combined_df.round(ROUND_DIGIT)
     combined_df.to_csv(output_path, index=False)
 
     logger.info(f"Combined predictions saved to: {output_path}")
