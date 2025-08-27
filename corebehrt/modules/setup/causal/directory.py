@@ -91,9 +91,18 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         self.create_directory("calibrated_predictions")
 
         # Write config in output directory.
-        self.write_config(
-            "calibrated_predictions", source="finetune_model", name=FINETUNE_CFG
-        )
+        if os.path.exists(join(self.cfg.paths.finetune_model, FINETUNE_CFG)):
+            self.write_config(
+                "calibrated_predictions", source="finetune_model", name=FINETUNE_CFG
+            )
+        elif os.path.exists(join(self.cfg.paths.finetune_model, TRAIN_BASELINE_CFG)):
+            self.write_config(
+                "calibrated_predictions",
+                source="finetune_model",
+                name=TRAIN_BASELINE_CFG,
+            )
+        else:
+            raise ValueError("No finetune or baseline config found")
         self.write_config("calibrated_predictions", name=CALIBRATE_CFG)
 
     def setup_estimate(self) -> None:

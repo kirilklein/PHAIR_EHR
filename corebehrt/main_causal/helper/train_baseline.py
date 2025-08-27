@@ -1,7 +1,9 @@
 import logging
-from os.path import join
-from typing import Any, Dict, List, Tuple, NamedTuple
+import os
 from dataclasses import dataclass
+from datetime import datetime
+from os.path import join
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import optuna
@@ -11,15 +13,26 @@ from catboost import CatBoostClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
-from corebehrt.constants.causal.data import EXPOSURE
+from corebehrt.constants.causal.data import (
+    CF_PROBAS,
+    EXPOSURE,
+    EXPOSURE_COL,
+    OUTCOME_COL,
+    PROBAS,
+    PS_COL,
+)
+from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
+from corebehrt.constants.data import PID_COL
 from corebehrt.constants.paths import (
     FOLDS_FILE,
 )
-from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
-from corebehrt.modules.setup.config import Config
 from corebehrt.functional.preparation.causal.one_hot import (
     create_features_from_patients,
 )
+from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
+from corebehrt.modules.setup.config import Config
+
+ROUND_DIGIT = 7
 
 
 @dataclass
@@ -33,12 +46,99 @@ class FoldPredictionData:
     targets: np.ndarray
 
 
-class FoldPredictions(NamedTuple):
-    """Container for predictions from a single fold."""
+def save_nested_cv_summary(
+    all_results: List[pd.DataFrame], baseline_folder: str
+) -> None:
+    """Combines all target results and saves the final summary."""
+    logger = logging.getLogger("save_summary")
 
-    pids: List[int]
-    predictions: Dict[str, np.ndarray]  # target_name -> predictions
-    targets: Dict[str, np.ndarray]  # target_name -> actual values
+    if not all_results:
+        logger.warning("No nested CV results to save.")
+        return
+
+    # Combine all results into a single DataFrame
+    all_results_df = pd.concat(all_results, ignore_index=True)
+    all_results_df = all_results_df.sort_values(by="mean_auc", ascending=False)
+
+    # Save the combined report
+    scores_folder = join(baseline_folder, "scores")
+    os.makedirs(scores_folder, exist_ok=True)
+    final_report_path = join(
+        scores_folder, f"scores_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    )
+    all_results_df.to_csv(final_report_path, index=False)
+
+    logger.info("===== Nested CV Final Summary =====")
+    logger.info(f"\n{all_results_df.to_string(index=False)}")
+    logger.info(f"Final summary report saved to {final_report_path}")
+
+
+def save_combined_predictions(
+    prediction_storage: List[FoldPredictionData],
+    baseline_folder: str,
+    outcome_names: List[str],
+) -> None:
+    """Combines predictions from all folds and saves in the same format as finetune_exp_y.py."""
+    logger = logging.getLogger("save_predictions")
+
+    if not prediction_storage:
+        logger.warning("No fold predictions to save.")
+        return
+
+    # Group predictions by fold and organize by target
+    fold_data = {}  # fold_idx -> {target_name: (pids, predictions, targets)}
+
+    for pred_data in prediction_storage:
+        fold_idx = pred_data.fold_idx
+        if fold_idx not in fold_data:
+            fold_data[fold_idx] = {}
+
+        fold_data[fold_idx][pred_data.target_name] = (
+            pred_data.pids,
+            pred_data.predictions,
+            pred_data.targets,
+        )
+
+    # Combine all folds
+    all_data = []
+
+    for fold_idx in sorted(fold_data.keys()):
+        fold_targets = fold_data[fold_idx]
+
+        # Get PIDs from the first available target (should be consistent across targets)
+        first_target = next(iter(fold_targets.keys()))
+        pids, _, _ = fold_targets[first_target]
+
+        # Create row data for each patient in this fold
+        for i, pid in enumerate(pids):
+            row_data = {PID_COL: pid}
+
+            # Add exposure data (propensity score and target)
+            if EXPOSURE in fold_targets:
+                _, predictions, targets = fold_targets[EXPOSURE]
+                row_data[PS_COL] = predictions[i]
+                row_data[EXPOSURE_COL] = int(targets[i])
+
+            # Add outcome data
+            for outcome_name in outcome_names:
+                if outcome_name in fold_targets:
+                    _, predictions, targets = fold_targets[outcome_name]
+                    row_data[f"{PROBAS}_{outcome_name}"] = predictions[i]
+                    row_data[f"{OUTCOME_COL}_{outcome_name}"] = int(targets[i])
+                    # For baseline, we use the same prediction as counterfactual
+                    row_data[f"{CF_PROBAS}_{outcome_name}"] = predictions[i]
+
+            all_data.append(row_data)
+
+    # Create DataFrame and save
+    combined_df = pd.DataFrame(all_data)
+    output_path = join(baseline_folder, COMBINED_PREDICTIONS_FILE)
+    combined_df = combined_df.round(ROUND_DIGIT)
+    combined_df.to_csv(output_path, index=False)
+
+    logger.info(f"Combined predictions saved to: {output_path}")
+    logger.info(f"Combined dataframe shape: {combined_df.shape}")
+    logger.info(f"Columns: {list(combined_df.columns)}")
 
 
 def run_hyperparameter_tuning(
