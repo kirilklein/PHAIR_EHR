@@ -2,7 +2,7 @@ logging:
   # Logging verbosity level (e.g., DEBUG, INFO, WARNING, ERROR)
   level: INFO
   # Optional: path to a log file. If omitted, logs to console.
-  path: ./outputs/logs/causal_baseline.log
+  path: ./outputs/logs/causal/baseline.log
 
 paths:
   # --- INPUTS ---
