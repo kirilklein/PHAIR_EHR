@@ -36,14 +36,14 @@ def main_calibrate(config_path):
         num_outcomes_to_plot=num_outcomes_to_plot,
     )
 
-    # 2. Collect raw predictions
-    logger.info("Collecting and saving predictions...")
-    prediction_processor.collect_and_save_all_predictions()
+    # 2. Load pre-combined predictions and save in expected format
+    logger.info("Loading pre-combined predictions and saving in expected format...")
+    prediction_processor.load_and_save_predictions()
 
-    # 3. Calibrate predictions
+    # 3. Load, calibrate and save all predictions
     logger.info("Calibrating predictions...")
     calibrated_data: CalibrationArtifacts = (
-        prediction_processor.load_calibrate_and_save_all()
+        prediction_processor.load_and_calibrate_predictions()
     )
 
     # 4. Generate plots
