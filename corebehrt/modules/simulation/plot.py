@@ -346,7 +346,7 @@ def plot_true_effects_vs_risk_differences(
             f"    Observed - True: {r['observed_risk_difference'] - r['true_risk_difference']:.3f}"
         )
         print(
-            f"    ATE - Observed: {r['ate_mean'] - r['observed_risk_difference']:.3f}"
+            f"    Risk Difference: {r['ate_mean'] - r['observed_risk_difference']:.3f}"
         )
 
     print("\n" + "=" * 80)
