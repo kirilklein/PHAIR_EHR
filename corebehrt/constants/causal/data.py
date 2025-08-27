@@ -54,7 +54,7 @@ FLOW_AFTER_STRICT = "after_strict"
 FLOW_FINAL = "final"
 
 CALIBRATION_COLLAPSE_THRESHOLD = 0.01
-
+ROUND_DIGIT = 8  # For saving probas
 
 # Prepare finetune
 GROUP_COL = "group"

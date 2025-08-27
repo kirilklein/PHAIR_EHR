@@ -11,14 +11,13 @@ from corebehrt.constants.causal.data import (
     PROBAS,
     PS_COL,
     TARGETS,
+    ROUND_DIGIT,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.calibration import calibrate_folds
 from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
 from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
-
-ROUND_DIGIT = 7
 
 
 class CalibrationProcessor:
@@ -77,6 +76,7 @@ class CalibrationProcessor:
         combined_calibrated_df = self._create_combined_calibrated_df(
             df_exp_calibrated, outcomes_calibrated
         )
+        combined_calibrated_df = combined_calibrated_df.round(ROUND_DIGIT)
         combined_calibrated_df.to_csv(
             self.paths.get_combined_calibrated_path(), index=False
         )

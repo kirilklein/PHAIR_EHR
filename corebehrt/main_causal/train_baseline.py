@@ -18,7 +18,6 @@ from corebehrt.constants.paths import (
     OUTCOME_NAMES_FILE,
     TEST_PIDS_FILE,
 )
-
 from corebehrt.functional.io_operations.load import load_vocabulary
 from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.train_baseline import (
@@ -32,7 +31,6 @@ from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.config import load_config
 
 CONFIG_PATH = "./corebehrt/configs/causal/finetune/baseline.yaml"
-ROUND_DIGIT = 7
 
 
 def main_baseline(config_path: str):

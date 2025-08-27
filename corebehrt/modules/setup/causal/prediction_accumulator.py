@@ -21,12 +21,11 @@ from corebehrt.constants.causal.data import (
     PROBAS,
     PS_COL,
     TARGETS,
+    ROUND_DIGIT,
 )
 from corebehrt.constants.data import PID_COL, VAL_KEY
 from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
 from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
-
-ROUND_DIGIT = 7
 
 
 class PredictionAccumulator:

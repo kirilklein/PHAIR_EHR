@@ -20,6 +20,7 @@ from corebehrt.constants.causal.data import (
     OUTCOME_COL,
     PROBAS,
     PS_COL,
+    ROUND_DIGIT,
 )
 from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
 from corebehrt.constants.data import PID_COL
@@ -32,8 +33,6 @@ from corebehrt.functional.preparation.causal.one_hot import (
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.config import Config
 
-ROUND_DIGIT = 7
-
 
 @dataclass
 class FoldPredictionData:
@@ -44,6 +43,7 @@ class FoldPredictionData:
     pids: List[int]
     predictions: np.ndarray
     targets: np.ndarray
+    cf_predictions: np.ndarray = None  # For counterfactual predictions (outcomes only)
 
 
 def save_nested_cv_summary(
@@ -86,7 +86,7 @@ def save_combined_predictions(
         return
 
     # Group predictions by fold and organize by target
-    fold_data = {}  # fold_idx -> {target_name: (pids, predictions, targets)}
+    fold_data = {}  # fold_idx -> {target_name: (pids, predictions, targets, cf_predictions)}
 
     for pred_data in prediction_storage:
         fold_idx = pred_data.fold_idx
@@ -97,6 +97,7 @@ def save_combined_predictions(
             pred_data.pids,
             pred_data.predictions,
             pred_data.targets,
+            pred_data.cf_predictions,
         )
 
     # Combine all folds
@@ -107,7 +108,7 @@ def save_combined_predictions(
 
         # Get PIDs from the first available target (should be consistent across targets)
         first_target = next(iter(fold_targets.keys()))
-        pids, _, _ = fold_targets[first_target]
+        pids, _, _, _ = fold_targets[first_target]
 
         # Create row data for each patient in this fold
         for i, pid in enumerate(pids):
@@ -115,18 +116,22 @@ def save_combined_predictions(
 
             # Add exposure data (propensity score and target)
             if EXPOSURE in fold_targets:
-                _, predictions, targets = fold_targets[EXPOSURE]
+                _, predictions, targets, _ = fold_targets[EXPOSURE]
                 row_data[PS_COL] = predictions[i]
                 row_data[EXPOSURE_COL] = int(targets[i])
 
             # Add outcome data
             for outcome_name in outcome_names:
                 if outcome_name in fold_targets:
-                    _, predictions, targets = fold_targets[outcome_name]
+                    _, predictions, targets, cf_predictions = fold_targets[outcome_name]
                     row_data[f"{PROBAS}_{outcome_name}"] = predictions[i]
                     row_data[f"{OUTCOME_COL}_{outcome_name}"] = int(targets[i])
-                    # For baseline, we use the same prediction as counterfactual
-                    row_data[f"{CF_PROBAS}_{outcome_name}"] = predictions[i]
+                    # Use proper counterfactual predictions
+                    if cf_predictions is not None:
+                        row_data[f"{CF_PROBAS}_{outcome_name}"] = cf_predictions[i]
+                    else:
+                        # Fallback for exposure (which doesn't have counterfactual)
+                        row_data[f"{CF_PROBAS}_{outcome_name}"] = predictions[i]
 
             all_data.append(row_data)
 
@@ -321,6 +326,35 @@ def _get_best_params_for_fold(
     return tuned_params
 
 
+def _generate_counterfactual_predictions(
+    model: CatBoostClassifier,
+    X_test: pd.DataFrame,
+    target_name: str,
+    logger: logging.Logger,
+) -> np.ndarray:
+    """Generate counterfactual predictions by flipping the exposure value."""
+    if target_name == EXPOSURE:
+        # No counterfactual for exposure itself
+        return None
+
+    if EXPOSURE not in X_test.columns:
+        logger.warning(
+            f"  No exposure column found for counterfactual prediction of {target_name}"
+        )
+        return None
+
+    logger.info(f"  Generating counterfactual predictions for {target_name}...")
+
+    # Create counterfactual dataset by flipping exposure
+    X_cf = X_test.copy()
+    X_cf[EXPOSURE] = 1 - X_cf[EXPOSURE]  # Flip exposure (0->1, 1->0)
+
+    # Generate counterfactual predictions
+    cf_predictions = model.predict_proba(X_cf)[:, 1]
+
+    return cf_predictions
+
+
 def _train_and_evaluate_fold(
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -357,6 +391,11 @@ def _train_and_evaluate_fold(
 
     logger.info(f"  Final model evaluation complete. AUC: {unbiased_auc:.4f}")
 
+    # Generate counterfactual predictions for outcome targets
+    cf_predictions = _generate_counterfactual_predictions(
+        final_model, X_test, target_name, logger
+    )
+
     # Store predictions for later combination
     # Convert to numpy array if it's a pandas Series, otherwise use as-is
     targets_array = y_test.values if hasattr(y_test, "values") else y_test
@@ -368,6 +407,7 @@ def _train_and_evaluate_fold(
             pids=test_pids,
             predictions=y_pred_proba,
             targets=targets_array,
+            cf_predictions=cf_predictions,
         )
     )
 
