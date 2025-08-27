@@ -23,6 +23,7 @@ from corebehrt.constants.causal.data import (
     TARGETS,
 )
 from corebehrt.constants.data import PID_COL, VAL_KEY
+from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
 from corebehrt.functional.io_operations.causal.predictions import collect_fold_data
 
 
@@ -68,7 +69,7 @@ class PredictionAccumulator:
         combined_df = self._combine_predictions(df_exposure, outcome_dataframes)
 
         # Save combined predictions
-        output_path = join(self.finetune_dir, "combined_predictions.csv")
+        output_path = join(self.finetune_dir, COMBINED_PREDICTIONS_FILE)
         combined_df.to_csv(output_path, index=False)
 
         self.logger.info(f"Combined predictions saved to: {output_path}")

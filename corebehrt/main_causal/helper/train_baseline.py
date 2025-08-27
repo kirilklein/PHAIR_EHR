@@ -1,6 +1,7 @@
 import logging
 from os.path import join
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, NamedTuple
+from dataclasses import dataclass
 
 import numpy as np
 import optuna
@@ -19,6 +20,25 @@ from corebehrt.modules.setup.config import Config
 from corebehrt.functional.preparation.causal.one_hot import (
     create_features_from_patients,
 )
+
+
+@dataclass
+class FoldPredictionData:
+    """Container for storing predictions from each fold."""
+
+    fold_idx: int
+    target_name: str
+    pids: List[int]
+    predictions: np.ndarray
+    targets: np.ndarray
+
+
+class FoldPredictions(NamedTuple):
+    """Container for predictions from a single fold."""
+
+    pids: List[int]
+    predictions: Dict[str, np.ndarray]  # target_name -> predictions
+    targets: Dict[str, np.ndarray]  # target_name -> actual values
 
 
 def run_hyperparameter_tuning(
@@ -208,6 +228,10 @@ def _train_and_evaluate_fold(
     y_test: pd.Series,
     best_params: Dict,
     logger: logging.Logger,
+    test_pids: List[int],
+    target_name: str,
+    fold_idx: int,
+    prediction_storage: List[FoldPredictionData],
 ) -> float:
     """Trains a final model and evaluates it on the holdout test set."""
     logger.info(f"  Training final model with outer train set size: {len(X_train)}")
@@ -232,6 +256,20 @@ def _train_and_evaluate_fold(
     unbiased_auc = roc_auc_score(y_test, y_pred_proba)
 
     logger.info(f"  Final model evaluation complete. AUC: {unbiased_auc:.4f}")
+
+    # Store predictions for later combination
+    # Convert to numpy array if it's a pandas Series, otherwise use as-is
+    targets_array = y_test.values if hasattr(y_test, "values") else y_test
+
+    prediction_storage.append(
+        FoldPredictionData(
+            fold_idx=fold_idx,
+            target_name=target_name,
+            pids=test_pids,
+            predictions=y_pred_proba,
+            targets=targets_array,
+        )
+    )
 
     return unbiased_auc
 
@@ -263,13 +301,12 @@ def _report_and_save_target_results(
 def nested_cv_loop(
     cfg: Config,
     logger: logging.Logger,
-    baseline_folder: str,
     data: CausalPatientDataset,
     folds: list,
-) -> List[pd.DataFrame]:
+) -> Tuple[List[pd.DataFrame], List[FoldPredictionData]]:
     """
     Manages the nested cross-validation process using helper functions.
-    Returns a list of results DataFrames for each target.
+    Returns a list of results DataFrames for each target and collected predictions.
     """
     targets_to_train = cfg.get("targets", [EXPOSURE] + data.get_outcome_names())
     logger.info(f"Starting Nested Cross-Validation for targets: {targets_to_train}")
@@ -285,6 +322,7 @@ def nested_cv_loop(
         logger.info(f"Tuning configuration: {tuning_cfg}")
 
     all_results = []
+    prediction_storage = []  # Store all predictions
 
     for target_name in targets_to_train:
         logger.info(f"\n===== Processing Target: {target_name.upper()} =====")
@@ -298,6 +336,7 @@ def nested_cv_loop(
 
             outer_train_data = data.filter_by_pids(fold_dict["train"])
             outer_test_data = data.filter_by_pids(fold_dict["val"])
+            test_pids = outer_test_data.get_pids()
 
             best_params = base_params
             if should_tune:
@@ -338,6 +377,10 @@ def nested_cv_loop(
                 y_outer_test,
                 best_params,
                 logger,
+                test_pids,
+                target_name,
+                i,
+                prediction_storage,
             )
 
             all_unbiased_scores.append(unbiased_auc)
@@ -353,7 +396,7 @@ def nested_cv_loop(
         )
         all_results.append(target_results)
 
-    return all_results
+    return all_results, prediction_storage
 
 
 def handle_folds(cfg: Config, logger: logging.Logger) -> list:

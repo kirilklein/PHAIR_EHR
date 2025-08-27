@@ -6,29 +6,51 @@ with defaults, and integrates Optuna for automated hyperparameter tuning. It inc
 features and supports cross-validation with the same directory structure and configuration system.
 """
 
-import glob
 import logging
 import os
 from datetime import datetime
 from os.path import join
-from typing import List
+from typing import List, Dict, NamedTuple
 
 import optuna
 import pandas as pd
 import torch
+import numpy as np
 
 from corebehrt.constants.paths import (
     PREPARED_ALL_PATIENTS,
     TEST_PIDS_FILE,
 )
+from corebehrt.constants.data import PID_COL
+from corebehrt.constants.causal.data import (
+    EXPOSURE,
+    PS_COL,
+    EXPOSURE_COL,
+    OUTCOME_COL,
+    PROBAS,
+    CF_PROBAS,
+)
+from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
 from corebehrt.functional.io_operations.load import load_vocabulary
 from corebehrt.functional.setup.args import get_args
-from corebehrt.main_causal.helper.train_baseline import handle_folds, nested_cv_loop
+from corebehrt.main_causal.helper.train_baseline import (
+    handle_folds,
+    nested_cv_loop,
+    FoldPredictionData,
+)
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.config import load_config
 
 CONFIG_PATH = "./corebehrt/configs/causal/finetune/baseline.yaml"
+
+
+class FoldPredictions(NamedTuple):
+    """Container for predictions from a single fold."""
+
+    pids: List[int]
+    predictions: Dict[str, np.ndarray]  # target_name -> predictions
+    targets: Dict[str, np.ndarray]  # target_name -> actual values
 
 
 def save_nested_cv_summary(
@@ -56,6 +78,73 @@ def save_nested_cv_summary(
     logger.info("===== Nested CV Final Summary =====")
     logger.info(f"\n{all_results_df.to_string(index=False)}")
     logger.info(f"Final summary report saved to {final_report_path}")
+
+
+def save_combined_predictions(
+    prediction_storage: List[FoldPredictionData],
+    baseline_folder: str,
+    outcome_names: List[str],
+) -> None:
+    """Combines predictions from all folds and saves in the same format as finetune_exp_y.py."""
+    logger = logging.getLogger("save_predictions")
+
+    if not prediction_storage:
+        logger.warning("No fold predictions to save.")
+        return
+
+    # Group predictions by fold and organize by target
+    fold_data = {}  # fold_idx -> {target_name: (pids, predictions, targets)}
+
+    for pred_data in prediction_storage:
+        fold_idx = pred_data.fold_idx
+        if fold_idx not in fold_data:
+            fold_data[fold_idx] = {}
+
+        fold_data[fold_idx][pred_data.target_name] = (
+            pred_data.pids,
+            pred_data.predictions,
+            pred_data.targets,
+        )
+
+    # Combine all folds
+    all_data = []
+
+    for fold_idx in sorted(fold_data.keys()):
+        fold_targets = fold_data[fold_idx]
+
+        # Get PIDs from the first available target (should be consistent across targets)
+        first_target = next(iter(fold_targets.keys()))
+        pids, _, _ = fold_targets[first_target]
+
+        # Create row data for each patient in this fold
+        for i, pid in enumerate(pids):
+            row_data = {PID_COL: pid}
+
+            # Add exposure data (propensity score and target)
+            if EXPOSURE in fold_targets:
+                _, predictions, targets = fold_targets[EXPOSURE]
+                row_data[PS_COL] = predictions[i]
+                row_data[EXPOSURE_COL] = int(targets[i])
+
+            # Add outcome data
+            for outcome_name in outcome_names:
+                if outcome_name in fold_targets:
+                    _, predictions, targets = fold_targets[outcome_name]
+                    row_data[f"{PROBAS}_{outcome_name}"] = predictions[i]
+                    row_data[f"{OUTCOME_COL}_{outcome_name}"] = int(targets[i])
+                    # For baseline, we use the same prediction as counterfactual
+                    row_data[f"{CF_PROBAS}_{outcome_name}"] = predictions[i]
+
+            all_data.append(row_data)
+
+    # Create DataFrame and save
+    combined_df = pd.DataFrame(all_data)
+    output_path = join(baseline_folder, COMBINED_PREDICTIONS_FILE)
+    combined_df.to_csv(output_path, index=False)
+
+    logger.info(f"Combined predictions saved to: {output_path}")
+    logger.info(f"Combined dataframe shape: {combined_df.shape}")
+    logger.info(f"Columns: {list(combined_df.columns)}")
 
 
 def main_baseline(config_path: str):
@@ -87,11 +176,15 @@ def main_baseline(config_path: str):
     }
     cv_data = data.filter_by_pids(list(all_pids_in_folds))
 
-    # Run the main Nested CV loop and collect results
-    all_results = nested_cv_loop(cfg, logger, cfg.paths.model, cv_data, folds)
+    # Run the main Nested CV loop and collect results and predictions
+    all_results, prediction_storage = nested_cv_loop(cfg, logger, cv_data, folds)
 
     # Save only the combined final summary
     save_nested_cv_summary(all_results, cfg.paths.model)
+
+    # Save combined predictions in the same format as finetune_exp_y.py
+    outcome_names = data.get_outcome_names()
+    save_combined_predictions(prediction_storage, cfg.paths.model, outcome_names)
 
     logger.info("Baseline training with Nested CV completed.")
 

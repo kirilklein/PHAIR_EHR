@@ -16,6 +16,7 @@ from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.calibration import calibrate_folds
 from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
+from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
 
 
 class CalibrationProcessor:
@@ -37,7 +38,7 @@ class CalibrationProcessor:
         expected individual file format for backward compatibility.
         """
         # Load the pre-combined predictions from finetune
-        combined_predictions_path = join(self.finetune_dir, "combined_predictions.csv")
+        combined_predictions_path = join(self.finetune_dir, COMBINED_PREDICTIONS_FILE)
         combined_df = pd.read_csv(combined_predictions_path)
 
         # Extract and save exposure predictions
@@ -58,7 +59,7 @@ class CalibrationProcessor:
         self.load_and_save_predictions()
 
         # Load the pre-combined predictions from finetune
-        combined_predictions_path = join(self.finetune_dir, "combined_predictions.csv")
+        combined_predictions_path = join(self.finetune_dir, COMBINED_PREDICTIONS_FILE)
         combined_df = pd.read_csv(combined_predictions_path)
 
         # Calibrate exposure
