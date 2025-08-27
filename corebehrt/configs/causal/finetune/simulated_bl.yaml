@@ -12,7 +12,7 @@ paths:
   # --- OUTPUTS ---
   # Main directory where all outputs for this baseline run will be saved.
   # This includes models, results, and fold definitions.
-  model: ./outputs/causal/baseline/models/catboost
+  model: ./outputs/causal/finetune/models/baseline/simulated
 
 # ==============================================================================
 # Feature Engineering Settings
@@ -27,13 +27,13 @@ include_age: true # If true, include age-based features (mean, min, max, std, ra
 # These are the base parameters for the CatBoost model.
 # They are used directly if tuning is disabled, or as a starting point for tuning.
 catboost:
-  n_estimators: 100 # Max number of trees. Training will likely stop early.
+  n_estimators: 50 # Max number of trees. Training will likely stop early.
   learning_rate: 0.05 # Step size shrinkage to prevent overfitting.
   max_depth: 5 # Maximum depth of each tree.
   subsample: 0.8 # Fraction of objects to sample for each tree (row sampling).
   colsample_bylevel: 0.8 # Fraction of features to sample for each level (column sampling).
   l2_leaf_reg: 3 # L2 regularization term on weights.
-  early_stopping_rounds: 20 # Stop training if the validation score doesn't improve for this many rounds.
+  early_stopping_rounds: 10 # Stop training if the validation score doesn't improve for this many rounds.
 
 # ==============================================================================
 # Hyperparameter Tuning Settings (Optuna)
@@ -45,7 +45,7 @@ tuning:
   tune_hyperparameters: True
 
   # Number of different hyperparameter combinations to try in the Optuna search.
-  n_trials: 10
+  n_trials: 5
 
   # [NEW] The proportion of the outer training set to use for validation in the inner loop.
   # For example, 0.2 means an 80/20 split for inner training/validation.
@@ -54,8 +54,7 @@ tuning:
   # [NEW] If true, tune hyperparameters only on the first fold and reuse them for
   # all subsequent folds. This provides a significant speed-up at the cost of
   # slightly less robust hyperparameter selection. Recommended for faster experiments.
-  reuse_hyperparameters: True
-
+  reuse_hyperparameters: true
 # ==============================================================================
 # Target and Evaluation Settings
 # ==============================================================================
@@ -64,7 +63,3 @@ tuning:
 # If this section is commented out, the script will automatically train a model
 # for the exposure and all outcomes found in the dataset.
 # targets: ["exposure", "OUTCOME", "OUTCOME_2"]
-
-# This setting is for a final evaluation step, which is not part of the current
-# nested cross-validation script. You can ignore it or use it for a future test set evaluation.
-evaluate: true
