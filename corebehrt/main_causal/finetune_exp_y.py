@@ -22,6 +22,7 @@ from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.functional.io_operations.load import load_vocabulary
 from corebehrt.modules.setup.config import Config, load_config
 from corebehrt.modules.setup.directory import DirectoryPreparer
+from corebehrt.modules.setup.causal.prediction_accumulator import PredictionAccumulator
 
 CONFIG_PATH = "./corebehrt/configs/causal/finetune/ft_exp_y.yaml"
 
@@ -63,6 +64,10 @@ def main_finetune(config_path):
     )
 
     outcome_names = data.get_outcome_names()
+    # Save combined predictions
+    PredictionAccumulator(
+        cfg.paths.model, outcome_names
+    ).accumulate_and_save_predictions()
 
     # Save outcome names to the model directory
     torch.save(outcome_names, join(cfg.paths.model, OUTCOME_NAMES_FILE))
