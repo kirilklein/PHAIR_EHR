@@ -135,10 +135,6 @@ def collect_predictions_without_sampler(
     # Concatenate all batches
     preds = np.concatenate(preds_list)
     targets = np.concatenate(targets_list)
-
-    print(f"Unique target values: {np.unique(targets)}")
-    print(f"Target distribution: {np.bincount(targets)}")
-
     # Ensure both arrays are 1D
     assert preds.ndim == 1, f"Predictions should be 1D, got shape {preds.shape}"
     assert targets.ndim == 1, f"Targets should be 1D, got shape {targets.shape}"

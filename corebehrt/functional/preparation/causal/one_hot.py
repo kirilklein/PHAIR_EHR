@@ -43,9 +43,6 @@ def create_features_from_patients(
     patients: List, vocabulary: dict, multihot: bool = False, include_age: bool = True
 ) -> Tuple[pd.DataFrame, Dict[str, np.ndarray]]:
     """Creates a feature DataFrame and a dictionary of target variables."""
-    print("Extracting concepts, ages, and targets from patients...")
-
-    # Create feature matrix from patient concepts
     feature_counts = [Counter(patient.concepts) for patient in patients]
     if multihot:
         feature_matrix = np.array(
@@ -108,11 +105,5 @@ def create_features_from_patients(
 
     # Add exposure as a feature for outcome prediction tasks
     feature_df[EXPOSURE] = targets_dict[EXPOSURE]
-    max_print = 10
-    for i, (name, values) in enumerate(targets_dict.items()):
-        print(f"{name} distribution: {pd.Series(values).value_counts().to_dict()}")
-        if i >= max_print:
-            print("...")
-            break
 
     return feature_df, targets_dict

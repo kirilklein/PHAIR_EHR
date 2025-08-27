@@ -237,9 +237,9 @@ def _train_and_evaluate_fold(
 
 
 def _report_and_save_target_results(
-    target_name: str, scores: List[float], baseline_folder: str, logger: logging.Logger
-):
-    """Calculates final metrics for a target, logs them, and saves to a CSV."""
+    target_name: str, scores: List[float], logger: logging.Logger
+) -> pd.DataFrame:
+    """Calculates final metrics for a target and returns the results DataFrame."""
     scores = [
         s for s in scores if not np.isnan(s)
     ]  # Filter out NaNs from skipped folds
@@ -257,9 +257,7 @@ def _report_and_save_target_results(
             "std_auc": [std_auc],
         }
     )
-    results_df.to_csv(
-        join(baseline_folder, f"nested_cv_results_{target_name}.csv"), index=False
-    )
+    return results_df
 
 
 def nested_cv_loop(
@@ -268,9 +266,10 @@ def nested_cv_loop(
     baseline_folder: str,
     data: CausalPatientDataset,
     folds: list,
-) -> None:
+) -> List[pd.DataFrame]:
     """
     Manages the nested cross-validation process using helper functions.
+    Returns a list of results DataFrames for each target.
     """
     targets_to_train = cfg.get("targets", [EXPOSURE] + data.get_outcome_names())
     logger.info(f"Starting Nested Cross-Validation for targets: {targets_to_train}")
@@ -284,6 +283,8 @@ def nested_cv_loop(
         logger.info(f"Reuse hyperparameters across folds: {reuse_hyperparameters}")
         logger.info(f"Base parameters: {base_params}")
         logger.info(f"Tuning configuration: {tuning_cfg}")
+
+    all_results = []
 
     for target_name in targets_to_train:
         logger.info(f"\n===== Processing Target: {target_name.upper()} =====")
@@ -347,9 +348,12 @@ def nested_cv_loop(
 
             logger.info(f"--- Completed Outer Fold {i + 1}/{len(folds)} ---\n")
 
-        _report_and_save_target_results(
-            target_name, all_unbiased_scores, baseline_folder, logger
+        target_results = _report_and_save_target_results(
+            target_name, all_unbiased_scores, logger
         )
+        all_results.append(target_results)
+
+    return all_results
 
 
 def handle_folds(cfg: Config, logger: logging.Logger) -> list:

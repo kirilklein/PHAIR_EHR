@@ -7,11 +7,10 @@ dataframe structure that was previously done in CalibrationProcessor.
 """
 
 import logging
-import os
 from os.path import join
 from typing import Dict, List
+
 import pandas as pd
-import torch
 
 from corebehrt.constants.causal.data import (
     CF_OUTCOME,

@@ -6,47 +6,51 @@ with defaults, and integrates Optuna for automated hyperparameter tuning. It inc
 features and supports cross-validation with the same directory structure and configuration system.
 """
 
+import glob
 import logging
 import os
+from datetime import datetime
 from os.path import join
+from typing import List
 
-import torch
 import optuna
-
+import pandas as pd
+import torch
 
 from corebehrt.constants.paths import (
     PREPARED_ALL_PATIENTS,
     TEST_PIDS_FILE,
 )
-from corebehrt.functional.setup.args import get_args
-import pandas as pd
-import glob
-from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.functional.io_operations.load import load_vocabulary
-from corebehrt.modules.setup.config import load_config
-from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
+from corebehrt.functional.setup.args import get_args
 from corebehrt.main_causal.helper.train_baseline import handle_folds, nested_cv_loop
+from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
+from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
+from corebehrt.modules.setup.config import load_config
 
 CONFIG_PATH = "./corebehrt/configs/causal/finetune/baseline.yaml"
 
 
-def aggregate_nested_cv_results(baseline_folder: str) -> None:
-    """Finds all nested_cv_results CSVs and combines them into a single report."""
-    logger = logging.getLogger("aggregate_results")
-    search_path = join(baseline_folder, "nested_cv_results_*.csv")
-    result_files = glob.glob(search_path)
+def save_nested_cv_summary(
+    all_results: List[pd.DataFrame], baseline_folder: str
+) -> None:
+    """Combines all target results and saves the final summary."""
+    logger = logging.getLogger("save_summary")
 
-    if not result_files:
-        logger.warning("No Nested CV result files found to aggregate.")
+    if not all_results:
+        logger.warning("No nested CV results to save.")
         return
 
-    all_results_df = pd.concat(
-        [pd.read_csv(f) for f in result_files], ignore_index=True
-    )
+    # Combine all results into a single DataFrame
+    all_results_df = pd.concat(all_results, ignore_index=True)
     all_results_df = all_results_df.sort_values(by="mean_auc", ascending=False)
 
     # Save the combined report
-    final_report_path = join(baseline_folder, "final_nested_cv_summary.csv")
+    scores_folder = join(baseline_folder, "scores")
+    os.makedirs(scores_folder, exist_ok=True)
+    final_report_path = join(
+        scores_folder, f"scores_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    )
     all_results_df.to_csv(final_report_path, index=False)
 
     logger.info("===== Nested CV Final Summary =====")
@@ -83,11 +87,11 @@ def main_baseline(config_path: str):
     }
     cv_data = data.filter_by_pids(list(all_pids_in_folds))
 
-    # Run the main Nested CV loop
-    nested_cv_loop(cfg, logger, cfg.paths.model, cv_data, folds)
+    # Run the main Nested CV loop and collect results
+    all_results = nested_cv_loop(cfg, logger, cfg.paths.model, cv_data, folds)
 
-    # Aggregate the final results into a single report
-    aggregate_nested_cv_results(cfg.paths.model)
+    # Save only the combined final summary
+    save_nested_cv_summary(all_results, cfg.paths.model)
 
     logger.info("Baseline training with Nested CV completed.")
 
