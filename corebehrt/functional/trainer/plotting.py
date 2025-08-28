@@ -272,8 +272,8 @@ def plot_prediction_histograms(
     """Plots prediction histograms for exposure and outcomes using subplots."""
     if not accumulate_logits:
         return
-
-    hist_dir = os.path.join(run_folder, "figs", "histograms")
+    run_folder = Path(run_folder)
+    hist_dir = run_folder.parent / "figs" / run_folder.name / "histograms"
     os.makedirs(hist_dir, exist_ok=True)
 
     # Plot for exposure

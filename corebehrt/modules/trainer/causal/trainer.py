@@ -5,7 +5,7 @@ from typing import Dict
 import torch
 import random
 import yaml
-
+from pathlib import Path
 from corebehrt import azure
 from corebehrt.constants.causal.data import (
     CF_OUTCOME,
@@ -601,10 +601,11 @@ class CausalEHRTrainer(EHRTrainer):
             self._update_metric_history(epoch_metrics)
 
             # Plot metrics
+            run_folder = Path(self.run_folder)
             plot_training_curves(
                 self.metric_history,
                 self.epoch_history,
-                os.path.join(self.run_folder, "figs"),
+                run_folder.parent / "figs" / run_folder.name,
                 self.outcome_names,
                 self.log,
                 max_legend_items=self.num_targets_to_log,
