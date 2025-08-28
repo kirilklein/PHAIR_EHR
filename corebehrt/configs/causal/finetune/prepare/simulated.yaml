@@ -37,6 +37,9 @@ data:
   max_number_of_plots: 10
   number_subjects_to_plot: 10
 
+  sample_num_patients: null # omit or null to use all patients
+  sample_seed: 42 # optional
+
 exposure:
   # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
   n_hours_censoring: -10 # censor time after index date (negative means before)

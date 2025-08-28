@@ -1,6 +1,7 @@
 import logging
 import os
 from dataclasses import dataclass
+import random
 from os.path import join
 from typing import Dict, List, Tuple
 
@@ -111,9 +112,46 @@ class CausalDatasetPreparer:
         """
         # 1. Load and filter initial data
         self.logger.info("Loading and filtering initial data")
+        # Optional sampling controls from config
+        sample_num_patients = self.data_cfg.get("sample_num_patients")
+        sample_seed = int(self.data_cfg.get("sample_seed", 42))
+
+        # Load cohort PIDs if present
         pids = self.ds_preparer.load_cohort(self.paths_cfg)
-        data = self.load_shards_into_patient_data(pids, mode)
-        pids = data.get_pids()  # Use PIDs actually present in the data
+
+        # If we have cohort PIDs and sampling is requested, sample before loading shards
+        selected_pids = None
+        if sample_num_patients is not None and pids is not None:
+            rng = random.Random(sample_seed)
+            selected_pids = rng.sample(
+                list(pids), k=min(int(sample_num_patients), len(pids))
+            )
+
+        # Load shards using sampled PIDs (if available)
+        data = self.load_shards_into_patient_data(selected_pids or pids, mode)
+
+        # Determine final PIDs present in loaded data
+        pids_in_data = data.get_pids()
+
+        # If cohort PIDs weren't available earlier and sampling is requested, sample now
+        if sample_num_patients is not None and selected_pids is None:
+            rng = random.Random(sample_seed)
+            selected_pids = rng.sample(
+                list(pids_in_data), k=min(int(sample_num_patients), len(pids_in_data))
+            )
+
+        # If sampling was requested, subset the dataset to the selected PIDs
+        if selected_pids is not None:
+            selected_set = set(selected_pids)
+            data.patients = [
+                patient for patient in data.patients if patient.pid in selected_set
+            ]
+            self.logger.info(
+                f"Subselected {len(data.patients)} patients for sampling test run"
+            )
+
+        # Use final PID list from data
+        pids = data.get_pids()
 
         exposures, index_date_matching, index_dates = self.load_cohort_data(
             self.paths_cfg.cohort
