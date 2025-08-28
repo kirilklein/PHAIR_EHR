@@ -52,6 +52,7 @@ from corebehrt.functional.visualize.estimate import (
     create_annotated_heatmap_matplotlib,
     create_contingency_table_plot,
     create_effect_size_plot,
+    create_ps_comparison_plot,
 )
 from corebehrt.modules.causal.bias import BiasConfig, BiasIntroducer
 from corebehrt.modules.setup.config import Config
@@ -198,6 +199,10 @@ class EffectEstimator:
     ):
         fig_dir = join(self.exp_dir, "figures")
         os.makedirs(fig_dir, exist_ok=True)
+
+        create_ps_comparison_plot(
+            self.df, self.analysis_df, PS_COL, EXPOSURE_COL, fig_dir
+        )
         create_ipw_plot(
             self.analysis_df[EXPOSURE_COL], self.analysis_df[PS_COL], fig_dir
         )

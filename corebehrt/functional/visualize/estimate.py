@@ -11,9 +11,9 @@ from CausalEstimate.estimators.functional.ipw import compute_ipw_weights
 from corebehrt.constants.causal.data import (
     EffectColumns,
     TMLEAnalysisColumns,
-    EXPOSURE_COL,
-    PS_COL,
 )
+from corebehrt.functional.visualize.calibrate import plot_probas_hist
+
 from corebehrt.modules.plot.estimate import (
     ContingencyPlotConfig,
     EffectSizePlotConfig,
@@ -268,3 +268,39 @@ def create_ipw_plot(exposure: pd.Series, propensity: pd.Series, save_dir: str):
     save_path = join(save_dir, "ipw_weights.png")
     save_figure_with_azure_copy(fig, save_path, bbox_inches="tight")
     plt.close(fig)
+
+
+def create_ps_comparison_plot(df_before, df_after, ps_col, exposure_col, save_dir: str):
+    try:
+        fig, ax = plt.subplots(2, 1, figsize=(10, 6))
+        ax: List[Axes] = ax.flatten()
+        plot_probas_hist(
+            df_before,
+            ps_col,
+            exposure_col,
+            ("Control", "Exposed"),
+            "Before Common Support",
+            "Propensity Score",
+            ax[0],
+            min_quantile=0,
+            max_quantile=1,
+        )
+        ax[0].legend_.remove()
+        plot_probas_hist(
+            df_after,
+            ps_col,
+            exposure_col,
+            ("Control", "Exposed"),
+            "After Common Support",
+            "Propensity Score",
+            ax[1],
+            min_quantile=0,
+            max_quantile=1,
+        )
+        fig.suptitle("Effect of Common Support on Propensity Score")
+        save_figure_with_azure_copy(
+            fig, join(save_dir, "ps_comparison.png"), bbox_inches="tight"
+        )
+        plt.close(fig)
+    except Exception as e:
+        logger.warning(f"Failed to create PS histograms: {e}")
