@@ -53,9 +53,11 @@ class CausalEHRTrainer(EHRTrainer):
         self.plot_histograms = self.args.get("plot_histograms", False)
         self.plot_gradients = self.args.get("plot_gradients", False)
         self.plot_gradients_frequency = self.args.get("plot_gradients_frequency", 100)
+        self.plot_log_scale = self.args.get("plot_log_scale", False)
         self._set_plateau_parameters()
         self._set_logging_parameters()
         self.global_step = 0
+        self.update_step = 0
         if self.use_pcgrad:
             self.optimizer = PCGrad(self.optimizer)
 
@@ -187,20 +189,27 @@ class CausalEHRTrainer(EHRTrainer):
         """Updates the model (optimizer and scheduler) with PCGrad support"""
         # PCGrad optimizer exposes param_groups, so scaler can work with it directly
         self._clip_gradients()
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+
         if (
-            self.global_step % self.plot_gradients_frequency == 0
+            self.update_step % self.plot_gradients_frequency == 0
         ) and self.plot_gradients:
+            run_folder = Path(self.run_folder)
+            save_folder = (
+                run_folder.parent / "figs" / run_folder.name / "gradient_distributions"
+            )
+            save_folder.mkdir(parents=True, exist_ok=True)
             plot_gradient_distributions(
                 self.model,
                 self.optimizer,
                 self.scaler,
                 self.log,
-                self.run_folder,
+                save_folder,
                 self.global_step,
             )
-
+        # Count optimized update steps and plot before stepping
+        self.update_step += 1
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
         if self.scheduler is not None:
             self.scheduler.step()
 
@@ -609,6 +618,7 @@ class CausalEHRTrainer(EHRTrainer):
                 self.outcome_names,
                 self.log,
                 max_legend_items=self.num_targets_to_log,
+                log_scale=self.plot_log_scale,
             )
 
         if (is_best and epoch > 0) or (

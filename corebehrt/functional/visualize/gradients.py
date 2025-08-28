@@ -24,11 +24,6 @@ def _plot_distributions_for_group(
     Helper to generate and save/show distribution plots for a group of gradients.
     This function is styled to match the weight distribution plotter.
     """
-    if save_dir:
-        # Create a specific subdirectory for gradient plots
-        save_dir = os.path.join(save_dir, "gradient_distributions")
-        os.makedirs(save_dir, exist_ok=True)
-
     layers_to_plot = list(gradients_in_group.items())
     num_layers = len(layers_to_plot)
     if num_layers == 0:
@@ -102,7 +97,7 @@ def plot_gradient_distributions(
     optimizer: Optimizer,
     scaler: Optional[GradScaler] = None,
     log: Callable[[str], None] = print,
-    run_folder: str = ".",
+    save_dir: str = ".",
     global_step: int = 0,
     bins: int = 75,
     max_subplots_per_fig: int = 16,
@@ -129,7 +124,6 @@ def plot_gradient_distributions(
             which mutates optimizer state. If False (default), uses non-destructive approach.
     """
     # --- 1. Handle gradient scaling non-destructively ---
-    save_dir = os.path.join(run_folder, "figs")  # Base directory for figures
     os.makedirs(save_dir, exist_ok=True)
 
     unscaled_str = ""

@@ -40,6 +40,7 @@ def plot_training_curves(
     outcome_names: Optional[List[str]] = None,
     log_func: Callable[[str], None] = print,
     max_legend_items: int = 10,
+    log_scale: bool = False,
 ):
     """
     Groups, plots, and saves training curves with clear directory organization.
@@ -80,6 +81,7 @@ def plot_training_curves(
             output_dir=output_dir,
             log_func=log_func,
             max_legend_items=max_legend_items,
+            log_scale=log_scale,
         )
 
 
@@ -161,6 +163,7 @@ def _create_metric_plot(
     output_dir: Path,
     log_func: Callable[[str], None],
     max_legend_items: int,
+    log_scale: bool,
 ):
     """Creates, styles, and saves a single plot for a group of metrics."""
     # Determine plot directory: 'output_dir/outcomes', 'output_dir/exposure', or 'output_dir'
@@ -240,7 +243,8 @@ def _create_metric_plot(
     ax.set_ylabel(title_name, fontsize=12)
     ax.set_title(plot_title, fontsize=16, weight="bold")
     ax.grid(True, which="both", linestyle="--", linewidth=0.5)
-
+    if log_scale:
+        ax.set_yscale("log")
     # --- Legend Handling ---
     num_lines = len(data)
     if num_lines > max_legend_items:
