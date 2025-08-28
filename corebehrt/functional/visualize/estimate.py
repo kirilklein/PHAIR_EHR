@@ -1,11 +1,17 @@
 import logging
 import os
-
+from os.path import join
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from CausalEstimate.estimators.functional.ipw import compute_ipw_weights
 
-from corebehrt.constants.causal.data import EffectColumns, TMLEAnalysisColumns
+from corebehrt.constants.causal.data import (
+    EffectColumns,
+    TMLEAnalysisColumns,
+    EXPOSURE_COL,
+    PS_COL,
+)
 from corebehrt.modules.plot.estimate import (
     ContingencyPlotConfig,
     EffectSizePlotConfig,
@@ -173,3 +179,83 @@ def create_adjustment_plot(
         plotter.run()
     except Exception as e:
         logger.error(f"Failed to create adjustment plot. Error: {e}", exc_info=True)
+
+
+def create_ipw_plot(df: pd.DataFrame, save_dir: str):
+    # Prepare combinations and figure
+    combos = [
+        ("ATE", True),
+        ("ATE", False),
+        ("ATT", True),
+        ("ATT", False),
+    ]
+
+    A = df[EXPOSURE_COL].values
+    exposure_labels = pd.Series(A).map({0: "Control", 1: "Exposed"}).values
+
+    # Precompute weights and mask for ATT (omit treated)
+    weights_data = []
+    for wt, stab in combos:
+        w = compute_ipw_weights(
+            A=df[EXPOSURE_COL],
+            ps=df[PS_COL],
+            weight_type=wt,
+            stabilized=stab,
+        )
+        if wt == "ATT":
+            mask = A == 0  # omit treated (A==1) for ATT plots
+        else:
+            mask = slice(None)
+        weights_data.append((wt, stab, w, mask))
+
+    # Determine global x-limit (robust against heavy tails)
+    included_weights = []
+    for wt, stab, w, mask in weights_data:
+        ww = w if isinstance(mask, slice) else w[mask]
+        included_weights.append(pd.Series(ww))
+    p99 = pd.concat(included_weights).quantile(0.99)
+    xmax = float(p99) if pd.notnull(p99) and p99 > 0 else None
+
+    # Plot
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10), dpi=120)
+    axes = axes.flatten()
+    palette = {"Control": "#1f77b4", "Exposed": "#d62728"}
+
+    for ax, (wt, stab, w, mask) in zip(axes, weights_data):
+        if isinstance(mask, slice):
+            w_plot = pd.Series(w, name="weight")
+            labels = pd.Series(exposure_labels, name="Exposure")
+        else:
+            w_plot = pd.Series(w[mask], name="weight")
+            labels = pd.Series(exposure_labels[mask], name="Exposure")
+
+        df_plot = pd.concat([w_plot, labels], axis=1)
+
+        sns.histplot(
+            data=df_plot,
+            x="weight",
+            hue="Exposure",
+            bins=50,
+            element="step",
+            stat="density",
+            common_norm=False,
+            palette=palette,
+            alpha=0.5,
+            ax=ax,
+        )
+        ax.set_title(f"{wt} — {'Stabilized' if stab else 'Unstabilized'}")
+        ax.set_xlabel("IPW weight")
+        ax.set_ylabel("Density")
+        if xmax:
+            ax.set_xlim(0, xmax)
+        ax.grid(True, linestyle="--", alpha=0.3)
+
+        # For ATT, legend will only show Control; keep consistent location
+        ax.legend(title="Exposure", loc="upper right", frameon=False)
+
+    plt.suptitle("IPW Weight Distributions by Exposure", y=0.98)
+    plt.tight_layout()
+
+    save_path = join(save_dir, "ipw_weights.png")
+    save_figure_with_azure_copy(fig, save_path, bbox_inches="tight")
+    plt.close(fig)

@@ -41,10 +41,13 @@ from corebehrt.functional.io_operations.estimate import (
     save_all_results,
     save_tmle_analysis,
 )
-from corebehrt.functional.visualize.estimate import (
+from corebehrt.modules.plot.estimate import (
     AdjustmentPlotConfig,
     ContingencyPlotConfig,
     EffectSizePlotConfig,
+)
+from corebehrt.functional.visualize.estimate import (
+    create_ipw_plot,
     create_adjustment_plot,
     create_annotated_heatmap_matplotlib,
     create_contingency_table_plot,
@@ -72,16 +75,18 @@ class EffectEstimator:
             COMBINED_CALIBRATED_PREDICTIONS_FILE,
         )
         self.estimator_cfg: dict = self.cfg.estimator
+        self.init_estimator_args(self.estimator_cfg)
         self._init_plot_configs()
         self.effect_type: str = self.cfg.estimator.effect_type
         self.df = pd.read_csv(self.predictions_file)
+        self.analysis_df = self._get_analysis_cohort(self.df)
         self.outcome_names = get_outcome_names(self.df)
         validate_columns(self.df, self.outcome_names)
         self.counterfactual_outcomes_dir: str = self.cfg.paths.get(
             "counterfactual_outcomes"
         )
         self.counterfactual_df = self._load_counterfactual_outcomes()
-        self.init_estimator_args(self.estimator_cfg)
+
         self._init_bias_introducer()
 
     def _init_plot_configs(self) -> None:
@@ -129,7 +134,7 @@ class EffectEstimator:
             self.logger.info(f"--- Processing outcome: {outcome_name} ---")
 
             # 1. Prepare data with potential outcomes for the current outcome
-            df_for_outcome = prepare_data_for_outcome(self.df, outcome_name)
+            df_for_outcome = prepare_data_for_outcome(self.analysis_df, outcome_name)
 
             # 2. Build estimators with the correct outcome column
             estimator = self._build_multi_estimator()
@@ -137,12 +142,9 @@ class EffectEstimator:
             # 3. Estimate effects
             effect_df = self._estimate_effects(df_for_outcome, estimator)
 
-            # 4. Get the analysis cohort and add benchmarks
-            analysis_df = self._get_analysis_cohort(df_for_outcome)
-
             if self.counterfactual_df is not None:
                 effect_df = append_true_effect(
-                    analysis_df,
+                    df_for_outcome,
                     effect_df,
                     self.counterfactual_df,
                     outcome_name,
@@ -150,10 +152,10 @@ class EffectEstimator:
                     self.common_support_threshold,
                 )
 
-            effect_df = append_unadjusted_effect(analysis_df, effect_df)
+            effect_df = append_unadjusted_effect(df_for_outcome, effect_df)
 
             # 5. Compute and collect stats for this outcome
-            outcome_stats = compute_outcome_stats(analysis_df, outcome_name)
+            outcome_stats = compute_outcome_stats(df_for_outcome, outcome_name)
             all_stats.append(outcome_stats)
 
             # 6. Tag results with the outcome name and collect
@@ -182,8 +184,8 @@ class EffectEstimator:
         effect_dict = estimator.compute_effects(
             df,
             n_bootstraps=self.n_bootstrap,
-            apply_common_support=self.common_support,
-            common_support_threshold=self.common_support_threshold,
+            apply_common_support=False,  # we already filtered for common support
+            common_support_threshold=None,
             return_bootstrap_samples=False,
         )
         return convert_effect_to_dataframe(effect_dict)
@@ -196,6 +198,7 @@ class EffectEstimator:
     ):
         fig_dir = join(self.exp_dir, "figures")
         os.makedirs(fig_dir, exist_ok=True)
+        create_ipw_plot(self.analysis_df, fig_dir)
         methods = self.estimator_cfg.methods
         create_annotated_heatmap_matplotlib(
             final_results_df,
@@ -255,10 +258,18 @@ class EffectEstimator:
         combined_stats_df = pd.concat(all_stats, ignore_index=True)
         initial_estimates_df = pd.concat(initial_estimates, ignore_index=True)
 
-        save_all_results(self.exp_dir, self.df, final_results_df, combined_stats_df)
+        save_all_results(
+            self.exp_dir, self.analysis_df, final_results_df, combined_stats_df
+        )
 
-        tmle_analysis_df = prepare_tmle_analysis_df(initial_estimates_df)
-        save_tmle_analysis(tmle_analysis_df, self.exp_dir)
+        tmle_analysis_df = (
+            prepare_tmle_analysis_df(initial_estimates_df)
+            if any(m.upper() == "TMLE" for m in self.estimator_cfg.methods)
+            else None
+        )
+        save_tmle_analysis(
+            tmle_analysis_df, self.exp_dir
+        ) if tmle_analysis_df is not None else None
         return final_results_df, combined_stats_df, tmle_analysis_df
 
     def _build_multi_estimator(self) -> MultiEstimator:
@@ -370,14 +381,14 @@ class EffectEstimator:
                 f"--- Processing outcome: {outcome_name} for bias simulation ---"
             )
 
-            df_for_outcome = prepare_data_for_outcome(self.df, outcome_name)
+            df_for_outcome = prepare_data_for_outcome(self.analysis_df, outcome_name)
             estimator = self._build_multi_estimator()
 
             # Get unbiased cohort and calculate true effect once as a reference
-            analysis_df_unbiased = self._get_analysis_cohort(df_for_outcome.copy())
+
             dummy_effect_df = pd.DataFrame([{"estimator": "placeholder"}])
             true_effect_df = append_true_effect(
-                analysis_df_unbiased,
+                df_for_outcome,
                 dummy_effect_df,
                 self.counterfactual_df,
                 outcome_name,
