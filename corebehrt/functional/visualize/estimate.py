@@ -182,8 +182,18 @@ def create_adjustment_plot(
         logger.error(f"Failed to create adjustment plot. Error: {e}", exc_info=True)
 
 
-def create_ipw_plot(df: pd.DataFrame, save_dir: str):
-    # Prepare combinations and figure
+def create_ipw_plot(exposure: pd.Series, propensity: pd.Series, save_dir: str):
+    """
+    Creates IPW weight distribution plots for ATE and ATT.
+    Args:
+        exposure: pd.Series of exposure values
+        propensity: pd.Series of propensity scores
+        save_dir: str path to save the figure in
+
+    """
+    if len(exposure) != len(propensity):
+        raise ValueError("Exposure and propensity must have the same length")
+
     combos = [
         ("ATE", True),
         ("ATE", False),
@@ -191,15 +201,15 @@ def create_ipw_plot(df: pd.DataFrame, save_dir: str):
         ("ATT", False),
     ]
 
-    A = df[EXPOSURE_COL].values
+    A = exposure.values
     exposure_labels = pd.Series(A).map({0: "Control", 1: "Exposed"}).values
 
     # Precompute weights and mask for ATT (omit treated)
     weights_data = []
     for wt, stab in combos:
         w = compute_ipw_weights(
-            A=df[EXPOSURE_COL],
-            ps=df[PS_COL],
+            A=exposure,
+            ps=propensity,
             weight_type=wt,
             stabilized=stab,
         )

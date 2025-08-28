@@ -52,11 +52,11 @@ trainer_args:
   use_pcgrad: false
   plot_histograms: true
   save_curves: false
-  plot_gradients: true
-  plot_gradients_frequency: 20
+  plot_gradients: false
+  plot_gradients_frequency: 3
 
 optimizer:
-  lr: 5e-5
+  lr: 7e-5
   eps: 1e-6
   weight_decay: 0
 
