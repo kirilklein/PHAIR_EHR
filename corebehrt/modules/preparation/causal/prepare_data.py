@@ -91,6 +91,9 @@ class CausalDatasetPreparer:
         self.end_date = self.get_end_date(cohort_cfg)
         self.vocabulary = self.ds_preparer.vocab
         self.min_instances_per_class = self.data_cfg.get("min_instances_per_class", 10)
+        self.max_items_per_plot = self.data_cfg.get("max_items_per_plot", 15)
+        self.max_number_of_plots = self.data_cfg.get("max_number_of_plots", 10)
+        self.number_subjects_to_plot = self.data_cfg.get("number_subjects_to_plot", 10)
         self.logger = logger
 
     def prepare_finetune_data(self, mode: str = "tuning") -> CausalPatientDataset:
@@ -178,7 +181,12 @@ class CausalDatasetPreparer:
             all_targets.rename(columns={binary_exposure.name: "exposure"}, inplace=True)
             plot_target_distribution(all_targets, fig_dir)
 
-            plot_filtering_stats(filtering_stats, fig_dir)
+            plot_filtering_stats(
+                filtering_stats,
+                fig_dir,
+                self.max_items_per_plot,
+                self.max_number_of_plots,
+            )
             plot_followups_timeline(
                 exposures=exposures,
                 outcomes=outcomes,
@@ -186,7 +194,7 @@ class CausalDatasetPreparer:
                 index_date_matching=index_date_matching,
                 censor_dates=censor_dates,
                 save_dir=fig_dir,
-                n_random_subjects=30,
+                n_random_subjects=self.number_subjects_to_plot,
             )
         return data
 

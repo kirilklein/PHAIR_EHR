@@ -27,7 +27,7 @@ model:
   loss:
     name: bce # bce by default
     # params:
-     # gamma: 4.0
+    # gamma: 4.0
   initialize_sigmoid_bias: false
 
 trainer_args:

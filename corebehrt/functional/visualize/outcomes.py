@@ -12,7 +12,10 @@ from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
 
 
 def plot_target_distribution(
-    df: pd.DataFrame, outcome_dir: str, max_outcomes_per_plot: int = 100
+    df: pd.DataFrame,
+    outcome_dir: str,
+    max_outcomes_per_plot: int = 15,
+    max_number_of_plots: int = 10,
 ) -> None:
     """
     Plots the distribution of positive outcomes, splitting into multiple files if needed.
@@ -21,12 +24,34 @@ def plot_target_distribution(
         df (pd.DataFrame): DataFrame with outcome columns.
         outcome_dir (str): Directory where the plot(s) will be saved.
         max_outcomes_per_plot (int): Maximum number of outcomes to display in a single plot.
+        max_number_of_plots (int): Maximum number of plots to generate.
     """
     # Ensure the output directory exists
     os.makedirs(outcome_dir, exist_ok=True)
 
+    if max_outcomes_per_plot <= 0 or max_number_of_plots <= 0:
+        print(
+            "max_outcomes_per_plot and max_number_of_plots must be positive; skipping plot generation."
+        )
+        return
+
     outcome_proportions = df.mean().sort_values(ascending=True)
     num_outcomes = len(outcome_proportions)
+
+    if num_outcomes == 0:
+        print("No outcomes to plot.")
+        return
+
+    # Cap total number of displayed outcomes to available capacity
+    total_capacity = max_outcomes_per_plot * max_number_of_plots
+    if num_outcomes > total_capacity:
+        print(
+            f"Number of outcomes ({num_outcomes}) exceeds the total capacity "
+            f"({total_capacity} = {max_outcomes_per_plot} per plot × {max_number_of_plots} plots). "
+            f"Truncating to first {total_capacity} outcomes."
+        )
+        outcome_proportions = outcome_proportions.iloc[:total_capacity]
+        num_outcomes = len(outcome_proportions)
 
     if num_outcomes <= max_outcomes_per_plot:
         # Plotting a single figure
@@ -57,10 +82,10 @@ def plot_target_distribution(
         print(f"Plot saved to '{save_path}'")
 
     else:
-        # Splitting into multiple figures
+        # Splitting into multiple figures (bounded by max_number_of_plots)
         num_plots = (num_outcomes + max_outcomes_per_plot - 1) // max_outcomes_per_plot
         print(
-            f"Number of outcomes ({num_outcomes}) exceeds the limit of {max_outcomes_per_plot}. Generating {num_plots} plots."
+            f"Generating {num_plots} plot(s) with up to {max_outcomes_per_plot} outcomes each."
         )
 
         for i in range(num_plots):
@@ -99,7 +124,12 @@ def plot_target_distribution(
             print(f"Plot saved to '{save_path}'")
 
 
-def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int = 100):
+def plot_filtering_stats(
+    stats: dict,
+    output_dir: str,
+    max_items_per_plot: int = 15,
+    max_number_of_plots: int = 10,
+):
     """
     Plots patient counts before and after filtering, splitting into multiple files if needed.
 
@@ -107,9 +137,16 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
         stats (dict): A dictionary containing the before/after counts.
         output_dir (str): The directory to save the plot(s) in.
         max_items_per_plot (int): Maximum number of items to display in a single plot.
+        max_number_of_plots (int): Maximum number of plots to generate.
     """
     if not stats:
         print("Statistics dictionary is empty, skipping plot generation.")
+        return
+
+    if max_items_per_plot <= 0 or max_number_of_plots <= 0:
+        print(
+            "max_items_per_plot and max_number_of_plots must be positive; skipping plot generation."
+        )
         return
 
     os.makedirs(output_dir, exist_ok=True)
@@ -152,21 +189,30 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
     )
     df_plot = df_plot.sort_values("name")
 
-    # (The rest of the plotting logic with splitting into chunks remains the same)
+    # Determine which items to plot with capacity constraints
     item_names = df_plot["name"].unique().tolist()
     num_items = len(item_names)
     if num_items == 0:
         print("No data to plot.")
         return
 
+    total_capacity = max_items_per_plot * max_number_of_plots
+    if num_items > total_capacity:
+        print(
+            f"Number of items ({num_items}) exceeds the total capacity "
+            f"({total_capacity} = {max_items_per_plot} per plot × {max_number_of_plots} plots). "
+            f"Truncating to first {total_capacity} items."
+        )
+        item_names = item_names[:total_capacity]
+        num_items = len(item_names)
+
     num_plots = (num_items + max_items_per_plot - 1) // max_items_per_plot
     if num_plots > 1:
         print(
-            f"Number of items ({num_items}) exceeds the limit of {max_items_per_plot}. "
-            f"Generating {num_plots} plots."
+            f"Generating {num_plots} plot(s) with up to {max_items_per_plot} items each."
         )
 
-    # 3. Loop through chunks and generate a plot for each
+    # Loop through chunks and generate a plot for each
     for i in range(num_plots):
         start_index = i * max_items_per_plot
         end_index = start_index + max_items_per_plot
@@ -214,11 +260,10 @@ def plot_filtering_stats(stats: dict, output_dir: str, max_items_per_plot: int =
         plt.tight_layout()
 
         # Determine save path
-        base_filename = "filtering_counts_comparison"
         if num_plots > 1:
-            save_path = join(output_dir, f"{base_filename}_{i + 1}.png")
+            save_path = join(output_dir, "filtering_counts", f"fig_{i + 1}.png")
         else:
-            save_path = join(output_dir, f"{base_filename}.png")
+            save_path = join(output_dir, "filtering_counts", f"fig.png")
 
         save_figure_with_azure_copy(plt.gcf(), save_path)
         print(f"Saved filtering statistics plot to {save_path}")
