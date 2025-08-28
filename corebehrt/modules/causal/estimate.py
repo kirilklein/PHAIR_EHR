@@ -1,6 +1,6 @@
+import logging
 import os
 from os.path import join
-from typing import Any, Dict
 
 import pandas as pd
 import torch
@@ -11,9 +11,6 @@ from CausalEstimate.filter.propensity import filter_common_support
 from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     OUTCOME,
-    PROB_C_KEY,
-    PROB_KEY,
-    PROB_T_KEY,
     PROBAS,
     PROBAS_CONTROL,
     PROBAS_EXPOSED,
@@ -65,24 +62,26 @@ class EffectEstimator:
 
     RELEVANT_COLUMNS = EffectColumns.get_columns()
 
-    def __init__(self, cfg: Config, logger: Any):
+    def __init__(self, cfg: Config, logger: logging.Logger):
         self.cfg = cfg
         self.logger = logger
-        self.exp_dir = self.cfg.paths.estimate
+        self.exp_dir: str = self.cfg.paths.estimate
 
-        self.predictions_file = join(
+        self.predictions_file: str = join(
             self.cfg.paths.calibrated_predictions,
             COMBINED_CALIBRATED_PREDICTIONS_FILE,
         )
-        self.estimator_cfg = self.cfg.estimator
+        self.estimator_cfg: dict = self.cfg.estimator
         self._init_plot_configs()
-        self.effect_type = self.cfg.estimator.effect_type
+        self.effect_type: str = self.cfg.estimator.effect_type
         self.df = pd.read_csv(self.predictions_file)
         self.outcome_names = get_outcome_names(self.df)
         validate_columns(self.df, self.outcome_names)
-        self.counterfactual_outcomes_dir = self.cfg.paths.get("counterfactual_outcomes")
+        self.counterfactual_outcomes_dir: str = self.cfg.paths.get(
+            "counterfactual_outcomes"
+        )
         self.counterfactual_df = self._load_counterfactual_outcomes()
-        self.estimation_args = self._get_estimation_args()
+        self.init_estimator_args(self.estimator_cfg)
         self._init_bias_introducer()
 
     def _init_plot_configs(self) -> None:
@@ -148,7 +147,7 @@ class EffectEstimator:
                     self.counterfactual_df,
                     outcome_name,
                     self.effect_type,
-                    self.estimation_args["common_support_threshold"],
+                    self.common_support_threshold,
                 )
 
             effect_df = append_unadjusted_effect(analysis_df, effect_df)
@@ -175,6 +174,19 @@ class EffectEstimator:
         )
         self._visualize_effects(final_results_df, combined_stats_df, tmle_analysis_df)
         self.logger.info("Effect estimation complete for all outcomes.")
+
+    def _estimate_effects(
+        self, df: pd.DataFrame, estimator: MultiEstimator
+    ) -> pd.DataFrame:
+        """Estimate effects using the provided estimator instance."""
+        effect_dict = estimator.compute_effects(
+            df,
+            n_bootstraps=self.n_bootstrap,
+            apply_common_support=self.common_support,
+            common_support_threshold=self.common_support_threshold,
+            return_bootstrap_samples=False,
+        )
+        return convert_effect_to_dataframe(effect_dict)
 
     def _visualize_effects(
         self,
@@ -252,8 +264,6 @@ class EffectEstimator:
     def _build_multi_estimator(self) -> MultiEstimator:
         """Builds a MultiEstimator for a specific outcome."""
         estimators = []
-        method_args = self.estimation_args["method_args"]
-        # Define the specific observed outcome column for this run
 
         for method in self.estimator_cfg.methods:
             method_upper = method.upper()
@@ -264,13 +274,10 @@ class EffectEstimator:
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
-                        probas_col=method_args.get("TMLE", {}).get(PROB_KEY, PROBAS),
-                        probas_t1_col=method_args.get("TMLE", {}).get(
-                            PROB_T_KEY, PROBAS_EXPOSED
-                        ),
-                        probas_t0_col=method_args.get("TMLE", {}).get(
-                            PROB_C_KEY, PROBAS_CONTROL
-                        ),
+                        probas_col=PROBAS,
+                        probas_t1_col=PROBAS_EXPOSED,
+                        probas_t0_col=PROBAS_CONTROL,
+                        stabilized=self.stabilized_weights,
                     )
                 )
             elif method_upper == "IPW":
@@ -280,6 +287,7 @@ class EffectEstimator:
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
+                        stabilized=self.stabilized_weights,
                     )
                 )
             elif method_upper == "AIPW":
@@ -289,46 +297,21 @@ class EffectEstimator:
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
-                        probas_t1_col=method_args.get("AIPW", {}).get(
-                            PROB_T_KEY, PROBAS_EXPOSED
-                        ),
-                        probas_t0_col=method_args.get("AIPW", {}).get(
-                            PROB_C_KEY, PROBAS_CONTROL
-                        ),
+                        probas_t1_col=PROBAS_EXPOSED,
+                        probas_t0_col=PROBAS_CONTROL,
                     )
                 )
         return MultiEstimator(estimators=estimators, verbose=False)
 
-    def _get_estimation_args(self) -> Dict:
+    def init_estimator_args(self, cfg) -> None:
         """
         Initialize estimation arguments.
         Uses shorter keys for predicted outcomes.
         """
-        default_method_args = {
-            "AIPW": {
-                PROB_T_KEY: PROBAS_EXPOSED,
-                PROB_C_KEY: PROBAS_CONTROL,
-            },
-            "TMLE": {
-                PROB_KEY: PROBAS,
-                PROB_T_KEY: PROBAS_EXPOSED,
-                PROB_C_KEY: PROBAS_CONTROL,
-            },
-        }
-        # Merge user-provided overrides, if any.
-        user_args = self.estimator_cfg.get("method_args", {})
-        default_method_args.update(user_args)
-
-        return {
-            "method_args": default_method_args,
-            "common_support": bool(
-                self.estimator_cfg.get("common_support_threshold", False)
-            ),
-            "common_support_threshold": self.estimator_cfg.get(
-                "common_support_threshold"
-            ),
-            "n_bootstrap": self.estimator_cfg.get("n_bootstrap", 0),
-        }
+        self.common_support_threshold: float = cfg.get("common_support_threshold", None)
+        self.common_support: bool = True if self.common_support_threshold else False
+        self.n_bootstrap: int = cfg.get("n_bootstrap", 0)
+        self.stabilized_weights: bool = cfg.get("stabilized_weights", True)
 
     def _get_analysis_cohort(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -338,12 +321,12 @@ class EffectEstimator:
         same cohort as the other estimators for fair comparison.
         """
         initial_len = len(df)
-        if self.estimation_args["common_support"]:
+        if self.common_support:
             df = filter_common_support(
                 df,
                 ps_col=PS_COL,
                 treatment_col=EXPOSURE_COL,
-                threshold=self.estimation_args["common_support_threshold"],
+                threshold=self.common_support_threshold,
             )
             self.logger.info(
                 f"Analysis cohort after common support filtering: {initial_len} → {len(df)} observations"
@@ -351,20 +334,6 @@ class EffectEstimator:
 
         torch.save(df[PID_COL].values, join(self.exp_dir, PATIENTS_FILE))
         return df
-
-    def _estimate_effects(
-        self, df: pd.DataFrame, estimator: MultiEstimator
-    ) -> pd.DataFrame:
-        """Estimate effects using the provided estimator instance."""
-        # This method is now simpler as it just runs the given estimator.
-        effect_dict = estimator.compute_effects(
-            df,
-            n_bootstraps=self.estimation_args["n_bootstrap"],
-            apply_common_support=self.estimation_args["common_support"],
-            common_support_threshold=self.estimation_args["common_support_threshold"],
-            return_bootstrap_samples=False,
-        )
-        return convert_effect_to_dataframe(effect_dict)
 
     def _load_counterfactual_outcomes(self) -> pd.DataFrame:
         """Load combined counterfactual outcomes if available."""
@@ -413,7 +382,7 @@ class EffectEstimator:
                 self.counterfactual_df,
                 outcome_name,
                 self.effect_type,
-                self.estimation_args["common_support_threshold"],
+                self.common_support_threshold,
             )
             true_effect_value = true_effect_df[EffectColumns.true_effect].iloc[0]
 
