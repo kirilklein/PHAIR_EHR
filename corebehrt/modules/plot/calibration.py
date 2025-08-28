@@ -17,6 +17,7 @@ from corebehrt.functional.visualize.calibrate import (
     plot_weights_hist,
     produce_calibration_plots,
 )
+from corebehrt.functional.visualize.estimate import create_ipw_plot
 from corebehrt.modules.setup.causal.artifacts import CalibrationArtifacts
 from corebehrt.modules.setup.causal.path_manager import CalibrationPathManager
 from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
@@ -87,7 +88,7 @@ class PlottingManager:
         fig, axes = plt.subplots(
             rows, cols, figsize=(6 * cols, 6 * rows), squeeze=False
         )
-        axes = axes.flatten()
+        axes: List[Axes] = axes.flatten()
 
         for i, name in enumerate(self.outcomes_to_plot):
             produce_calibration_plots(
@@ -115,6 +116,7 @@ class PlottingManager:
         cf_fig_dir = self.paths.get_figure_dir("cf_probas")
         os.makedirs(hist_fig_dir, exist_ok=True)
         os.makedirs(cf_fig_dir, exist_ok=True)
+        create_ipw_plot(data.calibrated_exposure_df, hist_fig_dir)
 
         # Plot standalone propensity score distribution
         fig, ax = plt.subplots()

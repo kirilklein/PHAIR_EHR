@@ -1,6 +1,8 @@
 import logging
 import os
 from os.path import join
+from typing import List
+from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -100,7 +102,6 @@ def create_annotated_heatmap_matplotlib(
     )
     ax.set_xlabel("Outcome")
     ax.set_ylabel("Method")
-    plt.tight_layout()
 
     # --- New logic for saving or showing the plot ---
     if save_path:
@@ -218,7 +219,7 @@ def create_ipw_plot(df: pd.DataFrame, save_dir: str):
 
     # Plot
     fig, axes = plt.subplots(2, 2, figsize=(14, 10), dpi=120)
-    axes = axes.flatten()
+    axes: List[Axes] = axes.flatten()
     palette = {"Control": "#1f77b4", "Exposed": "#d62728"}
 
     for ax, (wt, stab, w, mask) in zip(axes, weights_data):
@@ -254,8 +255,6 @@ def create_ipw_plot(df: pd.DataFrame, save_dir: str):
         ax.legend(title="Exposure", loc="upper right", frameon=False)
 
     plt.suptitle("IPW Weight Distributions by Exposure", y=0.98)
-    plt.tight_layout()
-
     save_path = join(save_dir, "ipw_weights.png")
     save_figure_with_azure_copy(fig, save_path, bbox_inches="tight")
     plt.close(fig)
