@@ -4,18 +4,18 @@ logging:
 
 paths:
   ## INPUTS
-  calibrated_predictions: ./outputs/causal/finetune/models/baseline/simulated/calibrated/
-  counterfactual_outcomes: ./outputs/causal/simulated_outcomes # optional
+  calibrated_predictions: ./outputs/causal/finetune/models/baseline/simulated_ipw/calibrated/
+  counterfactual_outcomes: ./outputs/causal/simulated_outcomes_ipw # optional
 
   ## OUTPUTS
-  estimate: ./outputs/causal/estimate/baseline/simulated_bl
+  estimate: ./outputs/causal/estimate/baseline/simulated_ipw_stabilized
 
 estimator:
   methods: ["IPW", "TMLE"]
   effect_type: "ATE"
   n_bootstrap: 30
   common_support_threshold: 0.001
-  stabilized_weights: false
+  stabilized_weights: true
 
 plot:
   contingency_table:

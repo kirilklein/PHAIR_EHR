@@ -1,0 +1,11 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  finetune_model: ./outputs/causal/finetune/models/baseline/simulated_ipw
+
+  ## OUTPUTS
+  calibrated_predictions: ./outputs/causal/finetune/models/baseline/simulated_ipw/calibrated
+

@@ -1,0 +1,53 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  features: ./outputs/causal/data/features
+  tokenized: ./outputs/causal/data/tokenized
+  cohort: ./outputs/causal/finetune/cohorts/full_simulated_ipw # path to cohort directory
+
+  outcomes: ./outputs/causal/simulated_outcomes_ipw
+  outcome_files: # should correspond to the file names in the outcomes directory
+    - OUTCOME.csv
+    - OUTCOME_2.csv
+    - OUTCOME_3.csv
+    - OUTCOME_4.csv
+    - OUTCOME_5.csv
+    - OUTCOME_6.csv
+    - OUTCOME_7.csv
+    - OUTCOME_8.csv
+
+  exposures: ./outputs/causal/simulated_outcomes_ipw
+  exposure: exposure.csv
+
+  ## OUTPUTS
+  prepared_data: ./outputs/causal/finetune/prepared_data_simulated_ipw # Save model/outputs to this folder
+  #runs: ./outputs/pretraining # Use for generating a new model folder
+
+data:
+  type: finetune
+  truncation_len: 64
+  min_len: 2 # 0 by default
+  cv_folds: 2
+
+  min_instances_per_class: 10
+  max_items_per_plot: 15
+  max_number_of_plots: 10
+  number_subjects_to_plot: 10
+
+  sample_num_patients: null # omit or null to use all patients
+  sample_seed: 42 # optional
+
+exposure:
+  # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
+  n_hours_censoring: -10 # censor time after index date (negative means before)
+  n_hours_start_follow_up: -10 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: 1000 # end follow up (considering outcomes) time after index date (negative means before)
+outcome:
+  n_hours_start_follow_up: 0 # start follow up (considering outcomes) time after index date (negative means before)
+  n_hours_end_follow_up: null # end follow up (considering outcomes) time after index date (negative means before)
+  n_hours_compliance: null # follow up time is adjusted based on compliance
+  group_wise_follow_up: false
+

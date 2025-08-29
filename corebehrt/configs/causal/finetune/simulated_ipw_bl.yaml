@@ -2,17 +2,17 @@ logging:
   # Logging verbosity level (e.g., DEBUG, INFO, WARNING, ERROR)
   level: INFO
   # Optional: path to a log file. If omitted, logs to console.
-  path: ./outputs/logs/causal/baseline.log
+  path: ./outputs/logs/causal/baseline_ipw.log
 
 paths:
   # --- INPUTS ---
   # Path to the directory containing the prepared patient data and vocabulary.
-  prepared_data: ./outputs/causal/finetune/prepared_data_simulated
+  prepared_data: ./outputs/causal/finetune/prepared_data_simulated_ipw
 
   # --- OUTPUTS ---
   # Main directory where all outputs for this baseline run will be saved.
   # This includes models, results, and fold definitions.
-  model: ./outputs/causal/finetune/models/baseline/simulated
+  model: ./outputs/causal/finetune/models/baseline/simulated_ipw
 
 # ==============================================================================
 # Feature Engineering Settings
@@ -63,3 +63,4 @@ tuning:
 # If this section is commented out, the script will automatically train a model
 # for the exposure and all outcomes found in the dataset.
 # targets: ["exposure", "OUTCOME", "OUTCOME_2"]
+

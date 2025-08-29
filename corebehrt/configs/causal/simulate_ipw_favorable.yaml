@@ -1,0 +1,114 @@
+# --------------------------------------------------------------------------
+# General Settings
+# --------------------------------------------------------------------------
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  # Input directory for real patient sequence data
+  data: ./example_data/synthea_meds_causal
+  splits: ["tuning"]
+  # Output directory for the new simulation results
+  outcomes: ./outputs/causal/simulated_outcomes_ipw
+
+seed: 42
+debug: false
+min_num_codes: 3
+include_code_prefixes: ["D/"]
+index_date_str: "2020-01-01"
+
+# --------------------------------------------------------------------------
+# Simulation Model - All Observable Features are Confounders
+# --------------------------------------------------------------------------
+simulation_model:
+  # --- 1. Define the Latent Space Structure ---
+  # ONLY shared factors - all observable features will be confounders
+  num_shared_factors: 15 # All factors are confounders affecting both exposure and outcome
+  num_exposure_only_factors: 0 # NO instruments - prevents overadjustment in PS model
+  num_outcome_only_factors: 0 # NO outcome-only factors - simpler outcome model
+
+  # --- 2. Define How Medical Codes Map to Latent Factors ---
+  factor_mapping:
+    mean: 0.0
+    scale: 1.0 # Moderate effect size for predictable relationships
+    sparsity_factor: 0.90 # Lower sparsity - each code relates to multiple confounders
+
+  # --- 3. Control the Causal Structure (Pure Confounding) ---
+  # All effects come from shared factors (confounders)
+  # This ensures PS model adjusts for the RIGHT variables
+  influence_scales:
+    # Balanced confounding effects - both exposure and outcome well-predicted
+    shared_to_exposure: 2.5 # Strong but not extreme - good PS discrimination
+    shared_to_outcome: 2.0 # Strong outcome prediction from confounders
+    # NO instrument or outcome-only effects
+    exposure_only_to_exposure: 0.0 # No instruments to cause overadjustment
+    outcome_only_to_outcome: 0.0 # No outcome-only predictors
+
+  time_decay_halflife_days: 5000 # Moderate decay
+  noise:
+    logit_noise_scale: 0.1 # Minimal noise - let confounding structure dominate
+
+# --------------------------------------------------------------------------
+# Exposure and Outcome Settings
+# --------------------------------------------------------------------------
+exposure:
+  p_base: 0.25 # Reduced from 0.3 - less balanced, better for PS modeling
+  age_effect: 0.008 # Increased slightly - stronger age effect
+
+outcomes:
+  OUTCOME:
+    run_in_days: 1
+    p_base: 0.15 # Reduced from 0.2 - rarer outcome
+    exposure_effect: 2.5 # Reduced from 3.0 - moderate effect
+    age_effect: -0.008 # Stronger age effect
+
+  OUTCOME_2:
+    run_in_days: 1
+    p_base: 0.18
+    exposure_effect: 1.5 # Moderate positive effect
+    age_effect: 0.006
+
+  OUTCOME_3:
+    run_in_days: 1
+    p_base: 0.22
+    exposure_effect: 0.8 # Weak positive effect
+    age_effect: -0.004
+
+  OUTCOME_4:
+    run_in_days: 1
+    p_base: 0.16
+    exposure_effect: 0.0 # True ZERO causal effect
+    age_effect: 0.005
+
+  OUTCOME_5:
+    run_in_days: 1
+    p_base: 0.12
+    exposure_effect: 2.2 # Moderate positive effect
+    age_effect: -0.007
+
+  OUTCOME_6:
+    run_in_days: 1
+    p_base: 0.14
+    exposure_effect: 0.6 # Weak positive effect
+    age_effect: 0.003
+
+  OUTCOME_7:
+    run_in_days: 1
+    p_base: 0.11
+    exposure_effect: -0.8 # Weak negative effect
+    age_effect: -0.002
+
+  OUTCOME_8:
+    run_in_days: 1
+    p_base: 0.09
+    exposure_effect: 0.0 # True ZERO causal effect
+    age_effect: 0.004
+# --------------------------------------------------------------------------
+# Optional Unobserved Confounding (keeping it light)
+# --------------------------------------------------------------------------
+# unobserved_confounder:
+#   p_occurrence: 0.05
+#   exposure_effect: 0.005
+#   outcome_effects:
+#     OUTCOME_4: 0.05
