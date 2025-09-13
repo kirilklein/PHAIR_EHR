@@ -82,6 +82,7 @@ class EffectEstimator:
         self.effect_type: str = self.cfg.estimator.effect_type
         self.df = pd.read_csv(self.predictions_file)
         self.analysis_df = self._get_analysis_cohort(self.df)
+        self._save_analysis_pids(self.analysis_df)
         self.outcome_names = get_outcome_names(self.df)
         validate_columns(self.df, self.outcome_names)
         self.counterfactual_outcomes_dir: str = self.cfg.paths.get(
@@ -90,6 +91,10 @@ class EffectEstimator:
         self.counterfactual_df = self._load_counterfactual_outcomes()
         self.ite_df = self._load_ite_data()
         self._init_bias_introducer()
+
+    def _save_analysis_pids(self, df: pd.DataFrame) -> None:
+        """Save analysis pids to disk."""
+        torch.save(df[PID_COL].values, join(self.exp_dir, "common_support_pids.pt"))
 
     def _init_plot_configs(self) -> None:
         if self.cfg.get("plot", False):
