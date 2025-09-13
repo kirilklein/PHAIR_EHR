@@ -37,7 +37,7 @@ if errorlevel 1 goto :error
 
 
 echo ==== Running test_estimate_result... ====
-python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor 1.4 --ipw_ci_stretch_factor 1.8 --dir outputs\causal\estimate\baseline\simulated
+python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor 1.4 --ipw_ci_stretch_factor 1.8 --dir outputs\causal\estimate\baseline\simulated_bl
 if errorlevel 1 goto :error
 
 echo Pipeline completed successfully.
