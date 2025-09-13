@@ -296,7 +296,7 @@ class EffectEstimator:
                         probas_col=PROBAS,
                         probas_t1_col=PROBAS_EXPOSED,
                         probas_t0_col=PROBAS_CONTROL,
-                        stabilized=self.clip_percentile,
+                        clip_percentile=self.clip_percentile,
                     )
                 )
             elif method_upper == "IPW":
@@ -306,7 +306,7 @@ class EffectEstimator:
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
-                        stabilized=self.clip_percentile,
+                        clip_percentile=self.clip_percentile,
                     )
                 )
             elif method_upper == "AIPW":
