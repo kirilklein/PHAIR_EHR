@@ -21,7 +21,7 @@ from corebehrt.constants.causal.data import (
     PROBAS,
     PS_COL,
     TARGETS,
-    ROUND_DIGIT,
+    PROBAS_ROUND_DIGIT,
 )
 from corebehrt.constants.data import PID_COL, VAL_KEY
 from corebehrt.constants.causal.paths import COMBINED_PREDICTIONS_FILE
@@ -71,7 +71,7 @@ class PredictionAccumulator:
 
         # Save combined predictions
         output_path = join(self.finetune_dir, COMBINED_PREDICTIONS_FILE)
-        combined_df = combined_df.round(ROUND_DIGIT)
+        combined_df = combined_df.round(PROBAS_ROUND_DIGIT)
         combined_df.to_csv(output_path, index=False)
 
         self.logger.info(f"Combined predictions saved to: {output_path}")
