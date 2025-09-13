@@ -11,7 +11,7 @@ from corebehrt.constants.causal.data import (
     PROBAS,
     PS_COL,
     TARGETS,
-    ROUND_DIGIT,
+    PROBAS_ROUND_DIGIT,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.calibration import calibrate_folds
@@ -41,7 +41,7 @@ class CalibrationProcessor:
         # Load the pre-combined predictions from finetune
         combined_predictions_path = join(self.finetune_dir, COMBINED_PREDICTIONS_FILE)
         combined_df = pd.read_csv(combined_predictions_path)
-        combined_df = combined_df.round(ROUND_DIGIT)
+        combined_df = combined_df.round(PROBAS_ROUND_DIGIT)
 
         # Extract and save exposure predictions
         self._extract_and_save_exposure_predictions(combined_df)
@@ -63,7 +63,7 @@ class CalibrationProcessor:
         # Load the pre-combined predictions from finetune
         combined_predictions_path = join(self.finetune_dir, COMBINED_PREDICTIONS_FILE)
         combined_df = pd.read_csv(combined_predictions_path)
-        combined_df = combined_df.round(ROUND_DIGIT)
+        combined_df = combined_df.round(PROBAS_ROUND_DIGIT)
         # Calibrate exposure
         df_exp, df_exp_calibrated = self._calibrate_exposure_from_combined(combined_df)
 
@@ -76,7 +76,7 @@ class CalibrationProcessor:
         combined_calibrated_df = self._create_combined_calibrated_df(
             df_exp_calibrated, outcomes_calibrated
         )
-        combined_calibrated_df = combined_calibrated_df.round(ROUND_DIGIT)
+        combined_calibrated_df = combined_calibrated_df.round(PROBAS_ROUND_DIGIT)
         combined_calibrated_df.to_csv(
             self.paths.get_combined_calibrated_path(), index=False
         )
