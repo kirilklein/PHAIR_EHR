@@ -296,7 +296,7 @@ class EffectEstimator:
                         probas_col=PROBAS,
                         probas_t1_col=PROBAS_EXPOSED,
                         probas_t0_col=PROBAS_CONTROL,
-                        stabilized=self.stabilized_weights,
+                        stabilized=self.clip_percentile,
                     )
                 )
             elif method_upper == "IPW":
@@ -306,7 +306,7 @@ class EffectEstimator:
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
-                        stabilized=self.stabilized_weights,
+                        stabilized=self.clip_percentile,
                     )
                 )
             elif method_upper == "AIPW":
@@ -330,7 +330,7 @@ class EffectEstimator:
         self.common_support_threshold: float = cfg.get("common_support_threshold", None)
         self.common_support: bool = True if self.common_support_threshold else False
         self.n_bootstrap: int = cfg.get("n_bootstrap", 0)
-        self.stabilized_weights: bool = cfg.get("stabilized_weights", True)
+        self.clip_percentile: float = cfg.get("clip_percentile", 1)
 
     def _get_analysis_cohort(self, df: pd.DataFrame) -> pd.DataFrame:
         """

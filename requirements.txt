@@ -8,7 +8,7 @@ setuptools==75.6.0
 torch==2.5.1
 tqdm==4.67.1
 transformers==4.48.3
-CausalEstimate==0.9.0
+CausalEstimate==0.10.0
 lightning==2.5.0.post0
 xgboost==3.0.0
 betacal==1.1.0
