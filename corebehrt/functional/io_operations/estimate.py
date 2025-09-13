@@ -6,12 +6,14 @@ to various file formats (parquet, csv) in the experiment directory structure.
 """
 
 from os.path import join
+
 import pandas as pd
 
+from corebehrt.constants.causal.data import EFFECT_ROUND_DIGIT
 from corebehrt.constants.causal.paths import (
+    ESTIMATE_RESULTS_FILE,
     EXPERIMENT_DATA_FILE,
     EXPERIMENT_STATS_FILE,
-    ESTIMATE_RESULTS_FILE,
 )
 
 
@@ -39,7 +41,7 @@ def save_experiment_stats_combined(stats_df: pd.DataFrame, exp_dir: str) -> None
 def save_estimate_results(effect_df: pd.DataFrame, exp_dir: str) -> None:
     """Save effect estimates as CSV file with 5 decimal precision."""
     filepath = join(exp_dir, ESTIMATE_RESULTS_FILE)
-    effect_df = effect_df.round(5)
+    effect_df = effect_df.round(EFFECT_ROUND_DIGIT)
     effect_df.to_csv(filepath, index=False)
 
 

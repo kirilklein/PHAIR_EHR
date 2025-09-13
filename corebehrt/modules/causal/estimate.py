@@ -16,6 +16,7 @@ from corebehrt.constants.causal.data import (
     PROBAS_EXPOSED,
     PS_COL,
     EffectColumns,
+    EFFECT_ROUND_DIGIT,
 )
 from corebehrt.constants.causal.paths import (
     COMBINED_CALIBRATED_PREDICTIONS_FILE,
@@ -168,7 +169,7 @@ class EffectEstimator:
             ]
 
             effect_df_clean = effect_df[filter_columns]
-            effect_df_clean = effect_df_clean.round(5)
+            effect_df_clean = effect_df_clean.round(EFFECT_ROUND_DIGIT)
             initial_estimates.append(effect_df)
             all_effects.append(effect_df_clean)
 
@@ -430,7 +431,7 @@ class EffectEstimator:
     def _save_bias_results(self, results_df: pd.DataFrame) -> None:
         """Saves the results of the bias simulation."""
         results_path = join(self.exp_dir, "bias_simulation_results.csv")
-        results_df = results_df.round(5)
+        results_df = results_df.round(EFFECT_ROUND_DIGIT)
         results_df = results_df[
             [col for col in self.RELEVANT_COLUMNS if col in results_df.columns]
         ]
