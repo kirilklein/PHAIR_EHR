@@ -1,9 +1,9 @@
 import pandas as pd
+import numpy as np
 
 from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     OUTCOME,
-    PS_COL,
     SIMULATED_OUTCOME_CONTROL,
     SIMULATED_OUTCOME_EXPOSED,
     SIMULATED_PROBAS_CONTROL,
@@ -11,12 +11,11 @@ from corebehrt.constants.causal.data import (
     EffectColumns,
 )
 from corebehrt.constants.data import PID_COL
-from corebehrt.functional.causal.effect import compute_effect_from_counterfactuals
+from corebehrt.functional.causal.effect import compute_effect_from_ite
 from corebehrt.functional.causal.estimate import (
     calculate_risk_difference,
     calculate_risk_ratio,
 )
-from CausalEstimate.filter.propensity import filter_common_support
 
 
 def append_unadjusted_effect(df: pd.DataFrame, effect_df: pd.DataFrame) -> pd.DataFrame:
@@ -39,12 +38,10 @@ def append_unadjusted_effect(df: pd.DataFrame, effect_df: pd.DataFrame) -> pd.Da
 
 
 def append_true_effect(
-    analysis_df: pd.DataFrame,
     effect_df: pd.DataFrame,
-    counterfactual_df: pd.DataFrame,
+    ite_df: pd.DataFrame,
     outcome_name: str,
-    effect_type: str,
-    common_support_threshold: float = 0.01,
+    analysis_pids: np.ndarray,
 ) -> pd.DataFrame:
     """
     Add ground truth effect estimates from simulated counterfactual outcomes.
@@ -54,20 +51,9 @@ def append_true_effect(
 
     Adds the true effect to the effect_df. (TRUE_EFFECT_COL)
     """
-    if PS_COL not in counterfactual_df.columns:
-        combined = pd.merge(
-            analysis_df[[PID_COL, PS_COL]], counterfactual_df, on=PID_COL, how="inner"
-        )
-    else:
-        combined = counterfactual_df[
-            counterfactual_df[PID_COL].isin(analysis_df[PID_COL].unique())
-        ]
-    combined = filter_common_support(
-        combined, PS_COL, EXPOSURE_COL, common_support_threshold
+    effect_df[EffectColumns.true_effect] = compute_effect_from_ite(
+        ite_df, analysis_pids, outcome_name
     )
-    cf_outcomes = prepare_counterfactual_data_for_outcome(combined, outcome_name)
-    true_effect = compute_effect_from_counterfactuals(cf_outcomes, effect_type)
-    effect_df[EffectColumns.true_effect] = true_effect
     return effect_df
 
 

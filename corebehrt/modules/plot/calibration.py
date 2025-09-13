@@ -117,7 +117,7 @@ class PlottingManager:
         os.makedirs(hist_fig_dir, exist_ok=True)
         os.makedirs(cf_fig_dir, exist_ok=True)
 
-        create_ipw_plot(df[EXPOSURE_COL], df[PS_COL], hist_fig_dir)
+        create_ipw_plot(df[EXPOSURE_COL], df[PS_COL], hist_fig_dir, clip_percentile=1.0)
 
         # Plot standalone propensity score distribution
         fig, ax = plt.subplots()

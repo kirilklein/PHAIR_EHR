@@ -88,7 +88,7 @@ class EffectEstimator:
             "counterfactual_outcomes"
         )
         self.counterfactual_df = self._load_counterfactual_outcomes()
-
+        self.ite_df = self._load_ite_data()
         self._init_bias_introducer()
 
     def _init_plot_configs(self) -> None:
@@ -146,12 +146,10 @@ class EffectEstimator:
 
             if self.counterfactual_df is not None:
                 effect_df = append_true_effect(
-                    df_for_outcome,
                     effect_df,
-                    self.counterfactual_df,
+                    self.ite_df,
                     outcome_name,
-                    self.effect_type,
-                    self.common_support_threshold,
+                    self.analysis_df[PID_COL].values,
                 )
 
             effect_df = append_unadjusted_effect(df_for_outcome, effect_df)
@@ -205,7 +203,10 @@ class EffectEstimator:
             self.df, self.analysis_df, PS_COL, EXPOSURE_COL, fig_dir
         )
         create_ipw_plot(
-            self.analysis_df[EXPOSURE_COL], self.analysis_df[PS_COL], fig_dir
+            self.analysis_df[EXPOSURE_COL],
+            self.analysis_df[PS_COL],
+            fig_dir,
+            self.clip_percentile,
         )
         methods = self.estimator_cfg.methods
         create_annotated_heatmap_matplotlib(
@@ -372,10 +373,23 @@ class EffectEstimator:
         )
         return None
 
+    def _load_ite_data(self) -> pd.DataFrame:
+        """Load Individual Treatment Effects data if available."""
+        if not self.counterfactual_outcomes_dir:
+            return None
+
+        ite_file = join(self.counterfactual_outcomes_dir, "ite.csv")
+        if os.path.exists(ite_file):
+            self.logger.info(f"Loading ITE data from {ite_file}")
+            return pd.read_csv(ite_file)
+
+        self.logger.info("No ITE file found")
+        return None
+
     def _run_bias_simulation(self) -> None:
         """Runs the effect estimation across a grid of biases for each outcome."""
         self.logger.info("Starting bias simulation.")
-        if self.counterfactual_df is None:
+        if self.ite_df is None:
             self.logger.error(
                 "Bias simulation requires counterfactual outcomes to calculate true effects. Aborting."
             )
@@ -396,12 +410,10 @@ class EffectEstimator:
 
             dummy_effect_df = pd.DataFrame([{"estimator": "placeholder"}])
             true_effect_df = append_true_effect(
-                df_for_outcome,
                 dummy_effect_df,
-                self.counterfactual_df,
+                self.ite_df,
                 outcome_name,
-                self.effect_type,
-                self.common_support_threshold,
+                self.analysis_df[PID_COL].values,
             )
             true_effect_value = true_effect_df[EffectColumns.true_effect].iloc[0]
 
