@@ -2,6 +2,8 @@
 outputs/
 corebehrt.egg-info/
 .venv
+venv/
+.vscode/
 .azure
 azure_job_config.yaml
 .azure_job_configs
