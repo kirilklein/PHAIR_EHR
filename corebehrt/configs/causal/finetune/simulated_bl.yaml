@@ -27,12 +27,12 @@ include_age: true # If true, include age-based features (mean, min, max, std, ra
 # These are the base parameters for the CatBoost model.
 # They are used directly if tuning is disabled, or as a starting point for tuning.
 catboost:
-  n_estimators: 50 # Max number of trees. Training will likely stop early.
-  learning_rate: 0.05 # Step size shrinkage to prevent overfitting.
-  max_depth: 5 # Maximum depth of each tree.
+  n_estimators: 100 # Max number of trees. Training will likely stop early.
+  learning_rate: 0.03 # Step size shrinkage to prevent overfitting.
+  max_depth: 6 # Maximum depth of each tree.
   subsample: 0.8 # Fraction of objects to sample for each tree (row sampling).
   colsample_bylevel: 0.8 # Fraction of features to sample for each level (column sampling).
-  l2_leaf_reg: 3 # L2 regularization term on weights.
+  l2_leaf_reg: 0 # L2 regularization term on weights.
   early_stopping_rounds: 10 # Stop training if the validation score doesn't improve for this many rounds.
 
 # ==============================================================================
@@ -45,7 +45,7 @@ tuning:
   tune_hyperparameters: True
 
   # Number of different hyperparameter combinations to try in the Optuna search.
-  n_trials: 5
+  n_trials: 10
 
   # [NEW] The proportion of the outer training set to use for validation in the inner loop.
   # For example, 0.2 means an 80/20 split for inner training/validation.

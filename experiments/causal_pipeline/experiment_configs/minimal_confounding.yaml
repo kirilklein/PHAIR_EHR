@@ -1,0 +1,33 @@
+# Minimal Confounding Experiment
+# Tests scenario with minimal confounding - easier causal inference
+
+experiment_name: minimal_confounding
+description: "Simulation with minimal confounding - easier causal inference scenario"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 0.2 # Very weak confounding
+    shared_to_outcome: 0.2 # Very weak confounding
+    exposure_only_to_exposure: 5.0 # Strong instruments
+    outcome_only_to_outcome: 5.0 # Strong independent risks
+
+outcomes:
+  OUTCOME:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 3.0
+    age_effect: -0.005
+  OUTCOME_NULL:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 0.0
+

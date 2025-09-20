@@ -50,6 +50,7 @@ simulation_model:
   time_decay_halflife_days: 6000
   noise:
     logit_noise_scale: 0
+
 # --------------------------------------------------------------------------
 # Exposure and Outcome Settings
 # --------------------------------------------------------------------------
@@ -82,17 +83,17 @@ outcomes:
   OUTCOME_5:
     run_in_days: 1
     p_base: 0.1
-    exposure_effect: 3.0 # True ZERO causal effect
+    exposure_effect: 3.0 # Strong positive effect
 
   OUTCOME_6:
     run_in_days: 1
     p_base: 0.1
-    exposure_effect: 1.0 # True ZERO causal effect
+    exposure_effect: 1.0 # Weak positive effect
 
   OUTCOME_7:
     run_in_days: 1
     p_base: 0.1
-    exposure_effect: -1.0 # True ZERO causal effect
+    exposure_effect: -1.0 # Negative effect
 
   OUTCOME_8:
     run_in_days: 1
@@ -102,18 +103,9 @@ outcomes:
   OUTCOME_9:
     run_in_days: 1
     p_base: 0.2
-    exposure_effect: -3.0 # True ZERO causal effect
+    exposure_effect: -3.0 # Strong negative effect
 
   OUTCOME_10:
     run_in_days: 1
     p_base: 0.3
-    exposure_effect: 2.5 # True ZERO causal effect
-
-# --------------------------------------------------------------------------
-# Optional Unobserved Confounding
-# --------------------------------------------------------------------------
-# unobserved_confounder:
-#   p_occurrence: 0.1
-#   exposure_effect: 0.01
-#   outcome_effects:
-#     OUTCOME_4: 0.1
+    exposure_effect: 2.5 # Strong positive effect

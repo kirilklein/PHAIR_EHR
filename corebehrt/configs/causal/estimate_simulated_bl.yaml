@@ -14,8 +14,8 @@ estimator:
   methods: ["IPW", "TMLE"]
   effect_type: "ATE"
   n_bootstrap: 30
-  common_support_threshold: 0.001
-  clip_percentile: 1.0
+  # common_support_threshold: 0.001  # Disable common support filtering
+  clip_percentile: 0.99 # Use weight clipping instead
 
 plot:
   contingency_table:

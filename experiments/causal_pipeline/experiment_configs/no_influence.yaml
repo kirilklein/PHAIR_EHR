@@ -1,0 +1,43 @@
+# No Influence Experiment
+# Tests scenario where simulation model has no causal effects
+
+experiment_name: no_influence
+description: "Simulation with all influence scales set to 0 - tests null effects"
+
+# These will be merged into the base simulation config
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 0
+    shared_to_outcome: 0
+    exposure_only_to_exposure: 0
+    outcome_only_to_outcome: 0
+
+# Override specific outcomes if needed
+outcomes:
+  OUTCOME:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 3.0
+    age_effect: -0.005
+  OUTCOME_2:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 2.0
+  OUTCOME_3:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 1.0
+  OUTCOME_4:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 0.0
+
