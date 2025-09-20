@@ -13,21 +13,34 @@ This directory contains a flexible experiment system for running causal inferenc
 - `base_configs/` - Template configs for each pipeline step  
 - `generated_configs/` - Auto-generated configs (don't edit manually)
 - `run_experiment.bat` - Main script to run experiments
-- `run_multiple_experiments.bat` - Run multiple experiments sequentially
+- `run_all_experiments.bat` - Run ALL experiments sequentially with logging
+- `run_experiments_ordered.bat` - Run experiments in custom order
+- `run_multiple_experiments.bat` - Run multiple experiments sequentially (legacy)
+- `monitor_experiments.bat` - Real-time monitoring of experiment progress
 - `create_new_experiment.bat` - Helper to create new experiment templates
+- `list_experiments.bat` - List all available experiments
 - `scripts/` - Helper scripts for config generation
 
 ## Example Usage
 
 ```bash
 # Run a single experiment
-run_experiment.bat no_influence
+run_experiment.bat ce0_cy0_y0_i0
 
-# Run multiple experiments
-run_multiple_experiments.bat no_influence strong_confounding minimal_confounding
+# Run ALL experiments sequentially (waits for each to complete)
+run_all_experiments.bat
+
+# Run experiments in a specific order
+run_experiments_ordered.bat ce0_cy0_y0_i0 ce0p5_cy0p5_y0_i0 ce1_cy1_y0_i0
+
+# Monitor experiment progress (real-time)
+monitor_experiments.bat
 
 # Create a new experiment template
 create_new_experiment.bat my_new_experiment
+
+# List available experiments
+list_experiments.bat
 ```
 
 ## Pre-configured Experiments
@@ -99,3 +112,37 @@ The system automatically:
 4. **Error handling** - Stops on errors with clear messaging
 
 No need to manually edit paths or duplicate config files!
+
+## Sequential Experiment Execution
+
+The system provides robust sequential execution with proper error handling:
+
+### `run_all_experiments.bat`
+
+- Automatically finds and runs ALL experiments in `experiment_configs/`
+- Waits for each experiment to complete before starting the next
+- Continues even if individual experiments fail
+- Creates timestamped log files with detailed execution records
+- Provides comprehensive summary at the end
+
+### `run_experiments_ordered.bat`
+
+- Run experiments in a specific order you define
+- Useful for running subsets or specific sequences
+- Same robust error handling and logging as `run_all_experiments.bat`
+
+### `monitor_experiments.bat`
+
+- Real-time monitoring of experiment progress
+- Shows currently running Python processes
+- Lists recent experiment outputs and log files
+- Auto-refreshes every 10 seconds
+
+### Logging
+
+All sequential runs create detailed log files:
+
+- Format: `run_all_experiments_YYYY-MM-DD_HH-MM-SS.log`
+- Records start/end times for each experiment
+- Tracks success/failure status
+- Final summary with counts and failed experiment list
