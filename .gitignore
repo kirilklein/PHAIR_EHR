@@ -18,3 +18,6 @@ corebehrt/main_causal/helper_data/sks_trees/
 mlruns/
 results/
 catboost_info/
+debug/
+
+experiments/causal_pipeline/generated_configs/
