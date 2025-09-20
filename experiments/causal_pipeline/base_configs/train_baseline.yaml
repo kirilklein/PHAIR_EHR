@@ -17,6 +17,8 @@ include_age: true
 
 # ==============================================================================
 # Model Parameters (CatBoost)
+# Note: Parameters specified here will be FIXED (not tuned by Optuna)
+# Parameters not specified will be tuned within predefined ranges
 # ==============================================================================
 catboost:
   n_estimators: 100
@@ -24,8 +26,9 @@ catboost:
   max_depth: 6
   subsample: 0.8
   colsample_bylevel: 0.8
-  l2_leaf_reg: 0
+  l2_leaf_reg: 0 # FIXED: No L2 regularization
   early_stopping_rounds: 10
+  # min_data_in_leaf: not specified, so will be TUNED in range [1, 100]
 
 # ==============================================================================
 # Hyperparameter Tuning Settings (Optuna)
@@ -35,4 +38,3 @@ tuning:
   n_trials: 10
   inner_val_size: 0.2
   reuse_hyperparameters: true
-

@@ -25,6 +25,7 @@ from corebehrt.main_causal.helper.train_baseline import (
     nested_cv_loop,
     save_nested_cv_summary,
     save_combined_predictions,
+    save_hyperparameters,
 )
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
@@ -68,11 +69,16 @@ def main_baseline(config_path: str):
     cv_data = data.filter_by_pids(list(all_pids_in_folds))
 
     # Run the main Nested CV loop and collect results and predictions
-    all_results, prediction_storage = nested_cv_loop(cfg, logger, cv_data, folds)
+    all_results, prediction_storage, target_hyperparams = nested_cv_loop(
+        cfg, logger, cv_data, folds
+    )
 
     # Save only the combined final summary
     model_path = cfg.paths.model
     save_nested_cv_summary(all_results, model_path)
+
+    # Save final hyperparameters for each target
+    save_hyperparameters(target_hyperparams, model_path)
 
     # Save combined predictions in the same format as finetune_exp_y.py
     outcome_names = data.get_outcome_names()

@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from os.path import join
@@ -71,6 +72,41 @@ def save_nested_cv_summary(
     logger.info("===== Nested CV Final Summary =====")
     logger.info(f"\n{all_results_df.to_string(index=False)}")
     logger.info(f"Final summary report saved to {final_report_path}")
+
+
+def save_hyperparameters(
+    target_hyperparams: Dict[str, Dict[str, Any]], baseline_folder: str
+) -> None:
+    """Saves the final hyperparameters for each target to a JSON file."""
+    logger = logging.getLogger("save_hyperparams")
+
+    hyperparams_folder = join(baseline_folder, "hyperparameters")
+    os.makedirs(hyperparams_folder, exist_ok=True)
+
+    hyperparams_path = join(
+        hyperparams_folder,
+        f"hyperparams_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+    )
+
+    # Convert numpy types to Python native types for JSON serialization
+    serializable_params = {}
+    for target, params in target_hyperparams.items():
+        serializable_params[target] = {}
+        for key, value in params.items():
+            if isinstance(value, (np.int64, np.int32)):
+                serializable_params[target][key] = int(value)
+            elif isinstance(value, (np.float64, np.float32)):
+                serializable_params[target][key] = float(value)
+            else:
+                serializable_params[target][key] = value
+
+    with open(hyperparams_path, "w") as f:
+        json.dump(serializable_params, f, indent=2)
+
+    logger.info(f"Hyperparameters saved to: {hyperparams_path}")
+    logger.info("Final hyperparameters summary:")
+    for target, params in serializable_params.items():
+        logger.info(f"  {target}: {params}")
 
 
 def save_combined_predictions(
@@ -152,11 +188,13 @@ def run_hyperparameter_tuning(
     X_val: pd.DataFrame,
     y_val: np.ndarray,
     base_params: Dict[str, Any],
+    config_params: Dict[str, Any],
     n_trials: int,
     scale_pos_weight: float,
 ) -> Dict[str, Any]:
     """
     INNER LOOP: Performs hyperparameter tuning using Optuna on a given train/val split.
+    Only tunes parameters that are NOT explicitly set in the config.
     Returns the best set of parameters found.
     """
     logging.info(f"  Starting hyperparameter tuning with {n_trials} trials...")
@@ -167,6 +205,32 @@ def run_hyperparameter_tuning(
     logging.info(f"  Val class distribution: {np.bincount(y_val)}")
     logging.info(f"  Scale pos weight: {scale_pos_weight:.4f}")
 
+    # Define default tuning ranges for each parameter
+    TUNING_RANGES = {
+        "learning_rate": ("float", 0.01, 0.3, True),  # (type, min, max, log_scale)
+        "max_depth": ("int", 4, 10),  # (type, min, max)
+        "subsample": ("float", 0.6, 1.0, False),
+        "colsample_bylevel": ("float", 0.6, 1.0, False),
+        "l2_leaf_reg": ("float", 1e-8, 10.0, True),
+        "min_data_in_leaf": ("int", 1, 100),
+    }
+
+    # Determine which parameters to tune (not in config)
+    params_to_tune = {}
+    fixed_params = {}
+
+    for param_name, range_info in TUNING_RANGES.items():
+        if param_name in config_params:
+            fixed_params[param_name] = config_params[param_name]
+            logging.info(
+                f"  Parameter '{param_name}' FIXED at {config_params[param_name]} (from config)"
+            )
+        else:
+            params_to_tune[param_name] = range_info
+            logging.info(
+                f"  Parameter '{param_name}' will be TUNED in range {range_info[1:3]}"
+            )
+
     # Check for trivial cases
     if len(np.unique(y_train)) < 2 or len(np.unique(y_val)) < 2:
         logging.warning(
@@ -175,14 +239,19 @@ def run_hyperparameter_tuning(
         return base_params
 
     def objective(trial: optuna.Trial):
-        trial_params = {
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
-            "max_depth": trial.suggest_int("max_depth", 4, 10),
-            "subsample": trial.suggest_float("subsample", 0.6, 1.0),
-            "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.6, 1.0),
-            "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1e-8, 10.0, log=True),
-            "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 1, 100),
-        }
+        trial_params = {}
+
+        # Only tune parameters not fixed by config
+        for param_name, range_info in params_to_tune.items():
+            if range_info[0] == "float":
+                log_scale = range_info[3] if len(range_info) > 3 else False
+                trial_params[param_name] = trial.suggest_float(
+                    param_name, range_info[1], range_info[2], log=log_scale
+                )
+            elif range_info[0] == "int":
+                trial_params[param_name] = trial.suggest_int(
+                    param_name, range_info[1], range_info[2]
+                )
 
         model = CatBoostClassifier(
             n_estimators=base_params["n_estimators"],
@@ -209,17 +278,23 @@ def run_hyperparameter_tuning(
 
         return auc
 
-    logging.info(f"  Running Optuna optimization...")
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials)
+    if params_to_tune:
+        logging.info(
+            f"  Running Optuna optimization for {len(params_to_tune)} parameters..."
+        )
+        study = optuna.create_study(direction="maximize")
+        study.optimize(objective, n_trials=n_trials)
 
-    logging.info(f"  Hyperparameter tuning completed!")
-    logging.info(f"  Best trial AUC: {study.best_value:.4f}")
-    logging.info(f"  Best parameters: {study.best_params}")
+        logging.info(f"  Hyperparameter tuning completed!")
+        logging.info(f"  Best trial AUC: {study.best_value:.4f}")
+        logging.info(f"  Best tuned parameters: {study.best_params}")
 
-    final_params = {**base_params, **study.best_params}
+        final_params = {**base_params, **study.best_params}
+    else:
+        logging.info("  No parameters to tune (all fixed by config)")
+        final_params = base_params.copy()
+
     logging.info(f"  Final merged parameters: {final_params}")
-
     return final_params
 
 
@@ -312,12 +387,16 @@ def _get_best_params_for_fold(
 
     scale_pos_weight = (y_inner_train == 0).sum() / max((y_inner_train == 1).sum(), 1)
 
+    # Get config parameters for this tuning session
+    config_params = cfg.get("catboost", {})
+
     tuned_params = run_hyperparameter_tuning(
         X_inner_train,
         y_inner_train,
         X_inner_val,
         y_inner_val,
         base_params,
+        config_params,
         n_trials,
         scale_pos_weight,
     )
@@ -443,10 +522,13 @@ def nested_cv_loop(
     logger: logging.Logger,
     data: CausalPatientDataset,
     folds: list,
-) -> Tuple[List[pd.DataFrame], List[FoldPredictionData]]:
+) -> Tuple[List[pd.DataFrame], List[FoldPredictionData], Dict[str, Dict[str, Any]]]:
     """
     Manages the nested cross-validation process using helper functions.
-    Returns a list of results DataFrames for each target and collected predictions.
+    Returns:
+        - List of results DataFrames for each target
+        - Collected predictions from all folds
+        - Final hyperparameters used for each target
     """
     targets_to_train = cfg.get("targets", [EXPOSURE] + data.get_outcome_names())
     logger.info(f"Starting Nested Cross-Validation for targets: {targets_to_train}")
@@ -463,6 +545,7 @@ def nested_cv_loop(
 
     all_results = []
     prediction_storage = []  # Store all predictions
+    target_hyperparams = {}  # Store final hyperparameters for each target
 
     for target_name in targets_to_train:
         logger.info(f"\n===== Processing Target: {target_name.upper()} =====")
@@ -536,7 +619,13 @@ def nested_cv_loop(
         )
         all_results.append(target_results)
 
-    return all_results, prediction_storage
+        # Store final hyperparameters for this target
+        if best_params_for_target is not None:
+            target_hyperparams[target_name] = best_params_for_target
+        else:
+            target_hyperparams[target_name] = base_params
+
+    return all_results, prediction_storage, target_hyperparams
 
 
 def handle_folds(cfg: Config, logger: logging.Logger) -> list:
