@@ -13,6 +13,12 @@ paths:
     - OUTCOME_2.csv
     - OUTCOME_3.csv
     - OUTCOME_4.csv
+    - OUTCOME_5.csv
+    - OUTCOME_6.csv
+    - OUTCOME_7.csv
+    - OUTCOME_8.csv
+    - OUTCOME_9.csv
+    - OUTCOME_10.csv
   exposures: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/simulated_outcomes
   exposure: exposure.csv
 
@@ -41,4 +47,3 @@ outcome:
   n_hours_end_follow_up: null
   n_hours_compliance: null
   group_wise_follow_up: false
-
