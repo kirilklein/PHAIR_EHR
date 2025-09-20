@@ -1,0 +1,52 @@
+# Strong Confounding Scenario
+# Shared factors (Z_sh) dominate both exposure and outcome prediction
+# This simulates data with strong unmeasured confounding
+
+# Inherit base configuration
+<<: &base_config
+  logging:
+    level: INFO
+    path: ./outputs/logs/causal
+
+  paths:
+    data: ./example_data/synthea_meds_causal
+    splits: ["tuning"]
+    outcomes: ./outputs/causal/scenarios/strong_confounding
+
+  seed: 42
+  debug: false
+  min_num_codes: 3
+  include_code_prefixes: ["D/"]
+  index_date_str: "2020-01-01"
+
+  simulation_model:
+    num_shared_factors: 15      # More confounding factors
+    num_exposure_only_factors: 5   # Fewer instrumental factors  
+    num_outcome_only_factors: 5    # Fewer independent risks
+
+    factor_mapping:
+      mean: 0.0
+      scale: 1.4
+      sparsity_factor: 0.8
+
+    # STRONG CONFOUNDING: Shared factors dominate
+    influence_scales:
+      shared_to_exposure: 10.0     # Very strong Z_sh → Exposure
+      shared_to_outcome: 10.0      # Very strong Z_sh → Outcome  
+      exposure_only_to_exposure: 0.1  # Weak instrumental variables
+      outcome_only_to_outcome: 0.1    # Weak independent risks
+
+    time_decay_halflife_days: 6000
+    noise:
+      logit_noise_scale: 0
+
+  exposure:
+    p_base: 0.3
+    age_effect: 0.005
+
+  outcomes:
+    OUTCOME:
+      run_in_days: 1
+      p_base: 0.2
+      exposure_effect: 3.0
+      age_effect: -0.005
