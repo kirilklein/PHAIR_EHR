@@ -1,0 +1,101 @@
+# Causal Pipeline Experiment System
+
+This directory contains a flexible experiment system for running causal inference pipelines with different simulation settings.
+
+## Quick Start
+
+1. Define your experiment settings in `experiment_configs/`
+2. Run: `run_experiment.bat <experiment_name>`
+
+## Structure
+
+- `experiment_configs/` - Define experiment-specific simulation parameters
+- `base_configs/` - Template configs for each pipeline step  
+- `generated_configs/` - Auto-generated configs (don't edit manually)
+- `run_experiment.bat` - Main script to run experiments
+- `run_multiple_experiments.bat` - Run multiple experiments sequentially
+- `create_new_experiment.bat` - Helper to create new experiment templates
+- `scripts/` - Helper scripts for config generation
+
+## Example Usage
+
+```bash
+# Run a single experiment
+run_experiment.bat no_influence
+
+# Run multiple experiments
+run_multiple_experiments.bat no_influence strong_confounding minimal_confounding
+
+# Create a new experiment template
+create_new_experiment.bat my_new_experiment
+```
+
+## Pre-configured Experiments
+
+- **no_influence** - All influence scales set to 0 (tests null effects)
+- **strong_confounding** - Strong confounding scenario (challenging)  
+- **minimal_confounding** - Minimal confounding scenario (easier)
+
+## Adding New Experiments
+
+### Option 1: Use the helper script
+
+```bash
+create_new_experiment.bat my_experiment
+# Edit the generated file: experiment_configs/my_experiment.yaml
+run_experiment.bat my_experiment
+```
+
+### Option 2: Manual creation
+
+1. Create a new file in `experiment_configs/` (e.g., `my_experiment.yaml`)
+2. Define your simulation parameters (see examples)
+3. Run with `run_experiment.bat my_experiment`
+
+## Experiment Configuration
+
+Each experiment config can override:
+
+- **simulation_model**: Latent factor structure and influence scales
+- **outcomes**: Outcome definitions and effect sizes
+- **exposure**: Exposure model parameters
+
+Example minimal config:
+
+```yaml
+experiment_name: my_test
+description: "My test experiment"
+
+simulation_model:
+  influence_scales:
+    shared_to_exposure: 2.0
+    shared_to_outcome: 2.0
+
+outcomes:
+  OUTCOME:
+    exposure_effect: 1.5
+```
+
+## Output Structure
+
+All experiment outputs are saved in:
+
+```yaml
+outputs/causal/experiments/<experiment_name>/
+├── simulated_outcomes/     # Simulated data
+├── cohort/                 # Selected cohort
+├── prepared_data/          # Prepared features
+├── models/baseline/        # Trained models
+└── estimate/              # Causal estimates and plots
+```
+
+## What the System Does
+
+The system automatically:
+
+1. **Generates configs** - Creates all necessary config files with correct paths
+2. **Runs pipeline** - Executes: simulation → cohort → prepare → finetune → calibrate → estimate → test
+3. **Organizes outputs** - Saves all results in organized experiment directories
+4. **Error handling** - Stops on errors with clear messaging
+
+No need to manually edit paths or duplicate config files!
