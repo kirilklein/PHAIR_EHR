@@ -32,18 +32,51 @@ outcomes:
   OUTCOME:
     run_in_days: 1
     p_base: 0.2
-    exposure_effect: 3.0
+    exposure_effect: 3.0 # True logit-scale ATE
     age_effect: -0.005
+
   OUTCOME_2:
     run_in_days: 1
     p_base: 0.2
-    exposure_effect: 2.0
+    exposure_effect: 2.0 # Weaker positive effect
+
   OUTCOME_3:
     run_in_days: 1
     p_base: 0.2
-    exposure_effect: 1.0
+    exposure_effect: 1.0 # Even weaker positive effect
+
   OUTCOME_4:
     run_in_days: 1
     p_base: 0.2
-    exposure_effect: 0.0
+    exposure_effect: 0.0 # True ZERO causal effect
+
+  OUTCOME_5:
+    run_in_days: 1
+    p_base: 0.1
+    exposure_effect: 3.0 # Strong positive effect
+
+  OUTCOME_6:
+    run_in_days: 1
+    p_base: 0.1
+    exposure_effect: 1.0 # Weak positive effect
+
+  OUTCOME_7:
+    run_in_days: 1
+    p_base: 0.1
+    exposure_effect: -1.0 # Negative effect
+
+  OUTCOME_8:
+    run_in_days: 1
+    p_base: 0.1
+    exposure_effect: 0.0 # True ZERO causal effect
+
+  OUTCOME_9:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: -3.0 # Strong negative effect
+
+  OUTCOME_10:
+    run_in_days: 1
+    p_base: 0.3
+    exposure_effect: 2.5 # Strong positive effect
 
