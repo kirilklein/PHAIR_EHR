@@ -215,20 +215,24 @@ def run_hyperparameter_tuning(
         "min_data_in_leaf": ("int", 1, 100),
     }
 
-    # Determine which parameters to tune (not in config)
+    # Determine which parameters to tune vs. fix
+    # RULE: If parameter is explicitly in CONFIG → FIXED
+    #       If parameter is NOT in config → TUNED (even if it has a default value)
     params_to_tune = {}
     fixed_params = {}
 
     for param_name, range_info in TUNING_RANGES.items():
         if param_name in config_params:
+            # Parameter explicitly set in config → FIXED
             fixed_params[param_name] = config_params[param_name]
             logging.info(
                 f"  Parameter '{param_name}' FIXED at {config_params[param_name]} (from config)"
             )
         else:
+            # Parameter NOT in config → TUNED (ignore default values)
             params_to_tune[param_name] = range_info
             logging.info(
-                f"  Parameter '{param_name}' will be TUNED in range {range_info[1:3]}"
+                f"  Parameter '{param_name}' will be TUNED in range {range_info[1:3]} (not in config)"
             )
 
     # Check for trivial cases
@@ -300,17 +304,15 @@ def run_hyperparameter_tuning(
 
 def _setup_model_parameters(cfg: Config) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Loads and merges CatBoost and tuning parameters from the config."""
-    DEFAULT_PARAMS = {
+    # Only include defaults for parameters that are NEVER tuned
+    NON_TUNABLE_DEFAULTS = {
         "n_estimators": 1000,
-        "learning_rate": 0.05,
-        "max_depth": 6,
-        "subsample": 0.8,
-        "colsample_bylevel": 0.8,
-        "l2_leaf_reg": 3,
         "early_stopping_rounds": 50,
     }
+
     config_params = cfg.get("catboost", {})
-    base_params = {**DEFAULT_PARAMS, **config_params}
+    # Only use config params + non-tunable defaults
+    base_params = {**NON_TUNABLE_DEFAULTS, **config_params}
     tuning_cfg = cfg.get("tuning", {})
     return base_params, tuning_cfg
 
