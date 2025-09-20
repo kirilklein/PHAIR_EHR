@@ -21,3 +21,5 @@ catboost_info/
 debug/
 
 experiments/causal_pipeline/generated_configs/
+
+**.log
