@@ -23,6 +23,9 @@ echo ========================================
 echo Running Multiple Causal Pipeline Experiments
 echo ========================================
 
+REM Set batch mode to prevent pausing
+set BATCH_MODE=true
+
 set FAILED_EXPERIMENTS=
 set SUCCESS_COUNT=0
 set TOTAL_COUNT=0

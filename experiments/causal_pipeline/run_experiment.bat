@@ -90,7 +90,9 @@ echo ========================================
 echo Experiment %EXPERIMENT_NAME% completed successfully!
 echo Results saved in: outputs\causal\experiments\%EXPERIMENT_NAME%\
 echo ========================================
-pause
+
+REM Only pause if not running in batch mode
+if not "%BATCH_MODE%"=="true" pause
 exit /b 0
 
 :error
@@ -100,6 +102,8 @@ exit /b 0
     echo Check the output above for the Python traceback.
     echo Terminating pipeline.
     echo ======================================
-pause
+
+REM Only pause if not running in batch mode
+if not "%BATCH_MODE%"=="true" pause
 exit /b 1
 
