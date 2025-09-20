@@ -53,47 +53,47 @@ WEIGHT_COL = "weight"
 class RealisticCausalSimulator:
     """
     A realistic causal data generator for EHR data using decomposed latent health factors.
-    
-    This simulator implements a sophisticated Data Generating Process (DGP) that transforms 
+
+    This simulator implements a sophisticated Data Generating Process (DGP) that transforms
     patient longitudinal EHR data into realistic causal scenarios with known ground truth.
-    
+
     **Data Generating Process (4 Steps):**
-    
+
     **Step 1: Patient History Representation (x)**
         Converts longitudinal EHR data up to an index date into feature vectors x ∈ R^V.
         Features are weighted by exponential time decay: x_j = exp(-Δt_j / τ)
         where Δt_j is time since last occurrence and τ is the decay half-life.
-    
+
     **Step 2: Latent Health Factors (z)**
         Maps high-dimensional history x to low-dimensional latent factors z ∈ R^D:
         z = tanh(x @ W_f), where W_f is a sparse weight matrix.
-        
+
         The latent space is partitioned into three disjoint sets:
         - z_sh: Shared factors (confounders affecting both exposure and outcomes)
         - z_exp: Exposure-only factors (instrumental variables)
         - z_out: Outcome-only factors (independent outcome risks)
-    
+
     **Step 3: Exposure Assignment (A)**
         Treatment probability (propensity score) depends on confounding and exposure factors:
         logit(P(A=1|z)) = α₀ + λ_sh(z_sh·w_sh→A) + λ_exp(z_exp·w_exp→A) + u
         where λ terms control factor influence and u is optional unobserved confounding.
-    
+
     **Step 4: Potential Outcome Generation (Y(a))**
         Outcomes depend on confounders, outcome factors, and treatment:
         logit(P(Y_k(a)=1|z)) = γ₀ + ω_sh(z_sh·w_sh→Y_k) + ω_out(z_out·w_out→Y_k) + a·δ_k + u_k
         where δ_k is the true Average Treatment Effect for outcome k.
-    
+
     **Key Features:**
     - Realistic confounding structure with identifiable components
-    - Multiple correlated outcomes through shared latent factors  
+    - Multiple correlated outcomes through shared latent factors
     - Ground truth causal effects for benchmarking
     - Configurable factor decomposition and influence strengths
     - Optional unobserved confounding simulation
-    
+
     Args:
         config (SimulationConfig): Configuration object containing simulation parameters,
             factor decomposition settings, and outcome definitions.
-    
+
     Example:
         ```python
         config = SimulationConfig(...)
