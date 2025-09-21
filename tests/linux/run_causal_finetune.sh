@@ -25,7 +25,7 @@ python -m corebehrt.main_causal.finetune_exp_y --config_path corebehrt/configs/c
 check_error
 
 echo "==== Testing ft_exp_y... ===="
-python tests/pipeline/ft_exp_y.py ./outputs/causal/finetune/models/simple
+python -m tests.pipeline.ft_exp_y ./outputs/causal/finetune/models/simple
 check_error
 
 echo "==== Checking performance... ===="
