@@ -1,0 +1,23 @@
+# Very Strong Confounding with Moderate Support Experiment
+# Tests scenario with very strong confounding and moderate instruments/outcome-only
+
+experiment_name: ce3_cy3_y1_i1
+description: "Simulation with very strong confounding (3.0) and moderate instruments/outcome-only (1.0)"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 3.0 # Very strong confounding
+    shared_to_outcome: 3.0 # Very strong confounding
+    exposure_only_to_exposure: 1.0 # Moderate instruments
+    outcome_only_to_outcome: 1.0 # Moderate outcome-only
+
+# outcomes:

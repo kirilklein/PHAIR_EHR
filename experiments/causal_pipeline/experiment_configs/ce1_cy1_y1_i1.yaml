@@ -1,0 +1,23 @@
+# Balanced Moderate Influence Experiment
+# Tests scenario with moderate influence across all factor types
+
+experiment_name: ce1_cy1_y1_i1
+description: "Simulation with balanced moderate influence (1.0) across all factor types"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 1.0 # Moderate confounding
+    shared_to_outcome: 1.0 # Moderate confounding
+    exposure_only_to_exposure: 1.0 # Moderate instruments
+    outcome_only_to_outcome: 1.0 # Moderate outcome-only
+
+# outcomes:
