@@ -41,7 +41,7 @@ dependencies = [
     "transformers>=4.48.0",
     "xgboost",
     "matplotlib",
-    "CausalEstimate==0.8.4",
+    "CausalEstimate==0.10.0",
     "optuna==4.5.0",
     "catboost==1.2.8",
 ]
