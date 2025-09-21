@@ -334,7 +334,12 @@ criteria_definitions:
       - ^(?:M|RM)/A10BD07.*
       - ^(?:M|RM)/A10BD08.*
       - ^(?:M|RM)/A10BD10.*
+      - ^(?:M|RM)/A10BD11.*
       - ^(?:M|RM)/A10BD13.*
+      - ^(?:M|RM)/A10BD14.*
+      - ^(?:M|RM)/A10BD15.*
+      - ^(?:M|RM)/A10BD16.*
+      - ^(?:M|RM)/A10BD17.*
       - ^(?:M|RM)/A10BD18.*
       - ^(?:M|RM)/A10BD20.*
       - ^(?:M|RM)/A10BD22.*
@@ -355,15 +360,10 @@ criteria_definitions:
   dipeptidyl_peptidase_4_inhibitors:
     codes:
       - ^(?:M|RM)/A10BH.*
-      - ^(?:M|RM)/A10BD07.*
-      - ^(?:M|RM)/A10BD13.*
-      - ^(?:M|RM)/A10BD18.*
-      - ^(?:M|RM)/A10BD19.*
-      - ^(?:M|RM)/A10BD21.*
-      - ^(?:M|RM)/A10BD22.*
-      - ^(?:M|RM)/A10BD24.*
-      - ^(?:M|RM)/A10BD25.*
-      - ^(?:M|RM)/A10BD27.*
+      - ^(?:M|RM)/A10BD0[7-9].*
+      - ^(?:M|RM)/A10BD1[012389].*
+      - ^(?:M|RM)/A10BD2[012457].*
+
   glucagon_like_peptide_1_agonists:
     codes:
       - ^(?:M|RM)/A10BJ.*
@@ -374,11 +374,6 @@ criteria_definitions:
       - ^(?:M|RM)/A10BX14.*
   thiazolidinediones:
     codes:
-      - ^(?:M|RM)/A10BD03.*
-      - ^(?:M|RM)/A10BD06.*
-      - ^(?:M|RM)/A10BD09.*
-      - ^(?:M|RM)/A10BD12.*
-      - ^(?:M|RM)/A10BD26.*
       - ^(?:M|RM)/A10BG.*
 
   ### Other medication use ###
