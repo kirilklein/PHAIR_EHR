@@ -33,8 +33,17 @@ criteria_definitions:
       - ^(?:D|RD)/DE12.*
       - ^(?:D|RD)/DE13.*
       - ^(?:D|RD)/DE14.*
-      - ^(?:D|RD)/DO24[^4].*
       - ^(?:D|RD)/DH360.*
+
+  icd10_do24:
+    codes:
+      - ^(?:D|RD)/DO24.*
+  icd10_do244:
+    codes:
+      - ^(?:D|RD)/DO244.*
+  icd10_do24_excluding_do244:
+    expression: icd10_do24 & ~icd10_do244
+
   diabetes_atc_antihyperglycemic:
     codes:
       - ^(?:M|RM)/A10BA02.* # Metformin
@@ -82,6 +91,9 @@ criteria_definitions:
       - ^(?:M|RM)/A10BD26.*
       - ^(?:M|RM)/A10BG.*
 
+  diabetes:
+    expression: diabetes_icd10 | diabetes_atc_antihyperglycemic | icd10_do24_excluding_do244
+
   # Blood glucose level
   hemoglobin_a1c:
     codes:
@@ -117,7 +129,7 @@ criteria_definitions:
       - ^(?:D|RD)/DI719.*
   aortic_dissection:
     codes:
-      - ^(?:D|RD)/DI7.*
+      - ^(?:D|RD)/DI710.*
   aortic_regurgitation_stenosis:
     codes:
       - ^(?:D|RD)/DI06.*
@@ -252,6 +264,9 @@ criteria_definitions:
       - ^(?:M|RM)/C07BB12.* # Nebivolol
       - ^(?:M|RM)/C07FB12.* # Nebivolol
       - ^(?:M|RM)/C09DX05.* # Nebivolol
+  hypertension:
+    expression: hypertension_icd10 | hypertension_atc
+
   liver_disease_mild:
     codes:
       - ^(?:D|RD)/DB18.*
@@ -286,6 +301,10 @@ criteria_definitions:
       - ^(?:D|RD)/DK765.*
       - ^(?:D|RD)/DK766.*
       - ^(?:D|RD)/DK767.*
+
+  liver_disease:
+    expression: liver_disease_mild | liver_disease_moderate_severe
+
   mitral_regurgitation_stenosis:
     codes:
       - ^(?:D|RD)/DI05.*
