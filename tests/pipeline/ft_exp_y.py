@@ -12,8 +12,12 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 from os.path import exists, join
+
+# Add the project root to the Python path BEFORE importing corebehrt
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import numpy as np
 import torch

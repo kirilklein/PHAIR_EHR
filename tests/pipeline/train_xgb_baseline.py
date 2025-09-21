@@ -6,8 +6,12 @@ organization and readability without changing the underlying logic or results.
 
 import argparse
 import os
+import sys
 from collections import Counter
 from typing import Any, Dict, List, Tuple
+
+# Add the project root to the Python path BEFORE importing corebehrt
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import numpy as np
 import pandas as pd

@@ -19,14 +19,15 @@ import sys
 from os.path import exists, join
 from typing import Set, List, Dict
 
+# Add the project root to the Python path BEFORE importing corebehrt
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 import pandas as pd
 import torch
 
 from corebehrt.constants.data import PID_COL, TRAIN_KEY, VAL_KEY
 from corebehrt.constants.paths import FOLDS_FILE, INDEX_DATES_FILE
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 
 def get_patient_pids(processed_data_dir: str) -> Set[int]:
