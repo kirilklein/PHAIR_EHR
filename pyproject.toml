@@ -42,7 +42,8 @@ dependencies = [
     "xgboost",
     "matplotlib",
     "CausalEstimate==0.8.4",
-    "optuna==4.5.0"
+    "optuna==4.5.0",
+    "catboost==1.2.8",
 ]
 
 [tool.setuptools.packages.find]
