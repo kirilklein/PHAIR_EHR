@@ -4,8 +4,30 @@
 # Run All Causal Pipeline Experiments Sequentially
 # ========================================
 
+SKIP_EXISTING=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --skip-existing|-s)
+            SKIP_EXISTING=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--skip-existing|-s]"
+            exit 1
+            ;;
+    esac
+done
+
 echo "========================================"
 echo "Running All Causal Pipeline Experiments"
+if [ "$SKIP_EXISTING" = "true" ]; then
+    echo "Mode: SKIPPING existing experiments"
+else
+    echo "Mode: Re-running ALL experiments"
+fi
 echo "========================================"
 echo ""
 
@@ -22,6 +44,7 @@ fi
 TOTAL_EXPERIMENTS=0
 SUCCESSFUL_EXPERIMENTS=0
 FAILED_EXPERIMENTS=0
+SKIPPED_EXPERIMENTS=0
 FAILED_LIST=""
 
 # Count total experiments
@@ -51,6 +74,18 @@ for file in experiment_configs/*.yaml; do
     if [ -f "$file" ]; then
         filename=$(basename "$file" .yaml)
         ((CURRENT_EXPERIMENT++))
+        
+        # Check if experiment already exists and should be skipped
+        if [ "$SKIP_EXISTING" = "true" ]; then
+            if [ -f "../../outputs/causal/experiments/$filename/estimate/estimate_results.csv" ]; then
+                echo "========================================"
+                echo "Experiment $CURRENT_EXPERIMENT of $TOTAL_EXPERIMENTS: $filename (SKIPPED - already exists)"
+                echo "========================================"
+                ((SKIPPED_EXPERIMENTS++))
+                echo "[$(date +"%H:%M:%S")] SKIPPED: $filename (already exists)" >> "$LOG_FILE"
+                continue
+            fi
+        fi
         
         echo "========================================"
         echo "Experiment $CURRENT_EXPERIMENT of $TOTAL_EXPERIMENTS: $filename"
@@ -94,6 +129,9 @@ echo "========================================"
 echo "BATCH RUN SUMMARY"
 echo "========================================"
 echo "Total experiments: $TOTAL_EXPERIMENTS"
+if [ "$SKIP_EXISTING" = "true" ]; then
+    echo "Skipped: $SKIPPED_EXPERIMENTS"
+fi
 echo "Successful: $SUCCESSFUL_EXPERIMENTS"
 echo "Failed: $FAILED_EXPERIMENTS"
 echo ""
@@ -112,6 +150,9 @@ echo ""
     echo "BATCH RUN SUMMARY"
     echo "========================================"
     echo "Total experiments: $TOTAL_EXPERIMENTS"
+    if [ "$SKIP_EXISTING" = "true" ]; then
+        echo "Skipped: $SKIPPED_EXPERIMENTS"
+    fi
     echo "Successful: $SUCCESSFUL_EXPERIMENTS"
     echo "Failed: $FAILED_EXPERIMENTS"
     if [ $FAILED_EXPERIMENTS -gt 0 ]; then

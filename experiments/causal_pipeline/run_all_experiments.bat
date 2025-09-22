@@ -5,8 +5,32 @@ REM ========================================
 REM Run All Causal Pipeline Experiments Sequentially
 REM ========================================
 
+set SKIP_EXISTING=false
+
+REM Parse command line arguments
+:parse_args
+if "%1"=="" goto :start_main
+if "%1"=="--skip-existing" (
+    set SKIP_EXISTING=true
+    shift
+    goto :parse_args
+)
+if "%1"=="-s" (
+    set SKIP_EXISTING=true
+    shift
+    goto :parse_args
+)
+shift
+goto :parse_args
+
+:start_main
 echo ========================================
 echo Running All Causal Pipeline Experiments
+if "%SKIP_EXISTING%"=="true" (
+    echo Mode: SKIPPING existing experiments
+) else (
+    echo Mode: Re-running ALL experiments
+)
 echo ========================================
 echo.
 
@@ -50,9 +74,22 @@ set BATCH_MODE=true
 
 REM Run each experiment
 set CURRENT_EXPERIMENT=0
+set SKIPPED_EXPERIMENTS=0
 for %%f in (experiment_configs\*.yaml) do (
     set filename=%%~nf
     set /a CURRENT_EXPERIMENT+=1
+    
+    REM Check if experiment already exists and should be skipped
+    if "%SKIP_EXISTING%"=="true" (
+        if exist "..\..\outputs\causal\experiments\!filename!\estimate\estimate_results.csv" (
+            echo ========================================
+            echo Experiment !CURRENT_EXPERIMENT! of %TOTAL_EXPERIMENTS%: !filename! ^(SKIPPED - already exists^)
+            echo ========================================
+            set /a SKIPPED_EXPERIMENTS+=1
+            echo [!time!] SKIPPED: !filename! ^(already exists^) >> %LOG_FILE%
+            goto :skip_experiment
+        )
+    )
     
     echo ========================================
     echo Experiment !CURRENT_EXPERIMENT! of %TOTAL_EXPERIMENTS%: !filename!
@@ -86,6 +123,7 @@ for %%f in (experiment_configs\*.yaml) do (
         )
     )
     
+    :skip_experiment
     echo.
     echo Continuing to next experiment...
     echo.
@@ -97,6 +135,9 @@ echo ========================================
 echo BATCH RUN SUMMARY
 echo ========================================
 echo Total experiments: %TOTAL_EXPERIMENTS%
+if "%SKIP_EXISTING%"=="true" (
+    echo Skipped: %SKIPPED_EXPERIMENTS%
+)
 echo Successful: %SUCCESSFUL_EXPERIMENTS%
 echo Failed: %FAILED_EXPERIMENTS%
 echo.
@@ -114,6 +155,9 @@ echo ======================================== >> %LOG_FILE%
 echo BATCH RUN SUMMARY >> %LOG_FILE%
 echo ======================================== >> %LOG_FILE%
 echo Total experiments: %TOTAL_EXPERIMENTS% >> %LOG_FILE%
+if "%SKIP_EXISTING%"=="true" (
+    echo Skipped: %SKIPPED_EXPERIMENTS% >> %LOG_FILE%
+)
 echo Successful: %SUCCESSFUL_EXPERIMENTS% >> %LOG_FILE%
 echo Failed: %FAILED_EXPERIMENTS% >> %LOG_FILE%
 if %FAILED_EXPERIMENTS% gtr 0 (
