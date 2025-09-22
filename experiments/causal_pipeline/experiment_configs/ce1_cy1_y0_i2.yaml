@@ -1,0 +1,23 @@
+# Moderate Confounding with Moderate Instruments
+# Tests scenario with moderate confounding and moderate instrument support
+
+experiment_name: ce1_cy1_y0_i2
+description: "Simulation with moderate confounding (1.0) and moderate instruments (2.0)"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 1.0   # Moderate confounding
+    shared_to_outcome: 1.0    # Moderate confounding
+    exposure_only_to_exposure: 2.0  # Moderate instruments
+    outcome_only_to_outcome: 0.0
+
+# outcomes:

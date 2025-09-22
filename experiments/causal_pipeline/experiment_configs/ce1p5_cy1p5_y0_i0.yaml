@@ -1,0 +1,22 @@
+# Moderate-Strong Confounding Only
+# Tests scenario with moderate-strong confounding without instruments
+
+experiment_name: ce1p5_cy1p5_y0_i0
+description: "Simulation with moderate-strong confounding (1.5) and no instruments"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 1.5 # Moderate-strong confounding
+    shared_to_outcome: 1.5 # Moderate-strong confounding
+    exposure_only_to_exposure: 0.0
+    outcome_only_to_outcome: 0.0
+# outcomes:

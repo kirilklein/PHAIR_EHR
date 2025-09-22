@@ -1,0 +1,23 @@
+# Weak Confounding with Weak Instruments
+# Tests scenario with weak confounding and weak instrument support
+
+experiment_name: ce0p5_cy0p5_y0_i1
+description: "Simulation with weak confounding (0.5) and weak instruments (1.0)"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 0.5   # Weak confounding
+    shared_to_outcome: 0.5    # Weak confounding
+    exposure_only_to_exposure: 1.0  # Weak instruments
+    outcome_only_to_outcome: 0.0
+
+# outcomes:
