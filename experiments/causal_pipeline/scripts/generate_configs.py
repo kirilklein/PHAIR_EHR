@@ -58,12 +58,18 @@ def generate_experiment_configs(experiment_name, script_dir):
 
     # Config files to generate
     config_mappings = {
+        # Shared data preparation
         "simulation.yaml": "simulation.yaml",
         "select_cohort.yaml": "select_cohort.yaml",
         "prepare_finetune.yaml": "prepare_finetune.yaml",
+        # Baseline pipeline
         "train_baseline.yaml": "train_baseline.yaml",
         "calibrate.yaml": "calibrate.yaml",
         "estimate.yaml": "estimate.yaml",
+        # BERT pipeline
+        "finetune_bert.yaml": "finetune_bert.yaml",
+        "calibrate_bert.yaml": "calibrate_bert.yaml",
+        "estimate_bert.yaml": "estimate_bert.yaml",
     }
 
     for base_file, output_file in config_mappings.items():

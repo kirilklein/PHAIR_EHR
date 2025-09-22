@@ -1,0 +1,39 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  # --- INPUTS ---
+  prepared_data: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/prepared_data
+
+  # --- OUTPUTS ---
+  model: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/models/bert
+
+# ==============================================================================
+# BERT Fine-tuning Settings
+# ==============================================================================
+model:
+  model_path: ./outputs/pretraining/BertForMLM_2024-01-01_12-00-00 # Path to pretrained BERT
+
+training:
+  batch_size: 32
+  learning_rate: 5e-5
+  num_epochs: 10
+  warmup_steps: 500
+  weight_decay: 0.01
+
+validation:
+  eval_steps: 100
+  save_strategy: "steps"
+  save_steps: 500
+  evaluation_strategy: "steps"
+
+early_stopping:
+  patience: 3
+  metric: "eval_loss"
+
+# Cross-validation settings
+cv_folds: 2
+# Optional: Specify which targets to train models for
+# If commented out, will train for exposure and all outcomes
+# targets: ["exposure", "OUTCOME", "OUTCOME_2"]

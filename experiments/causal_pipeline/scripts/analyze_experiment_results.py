@@ -66,28 +66,66 @@ def load_experiment_results(
     )
 
     for exp_dir in exp_dirs:
-        results_file = exp_dir / "estimate" / "estimate_results.csv"
-        if not results_file.exists():
-            print(f"Warning: Results file not found for {exp_dir.name}")
+        exp_name = exp_dir.name
+
+        # Check for both baseline and BERT results
+        model_types = []
+        if (exp_dir / "estimate" / "baseline" / "estimate_results.csv").exists():
+            model_types.append("baseline")
+        if (exp_dir / "estimate" / "bert" / "estimate_results.csv").exists():
+            model_types.append("bert")
+
+        # Handle legacy structure (direct estimate folder)
+        if (exp_dir / "estimate" / "estimate_results.csv").exists() and not model_types:
+            model_types.append(
+                "baseline"
+            )  # Treat as baseline for backward compatibility
+
+        if not model_types:
+            print(f"Warning: No results found for {exp_name}")
             continue
 
-        try:
-            df = pd.read_csv(results_file)
-            df["experiment"] = exp_dir.name
-            params = parse_experiment_name(exp_dir.name)
-            for param, value in params.items():
-                df[param] = value
+        # Load results for each model type
+        for model_type in model_types:
+            if (
+                model_type == "baseline"
+                and (exp_dir / "estimate" / "estimate_results.csv").exists()
+            ):
+                # Legacy structure
+                results_file = exp_dir / "estimate" / "estimate_results.csv"
+            else:
+                # New structure
+                results_file = (
+                    exp_dir / "estimate" / model_type / "estimate_results.csv"
+                )
 
-            # Calculate bias metrics
-            df["bias"] = df["effect"] - df["true_effect"]
-            # Calculate relative bias, handling potential division by zero in true_effect
-            df["relative_bias"] = (df["bias"] / df["true_effect"]).replace(
-                [np.inf, -np.inf], np.nan
-            )
+            if not results_file.exists():
+                print(f"Warning: {model_type} results file not found for {exp_name}")
+                continue
 
-            all_results.append(df)
-        except Exception as e:
-            print(f"Error loading {exp_dir.name}: {e}")
+            try:
+                df = pd.read_csv(results_file)
+                df["experiment"] = exp_name
+                df["model_type"] = model_type
+
+                # Parse experiment parameters
+                params = parse_experiment_name(exp_name)
+                for param, value in params.items():
+                    df[param] = value
+
+                # Calculate bias metrics
+                df["bias"] = df["effect"] - df["true_effect"]
+                df["abs_bias"] = np.abs(df["bias"])
+                # Calculate relative bias, handling potential division by zero in true_effect
+                df["relative_bias"] = (df["bias"] / df["true_effect"]).replace(
+                    [np.inf, -np.inf], np.nan
+                )
+
+                all_results.append(df)
+                print(f"Loaded {model_type} results for {exp_name}: {len(df)} rows")
+
+            except Exception as e:
+                print(f"Error loading {model_type} results for {exp_name}: {e}")
 
     if not all_results:
         raise ValueError("No valid experiment results found.")
