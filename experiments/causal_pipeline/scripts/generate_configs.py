@@ -23,7 +23,10 @@ def merge_dicts(base_dict, override_dict):
 def replace_placeholders(config_dict, experiment_name):
     """Recursively replace {{EXPERIMENT_NAME}} placeholders in config."""
     if isinstance(config_dict, dict):
-        return {key: replace_placeholders(value, experiment_name) for key, value in config_dict.items()}
+        return {
+            key: replace_placeholders(value, experiment_name)
+            for key, value in config_dict.items()
+        }
     elif isinstance(config_dict, list):
         return [replace_placeholders(item, experiment_name) for item in config_dict]
     elif isinstance(config_dict, str):
@@ -34,39 +37,41 @@ def replace_placeholders(config_dict, experiment_name):
 
 def generate_experiment_configs(experiment_name, script_dir):
     """Generate all config files for a specific experiment."""
-    
+
     # Define paths relative to script directory
     base_configs_dir = script_dir / "base_configs"
     experiment_configs_dir = script_dir / "experiment_configs"
     output_dir = script_dir / "generated_configs" / experiment_name
-    
+
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Load experiment-specific config
     experiment_config_path = experiment_configs_dir / f"{experiment_name}.yaml"
     if not experiment_config_path.exists():
-        raise FileNotFoundError(f"Experiment config not found: {experiment_config_path}")
-    
-    with open(experiment_config_path, 'r') as f:
+        raise FileNotFoundError(
+            f"Experiment config not found: {experiment_config_path}"
+        )
+
+    with open(experiment_config_path, "r") as f:
         experiment_config = yaml.safe_load(f)
-    
+
     # Config files to generate
     config_mappings = {
         "simulation.yaml": "simulation.yaml",
-        "select_cohort.yaml": "select_cohort.yaml", 
+        "select_cohort.yaml": "select_cohort.yaml",
         "prepare_finetune.yaml": "prepare_finetune.yaml",
         "train_baseline.yaml": "train_baseline.yaml",
         "calibrate.yaml": "calibrate.yaml",
-        "estimate.yaml": "estimate.yaml"
+        "estimate.yaml": "estimate.yaml",
     }
-    
+
     for base_file, output_file in config_mappings.items():
         # Load base config
         base_config_path = base_configs_dir / base_file
-        with open(base_config_path, 'r') as f:
+        with open(base_config_path, "r") as f:
             base_config = yaml.safe_load(f)
-        
+
         # Merge with experiment-specific overrides (if any)
         if base_file == "simulation.yaml":
             # For simulation config, merge with experiment settings
@@ -74,17 +79,17 @@ def generate_experiment_configs(experiment_name, script_dir):
         else:
             # For other configs, just use base config
             final_config = base_config
-        
+
         # Replace placeholders
         final_config = replace_placeholders(final_config, experiment_name)
-        
+
         # Write output config
         output_path = output_dir / output_file
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             yaml.dump(final_config, f, default_flow_style=False, sort_keys=False)
-        
+
         print(f"Generated: {output_path}")
-    
+
     print(f"All configs generated for experiment: {experiment_name}")
     return output_dir
 
@@ -93,11 +98,10 @@ def main():
     parser = argparse.ArgumentParser(description="Generate experiment configs")
     parser.add_argument("experiment_name", help="Name of the experiment")
     args = parser.parse_args()
-    
+
     script_dir = Path(__file__).parent.parent
     generate_experiment_configs(args.experiment_name, script_dir)
 
 
 if __name__ == "__main__":
     main()
-
