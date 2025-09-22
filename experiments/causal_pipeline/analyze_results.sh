@@ -16,7 +16,7 @@ if [ $# -eq 0 ]; then
 fi
 
 RESULTS_DIR="../../outputs/causal/experiments"
-OUTPUT_DIR="analysis_plots"
+OUTPUT_DIR="../../outputs/causal/experiments_analysis_plots"
 
 echo "========================================"
 echo "Analyzing Experiment Results"
