@@ -12,8 +12,10 @@ This directory contains a flexible experiment system for running causal inferenc
 - `experiment_configs/` - Define experiment-specific simulation parameters
 - `base_configs/` - Template configs for each pipeline step  
 - `generated_configs/` - Auto-generated configs (don't edit manually)
-- `run_experiment.bat` - Main script to run experiments
-- `run_all_experiments.bat` - Run ALL experiments sequentially with logging
+- `run_experiment.bat` - Run baseline experiments only
+- `run_experiment_full.bat` - Run full pipeline (baseline + BERT)
+- `run_all_experiments.bat` - Run ALL baseline experiments sequentially
+- `run_all_experiments_full.bat` - Run ALL full experiments sequentially
 - `run_experiments_ordered.bat` - Run experiments in custom order
 - `run_multiple_experiments.bat` - Run multiple experiments sequentially (legacy)
 - `monitor_experiments.bat` - Real-time monitoring of experiment progress
@@ -24,11 +26,32 @@ This directory contains a flexible experiment system for running causal inferenc
 ## Example Usage
 
 ```bash
-# Run a single experiment
+# Run a single baseline experiment
 run_experiment.bat ce0_cy0_y0_i0
 
-# Run ALL experiments sequentially (waits for each to complete)
+# Run a single full experiment (baseline + BERT)
+run_experiment_full.bat ce0_cy0_y0_i0
+
+# Run only baseline pipeline for an experiment
+run_experiment_full.bat ce0_cy0_y0_i0 --baseline-only
+
+# Run only BERT pipeline for an experiment (requires baseline data)
+run_experiment_full.bat ce0_cy0_y0_i0 --bert-only
+
+# Run ALL baseline experiments sequentially
 run_all_experiments.bat
+
+# Run ALL full experiments sequentially (baseline + BERT)
+run_all_experiments_full.bat
+
+# Skip existing experiments
+run_all_experiments_full.bat --skip-existing
+
+# Run only baseline for all experiments
+run_all_experiments_full.bat --baseline-only
+
+# Run only BERT for all experiments
+run_all_experiments_full.bat --bert-only
 
 # Run experiments in a specific order
 run_experiments_ordered.bat ce0_cy0_y0_i0 ce0p5_cy0p5_y0_i0 ce1_cy1_y0_i0
@@ -93,14 +116,22 @@ outcomes:
 
 All experiment outputs are saved in:
 
-```yaml
-outputs/causal/experiments/<experiment_name>/
-├── simulated_outcomes/     # Simulated data
-├── cohort/                 # Selected cohort
-├── prepared_data/          # Prepared features
-├── models/baseline/        # Trained models
-└── estimate/              # Causal estimates and plots
 ```
+outputs/causal/experiments/<experiment_name>/
+├── simulated_outcomes/     # Simulated data (shared)
+├── cohort/                 # Selected cohort (shared)
+├── prepared_data/          # Prepared features (shared)
+├── models/
+│   ├── baseline/           # CatBoost baseline model
+│   └── bert/               # BERT fine-tuned model
+└── estimate/
+    ├── baseline/           # Baseline causal estimates
+    │   └── estimate_results.csv
+    └── bert/               # BERT causal estimates
+        └── estimate_results.csv
+```
+
+**Note**: The data preparation steps (simulation, cohort selection, data preparation) are shared between baseline and BERT pipelines to ensure fair comparison.
 
 ## What the System Does
 

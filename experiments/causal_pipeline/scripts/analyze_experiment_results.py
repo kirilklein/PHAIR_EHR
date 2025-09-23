@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Analyze experiment results across different confounding and instrument configurations.
-Creates a single overview plot for TMLE and IPW methods, averaged over all outcomes.
+Creates a comprehensive 3x3 overview plot for TMLE and IPW methods,
+including bias, precision, and coverage probability, averaged over all outcomes.
 
 Usage:
     python analyze_experiment_results.py --results_dir outputs/causal/experiments
@@ -10,15 +11,13 @@ Usage:
 
 import argparse
 import os
+import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import List, Dict, Optional
-
-# Add project root to path
-# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 # Set plotting style
 plt.style.use("seaborn-v0_8-whitegrid")
@@ -66,66 +65,33 @@ def load_experiment_results(
     )
 
     for exp_dir in exp_dirs:
-        exp_name = exp_dir.name
-
-        # Check for both baseline and BERT results
-        model_types = []
-        if (exp_dir / "estimate" / "baseline" / "estimate_results.csv").exists():
-            model_types.append("baseline")
-        if (exp_dir / "estimate" / "bert" / "estimate_results.csv").exists():
-            model_types.append("bert")
-
-        # Handle legacy structure (direct estimate folder)
-        if (exp_dir / "estimate" / "estimate_results.csv").exists() and not model_types:
-            model_types.append(
-                "baseline"
-            )  # Treat as baseline for backward compatibility
-
-        if not model_types:
-            print(f"Warning: No results found for {exp_name}")
+        results_file = exp_dir / "estimate" / "estimate_results.csv"
+        if not results_file.exists():
+            print(f"Warning: Results file not found for {exp_dir.name}")
             continue
 
-        # Load results for each model type
-        for model_type in model_types:
-            if (
-                model_type == "baseline"
-                and (exp_dir / "estimate" / "estimate_results.csv").exists()
-            ):
-                # Legacy structure
-                results_file = exp_dir / "estimate" / "estimate_results.csv"
-            else:
-                # New structure
-                results_file = (
-                    exp_dir / "estimate" / model_type / "estimate_results.csv"
-                )
+        try:
+            df = pd.read_csv(results_file)
+            df["experiment"] = exp_dir.name
+            params = parse_experiment_name(exp_dir.name)
+            for param, value in params.items():
+                df[param] = value
 
-            if not results_file.exists():
-                print(f"Warning: {model_type} results file not found for {exp_name}")
-                continue
+            # --- Calculate Metrics ---
+            # 1. Bias
+            df["bias"] = df["effect"] - df["true_effect"]
+            df["relative_bias"] = (df["bias"] / df["true_effect"]).replace(
+                [np.inf, -np.inf], np.nan
+            )
 
-            try:
-                df = pd.read_csv(results_file)
-                df["experiment"] = exp_name
-                df["model_type"] = model_type
+            # 2. Coverage Probability (NEW)
+            df["covered"] = (df["true_effect"] >= df["CI95_lower"]) & (
+                df["true_effect"] <= df["CI95_upper"]
+            )
 
-                # Parse experiment parameters
-                params = parse_experiment_name(exp_name)
-                for param, value in params.items():
-                    df[param] = value
-
-                # Calculate bias metrics
-                df["bias"] = df["effect"] - df["true_effect"]
-                df["abs_bias"] = np.abs(df["bias"])
-                # Calculate relative bias, handling potential division by zero in true_effect
-                df["relative_bias"] = (df["bias"] / df["true_effect"]).replace(
-                    [np.inf, -np.inf], np.nan
-                )
-
-                all_results.append(df)
-                print(f"Loaded {model_type} results for {exp_name}: {len(df)} rows")
-
-            except Exception as e:
-                print(f"Error loading {model_type} results for {exp_name}: {e}")
+            all_results.append(df)
+        except Exception as e:
+            print(f"Error loading {exp_dir.name}: {e}")
 
     if not all_results:
         raise ValueError("No valid experiment results found.")
@@ -139,11 +105,10 @@ def load_experiment_results(
 
 def create_overview_plot(df: pd.DataFrame, output_dir: str):
     """
-    Creates a single 2x2 plot summarizing method performance, averaged over all outcomes.
+    Creates a single 3x3 plot summarizing method performance (bias, precision, coverage).
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # Filter to TMLE and IPW methods and drop rows with NaN relative_bias
     methods_df = df[df["method"].isin(["TMLE", "IPW"])].copy()
     methods_df.dropna(subset=["relative_bias"], inplace=True)
 
@@ -151,127 +116,122 @@ def create_overview_plot(df: pd.DataFrame, output_dir: str):
         print("Warning: No valid TMLE or IPW results found to plot.")
         return
 
-    # --- Prepare data for plotting ---
     methods_df["avg_confounding"] = (methods_df["ce"] + methods_df["cy"]) / 2
-    methods_df["rmse"] = np.sqrt(methods_df["bias"] ** 2 + methods_df["std_err"] ** 2)
 
-    # --- Create the plot ---
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12), constrained_layout=True)
+    # --- Create the 3x3 plot ---
+    fig, axes = plt.subplots(3, 3, figsize=(24, 20), constrained_layout=True)
     fig.suptitle(
         "Performance Overview: TMLE vs. IPW (Averaged Across All Outcomes)",
-        fontsize=20,
+        fontsize=24,
         fontweight="bold",
     )
 
     colors = {"TMLE": "#0072B2", "IPW": "#D55E00"}
 
-    # --- Plot 1: Relative Bias vs. Confounding Strength ---
-    ax = axes[0, 0]
-    for method in ["TMLE", "IPW"]:
-        grouped = (
-            methods_df[methods_df["method"] == method]
-            .groupby("avg_confounding")["relative_bias"]
-            .agg(["mean", "std"])
-            .reset_index()
-        )
-        ax.errorbar(
-            grouped["avg_confounding"],
-            grouped["mean"],
-            yerr=grouped["std"],
-            label=method,
-            color=colors[method],
-            marker="o",
-            capsize=5,
-            linestyle="-",
-            linewidth=2.5,
-        )
-    ax.axhline(0, color="black", linestyle="--", alpha=0.7)
-    ax.set_title("Bias vs. Confounding Strength", fontsize=14)
-    ax.set_xlabel("Average Confounding Strength ((ce + cy) / 2)")
-    ax.set_ylabel("Relative Bias (Bias / True Effect)")
-    ax.legend()
+    # === ROW 1: RELATIVE BIAS (ACCURACY) ===
+    bias_axes = axes[0]
+    bias_axes[0].set_ylabel("Relative Bias", fontweight="bold", fontsize=14)
+    for ax, param, marker in zip(
+        bias_axes, ["avg_confounding", "i", "y"], ["o", "s", "^"]
+    ):
+        for method in ["TMLE", "IPW"]:
+            grouped = (
+                methods_df[methods_df["method"] == method]
+                .groupby(param)["relative_bias"]
+                .agg(["mean", "std"])
+                .reset_index()
+            )
+            ax.errorbar(
+                grouped[param],
+                grouped["mean"],
+                yerr=grouped["std"],
+                label=method,
+                color=colors[method],
+                marker=marker,
+                capsize=5,
+                linestyle="-",
+                linewidth=2.5,
+            )
+        ax.axhline(0, color="black", linestyle="--", alpha=0.7)
+        ax.legend()
+    bias_axes[0].set_title("Bias vs. Confounding", fontsize=16)
+    bias_axes[0].set_xlabel("Average Confounding Strength")
+    bias_axes[1].set_title("Bias vs. Instrument Strength", fontsize=16)
+    bias_axes[1].set_xlabel("Instrument Strength (i)")
+    bias_axes[2].set_title("Bias vs. Outcome-Only Confounder", fontsize=16)
+    bias_axes[2].set_xlabel("Outcome-Only Strength (y)")
 
-    # --- Plot 2: Relative Bias vs. Instrument Strength ---
-    ax = axes[0, 1]
-    for method in ["TMLE", "IPW"]:
-        grouped = (
-            methods_df[methods_df["method"] == method]
-            .groupby("i")["relative_bias"]
-            .agg(["mean", "std"])
-            .reset_index()
-        )
-        ax.errorbar(
-            grouped["i"],
-            grouped["mean"],
-            yerr=grouped["std"],
-            label=method,
-            color=colors[method],
-            marker="s",
-            capsize=5,
-            linestyle="-",
-            linewidth=2.5,
-        )
-    ax.axhline(0, color="black", linestyle="--", alpha=0.7)
-    ax.set_title("Bias vs. Instrument Strength", fontsize=14)
-    ax.set_xlabel("Instrument Strength (i)")
-    ax.set_ylabel("Relative Bias (Bias / True Effect)")
-    ax.legend()
+    # === ROW 2: STANDARD ERROR (PRECISION) ===
+    se_axes = axes[1]
+    se_axes[0].set_ylabel("Average Standard Error", fontweight="bold", fontsize=14)
+    for ax, param, marker in zip(
+        se_axes, ["avg_confounding", "i", "y"], ["o", "s", "^"]
+    ):
+        for method in ["TMLE", "IPW"]:
+            grouped = (
+                methods_df[methods_df["method"] == method]
+                .groupby(param)["std_err"]
+                .agg(["mean", "std"])
+                .reset_index()
+            )
+            ax.errorbar(
+                grouped[param],
+                grouped["mean"],
+                yerr=grouped["std"],
+                label=method,
+                color=colors[method],
+                marker=marker,
+                capsize=5,
+                linestyle="--",
+                linewidth=2.5,
+            )
+        ax.legend()
+    se_axes[0].set_title("Precision vs. Confounding", fontsize=16)
+    se_axes[0].set_xlabel("Average Confounding Strength")
+    se_axes[1].set_title("Precision vs. Instrument Strength", fontsize=16)
+    se_axes[1].set_xlabel("Instrument Strength (i)")
+    se_axes[2].set_title("Precision vs. Outcome-Only Confounder", fontsize=16)
+    se_axes[2].set_xlabel("Outcome-Only Strength (y)")
 
-    # --- Plot 3: Standard Error vs. Confounding Strength ---
-    ax = axes[1, 0]
-    for method in ["TMLE", "IPW"]:
-        grouped = (
-            methods_df[methods_df["method"] == method]
-            .groupby("avg_confounding")["std_err"]
-            .agg(["mean", "std"])
-            .reset_index()
-        )
-        ax.errorbar(
-            grouped["avg_confounding"],
-            grouped["mean"],
-            yerr=grouped["std"],
-            label=method,
-            color=colors[method],
-            marker="D",
-            capsize=5,
-            linestyle="--",
-            linewidth=2.5,
-        )
-    ax.set_title("Precision vs. Confounding Strength", fontsize=14)
-    ax.set_xlabel("Average Confounding Strength ((ce + cy) / 2)")
-    ax.set_ylabel("Average Standard Error")
-    ax.legend()
-
-    # --- Plot 4: RMSE vs. Confounding Strength ---
-    ax = axes[1, 1]
-    for method in ["TMLE", "IPW"]:
-        grouped = (
-            methods_df[methods_df["method"] == method]
-            .groupby("avg_confounding")["rmse"]
-            .agg(["mean", "std"])
-            .reset_index()
-        )
-        ax.errorbar(
-            grouped["avg_confounding"],
-            grouped["mean"],
-            yerr=grouped["std"],
-            label=method,
-            color=colors[method],
-            marker="^",
-            capsize=5,
-            linestyle="-",
-            linewidth=2.5,
-        )
-    ax.set_title("Overall Error (RMSE) vs. Confounding", fontsize=14)
-    ax.set_xlabel("Average Confounding Strength ((ce + cy) / 2)")
-    ax.set_ylabel("Average RMSE (sqrt(Bias² + SE²))")
-    ax.legend()
+    # === ROW 3: COVERAGE PROBABILITY (INFERENCE VALIDITY) ===
+    cov_axes = axes[2]
+    cov_axes[0].set_ylabel("Coverage Probability", fontweight="bold", fontsize=14)
+    for ax, param, marker in zip(
+        cov_axes, ["avg_confounding", "i", "y"], ["o", "s", "^"]
+    ):
+        for method in ["TMLE", "IPW"]:
+            # For a boolean, mean() gives the proportion.
+            grouped = (
+                methods_df[methods_df["method"] == method]
+                .groupby(param)["covered"]
+                .mean()
+                .reset_index()
+            )
+            ax.plot(
+                grouped[param],
+                grouped["covered"],
+                label=method,
+                color=colors[method],
+                marker=marker,
+                linestyle="-",
+                linewidth=2.5,
+                markersize=8,
+            )
+        ax.axhline(0.95, color="black", linestyle="--", alpha=0.7, label="Target (95%)")
+        ax.set_ylim(0, 1.05)  # Set y-axis from 0 to 105%
+        ax.legend()
+    cov_axes[0].set_title("Coverage vs. Confounding", fontsize=16)
+    cov_axes[0].set_xlabel("Average Confounding Strength")
+    cov_axes[1].set_title("Coverage vs. Instrument Strength", fontsize=16)
+    cov_axes[1].set_xlabel("Instrument Strength (i)")
+    cov_axes[2].set_title("Coverage vs. Outcome-Only Confounder", fontsize=16)
+    cov_axes[2].set_xlabel("Outcome-Only Strength (y)")
 
     # Save the final plot
     output_path = Path(output_dir) / "experiment_overview_plot.png"
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"Overview plot saved to: {output_path}")
+    print(f"Comprehensive 3x3 overview plot saved to: {output_path}")
 
 
 def main():
@@ -296,12 +256,8 @@ def main():
     print("Loading experiment results...")
     df = load_experiment_results(args.results_dir, args.experiments)
 
-    print("Creating simplified overview plot...")
+    print("Creating comprehensive 3x3 overview plot...")
     create_overview_plot(df, args.output_dir)
-
-    # The summary report function can be kept if desired, but is not essential for the plot
-    # print("Creating summary report...")
-    # create_summary_report(df, args.output_dir)
 
     print(f"\nAnalysis complete! Results saved to: {args.output_dir}")
 
