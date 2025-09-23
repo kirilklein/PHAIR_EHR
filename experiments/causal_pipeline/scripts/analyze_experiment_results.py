@@ -15,7 +15,7 @@ Usage:
 
 import argparse
 import os
-import sys
+
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -69,40 +69,87 @@ def load_experiment_results(
     )
 
     for exp_dir in exp_dirs:
-        results_file = exp_dir / "estimate" / "estimate_results.csv"
-        if not results_file.exists():
-            print(f"Warning: Results file not found for {exp_dir.name}")
+        exp_name = exp_dir.name
+
+        # Check for both baseline and BERT results
+        model_types = []
+        if (exp_dir / "estimate" / "baseline" / "estimate_results.csv").exists():
+            model_types.append("baseline")
+        if (exp_dir / "estimate" / "bert" / "estimate_results.csv").exists():
+            model_types.append("bert")
+
+        # Handle legacy structure (direct estimate folder)
+        if (exp_dir / "estimate" / "estimate_results.csv").exists() and not model_types:
+            model_types.append(
+                "baseline"
+            )  # Treat as baseline for backward compatibility
+
+        if not model_types:
+            print(f"Warning: No results found for {exp_name}")
             continue
 
-        try:
-            df = pd.read_csv(results_file)
-            df["experiment"] = exp_dir.name
-            params = parse_experiment_name(exp_dir.name)
-            for param, value in params.items():
-                df[param] = value
+        # Load results for each model type
+        for model_type in model_types:
+            if (
+                model_type == "baseline"
+                and (exp_dir / "estimate" / "estimate_results.csv").exists()
+            ):
+                # Legacy structure
+                results_file = exp_dir / "estimate" / "estimate_results.csv"
+            else:
+                # New structure
+                results_file = (
+                    exp_dir / "estimate" / model_type / "estimate_results.csv"
+                )
 
-            # --- Calculate Metrics ---
-            df["bias"] = df["effect"] - df["true_effect"]
-            df["relative_bias"] = (df["bias"] / df["true_effect"]).replace(
-                [np.inf, -np.inf], np.nan
-            )
+            if not results_file.exists():
+                print(f"Warning: {model_type} results file not found for {exp_name}")
+                continue
 
-            df["covered"] = (df["true_effect"] >= df["CI95_lower"]) & (
-                df["true_effect"] <= df["CI95_upper"]
-            )
+            try:
+                df = pd.read_csv(results_file)
+                df["experiment"] = exp_name
+                df["model_type"] = model_type  # New column
+                params = parse_experiment_name(exp_name)
+                for param, value in params.items():
+                    df[param] = value
 
-            all_results.append(df)
-        except Exception as e:
-            print(f"Error loading {exp_dir.name}: {e}")
+                # --- Calculate Metrics ---
+                df["bias"] = df["effect"] - df["true_effect"]
+                df["relative_bias"] = (df["bias"] / df["true_effect"]).replace(
+                    [np.inf, -np.inf], np.nan
+                )
+
+                df["covered"] = (df["true_effect"] >= df["CI95_lower"]) & (
+                    df["true_effect"] <= df["CI95_upper"]
+                )
+
+                all_results.append(df)
+                print(f"Loaded {model_type} results for {exp_name}: {len(df)} rows")
+            except Exception as e:
+                print(f"Error loading {model_type} results for {exp_name}: {e}")
 
     if not all_results:
         raise ValueError("No valid experiment results found.")
 
-    combined_df = pd.concat(all_results, ignore_index=True)
-    print(
-        f"Combined results: {len(combined_df)} rows from {len(all_results)} experiments."
-    )
-    return combined_df
+    # Group results by model type
+    results_by_model = {}
+    for df in all_results:
+        model_type = df["model_type"].iloc[0]
+        if model_type not in results_by_model:
+            results_by_model[model_type] = []
+        results_by_model[model_type].append(df)
+
+    # Combine results for each model type
+    combined_results = {}
+    for model_type, dfs in results_by_model.items():
+        combined_df = pd.concat(dfs, ignore_index=True)
+        combined_results[model_type] = combined_df
+        print(
+            f"Combined {model_type} results: {len(combined_df)} rows from {len(dfs)} experiments."
+        )
+
+    return combined_results
 
 
 def create_plots(df: pd.DataFrame, output_dir: str):
@@ -279,12 +326,19 @@ def main():
     args = parser.parse_args()
 
     print("Loading experiment results...")
-    df = load_experiment_results(args.results_dir, args.experiments)
+    results_by_model = load_experiment_results(args.results_dir, args.experiments)
 
-    print("Creating separate metric-specific overview plots...")
-    create_plots(df, args.output_dir)
+    print("Creating separate analyses for each model type...")
+    for model_type, df in results_by_model.items():
+        model_output_dir = os.path.join(args.output_dir, model_type)
+        print(f"\nAnalyzing {model_type} results...")
+        print(f"Creating plots for {model_type} in: {model_output_dir}")
+        create_plots(df, model_output_dir)
 
-    print(f"\nAnalysis complete! Plots saved to: {args.output_dir}")
+    print(f"\nAnalysis complete! Results saved to: {args.output_dir}")
+    print("Subfolders created:")
+    for model_type in results_by_model.keys():
+        print(f"  - {model_type}/")
 
 
 if __name__ == "__main__":
