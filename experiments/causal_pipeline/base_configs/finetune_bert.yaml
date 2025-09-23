@@ -3,37 +3,63 @@ logging:
   path: ./outputs/logs/causal
 
 paths:
-  # --- INPUTS ---
+  ## INPUTS
+  pretrain_model: ./outputs/pretraining/models/pretrained_model # Adjust path as needed
   prepared_data: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/prepared_data
 
-  # --- OUTPUTS ---
+  ## OUTPUTS
   model: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/models/bert
 
-# ==============================================================================
-# BERT Fine-tuning Settings
-# ==============================================================================
+save_encodings: false
+visualize_encodings: false
+visualize_weight_distributions: false
+
 model:
-  model_path: ./outputs/pretraining/BertForMLM_2024-01-01_12-00-00 # Path to pretrained BERT
+  head:
+    shared_representation: false # whether to share the bigru representation for exposure and outcome
+    bidirectional: true
+    bottleneck_dim: 128
+    l1_lambda: 0 # .2
+    temperature: 1
+    pooling_strategy: gru # cls or gru
+  loss:
+    name: bce # bce by default
+  initialize_sigmoid_bias: false
 
-training:
-  batch_size: 32
-  learning_rate: 5e-5
-  num_epochs: 10
-  warmup_steps: 500
-  weight_decay: 0.01
+trainer_args:
+  loss_weight_function:
+    _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt
+  batch_size: 64
+  val_batch_size: 256
+  effective_batch_size: 64
+  epochs: 10
+  info: true
+  shuffle: true
+  checkpoint_frequency: 1
+  early_stopping: 4
+  stopping_criterion: val_loss
+  n_layers_to_freeze: 0
+  freeze_encoder_on_plateau: true
+  freeze_encoder_on_plateau_threshold: 0.01
+  freeze_encoder_on_plateau_patience: 5
+  use_pcgrad: false
+  plot_histograms: true
+  save_curves: false
+  plot_gradients: false
+  plot_gradients_frequency: 3
 
-validation:
-  eval_steps: 100
-  save_strategy: "steps"
-  save_steps: 500
-  evaluation_strategy: "steps"
+optimizer:
+  lr: 7e-5
+  eps: 1e-6
+  weight_decay: 0
 
-early_stopping:
-  patience: 3
-  metric: "eval_loss"
+scheduler:
+  _target_: transformers.get_cosine_schedule_with_warmup
+  num_training_epochs: 20
+  num_warmup_epochs: 3
 
-# Cross-validation settings
-cv_folds: 2
-# Optional: Specify which targets to train models for
-# If commented out, will train for exposure and all outcomes
-# targets: ["exposure", "OUTCOME", "OUTCOME_2"]
+metrics:
+  roc_auc:
+    _target_: corebehrt.modules.monitoring.metrics.ROC_AUC
+  pr_auc:
+    _target_: corebehrt.modules.monitoring.metrics.PR_AUC
