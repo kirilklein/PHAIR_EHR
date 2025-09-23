@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
 Analyze experiment results across different confounding and instrument configurations.
-Creates a comprehensive 3x3 overview plot for TMLE and IPW methods,
-including bias, precision, and coverage probability, averaged over all outcomes.
+Creates three separate figures:
+1. Relative Bias across confounding, instrument, and outcome-only strengths.
+2. Standard Error across confounding, instrument, and outcome-only strengths.
+3. Coverage Probability across confounding, instrument, and outcome-only strengths.
+
+All plots are averaged over all outcomes for TMLE and IPW methods.
 
 Usage:
     python analyze_experiment_results.py --results_dir outputs/causal/experiments
@@ -78,13 +82,11 @@ def load_experiment_results(
                 df[param] = value
 
             # --- Calculate Metrics ---
-            # 1. Bias
             df["bias"] = df["effect"] - df["true_effect"]
             df["relative_bias"] = (df["bias"] / df["true_effect"]).replace(
                 [np.inf, -np.inf], np.nan
             )
 
-            # 2. Coverage Probability (NEW)
             df["covered"] = (df["true_effect"] >= df["CI95_lower"]) & (
                 df["true_effect"] <= df["CI95_upper"]
             )
@@ -103,9 +105,10 @@ def load_experiment_results(
     return combined_df
 
 
-def create_overview_plot(df: pd.DataFrame, output_dir: str):
+def create_plots(df: pd.DataFrame, output_dir: str):
     """
-    Creates a single 3x3 plot summarizing method performance (bias, precision, coverage).
+    Creates separate figures for Relative Bias, Standard Error, and Coverage Probability.
+    Each figure contains subplots for confounding, instrument, and outcome-only effects.
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -118,22 +121,23 @@ def create_overview_plot(df: pd.DataFrame, output_dir: str):
 
     methods_df["avg_confounding"] = (methods_df["ce"] + methods_df["cy"]) / 2
 
-    # --- Create the 3x3 plot ---
-    fig, axes = plt.subplots(3, 3, figsize=(24, 20), constrained_layout=True)
-    fig.suptitle(
-        "Performance Overview: TMLE vs. IPW (Averaged Across All Outcomes)",
-        fontsize=24,
+    colors = {"TMLE": "#0072B2", "IPW": "#D55E00"}
+    param_configs = [
+        ("avg_confounding", "Average Confounding Strength ((ce + cy) / 2)", "o"),
+        ("i", "Instrument Strength (i)", "s"),
+        ("y", "Outcome-Only Strength (y)", "^"),
+    ]
+
+    # --- Figure 1: Relative Bias ---
+    fig_bias, axes_bias = plt.subplots(1, 3, figsize=(24, 7), constrained_layout=True)
+    fig_bias.suptitle(
+        "Relative Bias of Estimators (Averaged Across All Outcomes)",
+        fontsize=20,
         fontweight="bold",
     )
 
-    colors = {"TMLE": "#0072B2", "IPW": "#D55E00"}
-
-    # === ROW 1: RELATIVE BIAS (ACCURACY) ===
-    bias_axes = axes[0]
-    bias_axes[0].set_ylabel("Relative Bias", fontweight="bold", fontsize=14)
-    for ax, param, marker in zip(
-        bias_axes, ["avg_confounding", "i", "y"], ["o", "s", "^"]
-    ):
+    for i, (param, xlabel, marker) in enumerate(param_configs):
+        ax = axes_bias[i]
         for method in ["TMLE", "IPW"]:
             grouped = (
                 methods_df[methods_df["method"] == method]
@@ -153,20 +157,31 @@ def create_overview_plot(df: pd.DataFrame, output_dir: str):
                 linewidth=2.5,
             )
         ax.axhline(0, color="black", linestyle="--", alpha=0.7)
+        ax.set_title(f"Bias vs. {xlabel.split(' (')[0]}", fontsize=16)
+        ax.set_xlabel(xlabel)
+        if i == 0:
+            ax.set_ylabel(
+                "Relative Bias (Bias / True Effect)", fontweight="bold", fontsize=14
+            )
         ax.legend()
-    bias_axes[0].set_title("Bias vs. Confounding", fontsize=16)
-    bias_axes[0].set_xlabel("Average Confounding Strength")
-    bias_axes[1].set_title("Bias vs. Instrument Strength", fontsize=16)
-    bias_axes[1].set_xlabel("Instrument Strength (i)")
-    bias_axes[2].set_title("Bias vs. Outcome-Only Confounder", fontsize=16)
-    bias_axes[2].set_xlabel("Outcome-Only Strength (y)")
+    plt.savefig(
+        Path(output_dir) / "relative_bias_overview.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close(fig_bias)
+    print(
+        f"Relative Bias plot saved to: {Path(output_dir) / 'relative_bias_overview.png'}"
+    )
 
-    # === ROW 2: STANDARD ERROR (PRECISION) ===
-    se_axes = axes[1]
-    se_axes[0].set_ylabel("Average Standard Error", fontweight="bold", fontsize=14)
-    for ax, param, marker in zip(
-        se_axes, ["avg_confounding", "i", "y"], ["o", "s", "^"]
-    ):
+    # --- Figure 2: Standard Error ---
+    fig_se, axes_se = plt.subplots(1, 3, figsize=(24, 7), constrained_layout=True)
+    fig_se.suptitle(
+        "Standard Error of Estimators (Averaged Across All Outcomes)",
+        fontsize=20,
+        fontweight="bold",
+    )
+
+    for i, (param, xlabel, marker) in enumerate(param_configs):
+        ax = axes_se[i]
         for method in ["TMLE", "IPW"]:
             grouped = (
                 methods_df[methods_df["method"] == method]
@@ -185,53 +200,63 @@ def create_overview_plot(df: pd.DataFrame, output_dir: str):
                 linestyle="--",
                 linewidth=2.5,
             )
+        ax.set_title(f"Precision vs. {xlabel.split(' (')[0]}", fontsize=16)
+        ax.set_xlabel(xlabel)
+        if i == 0:
+            ax.set_ylabel("Average Standard Error", fontweight="bold", fontsize=14)
         ax.legend()
-    se_axes[0].set_title("Precision vs. Confounding", fontsize=16)
-    se_axes[0].set_xlabel("Average Confounding Strength")
-    se_axes[1].set_title("Precision vs. Instrument Strength", fontsize=16)
-    se_axes[1].set_xlabel("Instrument Strength (i)")
-    se_axes[2].set_title("Precision vs. Outcome-Only Confounder", fontsize=16)
-    se_axes[2].set_xlabel("Outcome-Only Strength (y)")
+    plt.savefig(
+        Path(output_dir) / "standard_error_overview.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close(fig_se)
+    print(
+        f"Standard Error plot saved to: {Path(output_dir) / 'standard_error_overview.png'}"
+    )
 
-    # === ROW 3: COVERAGE PROBABILITY (INFERENCE VALIDITY) ===
-    cov_axes = axes[2]
-    cov_axes[0].set_ylabel("Coverage Probability", fontweight="bold", fontsize=14)
-    for ax, param, marker in zip(
-        cov_axes, ["avg_confounding", "i", "y"], ["o", "s", "^"]
-    ):
+    # --- Figure 3: Coverage Probability ---
+    fig_cov, axes_cov = plt.subplots(1, 3, figsize=(24, 7), constrained_layout=True)
+    fig_cov.suptitle(
+        "Coverage Probability of 95% CIs (Averaged Across All Outcomes)",
+        fontsize=20,
+        fontweight="bold",
+    )
+
+    for i, (param, xlabel, marker) in enumerate(param_configs):
+        ax = axes_cov[i]
         for method in ["TMLE", "IPW"]:
-            # For a boolean, mean() gives the proportion.
             grouped = (
                 methods_df[methods_df["method"] == method]
                 .groupby(param)["covered"]
-                .mean()
+                .agg(["mean", "std"])
                 .reset_index()
             )
-            ax.plot(
+            ax.errorbar(
                 grouped[param],
-                grouped["covered"],
+                grouped["mean"],
+                yerr=grouped["std"],
                 label=method,
                 color=colors[method],
                 marker=marker,
+                capsize=5,
                 linestyle="-",
                 linewidth=2.5,
-                markersize=8,
             )
         ax.axhline(0.95, color="black", linestyle="--", alpha=0.7, label="Target (95%)")
         ax.set_ylim(0, 1.05)  # Set y-axis from 0 to 105%
+        ax.set_title(f"Coverage vs. {xlabel.split(' (')[0]}", fontsize=16)
+        ax.set_xlabel(xlabel)
+        if i == 0:
+            ax.set_ylabel("Coverage Probability", fontweight="bold", fontsize=14)
         ax.legend()
-    cov_axes[0].set_title("Coverage vs. Confounding", fontsize=16)
-    cov_axes[0].set_xlabel("Average Confounding Strength")
-    cov_axes[1].set_title("Coverage vs. Instrument Strength", fontsize=16)
-    cov_axes[1].set_xlabel("Instrument Strength (i)")
-    cov_axes[2].set_title("Coverage vs. Outcome-Only Confounder", fontsize=16)
-    cov_axes[2].set_xlabel("Outcome-Only Strength (y)")
-
-    # Save the final plot
-    output_path = Path(output_dir) / "experiment_overview_plot.png"
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"Comprehensive 3x3 overview plot saved to: {output_path}")
+    plt.savefig(
+        Path(output_dir) / "coverage_probability_overview.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+    plt.close(fig_cov)
+    print(
+        f"Coverage Probability plot saved to: {Path(output_dir) / 'coverage_probability_overview.png'}"
+    )
 
 
 def main():
@@ -256,10 +281,10 @@ def main():
     print("Loading experiment results...")
     df = load_experiment_results(args.results_dir, args.experiments)
 
-    print("Creating comprehensive 3x3 overview plot...")
-    create_overview_plot(df, args.output_dir)
+    print("Creating separate metric-specific overview plots...")
+    create_plots(df, args.output_dir)
 
-    print(f"\nAnalysis complete! Results saved to: {args.output_dir}")
+    print(f"\nAnalysis complete! Plots saved to: {args.output_dir}")
 
 
 if __name__ == "__main__":
