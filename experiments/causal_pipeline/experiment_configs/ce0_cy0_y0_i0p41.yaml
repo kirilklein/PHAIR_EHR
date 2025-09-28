@@ -1,0 +1,23 @@
+# Weak-Moderate Instrument Experiment (0.41)
+# Tests scenario with weak-moderate instruments - confounding and outcome effects kept low
+
+experiment_name: ce0_cy0_y0_i0p41
+description: "Simulation with weak-moderate instruments (0.41), no confounding, no outcome effect"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 0.0 # No confounding
+    shared_to_outcome: 0.0 # No confounding
+    exposure_only_to_exposure: 0.41 # Weak-moderate instruments
+    outcome_only_to_outcome: 0.0 # No independent risks
+
+# outcomes:
