@@ -8,4 +8,4 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-python scripts/create_new_experiment.py "$1"
+python ../python_scripts/create_new_experiment.py "$1"

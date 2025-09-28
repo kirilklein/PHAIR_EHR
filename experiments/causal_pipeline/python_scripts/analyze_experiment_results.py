@@ -149,6 +149,9 @@ def load_experiment_results(
             f"Combined {model_type} results: {len(combined_df)} rows from {len(dfs)} experiments."
         )
 
+    if not combined_results:
+        raise ValueError("No valid experiment results found after processing.")
+
     return combined_results
 
 

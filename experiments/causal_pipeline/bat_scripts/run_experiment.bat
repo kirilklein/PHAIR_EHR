@@ -42,7 +42,7 @@ if not exist "experiment_configs\%EXPERIMENT_NAME%.yaml" (
 
 REM Generate experiment-specific configs
 echo Step 1: Generating experiment configs...
-python scripts\generate_configs.py %EXPERIMENT_NAME%
+python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME%
 if errorlevel 1 (
     echo ERROR: Failed to generate configs
     pause

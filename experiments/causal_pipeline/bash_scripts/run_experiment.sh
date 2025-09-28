@@ -45,7 +45,7 @@ fi
 
 # Generate experiment-specific configs
 echo "Step 1: Generating experiment configs..."
-python scripts/generate_configs.py "$EXPERIMENT_NAME"
+python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME"
 if [ $? -ne 0 ]; then
     echo "ERROR: Failed to generate configs"
     read -p "Press Enter to continue..."

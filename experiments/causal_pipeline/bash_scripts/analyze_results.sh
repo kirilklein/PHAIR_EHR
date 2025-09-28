@@ -25,10 +25,10 @@ echo ""
 
 if [ "$1" = "all" ]; then
     echo "Analyzing ALL experiments in $RESULTS_DIR"
-    python scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
 else
     echo "Analyzing specific experiments: $*"
-    python scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR" --experiments "$@"
+    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR" --experiments "$@"
 fi
 
 if [ $? -ne 0 ]; then

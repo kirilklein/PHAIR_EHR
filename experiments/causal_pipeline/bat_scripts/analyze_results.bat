@@ -17,8 +17,8 @@ if "%1"=="" (
     set RUN_ALL=false
 )
 
-set RESULTS_DIR=..\..\outputs\causal\experiments
-set OUTPUT_DIR=..\..\outputs\causal\sim_expriments_analysis_plots
+set RESULTS_DIR=..\..\..\outputs\causal\experiments
+set OUTPUT_DIR=..\..\..\outputs\causal\sim_expriments_analysis_plots
 
 echo ========================================
 echo Analyzing Experiment Results
@@ -27,13 +27,13 @@ echo.
 
 if "%RUN_ALL%"=="true" (
     echo Analyzing ALL experiments in %RESULTS_DIR%
-    python scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
 ) else if "%1"=="all" (
     echo Analyzing ALL experiments in %RESULTS_DIR%
-    python scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
 ) else (
     echo Analyzing specific experiments: %*
-    python scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR% --experiments %*
+    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR% --experiments %*
 )
 
 if errorlevel 1 (

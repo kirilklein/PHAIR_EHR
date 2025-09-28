@@ -116,7 +116,7 @@ outcomes:
 
 All experiment outputs are saved in:
 
-```
+```shell
 outputs/causal/experiments/<experiment_name>/
 ├── simulated_outcomes/     # Simulated data (shared)
 ├── cohort/                 # Selected cohort (shared)

@@ -8,5 +8,5 @@ if "%1"=="" (
     exit /b 1
 )
 
-python scripts\create_new_experiment.py %1
+python ..\python_scripts\create_new_experiment.py %1
 
