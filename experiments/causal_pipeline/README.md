@@ -5,65 +5,130 @@ This directory contains a flexible experiment system for running causal inferenc
 ## Quick Start
 
 1. Define your experiment settings in `experiment_configs/`
-2. Run: `run_experiment.bat <experiment_name>`
+2. Run an experiment:
+   - **Windows:** `bat_scripts\run_experiment.bat <experiment_name>`
+   - **Linux/Unix:** `bash_scripts/run_experiment.sh <experiment_name>`
 
 ## Structure
 
 - `experiment_configs/` - Define experiment-specific simulation parameters
 - `base_configs/` - Template configs for each pipeline step  
 - `generated_configs/` - Auto-generated configs (don't edit manually)
-- `run_experiment.bat` - Run baseline experiments only
-- `run_experiment_full.bat` - Run full pipeline (baseline + BERT)
-- `run_all_experiments.bat` - Run ALL baseline experiments sequentially
-- `run_all_experiments_full.bat` - Run ALL full experiments sequentially
-- `run_experiments_ordered.bat` - Run experiments in custom order
-- `run_multiple_experiments.bat` - Run multiple experiments sequentially (legacy)
-- `monitor_experiments.bat` - Real-time monitoring of experiment progress
-- `create_new_experiment.bat` - Helper to create new experiment templates
-- `list_experiments.bat` - List all available experiments
-- `scripts/` - Helper scripts for config generation
+- `bat_scripts/` - Windows batch scripts for running experiments
+  - `run_experiment.bat` - Run baseline experiments only
+  - `run_experiment_full.bat` - Run full pipeline (baseline + BERT)
+  - `run_all_experiments.bat` - Run ALL baseline experiments sequentially
+  - `run_all_experiments_full.bat` - Run ALL full experiments sequentially
+  - `run_experiments_ordered.bat` - Run experiments in custom order
+  - `run_multiple_experiments.bat` - Run multiple experiments sequentially (legacy)
+  - `monitor_experiments.bat` - Real-time monitoring of experiment progress
+  - `create_new_experiment.bat` - Helper to create new experiment templates
+  - `list_experiments.bat` - List all available experiments
+  - `analyze_results.bat` - Analyze experiment results
+- `bash_scripts/` - Linux/Unix bash scripts for running experiments
+  - `run_experiment.sh` - Run baseline experiments only
+  - `run_experiment_full.sh` - Run full pipeline (baseline + BERT)
+  - `run_all_experiments.sh` - Run ALL baseline experiments sequentially
+  - `run_all_experiments_full.sh` - Run ALL full experiments sequentially
+  - `run_experiments_ordered.sh` - Run experiments in custom order
+  - `monitor_experiments.sh` - Real-time monitoring of experiment progress
+  - `create_new_experiment.sh` - Helper to create new experiment templates
+  - `list_experiments.sh` - List all available experiments
+  - `analyze_results.sh` - Analyze experiment results
+- `python_scripts/` - Helper Python scripts for config generation and analysis
 
 ## Example Usage
 
-```bash
+### Windows (Batch Scripts)
+
+```batch
 # Run a single baseline experiment
-run_experiment.bat ce0_cy0_y0_i0
+bat_scripts\run_experiment.bat ce0_cy0_y0_i0
 
 # Run a single full experiment (baseline + BERT)
-run_experiment_full.bat ce0_cy0_y0_i0
+bat_scripts\run_experiment_full.bat ce0_cy0_y0_i0
 
 # Run only baseline pipeline for an experiment
-run_experiment_full.bat ce0_cy0_y0_i0 --baseline-only
+bat_scripts\run_experiment_full.bat ce0_cy0_y0_i0 --baseline-only
 
 # Run only BERT pipeline for an experiment (requires baseline data)
-run_experiment_full.bat ce0_cy0_y0_i0 --bert-only
+bat_scripts\run_experiment_full.bat ce0_cy0_y0_i0 --bert-only
 
 # Run ALL baseline experiments sequentially
-run_all_experiments.bat
+bat_scripts\run_all_experiments.bat
 
 # Run ALL full experiments sequentially (baseline + BERT)
-run_all_experiments_full.bat
+bat_scripts\run_all_experiments_full.bat
 
 # Skip existing experiments
-run_all_experiments_full.bat --skip-existing
+bat_scripts\run_all_experiments_full.bat --skip-existing
 
 # Run only baseline for all experiments
-run_all_experiments_full.bat --baseline-only
+bat_scripts\run_all_experiments_full.bat --baseline-only
 
 # Run only BERT for all experiments
-run_all_experiments_full.bat --bert-only
+bat_scripts\run_all_experiments_full.bat --bert-only
 
 # Run experiments in a specific order
-run_experiments_ordered.bat ce0_cy0_y0_i0 ce0p5_cy0p5_y0_i0 ce1_cy1_y0_i0
+bat_scripts\run_experiments_ordered.bat ce0_cy0_y0_i0 ce0p5_cy0p5_y0_i0 ce1_cy1_y0_i0
 
 # Monitor experiment progress (real-time)
-monitor_experiments.bat
+bat_scripts\monitor_experiments.bat
 
 # Create a new experiment template
-create_new_experiment.bat my_new_experiment
+bat_scripts\create_new_experiment.bat my_new_experiment
 
 # List available experiments
-list_experiments.bat
+bat_scripts\list_experiments.bat
+
+# Analyze experiment results
+bat_scripts\analyze_results.bat
+```
+
+### Linux/Unix (Bash Scripts)
+
+```bash
+# Run a single baseline experiment
+bash_scripts/run_experiment.sh ce0_cy0_y0_i0
+
+# Run a single full experiment (baseline + BERT)
+bash_scripts/run_experiment_full.sh ce0_cy0_y0_i0
+
+# Run only baseline pipeline for an experiment
+bash_scripts/run_experiment_full.sh ce0_cy0_y0_i0 --baseline-only
+
+# Run only BERT pipeline for an experiment (requires baseline data)
+bash_scripts/run_experiment_full.sh ce0_cy0_y0_i0 --bert-only
+
+# Run ALL baseline experiments sequentially
+bash_scripts/run_all_experiments.sh
+
+# Run ALL full experiments sequentially (baseline + BERT)
+bash_scripts/run_all_experiments_full.sh
+
+# Skip existing experiments
+bash_scripts/run_all_experiments_full.sh --skip-existing
+
+# Run only baseline for all experiments
+bash_scripts/run_all_experiments_full.sh --baseline-only
+
+# Run only BERT for all experiments
+bash_scripts/run_all_experiments_full.sh --bert-only
+
+# Run experiments in a specific order
+bash_scripts/run_experiments_ordered.sh ce0_cy0_y0_i0 ce0p5_cy0p5_y0_i0 ce1_cy1_y0_i0
+
+# Monitor experiment progress (real-time)
+bash_scripts/monitor_experiments.sh
+
+# Create a new experiment template
+bash_scripts/create_new_experiment.sh my_new_experiment
+
+# List available experiments
+bash_scripts/list_experiments.sh
+
+# Analyze experiment results
+bash_scripts/analyze_results.sh
 ```
 
 ## Pre-configured Experiments
@@ -76,17 +141,29 @@ list_experiments.bat
 
 ### Option 1: Use the helper script
 
-```bash
-create_new_experiment.bat my_experiment
+**Windows:**
+
+```bat
+bat_scripts\create_new_experiment.bat my_experiment
 # Edit the generated file: experiment_configs/my_experiment.yaml
-run_experiment.bat my_experiment
+bat_scripts\run_experiment.bat my_experiment
+```
+
+**Linux/Unix:**
+
+```bash
+bash_scripts/create_new_experiment.sh my_experiment
+# Edit the generated file: experiment_configs/my_experiment.yaml
+bash_scripts/run_experiment.sh my_experiment
 ```
 
 ### Option 2: Manual creation
 
 1. Create a new file in `experiment_configs/` (e.g., `my_experiment.yaml`)
 2. Define your simulation parameters (see examples)
-3. Run with `run_experiment.bat my_experiment`
+3. Run with:
+   - **Windows:** `bat_scripts\run_experiment.bat my_experiment`
+   - **Linux/Unix:** `bash_scripts/run_experiment.sh my_experiment`
 
 ## Experiment Configuration
 
@@ -148,7 +225,10 @@ No need to manually edit paths or duplicate config files!
 
 The system provides robust sequential execution with proper error handling:
 
-### `run_all_experiments.bat`
+### `run_all_experiments` Scripts
+
+**Windows:** `bat_scripts\run_all_experiments.bat`  
+**Linux/Unix:** `bash_scripts/run_all_experiments.sh`
 
 - Automatically finds and runs ALL experiments in `experiment_configs/`
 - Waits for each experiment to complete before starting the next
@@ -156,13 +236,19 @@ The system provides robust sequential execution with proper error handling:
 - Creates timestamped log files with detailed execution records
 - Provides comprehensive summary at the end
 
-### `run_experiments_ordered.bat`
+### `run_experiments_ordered` Scripts
+
+**Windows:** `bat_scripts\run_experiments_ordered.bat`  
+**Linux/Unix:** `bash_scripts/run_experiments_ordered.sh`
 
 - Run experiments in a specific order you define
 - Useful for running subsets or specific sequences
-- Same robust error handling and logging as `run_all_experiments.bat`
+- Same robust error handling and logging as `run_all_experiments` scripts
 
-### `monitor_experiments.bat`
+### `monitor_experiments` Scripts
+
+**Windows:** `bat_scripts\monitor_experiments.bat`  
+**Linux/Unix:** `bash_scripts/monitor_experiments.sh`
 
 - Real-time monitoring of experiment progress
 - Shows currently running Python processes
