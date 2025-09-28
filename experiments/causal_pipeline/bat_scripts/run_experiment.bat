@@ -101,6 +101,10 @@ if "%1"=="--bert-only" (
     goto :parse_args
 )
 if "%1"=="--run_id" (
+    if "%2"=="" (
+        echo ERROR: --run_id requires a run ID ^(e.g., run_01^)
+        exit /b 1
+    )
     set RUN_ID=%2
     shift
     shift

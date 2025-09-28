@@ -35,11 +35,11 @@ if "%1"=="--bert-only" (
     goto :parse_args
 )
 if "%1"=="--n_runs" (
-    set N_RUNS=%2
-    if "%N_RUNS%"=="" (
+    if "%2"=="" (
         echo ERROR: --n_runs requires a number
         exit /b 1
     )
+    set N_RUNS=%2
     shift
     shift
     goto :parse_args
