@@ -2,14 +2,17 @@
 setlocal EnableDelayedExpansion
 
 REM ========================================
-REM Run All Causal Pipeline Experiments Sequentially
+REM Run All Full Causal Pipeline Experiments (Baseline + BERT)
 REM ========================================
 
 set SKIP_EXISTING=false
+set RUN_MODE=both
 
 REM Parse command line arguments
 :parse_args
 if "%1"=="" goto :start_main
+if "%1"=="-h" goto :show_help
+if "%1"=="--help" goto :show_help
 if "%1"=="--skip-existing" (
     set SKIP_EXISTING=true
     shift
@@ -20,16 +23,69 @@ if "%1"=="-s" (
     shift
     goto :parse_args
 )
+if "%1"=="--baseline-only" (
+    set RUN_MODE=baseline
+    shift
+    goto :parse_args
+)
+if "%1"=="--bert-only" (
+    set RUN_MODE=bert
+    shift
+    goto :parse_args
+)
 shift
 goto :parse_args
 
+:show_help
+echo ========================================
+echo Run All Full Causal Pipeline Experiments
+echo ========================================
+echo.
+echo Usage: run_all_experiments_full.bat [OPTIONS]
+echo.
+echo OPTIONS:
+echo   -h, --help           Show this help message
+echo   -s, --skip-existing  Skip experiments that already have results
+echo   --baseline-only      Run only baseline ^(CatBoost^) pipeline for all experiments
+echo   --bert-only          Run only BERT pipeline for all experiments ^(requires baseline data^)
+echo   ^(no options^)         Run both baseline and BERT pipelines for all experiments
+echo.
+echo EXAMPLES:
+echo   run_all_experiments_full.bat
+echo     ^> Runs all experiments with both baseline and BERT pipelines
+echo.
+echo   run_all_experiments_full.bat --skip-existing
+echo     ^> Runs all experiments, skipping those that already have complete results
+echo.
+echo   run_all_experiments_full.bat --baseline-only -s
+echo     ^> Runs only baseline pipeline for all experiments, skipping existing ones
+echo.
+echo   run_all_experiments_full.bat --bert-only
+echo     ^> Runs only BERT pipeline for all experiments ^(baseline data must exist^)
+echo.
+echo NOTES:
+echo   - Experiment configs are read from: ..\experiment_configs\*.yaml
+echo   - Results are saved to: ..\..\outputs\causal\sim_study\runs\^<experiment_name^>\
+echo   - Log files are created with timestamp: run_all_experiments_full_YYYY-MM-DD_HH-MM-SS.log
+echo   - Use Ctrl+C to stop the batch run at any time
+echo.
+pause
+exit /b 0
+
 :start_main
 echo ========================================
-echo Running All Causal Pipeline Experiments
+echo Running All Full Causal Pipeline Experiments
 if "%SKIP_EXISTING%"=="true" (
     echo Mode: SKIPPING existing experiments
 ) else (
     echo Mode: Re-running ALL experiments
+)
+if "%RUN_MODE%"=="both" (
+    echo Pipeline: BASELINE + BERT
+) else if "%RUN_MODE%"=="baseline" (
+    echo Pipeline: BASELINE ONLY
+) else (
+    echo Pipeline: BERT ONLY
 )
 echo ========================================
 echo.
@@ -47,6 +103,7 @@ REM Initialize tracking variables
 set TOTAL_EXPERIMENTS=0
 set SUCCESSFUL_EXPERIMENTS=0
 set FAILED_EXPERIMENTS=0
+set SKIPPED_EXPERIMENTS=0
 set FAILED_LIST=
 
 REM Count total experiments
@@ -63,7 +120,7 @@ set "YY=%dt:~2,2%" & set "YYYY=%dt:~0,4%" & set "MM=%dt:~4,2%" & set "DD=%dt:~6,
 set "HH=%dt:~8,2%" & set "NN=%dt:~10,2%" & set "SS=%dt:~12,2%"
 set "timestamp=%YYYY%-%MM%-%DD%_%HH%-%NN%-%SS%"
 
-set LOG_FILE=run_all_experiments_%timestamp%.log
+set LOG_FILE=run_all_experiments_full_%timestamp%.log
 
 echo Starting batch run at %YYYY%-%MM%-%DD% %HH%:%NN%:%SS%
 echo Logging to: %LOG_FILE%
@@ -74,14 +131,39 @@ set BATCH_MODE=true
 
 REM Run each experiment
 set CURRENT_EXPERIMENT=0
-set SKIPPED_EXPERIMENTS=0
 for %%f in (..\experiment_configs\*.yaml) do (
     set filename=%%~nf
     set /a CURRENT_EXPERIMENT+=1
     
     REM Check if experiment already exists and should be skipped
     if "%SKIP_EXISTING%"=="true" (
-        if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\estimate_results.csv" (
+        set SHOULD_SKIP=false
+        
+        REM Check what exists based on run mode
+        if "%RUN_MODE%"=="baseline" (
+            if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\baseline\estimate_results.csv" (
+                set SHOULD_SKIP=true
+            ) else if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\estimate_results.csv" (
+                set SHOULD_SKIP=true
+            )
+        ) else if "%RUN_MODE%"=="bert" (
+            if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\bert\estimate_results.csv" (
+                set SHOULD_SKIP=true
+            )
+        ) else (
+            REM both mode - skip only if both exist
+            if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\baseline\estimate_results.csv" (
+                if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\bert\estimate_results.csv" (
+                    set SHOULD_SKIP=true
+                )
+            ) else if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\estimate_results.csv" (
+                if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\bert\estimate_results.csv" (
+                    set SHOULD_SKIP=true
+                )
+            )
+        )
+        
+        if "!SHOULD_SKIP!"=="true" (
             echo ========================================
             echo Experiment !CURRENT_EXPERIMENT! of %TOTAL_EXPERIMENTS%: !filename! ^(SKIPPED - already exists^)
             echo ========================================
@@ -100,8 +182,16 @@ for %%f in (..\experiment_configs\*.yaml) do (
     set "start_time=%dt:~8,2%:%dt:~10,2%:%dt:~12,2%"
     echo [!start_time!] Starting experiment: !filename! >> %LOG_FILE%
     
+    REM Build command arguments
+    set EXPERIMENT_ARGS=!filename!
+    if "%RUN_MODE%"=="baseline" (
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --baseline-only
+    ) else if "%RUN_MODE%"=="bert" (
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --bert-only
+    )
+    
     REM Run the experiment
-    call run_experiment.bat !filename!
+    call run_experiment.bat !EXPERIMENT_ARGS!
     set experiment_result=!errorlevel!
     
     REM Log end time and result
