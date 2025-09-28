@@ -8,7 +8,7 @@ if [ $# -eq 0 ]; then
     echo "Usage: ./run_experiment.sh <experiment_name>"
     echo ""
     echo "Available experiments:"
-    for file in experiment_configs/*.yaml; do
+    for file in ../experiment_configs/*.yaml; do
         if [ -f "$file" ]; then
             filename=$(basename "$file" .yaml)
             echo "  - $filename"
@@ -29,11 +29,11 @@ echo "Running Causal Pipeline Experiment: $EXPERIMENT_NAME"
 echo "========================================"
 
 # Check if experiment config exists
-if [ ! -f "experiment_configs/$EXPERIMENT_NAME.yaml" ]; then
-    echo "ERROR: Experiment config not found: experiment_configs/$EXPERIMENT_NAME.yaml"
+if [ ! -f "../experiment_configs/$EXPERIMENT_NAME.yaml" ]; then
+    echo "ERROR: Experiment config not found: ../experiment_configs/$EXPERIMENT_NAME.yaml"
     echo ""
     echo "Available experiments:"
-    for file in experiment_configs/*.yaml; do
+    for file in ../experiment_configs/*.yaml; do
         if [ -f "$file" ]; then
             filename=$(basename "$file" .yaml)
             echo "  - $filename"

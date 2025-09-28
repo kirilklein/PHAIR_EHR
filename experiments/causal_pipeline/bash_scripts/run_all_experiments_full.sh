@@ -53,8 +53,8 @@ echo "========================================"
 echo ""
 
 # Check if any experiment configs exist
-if ! ls experiment_configs/*.yaml 1> /dev/null 2>&1; then
-    echo "ERROR: No experiment configs found in experiment_configs/"
+if ! ls ../experiment_configs/*.yaml 1> /dev/null 2>&1; then
+    echo "ERROR: No experiment configs found in ../experiment_configs/"
     echo ""
     echo "Create experiments with: ./create_new_experiment.sh <name>"
     read -p "Press Enter to continue..."
@@ -69,7 +69,7 @@ SKIPPED_EXPERIMENTS=0
 FAILED_LIST=""
 
 # Count total experiments
-for file in experiment_configs/*.yaml; do
+for file in ../experiment_configs/*.yaml; do
     if [ -f "$file" ]; then
         ((TOTAL_EXPERIMENTS++))
     fi
@@ -91,7 +91,7 @@ export BATCH_MODE=true
 
 # Run each experiment
 CURRENT_EXPERIMENT=0
-for file in experiment_configs/*.yaml; do
+for file in ../experiment_configs/*.yaml; do
     if [ -f "$file" ]; then
         filename=$(basename "$file" .yaml)
         ((CURRENT_EXPERIMENT++))

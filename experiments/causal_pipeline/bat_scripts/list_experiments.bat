@@ -6,8 +6,8 @@ echo Available Causal Pipeline Experiments
 echo ========================================
 echo.
 
-if not exist experiment_configs\*.yaml (
-    echo No experiments found in experiment_configs/
+if not exist ..\experiment_configs\*.yaml (
+    echo No experiments found in ../experiment_configs/
     echo.
     echo Create a new experiment with: create_new_experiment.bat ^<name^>
     pause
@@ -17,7 +17,7 @@ if not exist experiment_configs\*.yaml (
 echo Experiment Name         Description
 echo ----------------       -----------
 
-for %%f in (experiment_configs\*.yaml) do (
+for %%f in (..\experiment_configs\*.yaml) do (
     set filename=%%~nf
     
     REM Try to extract description from YAML file

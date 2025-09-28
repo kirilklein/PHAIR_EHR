@@ -9,7 +9,7 @@ if "%1"=="" (
     echo Usage: run_multiple_experiments.bat experiment1 experiment2 experiment3 ...
     echo.
     echo Available experiments:
-    for %%f in (experiment_configs\*.yaml) do (
+    for %%f in (..\experiment_configs\*.yaml) do (
         set filename=%%~nf
         echo   - !filename!
     )

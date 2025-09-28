@@ -53,8 +53,8 @@ echo ========================================
 echo.
 
 REM Check if any experiment configs exist
-if not exist "experiment_configs\*.yaml" (
-    echo ERROR: No experiment configs found in experiment_configs\
+if not exist "..\experiment_configs\*.yaml" (
+    echo ERROR: No experiment configs found in ..\experiment_configs\
     echo.
     echo Create experiments with: create_new_experiment.bat ^<name^>
     pause
@@ -69,7 +69,7 @@ set SKIPPED_EXPERIMENTS=0
 set FAILED_LIST=
 
 REM Count total experiments
-for %%f in (experiment_configs\*.yaml) do (
+for %%f in (..\experiment_configs\*.yaml) do (
     set /a TOTAL_EXPERIMENTS+=1
 )
 
@@ -93,7 +93,7 @@ set BATCH_MODE=true
 
 REM Run each experiment
 set CURRENT_EXPERIMENT=0
-for %%f in (experiment_configs\*.yaml) do (
+for %%f in (..\experiment_configs\*.yaml) do (
     set filename=%%~nf
     set /a CURRENT_EXPERIMENT+=1
     

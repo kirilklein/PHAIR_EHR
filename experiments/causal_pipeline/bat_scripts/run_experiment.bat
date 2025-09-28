@@ -9,7 +9,7 @@ if "%1"=="" (
     echo Usage: run_experiment.bat ^<experiment_name^>
     echo.
     echo Available experiments:
-    for %%f in (experiment_configs\*.yaml) do (
+    for %%f in (..\experiment_configs\*.yaml) do (
         set filename=%%~nf
         echo   - !filename!
     )
@@ -28,11 +28,11 @@ echo Running Causal Pipeline Experiment: %EXPERIMENT_NAME%
 echo ========================================
 
 REM Check if experiment config exists
-if not exist "experiment_configs\%EXPERIMENT_NAME%.yaml" (
-    echo ERROR: Experiment config not found: experiment_configs\%EXPERIMENT_NAME%.yaml
+if not exist "..\experiment_configs\%EXPERIMENT_NAME%.yaml" (
+    echo ERROR: Experiment config not found: ..\experiment_configs\%EXPERIMENT_NAME%.yaml
     echo.
     echo Available experiments:
-    for %%f in (experiment_configs\*.yaml) do (
+    for %%f in (..\experiment_configs\*.yaml) do (
         set filename=%%~nf
         echo   - !filename!
     )

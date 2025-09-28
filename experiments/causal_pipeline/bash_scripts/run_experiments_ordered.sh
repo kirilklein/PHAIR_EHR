@@ -11,7 +11,7 @@ if [ $# -eq 0 ]; then
     echo "Each experiment will complete (successfully or with failure) before the next starts."
     echo ""
     echo "Available experiments:"
-    for file in experiment_configs/*.yaml; do
+    for file in ../experiment_configs/*.yaml; do
         if [ -f "$file" ]; then
             filename=$(basename "$file" .yaml)
             echo "  - $filename"
@@ -72,8 +72,8 @@ for experiment_name in "$@"; do
     echo "========================================"
     
     # Check if experiment config exists
-    if [ ! -f "experiment_configs/$experiment_name.yaml" ]; then
-        echo "ERROR: Experiment config not found: experiment_configs/$experiment_name.yaml"
+    if [ ! -f "../experiment_configs/$experiment_name.yaml" ]; then
+        echo "ERROR: Experiment config not found: ../experiment_configs/$experiment_name.yaml"
         echo "[$(date +"%H:%M:%S")] ERROR: Config not found for $experiment_name" >> "$LOG_FILE"
         ((FAILED_EXPERIMENTS++))
         if [ -z "$FAILED_LIST" ]; then

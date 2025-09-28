@@ -145,7 +145,7 @@ bash_scripts/analyze_results.sh
 
 ```bat
 bat_scripts\create_new_experiment.bat my_experiment
-# Edit the generated file: experiment_configs/my_experiment.yaml
+# Edit the generated file: ../experiment_configs/my_experiment.yaml
 bat_scripts\run_experiment.bat my_experiment
 ```
 
@@ -153,7 +153,7 @@ bat_scripts\run_experiment.bat my_experiment
 
 ```bash
 bash_scripts/create_new_experiment.sh my_experiment
-# Edit the generated file: experiment_configs/my_experiment.yaml
+
 bash_scripts/run_experiment.sh my_experiment
 ```
 

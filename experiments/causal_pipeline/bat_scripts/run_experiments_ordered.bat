@@ -12,7 +12,7 @@ if "%1"=="" (
     echo Each experiment will complete ^(successfully or with failure^) before the next starts.
     echo.
     echo Available experiments:
-    for %%f in (experiment_configs\*.yaml) do (
+    for %%f in (..\experiment_configs\*.yaml) do (
         set filename=%%~nf
         echo   - !filename!
     )
@@ -90,8 +90,8 @@ echo Experiment !CURRENT_EXPERIMENT! of %TOTAL_EXPERIMENTS%: !experiment_name!
 echo ========================================
 
 REM Check if experiment config exists
-if not exist "experiment_configs\!experiment_name!.yaml" (
-    echo ERROR: Experiment config not found: experiment_configs\!experiment_name!.yaml
+if not exist "..\experiment_configs\!experiment_name!.yaml" (
+    echo ERROR: Experiment config not found: ..\experiment_configs\!experiment_name!.yaml
     echo [!time!] ERROR: Config not found for !experiment_name! >> %LOG_FILE%
     set /a FAILED_EXPERIMENTS+=1
     if "!FAILED_LIST!"=="" (

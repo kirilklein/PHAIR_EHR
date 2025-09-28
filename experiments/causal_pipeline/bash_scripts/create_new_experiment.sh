@@ -3,7 +3,7 @@
 if [ $# -eq 0 ]; then
     echo "Usage: ./create_new_experiment.sh <experiment_name>"
     echo ""
-    echo "Creates a new experiment configuration template in experiment_configs/"
+    echo "Creates a new experiment configuration template in ../experiment_configs/"
     echo ""
     echo "Experiment Name Guidelines:"
     echo "  - Use underscores instead of spaces (e.g., strong_confounding)"

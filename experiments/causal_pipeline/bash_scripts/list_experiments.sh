@@ -5,8 +5,8 @@ echo "Available Causal Pipeline Experiments"
 echo "========================================"
 echo ""
 
-if ! ls experiment_configs/*.yaml 1> /dev/null 2>&1; then
-    echo "No experiments found in experiment_configs/"
+if ! ls ../experiment_configs/*.yaml 1> /dev/null 2>&1; then
+    echo "No experiments found in ../experiment_configs/"
     echo ""
     echo "Create a new experiment with: ./create_new_experiment.sh <name>"
     read -p "Press Enter to continue..."
@@ -16,7 +16,7 @@ fi
 echo "Experiment Name         Description"
 echo "----------------       -----------"
 
-for file in experiment_configs/*.yaml; do
+for file in ../experiment_configs/*.yaml; do
     if [ -f "$file" ]; then
         filename=$(basename "$file" .yaml)
         
@@ -34,6 +34,9 @@ done
 echo ""
 echo "Usage Examples:"
 echo "  ./run_experiment.sh <experiment_name>"
+echo "  ./run_experiment_full.sh <experiment_name>"
+echo "  ./run_all_experiments.sh"
+echo "  ./run_all_experiments_full.sh"
 echo "  ./run_experiments_ordered.sh exp1 exp2 exp3"
 echo "  ./create_new_experiment.sh <new_experiment_name>"
 echo ""
