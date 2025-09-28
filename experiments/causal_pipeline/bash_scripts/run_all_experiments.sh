@@ -153,7 +153,7 @@ for file in ../experiment_configs/*.yaml; do
         esac
         
         # Run the experiment
-        ./run_experiment_full.sh $EXPERIMENT_ARGS
+        ./run_experiment.sh $EXPERIMENT_ARGS
         experiment_result=$?
         
         # Log end time and result
