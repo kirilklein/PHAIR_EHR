@@ -10,6 +10,41 @@ RUN_MODE="both"
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -h|--help)
+            echo "========================================"
+            echo "Run All Full Causal Pipeline Experiments"
+            echo "========================================"
+            echo ""
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "OPTIONS:"
+            echo "  -h, --help           Show this help message"
+            echo "  -s, --skip-existing  Skip experiments that already have results"
+            echo "  --baseline-only      Run only baseline (CatBoost) pipeline for all experiments"
+            echo "  --bert-only          Run only BERT pipeline for all experiments (requires baseline data)"
+            echo "  (no options)         Run both baseline and BERT pipelines for all experiments"
+            echo ""
+            echo "EXAMPLES:"
+            echo "  $0"
+            echo "    > Runs all experiments with both baseline and BERT pipelines"
+            echo ""
+            echo "  $0 --skip-existing"
+            echo "    > Runs all experiments, skipping those that already have complete results"
+            echo ""
+            echo "  $0 --baseline-only -s"
+            echo "    > Runs only baseline pipeline for all experiments, skipping existing ones"
+            echo ""
+            echo "  $0 --bert-only"
+            echo "    > Runs only BERT pipeline for all experiments (baseline data must exist)"
+            echo ""
+            echo "NOTES:"
+            echo "  - Experiment configs are read from: ../experiment_configs/*.yaml"
+            echo "  - Results are saved to: ../../../outputs/causal/sim_study/runs/<experiment_name>/"
+            echo "  - Log files are saved to: ../logs/run_all_experiments_full_YYYY-MM-DD_HH-MM-SS.log"
+            echo "  - Use Ctrl+C to stop the batch run at any time"
+            echo ""
+            exit 0
+            ;;
         --skip-existing|-s)
             SKIP_EXISTING=true
             shift
@@ -24,7 +59,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--skip-existing|-s] [--baseline-only|--bert-only]"
+            echo "Usage: $0 [--skip-existing|-s] [--baseline-only|--bert-only] [-h|--help]"
             exit 1
             ;;
     esac
@@ -106,21 +141,21 @@ for file in ../experiment_configs/*.yaml; do
             # Check what exists based on run mode
             case $RUN_MODE in
                 "baseline")
-                    if [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/baseline/estimate_results.csv" ] || 
-                       [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/estimate_results.csv" ]; then
+                    if [ -f "../../../outputs/causal/sim_study/runs/$filename/estimate/baseline/estimate_results.csv" ] || 
+                       [ -f "../../../outputs/causal/sim_study/runs/$filename/estimate/estimate_results.csv" ]; then
                         SHOULD_SKIP=true
                     fi
                     ;;
                 "bert")
-                    if [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/bert/estimate_results.csv" ]; then
+                    if [ -f "../../../outputs/causal/sim_study/runs/$filename/estimate/bert/estimate_results.csv" ]; then
                         SHOULD_SKIP=true
                     fi
                     ;;
                 "both")
                     # Skip only if both exist
-                    if { [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/baseline/estimate_results.csv" ] || 
-                         [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/estimate_results.csv" ]; } &&
-                       [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/bert/estimate_results.csv" ]; then
+                    if { [ -f "../../../outputs/causal/sim_study/runs/$filename/estimate/baseline/estimate_results.csv" ] || 
+                         [ -f "../../../outputs/causal/sim_study/runs/$filename/estimate/estimate_results.csv" ]; } &&
+                       [ -f "../../../outputs/causal/sim_study/runs/$filename/estimate/bert/estimate_results.csv" ]; then
                         SHOULD_SKIP=true
                     fi
                     ;;

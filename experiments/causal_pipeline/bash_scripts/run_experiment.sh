@@ -4,16 +4,55 @@
 # Causal Pipeline Full Experiment Runner (Baseline + BERT)
 # ========================================
 
-# Check if experiment name is provided
-if [ -z "$1" ]; then
-    echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only]"
-    echo "Example: $0 my_experiment --baseline-only"
+# Check for help or no arguments
+if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "========================================"
+    echo "Full Causal Pipeline Experiment Runner"
+    echo "========================================"
+    echo ""
+    echo "Usage: $0 <experiment_name> [OPTIONS]"
+    echo ""
+    echo "ARGUMENTS:"
+    echo "  experiment_name       Name of the experiment to run"
+    echo ""
+    echo "OPTIONS:"
+    echo "  -h, --help           Show this help message"
+    echo "  --baseline-only      Run only baseline (CatBoost) pipeline"
+    echo "  --bert-only          Run only BERT pipeline (requires baseline data)"
+    echo "  (no options)         Run both baseline and BERT pipelines"
+    echo ""
+    echo "EXAMPLES:"
+    echo "  $0 ce1_cy1_y0_i0"
+    echo "    > Runs both baseline and BERT pipelines for experiment ce1_cy1_y0_i0"
+    echo ""
+    echo "  $0 ce1_cy1_y0_i0 --baseline-only"
+    echo "    > Runs only baseline pipeline for experiment ce1_cy1_y0_i0"
+    echo ""
+    echo "  $0 ce1_cy1_y0_i0 --bert-only"
+    echo "    > Runs only BERT pipeline for experiment ce1_cy1_y0_i0 (baseline data must exist)"
+    echo ""
+    echo "NOTES:"
+    echo "  - Experiment configs are read from: ../experiment_configs/<experiment_name>.yaml"
+    echo "  - Generated configs are saved to: ../generated_configs/<experiment_name>/"
+    echo "  - Results are saved to: ../../../outputs/causal/sim_study/runs/<experiment_name>/"
+    echo "  - Use Ctrl+C to stop the experiment at any time"
+    echo ""
+    if [ "$BATCH_MODE" != "true" ]; then
+        read -p "Press Enter to continue..."
+    fi
     exit 1
 fi
 
+echo "DEBUG: run_experiment.sh called with arguments: $*"
+echo "DEBUG: First argument \$1 = \"$1\""
+echo "DEBUG: Second argument \$2 = \"$2\""
+echo "DEBUG: All arguments \$* = $*"
+
 EXPERIMENT_NAME="$1"
+echo "DEBUG: EXPERIMENT_NAME set to: $EXPERIMENT_NAME"
 RUN_BASELINE=true
 RUN_BERT=true
+echo "DEBUG: Initial flags - RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT"
 
 # Parse additional arguments
 shift
@@ -35,12 +74,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+echo "========================================"
 echo "Running Full Causal Pipeline Experiment: $EXPERIMENT_NAME"
-if [ "$RUN_BASELINE" = "true" ]; then
-    echo "Including Baseline pipeline"
-fi
-if [ "$RUN_BERT" = "true" ]; then
-    echo "Including BERT pipeline"
+echo "DEBUG: RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT"
+if [ "$RUN_BASELINE" = "true" ] && [ "$RUN_BERT" = "true" ]; then
+    echo "Mode: BASELINE + BERT"
+elif [ "$RUN_BASELINE" = "true" ]; then
+    echo "Mode: BASELINE ONLY"
+else
+    echo "Mode: BERT ONLY"
 fi
 echo "========================================"
 
@@ -70,7 +112,22 @@ echo "Step 2: Running pipeline steps..."
 echo ""
 
 # Change to project root for running pipeline commands
-cd ../..
+cd ../../..
+echo "DEBUG: Current directory after cd: $(pwd)"
+echo "DEBUG: Config path will be: experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/simulation.yaml"
+
+# Verify the config file exists from this directory
+if [ -f "experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/simulation.yaml" ]; then
+    echo "DEBUG: Config file exists at expected path from current directory"
+else
+    echo "ERROR: Config file NOT found at expected path from current directory"
+    echo "DEBUG: Let's see what's in the generated_configs directory:"
+    ls -la "experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/" 2>/dev/null || echo "Directory does not exist"
+    if [ "$BATCH_MODE" != "true" ]; then
+        read -p "Press Enter to continue..."
+    fi
+    exit 1
+fi
 
 # Add the project root to Python path (if needed)
 export PYTHONPATH="$PWD:$PYTHONPATH"

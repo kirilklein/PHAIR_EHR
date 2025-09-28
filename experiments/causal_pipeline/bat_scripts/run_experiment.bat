@@ -119,22 +119,6 @@ if "%RUN_BASELINE%"=="true" if "%RUN_BERT%"=="true" (
 )
 echo ========================================
 
-REM Only activate conda if not already in batch mode (to avoid double activation)
-if not "%BATCH_MODE%"=="true" (
-    echo.
-    echo Setting up conda environment...
-    call C:/Users/fjn197/Miniconda3/Scripts/activate
-    call conda activate phair_ehr
-    if errorlevel 1 (
-        echo ERROR: Failed to activate conda environment 'phair_ehr'
-        echo Please ensure the environment exists and conda is properly installed.
-        pause
-        exit /b 1
-    )
-    echo Conda environment 'phair_ehr' activated successfully.
-    echo.
-)
-
 REM Check if experiment config exists
 if not exist "..\experiment_configs\%EXPERIMENT_NAME%.yaml" (
     echo ERROR: Experiment config not found: ..\experiment_configs\%EXPERIMENT_NAME%.yaml
@@ -162,10 +146,14 @@ if !CONFIG_EXIT_CODE! neq 0 (
 
 REM Verify that config files were created
 echo DEBUG: Checking if config files were generated...
-if exist "generated_configs\%EXPERIMENT_NAME%\simulation.yaml" (
-    echo DEBUG: simulation.yaml found in generated_configs\%EXPERIMENT_NAME%\
+echo DEBUG: Current working directory: %CD%
+echo DEBUG: Looking for: ..\generated_configs\%EXPERIMENT_NAME%\simulation.yaml
+if exist "..\generated_configs\%EXPERIMENT_NAME%\simulation.yaml" (
+    echo DEBUG: simulation.yaml found in ..\generated_configs\%EXPERIMENT_NAME%\
 ) else (
-    echo ERROR: simulation.yaml not found in generated_configs\%EXPERIMENT_NAME%\
+    echo ERROR: simulation.yaml not found in ..\generated_configs\%EXPERIMENT_NAME%\
+    echo DEBUG: Let's see what exists in the generated_configs directory:
+    dir "..\generated_configs\%EXPERIMENT_NAME%\" 2>nul || echo "Directory does not exist"
     pause
     exit /b 1
 )
@@ -175,7 +163,7 @@ echo Step 2: Running pipeline steps...
 echo.
 
 REM Change to project root for running pipeline commands
-cd ..\..
+cd ..\..\..
 echo DEBUG: Current directory after cd: %CD%
 echo DEBUG: Config path will be: experiments\causal_pipeline\generated_configs\%EXPERIMENT_NAME%\simulation.yaml
 

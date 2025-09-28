@@ -64,7 +64,6 @@ echo   run_all_experiments_full.bat --bert-only
 echo     ^> Runs only BERT pipeline for all experiments ^(baseline data must exist^)
 echo.
 echo NOTES:
-echo   - Requires conda environment 'phair_ehr' to be available
 echo   - Experiment configs are read from: ..\experiment_configs\*.yaml
 echo   - Results are saved to: ..\..\outputs\causal\sim_study\runs\^<experiment_name^>\
 echo   - Log files are saved to: ..\logs\run_all_experiments_full_YYYY-MM-DD_HH-MM-SS.log
@@ -89,18 +88,6 @@ if "%RUN_MODE%"=="both" (
     echo Pipeline: BERT ONLY
 )
 echo ========================================
-echo.
-
-echo Setting up conda environment...
-call C:/Users/fjn197/Miniconda3/Scripts/activate
-call conda activate phair_ehr
-if errorlevel 1 (
-    echo ERROR: Failed to activate conda environment 'phair_ehr'
-    echo Please ensure the environment exists and conda is properly installed.
-    pause
-    exit /b 1
-)
-echo Conda environment 'phair_ehr' activated successfully.
 echo.
 
 REM Check if any experiment configs exist

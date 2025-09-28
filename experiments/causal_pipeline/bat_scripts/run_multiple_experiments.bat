@@ -94,19 +94,6 @@ if "%RUN_MODE%"=="both" (
 )
 echo ========================================
 
-echo.
-echo Setting up conda environment...
-call C:/Users/fjn197/Miniconda3/Scripts/activate
-call conda activate phair_ehr
-if errorlevel 1 (
-    echo ERROR: Failed to activate conda environment 'phair_ehr'
-    echo Please ensure the environment exists and conda is properly installed.
-    pause
-    exit /b 1
-)
-echo Conda environment 'phair_ehr' activated successfully.
-echo.
-
 REM Set batch mode to prevent pausing
 set BATCH_MODE=true
 
