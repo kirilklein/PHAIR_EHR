@@ -8,6 +8,8 @@ set -e  # Exit on error
 
 RUN_MODE="both"
 EXPERIMENT_LIST=""
+N_RUNS=1
+RUN_ID_OVERRIDE=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -24,6 +26,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "OPTIONS:"
             echo "  -h, --help           Show this help message"
+            echo "  --n_runs N           Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
+            echo "  --run_id run_XX      Specific run ID to use (overrides --n_runs)"
             echo "  --baseline-only      Run only baseline (CatBoost) pipeline for all experiments"
             echo "  --bert-only          Run only BERT pipeline for all experiments (requires baseline data)"
             echo "  (no options)         Run both baseline and BERT pipelines for all experiments"
@@ -50,12 +54,34 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 --bert-only ce1_cy1_y0_i0"
             echo "    > Runs only BERT pipeline for the specified experiment (baseline data must exist)"
             echo ""
+            echo "  $0 --n_runs 3 ce1_cy1_y0_i0 ce0_cy0_y0_i0"
+            echo "    > Runs specified experiments 3 times each, creating run_01, run_02, run_03"
+            echo ""
+            echo "  $0 --run_id run_05 ce1_cy1_y0_i0"
+            echo "    > Runs specified experiment in run_05 folder specifically"
+            echo ""
             echo "NOTES:"
             echo "  - Experiment configs are read from: ../experiment_configs/<experiment_name>.yaml"
-            echo "  - Results are saved to: ../../../outputs/causal/sim_study/runs/<experiment_name>/"
+            echo "  - Results are saved to: ../../../outputs/causal/sim_study/runs/run_XX/<experiment_name>/"
             echo "  - Use Ctrl+C to stop the batch run at any time"
             echo ""
             exit 0
+            ;;
+        --n_runs)
+            N_RUNS="$2"
+            if ! [[ "$N_RUNS" =~ ^[0-9]+$ ]] || [ "$N_RUNS" -lt 1 ]; then
+                echo "ERROR: --n_runs must be a positive integer, got: $N_RUNS"
+                exit 1
+            fi
+            shift 2
+            ;;
+        --run_id)
+            RUN_ID_OVERRIDE="$2"
+            if [ -z "$RUN_ID_OVERRIDE" ]; then
+                echo "ERROR: --run_id requires a run ID (e.g., run_01)"
+                exit 1
+            fi
+            shift 2
             ;;
         --baseline-only)
             RUN_MODE="baseline"
@@ -88,15 +114,28 @@ fi
 echo "========================================"
 echo "Running Multiple Causal Pipeline Experiments"
 
+# Determine run configuration
+if [ -n "$RUN_ID_OVERRIDE" ]; then
+    echo "Run mode: Specific run ($RUN_ID_OVERRIDE)"
+    N_RUNS=1
+else
+    echo "Number of runs: $N_RUNS"
+    if [ "$N_RUNS" -gt 1 ]; then
+        echo "Will create: run_01 through run_$(printf '%02d' $N_RUNS)"
+    else
+        echo "Will create: run_01"
+    fi
+fi
+
 case $RUN_MODE in
     "both")
-        echo "Mode: BASELINE + BERT"
+        echo "Pipeline: BASELINE + BERT"
         ;;
     "baseline")
-        echo "Mode: BASELINE ONLY"
+        echo "Pipeline: BASELINE ONLY"
         ;;
     "bert")
-        echo "Mode: BERT ONLY"
+        echo "Pipeline: BERT ONLY"
         ;;
 esac
 echo "========================================"
@@ -109,56 +148,80 @@ SUCCESS_COUNT=0
 TOTAL_COUNT=0
 
 # Count experiments first
+EXPERIMENT_COUNT=0
 for experiment in $EXPERIMENT_LIST; do
-    ((TOTAL_COUNT++))
+    ((EXPERIMENT_COUNT++))
 done
 
-echo "Found $TOTAL_COUNT experiments to run: $EXPERIMENT_LIST"
+TOTAL_COUNT=$((EXPERIMENT_COUNT * N_RUNS))
+echo "Found $EXPERIMENT_COUNT experiments × $N_RUNS runs = $TOTAL_COUNT total experiments to run"
+echo "Experiments: $EXPERIMENT_LIST"
 echo ""
 
 CURRENT_COUNT=0
 
-# Run each experiment
-for experiment in $EXPERIMENT_LIST; do
-    EXPERIMENT_NAME="$experiment"
-    ((CURRENT_COUNT++))
-
-    echo ""
-    echo "----------------------------------------"
-    echo "Running experiment $CURRENT_COUNT of $TOTAL_COUNT: $EXPERIMENT_NAME"
-    echo "----------------------------------------"
-
-    # Call experiment with proper argument passing
-    echo "DEBUG: Calling run_experiment.sh with experiment: $EXPERIMENT_NAME, mode: $RUN_MODE"
-    
-    case $RUN_MODE in
-        "baseline")
-            ./run_experiment.sh "$EXPERIMENT_NAME" --baseline-only
-            ;;
-        "bert")
-            ./run_experiment.sh "$EXPERIMENT_NAME" --bert-only
-            ;;
-        *)
-            ./run_experiment.sh "$EXPERIMENT_NAME"
-            ;;
-    esac
-    
-    experiment_result=$?
-
-    if [ $experiment_result -ne 0 ]; then
-        echo ""
-        echo "ERROR: Experiment $EXPERIMENT_NAME failed with error code $experiment_result"
-        echo "Check the output above for detailed error information."
-        echo ""
-        if [ -z "$FAILED_EXPERIMENTS" ]; then
-            FAILED_EXPERIMENTS="$EXPERIMENT_NAME"
-        else
-            FAILED_EXPERIMENTS="$FAILED_EXPERIMENTS $EXPERIMENT_NAME"
-        fi
+# Run each experiment for each run
+for run_number in $(seq 1 $N_RUNS); do
+    # Determine run ID
+    if [ -n "$RUN_ID_OVERRIDE" ]; then
+        RUN_ID="$RUN_ID_OVERRIDE"
     else
-        echo "SUCCESS: Experiment $EXPERIMENT_NAME completed!"
-        ((SUCCESS_COUNT++))
+        RUN_ID=$(printf "run_%02d" $run_number)
     fi
+    
+    echo ""
+    echo "========================================="
+    echo "STARTING RUN $run_number of $N_RUNS: $RUN_ID"
+    echo "========================================="
+    echo ""
+    
+    for experiment in $EXPERIMENT_LIST; do
+        EXPERIMENT_NAME="$experiment"
+        ((CURRENT_COUNT++))
+
+        echo ""
+        echo "----------------------------------------"
+        echo "Running experiment $CURRENT_COUNT of $TOTAL_COUNT: $RUN_ID/$EXPERIMENT_NAME"
+        echo "----------------------------------------"
+
+        # Call experiment with proper argument passing
+        echo "DEBUG: Calling run_experiment.sh with experiment: $EXPERIMENT_NAME, run_id: $RUN_ID, mode: $RUN_MODE"
+        
+        case $RUN_MODE in
+            "baseline")
+                ./run_experiment.sh "$EXPERIMENT_NAME" --run_id "$RUN_ID" --baseline-only
+                ;;
+            "bert")
+                ./run_experiment.sh "$EXPERIMENT_NAME" --run_id "$RUN_ID" --bert-only
+                ;;
+            *)
+                ./run_experiment.sh "$EXPERIMENT_NAME" --run_id "$RUN_ID"
+                ;;
+        esac
+        
+        experiment_result=$?
+
+        if [ $experiment_result -ne 0 ]; then
+            echo ""
+            echo "ERROR: Experiment $RUN_ID/$EXPERIMENT_NAME failed with error code $experiment_result"
+            echo "Check the output above for detailed error information."
+            echo ""
+            if [ -z "$FAILED_EXPERIMENTS" ]; then
+                FAILED_EXPERIMENTS="$RUN_ID/$EXPERIMENT_NAME"
+            else
+                FAILED_EXPERIMENTS="$FAILED_EXPERIMENTS $RUN_ID/$EXPERIMENT_NAME"
+            fi
+        else
+            echo "SUCCESS: Experiment $RUN_ID/$EXPERIMENT_NAME completed!"
+            ((SUCCESS_COUNT++))
+        fi
+    done
+    
+    echo ""
+    echo "========================================="
+    echo "COMPLETED RUN $run_number of $N_RUNS: $RUN_ID"
+    echo "========================================="
+    echo ""
 done
 
 echo ""

@@ -52,7 +52,8 @@ EXPERIMENT_NAME="$1"
 echo "DEBUG: EXPERIMENT_NAME set to: $EXPERIMENT_NAME"
 RUN_BASELINE=true
 RUN_BERT=true
-echo "DEBUG: Initial flags - RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT"
+RUN_ID="run_01"  # Default run ID
+echo "DEBUG: Initial flags - RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT, RUN_ID=$RUN_ID"
 
 # Parse additional arguments
 shift
@@ -66,17 +67,21 @@ while [[ $# -gt 0 ]]; do
             RUN_BASELINE=false
             shift
             ;;
+        --run_id)
+            RUN_ID="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only]"
+            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX]"
             exit 1
             ;;
     esac
 done
 
 echo "========================================"
-echo "Running Full Causal Pipeline Experiment: $EXPERIMENT_NAME"
-echo "DEBUG: RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT"
+echo "Running Full Causal Pipeline Experiment: $RUN_ID/$EXPERIMENT_NAME"
+echo "DEBUG: RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT, RUN_ID=$RUN_ID"
 if [ "$RUN_BASELINE" = "true" ] && [ "$RUN_BERT" = "true" ]; then
     echo "Mode: BASELINE + BERT"
 elif [ "$RUN_BASELINE" = "true" ]; then
@@ -104,7 +109,7 @@ check_error() {
 
 # Generate experiment-specific configs
 echo "Step 1: Generating experiment configs..."
-python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME"
+python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME" --run_id "$RUN_ID"
 check_error
 
 echo ""
@@ -185,8 +190,8 @@ fi
 
 echo ""
 echo "========================================"
-echo "Experiment $EXPERIMENT_NAME completed successfully!"
-echo "Results saved in: outputs/causal/sim_study/runs/$EXPERIMENT_NAME/"
+echo "Experiment $RUN_ID/$EXPERIMENT_NAME completed successfully!"
+echo "Results saved in: outputs/causal/sim_study/runs/$RUN_ID/$EXPERIMENT_NAME/"
 echo "========================================"
 
 if [ "$BATCH_MODE" != "true" ]; then

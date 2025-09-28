@@ -7,6 +7,7 @@ REM ========================================
 
 set SKIP_EXISTING=false
 set RUN_MODE=both
+set N_RUNS=1
 
 REM Parse command line arguments
 :parse_args
@@ -30,6 +31,16 @@ if "%1"=="--baseline-only" (
 )
 if "%1"=="--bert-only" (
     set RUN_MODE=bert
+    shift
+    goto :parse_args
+)
+if "%1"=="--n_runs" (
+    set N_RUNS=%2
+    if "%N_RUNS%"=="" (
+        echo ERROR: --n_runs requires a number
+        exit /b 1
+    )
+    shift
     shift
     goto :parse_args
 )

@@ -81,7 +81,8 @@ set EXPERIMENT_NAME=%1
 echo DEBUG: EXPERIMENT_NAME set to: %EXPERIMENT_NAME%
 set RUN_BASELINE=true
 set RUN_BERT=true
-echo DEBUG: Initial flags - RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%
+set RUN_ID=run_01
+echo DEBUG: Initial flags - RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%, RUN_ID=%RUN_ID%
 
 REM Parse additional arguments
 :parse_args
@@ -99,6 +100,12 @@ if "%1"=="--bert-only" (
     shift
     goto :parse_args
 )
+if "%1"=="--run_id" (
+    set RUN_ID=%2
+    shift
+    shift
+    goto :parse_args
+)
 REM Unknown argument, skip it
 shift
 goto :parse_args
@@ -108,8 +115,8 @@ set SCRIPT_DIR=%~dp0
 set CONFIG_DIR=%SCRIPT_DIR%generated_configs\%EXPERIMENT_NAME%
 
 echo ========================================
-echo Running Full Causal Pipeline Experiment: %EXPERIMENT_NAME%
-echo DEBUG: RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%
+echo Running Full Causal Pipeline Experiment: %RUN_ID%/%EXPERIMENT_NAME%
+echo DEBUG: RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%, RUN_ID=%RUN_ID%
 if "%RUN_BASELINE%"=="true" if "%RUN_BERT%"=="true" (
     echo Mode: BASELINE + BERT
 ) else if "%RUN_BASELINE%"=="true" (
@@ -134,8 +141,8 @@ if not exist "..\experiment_configs\%EXPERIMENT_NAME%.yaml" (
 
 REM Generate experiment-specific configs
 echo Step 1: Generating experiment configs...
-echo DEBUG: About to run: python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME%
-python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME%
+echo DEBUG: About to run: python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID%
+python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID%
 set CONFIG_EXIT_CODE=!errorlevel!
 echo DEBUG: Config generation exit code: !CONFIG_EXIT_CODE!
 if !CONFIG_EXIT_CODE! neq 0 (
@@ -240,13 +247,13 @@ if "%RUN_BERT%"=="true" (
 
 echo.
 echo ========================================
-echo Experiment %EXPERIMENT_NAME% completed successfully!
-echo Results saved in: outputs\causal\sim_study\runs\%EXPERIMENT_NAME%\
+echo Experiment %RUN_ID%/%EXPERIMENT_NAME% completed successfully!
+echo Results saved in: outputs\causal\sim_study\runs\%RUN_ID%\%EXPERIMENT_NAME%\
 if "%RUN_BASELINE%"=="true" (
-    echo   - Baseline results: outputs\causal\sim_study\runs\%EXPERIMENT_NAME%\estimate\baseline\
+    echo   - Baseline results: outputs\causal\sim_study\runs\%RUN_ID%\%EXPERIMENT_NAME%\estimate\baseline\
 )
 if "%RUN_BERT%"=="true" (
-    echo   - BERT results: outputs\causal\sim_study\runs\%EXPERIMENT_NAME%\estimate\bert\
+    echo   - BERT results: outputs\causal\sim_study\runs\%RUN_ID%\%EXPERIMENT_NAME%\estimate\bert\
 )
 echo ========================================
 

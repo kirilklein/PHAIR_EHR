@@ -4,10 +4,10 @@ logging:
 
 paths:
   # --- INPUTS ---
-  prepared_data: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/prepared_data
+  prepared_data: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/prepared_data
 
   # --- OUTPUTS ---
-  model: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/models/baseline
+  model: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/baseline
 
 # ==============================================================================
 # Feature Engineering Settings

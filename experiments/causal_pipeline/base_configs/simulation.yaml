@@ -8,7 +8,7 @@ logging:
 paths:
   data: ./example_data/synthea_meds_causal
   splits: ["tuning"]
-  outcomes: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/simulated_outcomes
+  outcomes: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes
 
 seed: 42
 debug: false

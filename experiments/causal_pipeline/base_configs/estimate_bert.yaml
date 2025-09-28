@@ -4,11 +4,11 @@ logging:
 
 paths:
   ## INPUTS
-  calibrated_predictions: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/models/bert/calibrated/
-  counterfactual_outcomes: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/simulated_outcomes
+  calibrated_predictions: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/bert/calibrated/
+  counterfactual_outcomes: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes
 
   ## OUTPUTS
-  estimate: ./outputs/causal/experiments/{{EXPERIMENT_NAME}}/estimate/bert
+  estimate: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/estimate/bert
 
 estimator:
   methods: ["IPW", "TMLE"]
