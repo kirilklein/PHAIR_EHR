@@ -4,7 +4,7 @@
 # Run Multiple Causal Pipeline Experiments
 # ========================================
 
-set -e  # Exit on error
+# Note: Removed 'set -e' to prevent silent failures during debugging
 
 RUN_MODE="both"
 EXPERIMENT_LIST=""
@@ -12,7 +12,9 @@ N_RUNS=1
 RUN_ID_OVERRIDE=""
 
 # Parse command line arguments
+echo "DEBUG: Starting argument parsing with arguments: $*"
 while [[ $# -gt 0 ]]; do
+    echo "DEBUG: Processing argument: '$1'"
     case $1 in
         -h|--help)
             echo "========================================"
@@ -84,15 +86,18 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --baseline-only)
+            echo "DEBUG: Setting RUN_MODE to baseline"
             RUN_MODE="baseline"
             shift
             ;;
         --bert-only)
+            echo "DEBUG: Setting RUN_MODE to bert"
             RUN_MODE="bert"
             shift
             ;;
         *)
             # Add experiment to list
+            echo "DEBUG: Adding '$1' to experiment list"
             if [ -z "$EXPERIMENT_LIST" ]; then
                 EXPERIMENT_LIST="$1"
             else
@@ -149,7 +154,9 @@ TOTAL_COUNT=0
 
 # Count experiments first
 EXPERIMENT_COUNT=0
+echo "DEBUG: EXPERIMENT_LIST='$EXPERIMENT_LIST'"
 for experiment in $EXPERIMENT_LIST; do
+    echo "DEBUG: Processing experiment: '$experiment'"
     ((EXPERIMENT_COUNT++))
 done
 
@@ -157,6 +164,8 @@ TOTAL_COUNT=$((EXPERIMENT_COUNT * N_RUNS))
 echo "Found $EXPERIMENT_COUNT experiments × $N_RUNS runs = $TOTAL_COUNT total experiments to run"
 echo "Experiments: $EXPERIMENT_LIST"
 echo ""
+
+echo "DEBUG: About to start main loop with N_RUNS=$N_RUNS"
 
 CURRENT_COUNT=0
 
