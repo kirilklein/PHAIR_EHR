@@ -53,23 +53,109 @@ def parse_experiment_name(exp_name: str) -> Dict[str, float]:
     return params
 
 
+def aggregate_across_runs(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate results across multiple runs for the same experiment configuration.
+    Computes mean of means and proper combined standard errors.
+    """
+    if 'run_id' not in df.columns:
+        return df  # No run aggregation needed
+    
+    print("Aggregating results across runs...")
+    
+    # Group by everything except run_id and the metrics we want to aggregate
+    grouping_cols = [col for col in df.columns if col not in 
+                    ['run_id', 'effect', 'std_err', 'CI95_lower', 'CI95_upper', 
+                     'bias', 'relative_bias', 'covered']]
+    
+    def aggregate_metrics(group):
+        n_runs = len(group)
+        
+        # Mean of means
+        mean_effect = group['effect'].mean()
+        
+        # Combined standard error: sqrt(mean(var_within_runs) + var(means_across_runs))
+        # where var_within_runs = std_err^2
+        mean_within_run_var = (group['std_err'] ** 2).mean()
+        var_across_runs = group['effect'].var(ddof=1) if n_runs > 1 else 0
+        combined_std_err = np.sqrt(mean_within_run_var + var_across_runs)
+        
+        # Recalculate confidence intervals with combined standard error
+        # Assuming normal distribution (could be improved with t-distribution)
+        margin = 1.96 * combined_std_err
+        ci_lower = mean_effect - margin
+        ci_upper = mean_effect + margin
+        
+        # Aggregate other metrics
+        mean_bias = group['bias'].mean()
+        mean_relative_bias = group['relative_bias'].mean()
+        mean_covered = group['covered'].mean()  # Coverage probability
+        
+        return pd.Series({
+            'effect': mean_effect,
+            'std_err': combined_std_err,
+            'CI95_lower': ci_lower,
+            'CI95_upper': ci_upper,
+            'bias': mean_bias,
+            'relative_bias': mean_relative_bias,
+            'covered': mean_covered,
+            'n_runs': n_runs
+        })
+    
+    aggregated = df.groupby(grouping_cols).apply(aggregate_metrics).reset_index()
+    
+    print(f"Aggregated {len(df)} individual run results into {len(aggregated)} experiment configurations")
+    
+    # Show aggregation summary
+    run_counts = aggregated['n_runs'].value_counts().sort_index()
+    print("Runs per experiment configuration:")
+    for n_runs, count in run_counts.items():
+        print(f"  {count} experiments with {n_runs} runs each")
+    
+    return aggregated
+
+
 def load_experiment_results(
     results_dir: str, experiment_names: Optional[List[str]] = None
 ) -> pd.DataFrame:
-    """Load and combine results from multiple experiments."""
+    """Load and combine results from multiple experiments and runs."""
     results_path = Path(results_dir)
     if not results_path.exists():
         raise FileNotFoundError(f"Results directory not found: {results_dir}")
 
     all_results = []
-    exp_dirs = (
-        [results_path / name for name in experiment_names]
-        if experiment_names
-        else [d for d in results_path.iterdir() if d.is_dir()]
-    )
+    
+    # Check if we have the new run structure (run_01, run_02, etc.)
+    run_dirs = [d for d in results_path.iterdir() if d.is_dir() and d.name.startswith('run_')]
+    
+    if run_dirs:
+        # New structure: outputs/causal/sim_study/runs/run_XX/experiment_name/
+        print(f"Found {len(run_dirs)} run directories: {[d.name for d in run_dirs]}")
+        exp_dirs = []
+        for run_dir in run_dirs:
+            if experiment_names:
+                exp_dirs.extend([run_dir / name for name in experiment_names if (run_dir / name).exists()])
+            else:
+                exp_dirs.extend([d for d in run_dir.iterdir() if d.is_dir()])
+    else:
+        # Legacy structure: outputs/causal/sim_study/runs/experiment_name/
+        print("Using legacy directory structure")
+        exp_dirs = (
+            [results_path / name for name in experiment_names]
+            if experiment_names
+            else [d for d in results_path.iterdir() if d.is_dir()]
+        )
 
     for exp_dir in exp_dirs:
         exp_name = exp_dir.name
+        
+        # Determine run ID and experiment name
+        if exp_dir.parent.name.startswith('run_'):
+            run_id = exp_dir.parent.name
+            experiment_config = exp_name
+        else:
+            run_id = "run_01"  # Legacy structure
+            experiment_config = exp_name
 
         # Check for both baseline and BERT results
         model_types = []
@@ -85,7 +171,7 @@ def load_experiment_results(
             )  # Treat as baseline for backward compatibility
 
         if not model_types:
-            print(f"Warning: No results found for {exp_name}")
+            print(f"Warning: No results found for {run_id}/{exp_name}")
             continue
 
         # Load results for each model type
@@ -103,14 +189,15 @@ def load_experiment_results(
                 )
 
             if not results_file.exists():
-                print(f"Warning: {model_type} results file not found for {exp_name}")
+                print(f"Warning: {model_type} results file not found for {run_id}/{exp_name}")
                 continue
 
             try:
                 df = pd.read_csv(results_file)
-                df["experiment"] = exp_name
-                df["model_type"] = model_type  # New column
-                params = parse_experiment_name(exp_name)
+                df["experiment"] = experiment_config
+                df["run_id"] = run_id
+                df["model_type"] = model_type
+                params = parse_experiment_name(experiment_config)
                 for param, value in params.items():
                     df[param] = value
 
@@ -125,9 +212,9 @@ def load_experiment_results(
                 )
 
                 all_results.append(df)
-                print(f"Loaded {model_type} results for {exp_name}: {len(df)} rows")
+                print(f"Loaded {model_type} results for {run_id}/{exp_name}: {len(df)} rows")
             except Exception as e:
-                print(f"Error loading {model_type} results for {exp_name}: {e}")
+                print(f"Error loading {model_type} results for {run_id}/{exp_name}: {e}")
 
     if not all_results:
         raise ValueError("No valid experiment results found.")
@@ -144,9 +231,13 @@ def load_experiment_results(
     combined_results = {}
     for model_type, dfs in results_by_model.items():
         combined_df = pd.concat(dfs, ignore_index=True)
-        combined_results[model_type] = combined_df
+        
+        # Aggregate across runs for the same experiment configuration
+        aggregated_df = aggregate_across_runs(combined_df)
+        combined_results[model_type] = aggregated_df
+        
         print(
-            f"Combined {model_type} results: {len(combined_df)} rows from {len(dfs)} experiments."
+            f"Combined {model_type} results: {len(aggregated_df)} final rows from {len(combined_df)} individual run results across {len(dfs)} experiment files."
         )
 
     if not combined_results:
