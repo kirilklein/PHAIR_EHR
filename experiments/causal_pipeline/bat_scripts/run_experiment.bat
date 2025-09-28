@@ -5,24 +5,66 @@ REM ========================================
 REM Full Causal Pipeline Experiment Runner (Baseline + BERT)
 REM ========================================
 
-if "%1"=="" (
-    echo Usage: run_experiment_full.bat ^<experiment_name^> [--baseline-only^|--bert-only]
-    echo.
-    echo Options:
-    echo   --baseline-only    Run only baseline ^(CatBoost^) pipeline
-    echo   --bert-only        Run only BERT pipeline ^(requires baseline data^)
-    echo   ^(no flag^)          Run both baseline and BERT pipelines
-    echo.
-    echo Available experiments:
-    for %%f in (..\experiment_configs\*.yaml) do (
-        set filename=%%~nf
-        echo   - !filename!
-    )
-    echo.
-    echo Example: run_experiment_full.bat ce1_cy1_y0_i0
-    pause
-    exit /b 1
+if "%1"=="" goto :show_help
+if "%1"=="-h" goto :show_help
+if "%1"=="--help" goto :show_help
+
+:show_help
+echo ========================================
+echo Full Causal Pipeline Experiment Runner
+echo ========================================
+echo.
+echo Usage: run_experiment.bat ^<experiment_name^> [OPTIONS]
+echo.
+echo ARGUMENTS:
+echo   experiment_name       Name of the experiment to run
+echo.
+echo OPTIONS:
+echo   -h, --help           Show this help message
+echo   --baseline-only      Run only baseline ^(CatBoost^) pipeline
+echo   --bert-only          Run only BERT pipeline ^(requires baseline data^)
+echo   ^(no options^)         Run both baseline and BERT pipelines
+echo.
+echo AVAILABLE EXPERIMENTS:
+for %%f in (..\experiment_configs\*.yaml) do (
+    set filename=%%~nf
+    echo   - !filename!
 )
+echo.
+echo EXAMPLES:
+echo   run_experiment.bat ce1_cy1_y0_i0
+echo     ^> Runs both baseline and BERT pipelines for experiment ce1_cy1_y0_i0
+echo.
+echo   run_experiment.bat ce1_cy1_y0_i0 --baseline-only
+echo     ^> Runs only baseline pipeline for experiment ce1_cy1_y0_i0
+echo.
+echo   run_experiment.bat ce1_cy1_y0_i0 --bert-only
+echo     ^> Runs only BERT pipeline for experiment ce1_cy1_y0_i0 ^(baseline data must exist^)
+echo.
+echo PIPELINE PHASES:
+echo   PHASE 1: SHARED DATA PREPARATION
+echo     - simulate_outcomes: Generate synthetic data
+echo     - select_cohort: Select patient cohort
+echo     - prepare_finetune_data: Prepare data for model training
+echo.
+echo   PHASE 2: BASELINE MODELS ^(CATBOOST^)
+echo     - train_baseline: Train CatBoost models
+echo     - calibrate_baseline: Calibrate baseline models
+echo     - estimate_baseline: Run causal estimation with baseline models
+echo.
+echo   PHASE 3: BERT MODELS
+echo     - finetune_bert: Fine-tune BERT models
+echo     - calibrate_bert: Calibrate BERT models
+echo     - estimate_bert: Run causal estimation with BERT models
+echo.
+echo NOTES:
+echo   - Experiment configs are read from: ..\experiment_configs\^<experiment_name^>.yaml
+echo   - Generated configs are saved to: generated_configs\^<experiment_name^>\
+echo   - Results are saved to: ..\..\outputs\causal\sim_study\runs\^<experiment_name^>\
+echo   - Use Ctrl+C to stop the experiment at any time
+echo.
+if "%1"=="" pause
+exit /b 1
 
 set EXPERIMENT_NAME=%1
 set RUN_BASELINE=true
@@ -32,6 +74,8 @@ REM Parse additional arguments
 :parse_args
 shift
 if "%1"=="" goto :start_experiment
+if "%1"=="-h" goto :show_help
+if "%1"=="--help" goto :show_help
 if "%1"=="--baseline-only" (
     set RUN_BERT=false
     goto :parse_args
