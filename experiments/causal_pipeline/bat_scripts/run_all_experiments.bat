@@ -64,6 +64,7 @@ echo   run_all_experiments_full.bat --bert-only
 echo     ^> Runs only BERT pipeline for all experiments ^(baseline data must exist^)
 echo.
 echo NOTES:
+echo   - Requires conda environment 'phair_ehr' to be available
 echo   - Experiment configs are read from: ..\experiment_configs\*.yaml
 echo   - Results are saved to: ..\..\outputs\causal\sim_study\runs\^<experiment_name^>\
 echo   - Log files are created with timestamp: run_all_experiments_full_YYYY-MM-DD_HH-MM-SS.log
@@ -88,6 +89,18 @@ if "%RUN_MODE%"=="both" (
     echo Pipeline: BERT ONLY
 )
 echo ========================================
+echo.
+
+echo Setting up conda environment...
+call C:/Users/fjn197/Miniconda3/Scripts/activate
+call conda activate phair_ehr
+if errorlevel 1 (
+    echo ERROR: Failed to activate conda environment 'phair_ehr'
+    echo Please ensure the environment exists and conda is properly installed.
+    pause
+    exit /b 1
+)
+echo Conda environment 'phair_ehr' activated successfully.
 echo.
 
 REM Check if any experiment configs exist
@@ -182,16 +195,14 @@ for %%f in (..\experiment_configs\*.yaml) do (
     set "start_time=%dt:~8,2%:%dt:~10,2%:%dt:~12,2%"
     echo [!start_time!] Starting experiment: !filename! >> %LOG_FILE%
     
-    REM Build command arguments
-    set EXPERIMENT_ARGS=!filename!
+    REM Run the experiment with proper argument passing
     if "%RUN_MODE%"=="baseline" (
-        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --baseline-only
+        call run_experiment.bat !filename! --baseline-only
     ) else if "%RUN_MODE%"=="bert" (
-        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --bert-only
+        call run_experiment.bat !filename! --bert-only
+    ) else (
+        call run_experiment.bat !filename!
     )
-    
-    REM Run the experiment
-    call run_experiment.bat !EXPERIMENT_ARGS!
     set experiment_result=!errorlevel!
     
     REM Log end time and result
