@@ -80,7 +80,10 @@ echo ""
 
 # Get timestamp for logging
 timestamp=$(date +"%Y-%m-%d_%H-%M-%S")
-LOG_FILE="run_all_experiments_full_${timestamp}.log"
+# Create logs directory if it doesn't exist
+mkdir -p "../logs"
+
+LOG_FILE="../logs/run_all_experiments_full_${timestamp}.log"
 
 echo "Starting batch run at $(date)"
 echo "Logging to: $LOG_FILE"

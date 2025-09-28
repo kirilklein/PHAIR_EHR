@@ -42,12 +42,12 @@ echo.
 
 REM Show recent log files
 echo Recent Log Files:
-if exist "run_*.log" (
-    for /f "tokens=*" %%f in ('dir "run_*.log" /b /o-d 2^>nul') do (
+if exist "..\logs\*.log" (
+    for /f "tokens=*" %%f in ('dir "..\logs\*.log" /b /o-d 2^>nul') do (
         echo   %%f
     )
 ) else (
-    echo   No log files found
+    echo   No log files found in ..\logs\
 )
 echo.
 

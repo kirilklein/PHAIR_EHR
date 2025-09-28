@@ -67,7 +67,7 @@ echo NOTES:
 echo   - Requires conda environment 'phair_ehr' to be available
 echo   - Experiment configs are read from: ..\experiment_configs\*.yaml
 echo   - Results are saved to: ..\..\outputs\causal\sim_study\runs\^<experiment_name^>\
-echo   - Log files are created with timestamp: run_all_experiments_full_YYYY-MM-DD_HH-MM-SS.log
+echo   - Log files are saved to: ..\logs\run_all_experiments_full_YYYY-MM-DD_HH-MM-SS.log
 echo   - Use Ctrl+C to stop the batch run at any time
 echo.
 pause
@@ -133,7 +133,10 @@ set "YY=%dt:~2,2%" & set "YYYY=%dt:~0,4%" & set "MM=%dt:~4,2%" & set "DD=%dt:~6,
 set "HH=%dt:~8,2%" & set "NN=%dt:~10,2%" & set "SS=%dt:~12,2%"
 set "timestamp=%YYYY%-%MM%-%DD%_%HH%-%NN%-%SS%"
 
-set LOG_FILE=run_all_experiments_full_%timestamp%.log
+REM Create logs directory if it doesn't exist
+if not exist "..\logs" mkdir "..\logs"
+
+set LOG_FILE=..\logs\run_all_experiments_full_%timestamp%.log
 
 echo Starting batch run at %YYYY%-%MM%-%DD% %HH%:%NN%:%SS%
 echo Logging to: %LOG_FILE%

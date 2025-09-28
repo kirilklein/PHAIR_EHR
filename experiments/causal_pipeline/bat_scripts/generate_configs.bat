@@ -66,6 +66,7 @@ echo.
 echo NOTES:
 echo   - Reads experiment configs from: %CONFIG_DIR%\*.yaml
 echo   - Generated configs are saved to: ..\generated_configs\^<experiment_name^>\
+echo   - Log files are saved to: ..\logs\generate_configs_YYYY-MM-DD_HH-MM-SS.log
 echo   - Use Ctrl+C to stop the generation at any time
 echo.
 pause
@@ -113,7 +114,10 @@ set "YY=%dt:~2,2%" & set "YYYY=%dt:~0,4%" & set "MM=%dt:~4,2%" & set "DD=%dt:~6,
 set "HH=%dt:~8,2%" & set "NN=%dt:~10,2%" & set "SS=%dt:~12,2%"
 set "timestamp=%YYYY%-%MM%-%DD%_%HH%-%NN%-%SS%"
 
-set LOG_FILE=generate_configs_%timestamp%.log
+REM Create logs directory if it doesn't exist
+if not exist "..\logs" mkdir "..\logs"
+
+set LOG_FILE=..\logs\generate_configs_%timestamp%.log
 
 echo Starting config generation at %YYYY%-%MM%-%DD% %HH%:%NN%:%SS%
 echo Logging to: %LOG_FILE%

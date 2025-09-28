@@ -39,14 +39,14 @@ while true; do
     echo ""
     
     # Show recent log files
-    echo "Recent Log Files:"
-    if ls run_*.log 1> /dev/null 2>&1; then
-        ls -1t run_*.log 2>/dev/null | head -5 | while read file; do
-            echo "  $file"
-        done
-    else
-        echo "  No log files found"
-    fi
+echo "Recent Log Files:"
+if ls ../logs/*.log 1> /dev/null 2>&1; then
+    ls -1t ../logs/*.log 2>/dev/null | head -5 | while read file; do
+        echo "  $(basename "$file")"
+    done
+else
+    echo "  No log files found in ../logs/"
+fi
     echo ""
     
     echo "Press Ctrl+C to exit, or wait for auto-refresh..."
