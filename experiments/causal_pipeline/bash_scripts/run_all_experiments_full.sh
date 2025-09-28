@@ -103,21 +103,21 @@ for file in experiment_configs/*.yaml; do
             # Check what exists based on run mode
             case $RUN_MODE in
                 "baseline")
-                    if [ -f "../../outputs/causal/experiments/$filename/estimate/baseline/estimate_results.csv" ] || 
-                       [ -f "../../outputs/causal/experiments/$filename/estimate/estimate_results.csv" ]; then
+                    if [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/baseline/estimate_results.csv" ] || 
+                       [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/estimate_results.csv" ]; then
                         SHOULD_SKIP=true
                     fi
                     ;;
                 "bert")
-                    if [ -f "../../outputs/causal/experiments/$filename/estimate/bert/estimate_results.csv" ]; then
+                    if [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/bert/estimate_results.csv" ]; then
                         SHOULD_SKIP=true
                     fi
                     ;;
                 "both")
                     # Skip only if both exist
-                    if { [ -f "../../outputs/causal/experiments/$filename/estimate/baseline/estimate_results.csv" ] || 
-                         [ -f "../../outputs/causal/experiments/$filename/estimate/estimate_results.csv" ]; } &&
-                       [ -f "../../outputs/causal/experiments/$filename/estimate/bert/estimate_results.csv" ]; then
+                    if { [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/baseline/estimate_results.csv" ] || 
+                         [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/estimate_results.csv" ]; } &&
+                       [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/bert/estimate_results.csv" ]; then
                         SHOULD_SKIP=true
                     fi
                     ;;

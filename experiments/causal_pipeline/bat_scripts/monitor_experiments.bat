@@ -31,8 +31,8 @@ echo.
 
 REM Show recent experiment outputs
 echo Recent Experiment Directories:
-if exist "..\..\outputs\causal\experiments\" (
-    for /f "tokens=*" %%d in ('dir "..\..\outputs\causal\experiments\" /b /ad /o-d 2^>nul') do (
+if exist "..\..\outputs\causal\sim_study\runs\" (
+    for /f "tokens=*" %%d in ('dir "..\..\outputs\causal\sim_study\runs\" /b /ad /o-d 2^>nul') do (
         echo   %%d
     )
 ) else (

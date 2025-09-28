@@ -17,8 +17,8 @@ if "%1"=="" (
     set RUN_ALL=false
 )
 
-set RESULTS_DIR=..\..\..\outputs\causal\experiments
-set OUTPUT_DIR=..\..\..\outputs\causal\sim_expriments_analysis_plots
+set RESULTS_DIR=..\..\..\outputs\causal\sim_study\runs
+set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
 
 echo ========================================
 echo Analyzing Experiment Results

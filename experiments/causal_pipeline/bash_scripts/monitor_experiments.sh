@@ -29,8 +29,8 @@ while true; do
     
     # Show recent experiment outputs
     echo "Recent Experiment Directories:"
-    if [ -d "../../outputs/causal/experiments/" ]; then
-        ls -1t "../../outputs/causal/experiments/" 2>/dev/null | head -10 | while read dir; do
+    if [ -d "../../outputs/causal/sim_study/runs/" ]; then
+        ls -1t "../../outputs/causal/sim_study/runs/" 2>/dev/null | head -10 | while read dir; do
             echo "  $dir"
         done
     else

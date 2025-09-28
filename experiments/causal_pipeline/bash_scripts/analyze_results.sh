@@ -15,8 +15,8 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-RESULTS_DIR="../../outputs/causal/experiments"
-OUTPUT_DIR="../../outputs/causal/experiments_analysis_plots"
+RESULTS_DIR="../../../outputs/causal/sim_study/runs"
+OUTPUT_DIR="../../../outputs/causal/sim_study/analysis"
 
 echo "========================================"
 echo "Analyzing Experiment Results"

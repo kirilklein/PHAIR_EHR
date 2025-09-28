@@ -77,7 +77,7 @@ for file in experiment_configs/*.yaml; do
         
         # Check if experiment already exists and should be skipped
         if [ "$SKIP_EXISTING" = "true" ]; then
-            if [ -f "../../outputs/causal/experiments/$filename/estimate/estimate_results.csv" ]; then
+            if [ -f "../../outputs/causal/sim_study/runs/$filename/estimate/estimate_results.csv" ]; then
                 echo "========================================"
                 echo "Experiment $CURRENT_EXPERIMENT of $TOTAL_EXPERIMENTS: $filename (SKIPPED - already exists)"
                 echo "========================================"

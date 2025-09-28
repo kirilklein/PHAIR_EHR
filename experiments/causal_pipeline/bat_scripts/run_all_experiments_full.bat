@@ -103,23 +103,23 @@ for %%f in (experiment_configs\*.yaml) do (
         
         REM Check what exists based on run mode
         if "%RUN_MODE%"=="baseline" (
-            if exist "..\..\outputs\causal\experiments\!filename!\estimate\baseline\estimate_results.csv" (
+            if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\baseline\estimate_results.csv" (
                 set SHOULD_SKIP=true
-            ) else if exist "..\..\outputs\causal\experiments\!filename!\estimate\estimate_results.csv" (
+            ) else if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\estimate_results.csv" (
                 set SHOULD_SKIP=true
             )
         ) else if "%RUN_MODE%"=="bert" (
-            if exist "..\..\outputs\causal\experiments\!filename!\estimate\bert\estimate_results.csv" (
+            if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\bert\estimate_results.csv" (
                 set SHOULD_SKIP=true
             )
         ) else (
             REM both mode - skip only if both exist
-            if exist "..\..\outputs\causal\experiments\!filename!\estimate\baseline\estimate_results.csv" (
-                if exist "..\..\outputs\causal\experiments\!filename!\estimate\bert\estimate_results.csv" (
+            if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\baseline\estimate_results.csv" (
+                if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\bert\estimate_results.csv" (
                     set SHOULD_SKIP=true
                 )
-            ) else if exist "..\..\outputs\causal\experiments\!filename!\estimate\estimate_results.csv" (
-                if exist "..\..\outputs\causal\experiments\!filename!\estimate\bert\estimate_results.csv" (
+            ) else if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\estimate_results.csv" (
+                if exist "..\..\outputs\causal\sim_study\runs\!filename!\estimate\bert\estimate_results.csv" (
                     set SHOULD_SKIP=true
                 )
             )

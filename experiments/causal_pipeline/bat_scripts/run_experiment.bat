@@ -82,13 +82,13 @@ python -m corebehrt.main_causal.estimate --config_path experiments\causal_pipeli
 if errorlevel 1 goto :error
 
 echo ==== Running test_estimate_result... ====
-python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor 2.0 --ipw_ci_stretch_factor 2.0 --dir outputs\causal\experiments\%EXPERIMENT_NAME%\estimate
+python -m tests.test_main_causal.test_estimate_result --ci_stretch_factor 2.0 --ipw_ci_stretch_factor 2.0 --dir outputs\causal\sim_study\runs\%EXPERIMENT_NAME%\estimate
 if errorlevel 1 goto :error
 
 echo.
 echo ========================================
 echo Experiment %EXPERIMENT_NAME% completed successfully!
-echo Results saved in: outputs\causal\experiments\%EXPERIMENT_NAME%\
+echo Results saved in: outputs\causal\sim_study\runs\%EXPERIMENT_NAME%\
 echo ========================================
 
 REM Only pause if not running in batch mode

@@ -144,12 +144,12 @@ if "%RUN_BERT%"=="true" (
 echo.
 echo ========================================
 echo Experiment %EXPERIMENT_NAME% completed successfully!
-echo Results saved in: outputs\causal\experiments\%EXPERIMENT_NAME%\
+echo Results saved in: outputs\causal\sim_study\runs\%EXPERIMENT_NAME%\
 if "%RUN_BASELINE%"=="true" (
-    echo   - Baseline results: outputs\causal\experiments\%EXPERIMENT_NAME%\estimate\baseline\
+    echo   - Baseline results: outputs\causal\sim_study\runs\%EXPERIMENT_NAME%\estimate\baseline\
 )
 if "%RUN_BERT%"=="true" (
-    echo   - BERT results: outputs\causal\experiments\%EXPERIMENT_NAME%\estimate\bert\
+    echo   - BERT results: outputs\causal\sim_study\runs\%EXPERIMENT_NAME%\estimate\bert\
 )
 echo ========================================
 

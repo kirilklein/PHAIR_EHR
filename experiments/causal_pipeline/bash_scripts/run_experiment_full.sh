@@ -129,7 +129,7 @@ fi
 echo ""
 echo "========================================"
 echo "Experiment $EXPERIMENT_NAME completed successfully!"
-echo "Results saved in: outputs/causal/experiments/$EXPERIMENT_NAME/"
+echo "Results saved in: outputs/causal/sim_study/runs/$EXPERIMENT_NAME/"
 echo "========================================"
 
 if [ "$BATCH_MODE" != "true" ]; then
