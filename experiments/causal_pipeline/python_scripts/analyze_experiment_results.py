@@ -1,273 +1,216 @@
 #!/usr/bin/env python3
 """
-Analyze experiment results across different confounding and instrument configurations.
-Creates separate, detailed figures for Relative Bias, Standard Error, and Coverage Probability.
+Creates two simplified, clean plots for bias analysis:
+1. Bias vs. Confounding Strength (faceted by instrument level).
+2. Bias vs. Instrument Strength (faceted by confounding level).
 
-Correctly interprets negative confounders (e.g., 'cem1p5' as ce=-1.5).
-
-In each plot, separate lines are drawn for each unique combination of instrument and
-outcome-only strengths, allowing for a detailed comparison without over-averaging.
+Both plots skip creating subplots that would only contain a single data point.
 
 Usage:
     python analyze_experiment_results.py --results_dir outputs/causal/experiments
-    python analyze_experiment_results.py --results_dir outputs/causal/experiments --output_dir plots/
 """
 
 import argparse
-import os
 from pathlib import Path
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 
 # Set plotting style
 plt.style.use("seaborn-v0_8-whitegrid")
-sns.set_palette("colorblind")
 
 
 def parse_experiment_name(exp_name: str) -> Dict[str, float]:
-    """
-    Parse experiment name to extract parameter values.
-    Handles negative values for ce/cy indicated by 'm'.
-    Example: cem1p5_cy2_y0_i3 -> {ce: -1.5, cy: 2.0, y: 0.0, i: 3.0}
-    """
+    """Parse experiment name to extract parameter values, including negative 'm' values."""
     import re
-
     params = {}
-    # UPDATED: Regex now looks for an optional 'm' for minus sign in ce and cy.
     patterns = {
-        "ce": r"ce(m?\d+(?:p\d+)?)",  # shared_to_exposure
-        "cy": r"cy(m?\d+(?:p\d+)?)",  # shared_to_outcome
-        "y": r"y(\d+(?:p\d+)?)",    # outcome_only_to_outcome
-        "i": r"i(\d+(?:p\d+)?)",    # exposure_only_to_exposure
+        "ce": r"ce(m?\d+(?:p\d+)?)", "cy": r"cy(m?\d+(?:p\d+)?)",
+        "y": r"y(\d+(?:p\d+)?)", "i": r"i(\d+(?:p\d+)?)",
     }
-
     for param, pattern in patterns.items():
         match = re.search(pattern, exp_name)
         if match:
-            value_str = match.group(1)
-            # UPDATED: Replace 'm' with '-' for negative, then 'p' with '.' for decimal.
-            processed_str = value_str.replace("m", "-").replace("p", ".")
-            params[param] = float(processed_str)
+            value_str = match.group(1).replace("m", "-").replace("p", ".")
+            params[param] = float(value_str)
         else:
-            # If a parameter is not in the name, assume it's zero.
             params[param] = 0.0
     return params
 
 
-def aggregate_across_runs(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Aggregate results across multiple runs for the same experiment configuration.
-    Computes mean of metrics and a combined standard error.
-    """
-    if 'run_id' not in df.columns or df['run_id'].nunique() <= 1:
-        return df
-
-    print("Aggregating results across multiple runs...")
-    
-    grouping_cols = [
-        col for col in df.columns if col not in 
-        ['run_id', 'effect', 'std_err', 'CI95_lower', 'CI95_upper', 
-         'bias', 'relative_bias', 'covered']
-    ]
-    
-    def combined_se(group):
-        n_runs = len(group)
-        if n_runs <= 1:
-            return group['std_err'].iloc[0]
-        mean_within_run_var = (group['std_err'] ** 2).mean()
-        var_across_runs = group['effect'].var(ddof=1)
-        return np.sqrt(mean_within_run_var + var_across_runs)
-
-    aggregated = df.groupby(grouping_cols).apply(lambda g: pd.Series({
-        'effect': g['effect'].mean(),
-        'bias': g['bias'].mean(),
-        'relative_bias': g['relative_bias'].mean(),
-        'covered': g['covered'].mean(),
-        'std_err': combined_se(g),
-        'n_runs': len(g)
-    })).reset_index()
-    
-    margin = 1.96 * aggregated['std_err']
-    aggregated['CI95_lower'] = aggregated['effect'] - margin
-    aggregated['CI95_upper'] = aggregated['effect'] + margin
-    
-    print(f"Aggregated {len(df)} rows into {len(aggregated)} unique configurations.")
-    return aggregated
-
-
-def load_experiment_results(
-    results_dir: str, experiment_names: Optional[List[str]] = None
-) -> Dict[str, pd.DataFrame]:
-    """Load, combine, and aggregate results from multiple experiments and runs."""
+def load_and_process_results(
+    results_dir: str, experiment_names: Optional[list] = None
+) -> pd.DataFrame:
+    """Loads all data from run directories, calculates bias, and adds parameters."""
     results_path = Path(results_dir)
     if not results_path.exists():
         raise FileNotFoundError(f"Results directory not found: {results_dir}")
 
     all_results = []
-    
     run_dirs = [d for d in results_path.iterdir() if d.is_dir() and d.name.startswith('run_')]
-    
-    exp_dirs = []
-    if run_dirs:
-        print(f"Found {len(run_dirs)} run directories.")
-        for run_dir in run_dirs:
-            exp_paths = [d for d in run_dir.iterdir() if d.is_dir()]
-            if experiment_names:
-                exp_paths = [p for p in exp_paths if p.name in experiment_names]
-            exp_dirs.extend(exp_paths)
-    else:
-        print("Using legacy directory structure (no 'run_XX' folders).")
-        exp_dirs = [d for d in results_path.iterdir() if d.is_dir()]
+    if not run_dirs:
+        print("No 'run_XX' directories found. Treating results_dir as a single run.")
+        run_dirs = [results_path]
+
+    for run_dir in run_dirs:
+        exp_dirs = [d for d in run_dir.iterdir() if d.is_dir()]
         if experiment_names:
-            exp_dirs = [p for p in exp_dirs if p.name in experiment_names]
+            exp_dirs = [d for d in exp_dirs if d.name in experiment_names]
 
-    for exp_dir in exp_dirs:
-        run_id = exp_dir.parent.name if exp_dir.parent.name.startswith('run_') else "run_01"
-        
-        model_types_found = {
-            model_type: (exp_dir / "estimate" / model_type / "estimate_results.csv")
-            for model_type in ["baseline", "bert"]
-        }
-        model_types_found = {k: v for k, v in model_types_found.items() if v.exists()}
+        for exp_dir in exp_dirs:
+            possible_paths = [
+                exp_dir / "estimate" / "estimate_results.csv",
+                exp_dir / "estimate" / "baseline" / "estimate_results.csv",
+                exp_dir / "estimate" / "bert" / "estimate_results.csv"
+            ]
+            results_file = next((path for path in possible_paths if path.exists()), None)
 
-        legacy_file = exp_dir / "estimate" / "estimate_results.csv"
-        if legacy_file.exists() and not model_types_found:
-            model_types_found["baseline"] = legacy_file
-
-        if not model_types_found:
-            continue
-
-        for model_type, results_file in model_types_found.items():
+            if not results_file:
+                continue
+            
             try:
                 df = pd.read_csv(results_file)
-                df["experiment"] = exp_dir.name
-                df["run_id"] = run_id
-                df["model_type"] = model_type
+                df["run_id"] = run_dir.name
                 params = parse_experiment_name(exp_dir.name)
                 for param, value in params.items():
                     df[param] = value
-
+                
                 df["bias"] = df["effect"] - df["true_effect"]
-                df["relative_bias"] = (df["bias"] / df["true_effect"]).replace([np.inf, -np.inf], np.nan)
-                df["covered"] = (df["true_effect"] >= df["CI95_lower"]) & (df["true_effect"] <= df["CI95_upper"])
                 all_results.append(df)
             except Exception as e:
                 print(f"Error loading {results_file}: {e}")
 
     if not all_results:
-        raise ValueError("No valid experiment results found.")
+        raise ValueError("No valid results found to process.")
 
-    full_df = pd.concat(all_results, ignore_index=True)
-    results_by_model = {}
-    for model_type, group in full_df.groupby('model_type'):
-        print(f"\nProcessing model type: {model_type}")
-        results_by_model[model_type] = aggregate_across_runs(group)
-    
-    return results_by_model
+    combined_df = pd.concat(all_results, ignore_index=True)
+    print(f"Loaded {len(combined_df)} total rows from {len(run_dirs)} runs.")
+    return combined_df
 
-
-def create_plots(df: pd.DataFrame, output_dir: str):
-    """
-    Creates separate figures for key metrics, with detailed lines for each (i, y) setting.
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
+def perform_bias_aggregation(df: pd.DataFrame) -> pd.DataFrame:
+    """Performs the two-step aggregation to get the final mean and std dev of bias."""
     methods_df = df[df["method"].isin(["TMLE", "IPW"])].copy()
-    methods_df.dropna(subset=["relative_bias"], inplace=True)
     if methods_df.empty:
-        print("Warning: No valid TMLE or IPW results found to plot.")
-        return
+        print("No TMLE or IPW data found for aggregation.")
+        return pd.DataFrame()
 
-    methods_df["avg_confounding"] = (methods_df["ce"] + methods_df["cy"]) / 2
+    # Step A: Average bias over all outcomes WITHIN each run and experiment.
+    mean_bias_per_run = methods_df.groupby(
+        ['run_id', 'method', 'ce', 'cy', 'i', 'y']
+    )['bias'].mean().reset_index()
+
+    mean_bias_per_run['avg_confounding'] = (mean_bias_per_run['ce'] + mean_bias_per_run['cy']) / 2
+
+    # Step B: For each experiment setting, calculate the mean and std dev of the
+    # mean biases ACROSS all runs. This averages over the 'y' dimension.
+    final_agg = mean_bias_per_run.groupby(
+        ['method', 'avg_confounding', 'i']
+    )['bias'].agg(['mean', 'std']).reset_index()
     
-    unique_combinations = methods_df[['i', 'y']].drop_duplicates().sort_values(['i', 'y'])
-    n_combinations = len(unique_combinations)
-    
-    tmle_palette = sns.color_palette("Blues_d", n_colors=n_combinations)
-    ipw_palette = sns.color_palette("Reds_d", n_colors=n_combinations)
-    
-    color_map = {}
-    for idx, (_, row) in enumerate(unique_combinations.iterrows()):
-        key = (row['i'], row['y'])
-        color_map[key] = {'TMLE': tmle_palette[idx], 'IPW': ipw_palette[idx]}
-        
-    plot_configs = [
-        ('relative_bias', 'Relative Bias', 'Relative Bias (Bias / True Effect)'),
-        ('std_err', 'Standard Error', 'Standard Error'),
-        ('covered', 'Coverage Probability', 'Coverage Probability')
+    return final_agg
+
+def create_bias_vs_confounder_plot(final_agg: pd.DataFrame, output_dir: str):
+    """Generates plot of Bias vs. Confounding, faceted by Instrument."""
+    if final_agg.empty: return
+
+    all_instrument_levels = sorted(final_agg['i'].unique())
+    instrument_levels_to_plot = [
+        lvl for lvl in all_instrument_levels
+        if final_agg[final_agg['i'] == lvl]['avg_confounding'].nunique() > 1
     ]
 
-    for metric, title_prefix, ylabel in plot_configs:
-        fig, axes = plt.subplots(1, 3, figsize=(28, 8), constrained_layout=True)
-        fig.suptitle(f"{title_prefix} by Instrument/Outcome-Only Combinations", fontsize=20, fontweight="bold")
-
-        for i, (param, xlabel_base) in enumerate([("avg_confounding", "Confounding"), ("i", "Instrument"), ("y", "Outcome-Only")]):
-            ax = axes[i]
-            
-            for combo_idx, (_, combo_row) in enumerate(unique_combinations.iterrows()):
-                i_val, y_val = combo_row['i'], combo_row['y']
-                combo_key = (i_val, y_val)
-                combo_data = methods_df[(methods_df['i'] == i_val) & (methods_df['y'] == y_val)]
-                
-                for method in ["TMLE", "IPW"]:
-                    method_data = combo_data[combo_data["method"] == method]
-                    if method_data.empty:
-                        continue
-                    
-                    ax.plot(
-                        method_data[param],
-                        method_data[metric],
-                        label=f"{method} (i={i_val}, y={y_val})",
-                        color=color_map[combo_key][method],
-                        marker="o" if method == "TMLE" else "s",
-                        linestyle="-" if method == "TMLE" else "--",
-                        markersize=6,
-                        alpha=0.8
-                    )
-            
-            if metric in ['relative_bias']:
-                ax.axhline(0, color="black", linestyle=":", alpha=0.7)
-            if metric == 'covered':
-                ax.axhline(0.95, color="black", linestyle=":", alpha=0.7, label="95% Target")
-                ax.set_ylim(0, 1.05)
-            
-            ax.set_title(f"{title_prefix} vs. {xlabel_base}", fontsize=14, fontweight="bold")
-            ax.set_xlabel(f"{xlabel_base} Strength", fontsize=12)
-            if i == 0:
-                ax.set_ylabel(ylabel, fontweight="bold", fontsize=12)
-            ax.grid(True, which='both', linestyle='--', linewidth=0.5)
-
-        handles, labels = axes[0].get_legend_handles_labels()
-        fig.legend(handles, labels, bbox_to_anchor=(1.01, 0.95), loc='upper left', fontsize=10, title="Settings")
+    if not instrument_levels_to_plot:
+        print("No instrument levels with multiple confounder points found. Skipping Bias vs. Confounder plot.")
+        return
         
-        filename = f"{metric}_detailed_overview.png"
-        plt.savefig(Path(output_dir) / filename, dpi=300, bbox_inches="tight")
-        plt.close(fig)
-        print(f"Saved detailed plot to: {Path(output_dir) / filename}")
+    print(f"Skipping Bias vs. Confounder plots for i={set(all_instrument_levels) - set(instrument_levels_to_plot)} (only one data point).")
 
+    n_subplots = len(instrument_levels_to_plot)
+    fig, axes = plt.subplots(1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True)
+    if n_subplots == 1: axes = [axes]
+
+    fig.suptitle("Average Bias vs. Confounding Strength", fontsize=16, fontweight='bold')
+    for i, inst_level in enumerate(instrument_levels_to_plot):
+        ax = axes[i]
+        subplot_data = final_agg[final_agg['i'] == inst_level]
+        for method, color in [("TMLE", "blue"), ("IPW", "red")]:
+            method_data = subplot_data[subplot_data['method'] == method]
+            if not method_data.empty:
+                ax.errorbar(x=method_data['avg_confounding'], y=method_data['mean'], yerr=method_data['std'],
+                            label=method, color=color, marker='o', capsize=5, linestyle='-')
+        ax.axhline(0, color='black', linestyle='--', alpha=0.7)
+        ax.set_title(f'Instrument Strength (i) = {inst_level}')
+        ax.set_xlabel('Average Confounding Strength')
+        if i == 0: ax.set_ylabel('Average Bias (± Std Dev of Mean Bias)')
+        ax.legend()
+        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    output_path = Path(output_dir) / "bias_vs_confounding_plot.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f"Saved Bias vs. Confounding plot to: {output_path}")
+
+def create_bias_vs_instrument_plot(final_agg: pd.DataFrame, output_dir: str):
+    """Generates plot of Bias vs. Instrument, faceted by Confounding."""
+    if final_agg.empty: return
+
+    all_conf_levels = sorted(final_agg['avg_confounding'].unique())
+    conf_levels_to_plot = [
+        lvl for lvl in all_conf_levels
+        if final_agg[final_agg['avg_confounding'] == lvl]['i'].nunique() > 1
+    ]
+
+    if not conf_levels_to_plot:
+        print("No confounding levels with multiple instrument points found. Skipping Bias vs. Instrument plot.")
+        return
+
+    print(f"Skipping Bias vs. Instrument plots for avg_confounding={set(all_conf_levels) - set(conf_levels_to_plot)} (only one data point).")
+
+    n_subplots = len(conf_levels_to_plot)
+    fig, axes = plt.subplots(1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True)
+    if n_subplots == 1: axes = [axes]
+
+    fig.suptitle("Average Bias vs. Instrument Strength", fontsize=16, fontweight='bold')
+    for i, conf_level in enumerate(conf_levels_to_plot):
+        ax = axes[i]
+        subplot_data = final_agg[final_agg['avg_confounding'] == conf_level]
+        for method, color in [("TMLE", "blue"), ("IPW", "red")]:
+            method_data = subplot_data[subplot_data['method'] == method]
+            if not method_data.empty:
+                ax.errorbar(x=method_data['i'], y=method_data['mean'], yerr=method_data['std'],
+                            label=method, color=color, marker='o', capsize=5, linestyle='-')
+        ax.axhline(0, color='black', linestyle='--', alpha=0.7)
+        ax.set_title(f'Confounding Strength = {conf_level:.2f}')
+        ax.set_xlabel('Instrument Strength (i)')
+        if i == 0: ax.set_ylabel('Average Bias (± Std Dev of Mean Bias)')
+        ax.legend()
+        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    output_path = Path(output_dir) / "bias_vs_instrument_plot.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f"Saved Bias vs. Instrument plot to: {output_path}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Analyze and summarize causal inference experiment results.")
-    parser.add_argument("--results_dir", required=True, help="Directory containing experiment results.")
-    parser.add_argument("--experiments", nargs="*", help="Specific experiments to analyze (default: all).")
-    parser.add_argument("--output_dir", default="experiment_analysis_plots", help="Output directory for plots.")
+    parser = argparse.ArgumentParser(description="Create simplified bias analysis plots.")
+    parser.add_argument("--results_dir", required=True, help="Directory containing run subdirectories.")
+    parser.add_argument("--output_dir", default="experiment_analysis_plots", help="Directory to save plots.")
     args = parser.parse_args()
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
-    print("Loading experiment results...")
-    results_by_model = load_experiment_results(args.results_dir, args.experiments)
+    # 1. Load raw data
+    processed_data = load_and_process_results(args.results_dir)
 
-    print("\n--- Starting Plot Generation ---")
-    for model_type, df in results_by_model.items():
-        model_output_dir = Path(args.output_dir) / model_type
-        print(f"\nAnalyzing '{model_type}' results...")
-        print(f"Creating plots in: {model_output_dir}")
-        create_plots(df, str(model_output_dir))
+    # 2. Perform the aggregation once
+    final_agg_data = perform_bias_aggregation(processed_data)
 
-    print(f"\nAnalysis complete! Results saved to: {args.output_dir}")
+    # 3. Create the two separate plots from the same aggregated data
+    create_bias_vs_confounder_plot(final_agg_data, args.output_dir)
+    create_bias_vs_instrument_plot(final_agg_data, args.output_dir)
 
+    print("\nAnalysis complete.")
 
 if __name__ == "__main__":
     main()
