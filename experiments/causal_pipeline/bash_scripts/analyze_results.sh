@@ -22,13 +22,17 @@ if [ $# -eq 0 ]; then
     echo "  - Use --run_id to analyze results from a specific run only"
     echo "  - Results are saved to: ../../../outputs/causal/sim_study/analysis/"
     echo ""
-    read -p "Press Enter to continue..."
-    exit 1
+    echo "Running analysis of ALL experiments since no arguments provided..."
+    RUN_ALL=true
+    RUN_ID=""
+else
+    RUN_ALL=false
+    RUN_ID=""
 fi
 
-# Parse arguments
-RUN_ID=""
-EXPERIMENTS=""
+# Parse arguments (only if arguments were provided)
+if [ "$RUN_ALL" = "false" ]; then
+    EXPERIMENTS=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -51,6 +55,7 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+fi
 
 # Set directories
 RESULTS_DIR="../../../outputs/causal/sim_study/runs"
@@ -73,7 +78,13 @@ else
     echo "Analyzing results aggregated across all runs"
 fi
 
-if [ "$EXPERIMENTS" = "all" ] || [ -z "$EXPERIMENTS" ]; then
+if [ "$RUN_ALL" = "true" ]; then
+    echo "Analyzing ALL experiments in $RESULTS_DIR"
+    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+elif [ "$EXPERIMENTS" = "all" ]; then
+    echo "Analyzing ALL experiments in $RESULTS_DIR"
+    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+elif [ -z "$EXPERIMENTS" ]; then
     echo "Analyzing ALL experiments in $RESULTS_DIR"
     python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
 else
