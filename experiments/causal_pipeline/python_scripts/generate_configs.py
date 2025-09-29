@@ -28,7 +28,9 @@ def replace_placeholders(config_dict, experiment_name, run_id="run_01"):
             for key, value in config_dict.items()
         }
     elif isinstance(config_dict, list):
-        return [replace_placeholders(item, experiment_name, run_id) for item in config_dict]
+        return [
+            replace_placeholders(item, experiment_name, run_id) for item in config_dict
+        ]
     elif isinstance(config_dict, str):
         result = config_dict.replace("{{EXPERIMENT_NAME}}", experiment_name)
         result = result.replace("{{RUN_ID}}", run_id)
@@ -105,7 +107,9 @@ def generate_experiment_configs(experiment_name, script_dir, run_id="run_01"):
 def main():
     parser = argparse.ArgumentParser(description="Generate experiment configs")
     parser.add_argument("experiment_name", help="Name of the experiment")
-    parser.add_argument("--run_id", default="run_01", help="Run ID for output paths (default: run_01)")
+    parser.add_argument(
+        "--run_id", default="run_01", help="Run ID for output paths (default: run_01)"
+    )
     args = parser.parse_args()
 
     script_dir = Path(__file__).parent.parent
