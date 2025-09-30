@@ -19,6 +19,8 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  -h, --help           Show this help message"
     echo "  --baseline-only      Run only baseline (CatBoost) pipeline"
     echo "  --bert-only          Run only BERT pipeline (requires baseline data)"
+    echo "  --reuse-data         Reuse prepared data from run_01 if available (default: true)"
+    echo "  --no-reuse-data      Force regenerate all data even if run_01 exists"
     echo "  (no options)         Run both baseline and BERT pipelines"
     echo ""
     echo "EXAMPLES:"
@@ -53,7 +55,8 @@ echo "DEBUG: EXPERIMENT_NAME set to: $EXPERIMENT_NAME"
 RUN_BASELINE=true
 RUN_BERT=true
 RUN_ID="run_01"  # Default run ID
-echo "DEBUG: Initial flags - RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT, RUN_ID=$RUN_ID"
+REUSE_DATA=true  # Default: reuse data from run_01 if available
+echo "DEBUG: Initial flags - RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT, RUN_ID=$RUN_ID, REUSE_DATA=$REUSE_DATA"
 
 # Parse additional arguments
 shift
@@ -71,9 +74,17 @@ while [[ $# -gt 0 ]]; do
             RUN_ID="$2"
             shift 2
             ;;
+        --reuse-data|-r)
+            REUSE_DATA=true
+            shift
+            ;;
+        --no-reuse-data)
+            REUSE_DATA=false
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX]"
+            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX] [--reuse-data|--no-reuse-data]"
             exit 1
             ;;
     esac
@@ -138,17 +149,57 @@ fi
 export PYTHONPATH="$PWD:$PYTHONPATH"
 
 # --- Shared Data Preparation ---
-echo "==== Running simulate_outcomes... ===="
-python -m corebehrt.main_causal.simulate_from_sequence --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/simulation.yaml
-check_error
+# Check if we should reuse data from run_01
+SHOULD_REUSE=false
+if [ "$REUSE_DATA" = "true" ] && [ "$RUN_ID" != "run_01" ]; then
+    # Check if run_01 data exists for this experiment
+    RUN_01_PREPARED="./outputs/causal/sim_study/runs/run_01/$EXPERIMENT_NAME/prepared_data"
+    if [ -d "$RUN_01_PREPARED" ]; then
+        SHOULD_REUSE=true
+        echo ""
+        echo "======================================="
+        echo "Reusing prepared data from run_01"
+        echo "======================================="
+        echo "This ensures identical data across runs for proper variance measurement."
+        echo ""
+        
+        # Create target directories
+        TARGET_BASE="./outputs/causal/sim_study/runs/$RUN_ID/$EXPERIMENT_NAME"
+        mkdir -p "$TARGET_BASE"
+        
+        # Copy the prepared data directories from run_01
+        echo "Copying simulated_outcomes..."
+        cp -r "./outputs/causal/sim_study/runs/run_01/$EXPERIMENT_NAME/simulated_outcomes" "$TARGET_BASE/"
+        
+        echo "Copying cohort..."
+        cp -r "./outputs/causal/sim_study/runs/run_01/$EXPERIMENT_NAME/cohort" "$TARGET_BASE/"
+        
+        echo "Copying prepared_data..."
+        cp -r "./outputs/causal/sim_study/runs/run_01/$EXPERIMENT_NAME/prepared_data" "$TARGET_BASE/"
+        
+        echo "Data reuse complete. Skipping simulation and preparation steps."
+        echo ""
+    else
+        echo "Note: --reuse-data enabled but run_01 data not found at $RUN_01_PREPARED"
+        echo "Will generate new data for this run."
+        echo ""
+    fi
+fi
 
-echo "==== Running select_cohort... ===="
-python -m corebehrt.main_causal.select_cohort_full --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/select_cohort.yaml
-check_error
+# Only run data preparation if we're not reusing
+if [ "$SHOULD_REUSE" = "false" ]; then
+    echo "==== Running simulate_outcomes... ===="
+    python -m corebehrt.main_causal.simulate_from_sequence --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/simulation.yaml
+    check_error
 
-echo "==== Running prepare_finetune_data... ===="
-python -m corebehrt.main_causal.prepare_ft_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/prepare_finetune.yaml
-check_error
+    echo "==== Running select_cohort... ===="
+    python -m corebehrt.main_causal.select_cohort_full --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/select_cohort.yaml
+    check_error
+
+    echo "==== Running prepare_finetune_data... ===="
+    python -m corebehrt.main_causal.prepare_ft_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/prepare_finetune.yaml
+    check_error
+fi
 
 # --- Baseline Pipeline ---
 if [ "$RUN_BASELINE" = "true" ]; then

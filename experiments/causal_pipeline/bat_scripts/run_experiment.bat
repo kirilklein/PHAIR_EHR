@@ -31,6 +31,8 @@ echo OPTIONS:
 echo   -h, --help           Show this help message
 echo   --baseline-only      Run only baseline ^(CatBoost^) pipeline
 echo   --bert-only          Run only BERT pipeline ^(requires baseline data^)
+echo   --reuse-data         Reuse prepared data from run_01 if available ^(default: true^)
+echo   --no-reuse-data      Force regenerate all data even if run_01 exists
 echo   ^(no options^)         Run both baseline and BERT pipelines
 echo.
 echo AVAILABLE EXPERIMENTS:
@@ -82,7 +84,8 @@ echo DEBUG: EXPERIMENT_NAME set to: %EXPERIMENT_NAME%
 set RUN_BASELINE=true
 set RUN_BERT=true
 set RUN_ID=run_01
-echo DEBUG: Initial flags - RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%, RUN_ID=%RUN_ID%
+set REUSE_DATA=true
+echo DEBUG: Initial flags - RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%, RUN_ID=%RUN_ID%, REUSE_DATA=%REUSE_DATA%
 
 REM Parse additional arguments
 :parse_args
@@ -107,6 +110,16 @@ if "%1"=="--run_id" (
     )
     set RUN_ID=%2
     shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--reuse-data" (
+    set REUSE_DATA=true
+    shift
+    goto :parse_args
+)
+if "%1"=="--no-reuse-data" (
+    set REUSE_DATA=false
     shift
     goto :parse_args
 )
@@ -189,7 +202,46 @@ if exist "experiments\causal_pipeline\generated_configs\%EXPERIMENT_NAME%\simula
     exit /b 1
 )
 
-if "%RUN_BASELINE%"=="true" (
+REM --- Shared Data Preparation ---
+REM Check if we should reuse data from run_01
+set SHOULD_REUSE=false
+if "%REUSE_DATA%"=="true" if not "%RUN_ID%"=="run_01" (
+    REM Check if run_01 data exists for this experiment
+    set RUN_01_PREPARED=.\outputs\causal\sim_study\runs\run_01\%EXPERIMENT_NAME%\prepared_data
+    if exist "!RUN_01_PREPARED!" (
+        set SHOULD_REUSE=true
+        echo.
+        echo =======================================
+        echo Reusing prepared data from run_01
+        echo =======================================
+        echo This ensures identical data across runs for proper variance measurement.
+        echo.
+        
+        REM Create target directories
+        set TARGET_BASE=.\outputs\causal\sim_study\runs\%RUN_ID%\%EXPERIMENT_NAME%
+        if not exist "!TARGET_BASE!" mkdir "!TARGET_BASE!"
+        
+        REM Copy the prepared data directories from run_01
+        echo Copying simulated_outcomes...
+        xcopy /E /I /Y ".\outputs\causal\sim_study\runs\run_01\%EXPERIMENT_NAME%\simulated_outcomes" "!TARGET_BASE!\simulated_outcomes"
+        
+        echo Copying cohort...
+        xcopy /E /I /Y ".\outputs\causal\sim_study\runs\run_01\%EXPERIMENT_NAME%\cohort" "!TARGET_BASE!\cohort"
+        
+        echo Copying prepared_data...
+        xcopy /E /I /Y ".\outputs\causal\sim_study\runs\run_01\%EXPERIMENT_NAME%\prepared_data" "!TARGET_BASE!\prepared_data"
+        
+        echo Data reuse complete. Skipping simulation and preparation steps.
+        echo.
+    ) else (
+        echo Note: --reuse-data enabled but run_01 data not found at !RUN_01_PREPARED!
+        echo Will generate new data for this run.
+        echo.
+    )
+)
+
+REM Only run data preparation if we're not reusing
+if "%SHOULD_REUSE%"=="false" if "%RUN_BASELINE%"=="true" (
     echo ======================================
     echo PHASE 1: SHARED DATA PREPARATION
     echo ======================================
@@ -211,7 +263,9 @@ if "%RUN_BASELINE%"=="true" (
     echo ==== Running prepare_finetune_data... ====
     python -m corebehrt.main_causal.prepare_ft_exp_y --config_path experiments\causal_pipeline\generated_configs\%EXPERIMENT_NAME%\prepare_finetune.yaml
     if errorlevel 1 goto :error
+)
 
+if "%RUN_BASELINE%"=="true" (
     echo.
     echo ======================================
     echo PHASE 2: BASELINE MODELS ^(CATBOOST^)

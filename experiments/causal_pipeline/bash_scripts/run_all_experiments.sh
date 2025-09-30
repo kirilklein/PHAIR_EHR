@@ -7,6 +7,7 @@
 SKIP_EXISTING=false
 RUN_MODE="both"
 N_RUNS=1
+REUSE_DATA=true  # Default: reuse prepared data from run_01
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -22,6 +23,8 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help           Show this help message"
             echo "  -s, --skip-existing  Skip experiments that already have results"
             echo "  --n_runs N           Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
+            echo "  -r, --reuse-data     Reuse prepared data from run_01 for all subsequent runs (default: true)"
+            echo "  --no-reuse-data      Force regenerate data for each run (not recommended for variance studies)"
             echo "  --baseline-only      Run only baseline (CatBoost) pipeline for all experiments"
             echo "  --bert-only          Run only BERT pipeline for all experiments (requires baseline data)"
             echo "  (no options)         Run both baseline and BERT pipelines for all experiments"
@@ -45,7 +48,12 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 --n_runs 3 --baseline-only -s"
             echo "    > Runs only baseline pipeline 3 times, skipping existing runs"
             echo ""
+            echo "  $0 --n_runs 5 --no-reuse-data"
+            echo "    > Runs all experiments 5 times, regenerating data each time (for sensitivity analysis)"
+            echo ""
             echo "NOTES:"
+            echo "  - By default, run_02+ reuse prepared data from run_01 to ensure identical simulations"
+            echo "  - This allows proper measurement of model variance across different random seeds"
             echo "  - Experiment configs are read from: ../experiment_configs/*.yaml"
             echo "  - Results are saved to: ../../../outputs/causal/sim_study/runs/run_XX/<experiment_name>/"
             echo "  - Log files are saved to: ../logs/run_all_experiments_full_YYYY-MM-DD_HH-MM-SS.log"
@@ -57,7 +65,7 @@ while [[ $# -gt 0 ]]; do
             SKIP_EXISTING=true
             shift
             ;;
-        --n_runs)
+        --n_runs|-n)
             N_RUNS="$2"
             if ! [[ "$N_RUNS" =~ ^[0-9]+$ ]] || [ "$N_RUNS" -lt 1 ]; then
                 echo "ERROR: --n_runs must be a positive integer, got: $N_RUNS"
@@ -73,9 +81,17 @@ while [[ $# -gt 0 ]]; do
             RUN_MODE="bert"
             shift
             ;;
+        --reuse-data|-r)
+            REUSE_DATA=true
+            shift
+            ;;
+        --no-reuse-data)
+            REUSE_DATA=false
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--skip-existing|-s] [--n_runs N] [--baseline-only|--bert-only] [-h|--help]"
+            echo "Usage: $0 [--skip-existing|-s] [--n_runs N] [-r|--reuse-data|--no-reuse-data] [--baseline-only|--bert-only] [-h|--help]"
             exit 1
             ;;
     esac
@@ -107,6 +123,12 @@ case $RUN_MODE in
         echo "Pipeline: BERT ONLY"
         ;;
 esac
+
+if [ "$REUSE_DATA" = "true" ]; then
+    echo "Data reuse: ENABLED (run_02+ will reuse run_01 data)"
+else
+    echo "Data reuse: DISABLED (each run generates new data)"
+fi
 echo "========================================"
 echo ""
 
@@ -222,6 +244,13 @@ for run_number in $(seq 1 $N_RUNS); do
                     EXPERIMENT_ARGS="$EXPERIMENT_ARGS --bert-only"
                     ;;
             esac
+            
+            # Add data reuse flag
+            if [ "$REUSE_DATA" = "true" ]; then
+                EXPERIMENT_ARGS="$EXPERIMENT_ARGS --reuse-data"
+            else
+                EXPERIMENT_ARGS="$EXPERIMENT_ARGS --no-reuse-data"
+            fi
             
             # Run the experiment
             ./run_experiment.sh $EXPERIMENT_ARGS
