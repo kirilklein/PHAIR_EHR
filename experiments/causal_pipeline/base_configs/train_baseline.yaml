@@ -26,7 +26,7 @@ catboost:
   # max_depth: 6
   # subsample: 0.8
   # colsample_bylevel: 0.8
-  l2_leaf_reg: 0.01 # FIXED: No L2 regularization
+  l2_leaf_reg: 0.00 # FIXED: No L2 regularization
   early_stopping_rounds: 10
   # min_data_in_leaf: not specified, so will be TUNED in range [1, 100]
 
