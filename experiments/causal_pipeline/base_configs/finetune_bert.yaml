@@ -5,10 +5,11 @@ logging:
 paths:
   ## INPUTS
   pretrain_model: ./outputs/causal/pretrain/model # Adjust path as needed
-  prepared_data: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/prepared_data
+
+  prepared_data: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/prepared_data"
 
   ## OUTPUTS
-  model: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/bert
+  model: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/bert"
 
 save_encodings: false
 visualize_encodings: false

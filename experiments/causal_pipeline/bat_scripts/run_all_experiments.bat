@@ -9,6 +9,7 @@ set SKIP_EXISTING=false
 set RUN_MODE=both
 set N_RUNS=1
 set REUSE_DATA=true
+set EXPERIMENTS_DIR=.\outputs\causal\sim_study\runs
 
 REM Parse command line arguments
 :parse_args
@@ -45,6 +46,16 @@ if "%1"=="--n_runs" (
     shift
     goto :parse_args
 )
+if "%1"=="-n" (
+    if "%2"=="" (
+        echo ERROR: -n requires a number
+        exit /b 1
+    )
+    set N_RUNS=%2
+    shift
+    shift
+    goto :parse_args
+)
 if "%1"=="-r" (
     set REUSE_DATA=true
     shift
@@ -57,6 +68,26 @@ if "%1"=="--reuse-data" (
 )
 if "%1"=="--no-reuse-data" (
     set REUSE_DATA=false
+    shift
+    goto :parse_args
+)
+if "%1"=="-e" (
+    if "%2"=="" (
+        echo ERROR: -e requires a directory path
+        exit /b 1
+    )
+    set EXPERIMENTS_DIR=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--experiment-dir" (
+    if "%2"=="" (
+        echo ERROR: --experiment-dir requires a directory path
+        exit /b 1
+    )
+    set EXPERIMENTS_DIR=%2
+    shift
     shift
     goto :parse_args
 )
@@ -73,9 +104,10 @@ echo.
 echo OPTIONS:
 echo   -h, --help           Show this help message
 echo   -s, --skip-existing  Skip experiments that already have results
-echo   --n_runs N           Number of runs to execute ^(default: 1, creates run_01, run_02, etc.^)
+echo   --n_runs^|-n N       Number of runs to execute ^(default: 1, creates run_01, run_02, etc.^)
 echo   -r, --reuse-data     Reuse prepared data from run_01 for all subsequent runs ^(default: true^)
 echo   --no-reuse-data      Force regenerate data for each run ^(not recommended for variance studies^)
+echo   -e, --experiment-dir Base directory for experiments ^(default: .\outputs\causal\sim_study\runs^)
 echo   --baseline-only      Run only baseline ^(CatBoost^) pipeline for all experiments
 echo   --bert-only          Run only BERT pipeline for all experiments ^(requires baseline data^)
 echo   ^(no options^)         Run both baseline and BERT pipelines for all experiments
@@ -136,6 +168,8 @@ if "%REUSE_DATA%"=="true" (
 ) else (
     echo Data reuse: DISABLED ^(each run generates new data^)
 )
+
+echo Experiments directory: %EXPERIMENTS_DIR%
 echo ========================================
 echo.
 
@@ -209,23 +243,23 @@ for /L %%r in (1,1,%N_RUNS%) do (
         
         REM Check what exists based on run mode
         if "%RUN_MODE%"=="baseline" (
-            if exist "..\..\..\outputs\causal\sim_study\runs\!RUN_ID!\!filename!\estimate\baseline\estimate_results.csv" (
+            if exist "..\..\..\%EXPERIMENTS_DIR%\!RUN_ID!\!filename!\estimate\baseline\estimate_results.csv" (
                 set SHOULD_SKIP=true
-            ) else if exist "..\..\..\outputs\causal\sim_study\runs\!RUN_ID!\!filename!\estimate\estimate_results.csv" (
+            ) else if exist "..\..\..\%EXPERIMENTS_DIR%\!RUN_ID!\!filename!\estimate\estimate_results.csv" (
                 set SHOULD_SKIP=true
             )
         ) else if "%RUN_MODE%"=="bert" (
-            if exist "..\..\..\outputs\causal\sim_study\runs\!RUN_ID!\!filename!\estimate\bert\estimate_results.csv" (
+            if exist "..\..\..\%EXPERIMENTS_DIR%\!RUN_ID!\!filename!\estimate\bert\estimate_results.csv" (
                 set SHOULD_SKIP=true
             )
         ) else (
             REM both mode - skip only if both exist
-            if exist "..\..\..\outputs\causal\sim_study\runs\!RUN_ID!\!filename!\estimate\baseline\estimate_results.csv" (
-                if exist "..\..\..\outputs\causal\sim_study\runs\!RUN_ID!\!filename!\estimate\bert\estimate_results.csv" (
+            if exist "..\..\..\%EXPERIMENTS_DIR%\!RUN_ID!\!filename!\estimate\baseline\estimate_results.csv" (
+                if exist "..\..\..\%EXPERIMENTS_DIR%\!RUN_ID!\!filename!\estimate\bert\estimate_results.csv" (
                     set SHOULD_SKIP=true
                 )
-            ) else if exist "..\..\..\outputs\causal\sim_study\runs\!RUN_ID!\!filename!\estimate\estimate_results.csv" (
-                if exist "..\..\..\outputs\causal\sim_study\runs\!RUN_ID!\!filename!\estimate\bert\estimate_results.csv" (
+            ) else if exist "..\..\..\%EXPERIMENTS_DIR%\!RUN_ID!\!filename!\estimate\estimate_results.csv" (
+                if exist "..\..\..\%EXPERIMENTS_DIR%\!RUN_ID!\!filename!\estimate\bert\estimate_results.csv" (
                     set SHOULD_SKIP=true
                 )
             )
@@ -263,6 +297,9 @@ for /L %%r in (1,1,%N_RUNS%) do (
     ) else (
         set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --no-reuse-data
     )
+    
+    REM Add experiment directory
+    set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --experiment-dir "%EXPERIMENTS_DIR%"
     
     REM Run the experiment
     call run_experiment.bat !EXPERIMENT_ARGS!

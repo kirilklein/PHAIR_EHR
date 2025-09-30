@@ -10,6 +10,8 @@ RUN_MODE="both"
 EXPERIMENT_LIST=""
 N_RUNS=1
 RUN_ID_OVERRIDE=""
+REUSE_DATA=true
+EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"
 
 # Parse command line arguments
 echo "DEBUG: Starting argument parsing with arguments: $*"
@@ -28,8 +30,11 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "OPTIONS:"
             echo "  -h, --help           Show this help message"
-            echo "  --n_runs N           Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
+            echo "  --n_runs|-n N        Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
             echo "  --run_id run_XX      Specific run ID to use (overrides --n_runs)"
+            echo "  -r, --reuse-data     Reuse prepared data from run_01 for all subsequent runs (default: true)"
+            echo "  --no-reuse-data      Force regenerate data for each run"
+            echo "  -e, --experiment-dir Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
             echo "  --baseline-only      Run only baseline (CatBoost) pipeline for all experiments"
             echo "  --bert-only          Run only BERT pipeline for all experiments (requires baseline data)"
             echo "  (no options)         Run both baseline and BERT pipelines for all experiments"
@@ -69,7 +74,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             exit 0
             ;;
-        --n_runs)
+        --n_runs|-n)
             N_RUNS="$2"
             if ! [[ "$N_RUNS" =~ ^[0-9]+$ ]] || [ "$N_RUNS" -lt 1 ]; then
                 echo "ERROR: --n_runs must be a positive integer, got: $N_RUNS"
@@ -94,6 +99,18 @@ while [[ $# -gt 0 ]]; do
             echo "DEBUG: Setting RUN_MODE to bert"
             RUN_MODE="bert"
             shift
+            ;;
+        -r|--reuse-data)
+            REUSE_DATA=true
+            shift
+            ;;
+        --no-reuse-data)
+            REUSE_DATA=false
+            shift
+            ;;
+        -e|--experiment-dir)
+            EXPERIMENTS_DIR="$2"
+            shift 2
             ;;
         *)
             # Add experiment to list
@@ -143,6 +160,14 @@ case $RUN_MODE in
         echo "Pipeline: BERT ONLY"
         ;;
 esac
+
+if [ "$REUSE_DATA" = "true" ]; then
+    echo "Data reuse: ENABLED (run_02+ will reuse run_01 data)"
+else
+    echo "Data reuse: DISABLED (each run generates new data)"
+fi
+
+echo "Experiments directory: $EXPERIMENTS_DIR"
 echo "========================================"
 
 # Set batch mode to prevent pausing
@@ -196,17 +221,30 @@ for run_number in $(seq 1 $N_RUNS); do
         # Call experiment with proper argument passing
         echo "DEBUG: Calling run_experiment.sh with experiment: $EXPERIMENT_NAME, run_id: $RUN_ID, mode: $RUN_MODE"
         
+        # Build command arguments
+        EXPERIMENT_ARGS="$EXPERIMENT_NAME --run_id $RUN_ID"
+        
         case $RUN_MODE in
             "baseline")
-                ./run_experiment.sh "$EXPERIMENT_NAME" --run_id "$RUN_ID" --baseline-only
+                EXPERIMENT_ARGS="$EXPERIMENT_ARGS --baseline-only"
                 ;;
             "bert")
-                ./run_experiment.sh "$EXPERIMENT_NAME" --run_id "$RUN_ID" --bert-only
-                ;;
-            *)
-                ./run_experiment.sh "$EXPERIMENT_NAME" --run_id "$RUN_ID"
+                EXPERIMENT_ARGS="$EXPERIMENT_ARGS --bert-only"
                 ;;
         esac
+        
+        # Add data reuse flag
+        if [ "$REUSE_DATA" = "true" ]; then
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --reuse-data"
+        else
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --no-reuse-data"
+        fi
+        
+        # Add experiment directory
+        EXPERIMENT_ARGS="$EXPERIMENT_ARGS --experiment-dir \"$EXPERIMENTS_DIR\""
+        
+        # Run the experiment
+        eval "./run_experiment.sh $EXPERIMENT_ARGS"
         
         experiment_result=$?
 

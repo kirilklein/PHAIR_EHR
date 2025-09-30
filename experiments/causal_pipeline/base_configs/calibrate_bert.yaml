@@ -4,7 +4,7 @@ logging:
 
 paths:
   ## INPUTS
-  finetune_model: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/bert
+  finetune_model: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/bert"
 
   ## OUTPUTS
-  calibrated_predictions: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/bert/calibrated
+  calibrated_predictions: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/bert/calibrated"

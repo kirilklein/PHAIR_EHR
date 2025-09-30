@@ -6,8 +6,9 @@ paths:
   ## INPUTS
   features: ./outputs/causal/data/features
   tokenized: ./outputs/causal/data/tokenized
-  cohort: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/cohort
-  outcomes: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes
+  cohort: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/cohort"
+
+  outcomes: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
   outcome_files:
     - OUTCOME.csv
     - OUTCOME_2.csv
@@ -19,11 +20,11 @@ paths:
     - OUTCOME_8.csv
     - OUTCOME_9.csv
     - OUTCOME_10.csv
-  exposures: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes
+  exposures: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
   exposure: exposure.csv
 
   ## OUTPUTS
-  prepared_data: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/prepared_data
+  prepared_data: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/prepared_data"
 
 data:
   type: finetune

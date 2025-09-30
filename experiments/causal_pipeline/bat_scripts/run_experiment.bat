@@ -31,8 +31,9 @@ echo OPTIONS:
 echo   -h, --help           Show this help message
 echo   --baseline-only      Run only baseline ^(CatBoost^) pipeline
 echo   --bert-only          Run only BERT pipeline ^(requires baseline data^)
-echo   --reuse-data         Reuse prepared data from run_01 if available ^(default: true^)
+echo   --reuse-data^|-r     Reuse prepared data from run_01 if available ^(default: true^)
 echo   --no-reuse-data      Force regenerate all data even if run_01 exists
+echo   -e, --experiment-dir Base directory for experiments ^(default: .\outputs\causal\sim_study\runs^)
 echo   ^(no options^)         Run both baseline and BERT pipelines
 echo.
 echo AVAILABLE EXPERIMENTS:
@@ -85,7 +86,8 @@ set RUN_BASELINE=true
 set RUN_BERT=true
 set RUN_ID=run_01
 set REUSE_DATA=true
-echo DEBUG: Initial flags - RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%, RUN_ID=%RUN_ID%, REUSE_DATA=%REUSE_DATA%
+set EXPERIMENTS_DIR=.\outputs\causal\sim_study\runs
+echo DEBUG: Initial flags - RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%, RUN_ID=%RUN_ID%, REUSE_DATA=%REUSE_DATA%, EXPERIMENTS_DIR=%EXPERIMENTS_DIR%
 
 REM Parse additional arguments
 :parse_args
@@ -118,8 +120,33 @@ if "%1"=="--reuse-data" (
     shift
     goto :parse_args
 )
+if "%1"=="-r" (
+    set REUSE_DATA=true
+    shift
+    goto :parse_args
+)
 if "%1"=="--no-reuse-data" (
     set REUSE_DATA=false
+    shift
+    goto :parse_args
+)
+if "%1"=="-e" (
+    if "%2"=="" (
+        echo ERROR: -e requires a directory path
+        exit /b 1
+    )
+    set EXPERIMENTS_DIR=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--experiment-dir" (
+    if "%2"=="" (
+        echo ERROR: --experiment-dir requires a directory path
+        exit /b 1
+    )
+    set EXPERIMENTS_DIR=%2
+    shift
     shift
     goto :parse_args
 )
@@ -158,8 +185,8 @@ if not exist "..\experiment_configs\%EXPERIMENT_NAME%.yaml" (
 
 REM Generate experiment-specific configs
 echo Step 1: Generating experiment configs...
-echo DEBUG: About to run: python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID%
-python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID%
+echo DEBUG: About to run: python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR%
+python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR%
 set CONFIG_EXIT_CODE=!errorlevel!
 echo DEBUG: Config generation exit code: !CONFIG_EXIT_CODE!
 if !CONFIG_EXIT_CODE! neq 0 (
@@ -207,7 +234,7 @@ REM Check if we should reuse data from run_01
 set SHOULD_REUSE=false
 if "%REUSE_DATA%"=="true" if not "%RUN_ID%"=="run_01" (
     REM Check if run_01 data exists for this experiment
-    set RUN_01_PREPARED=.\outputs\causal\sim_study\runs\run_01\%EXPERIMENT_NAME%\prepared_data
+    set RUN_01_PREPARED=%EXPERIMENTS_DIR%\run_01\%EXPERIMENT_NAME%\prepared_data
     if exist "!RUN_01_PREPARED!" (
         set SHOULD_REUSE=true
         echo.
@@ -218,18 +245,18 @@ if "%REUSE_DATA%"=="true" if not "%RUN_ID%"=="run_01" (
         echo.
         
         REM Create target directories
-        set TARGET_BASE=.\outputs\causal\sim_study\runs\%RUN_ID%\%EXPERIMENT_NAME%
+        set TARGET_BASE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%
         if not exist "!TARGET_BASE!" mkdir "!TARGET_BASE!"
         
         REM Copy the prepared data directories from run_01
         echo Copying simulated_outcomes...
-        xcopy /E /I /Y ".\outputs\causal\sim_study\runs\run_01\%EXPERIMENT_NAME%\simulated_outcomes" "!TARGET_BASE!\simulated_outcomes"
+        xcopy /E /I /Y "%EXPERIMENTS_DIR%\run_01\%EXPERIMENT_NAME%\simulated_outcomes" "!TARGET_BASE!\simulated_outcomes"
         
         echo Copying cohort...
-        xcopy /E /I /Y ".\outputs\causal\sim_study\runs\run_01\%EXPERIMENT_NAME%\cohort" "!TARGET_BASE!\cohort"
+        xcopy /E /I /Y "%EXPERIMENTS_DIR%\run_01\%EXPERIMENT_NAME%\cohort" "!TARGET_BASE!\cohort"
         
         echo Copying prepared_data...
-        xcopy /E /I /Y ".\outputs\causal\sim_study\runs\run_01\%EXPERIMENT_NAME%\prepared_data" "!TARGET_BASE!\prepared_data"
+        xcopy /E /I /Y "%EXPERIMENTS_DIR%\run_01\%EXPERIMENT_NAME%\prepared_data" "!TARGET_BASE!\prepared_data"
         
         echo Data reuse complete. Skipping simulation and preparation steps.
         echo.
@@ -306,12 +333,12 @@ if "%RUN_BERT%"=="true" (
 echo.
 echo ========================================
 echo Experiment %RUN_ID%/%EXPERIMENT_NAME% completed successfully!
-echo Results saved in: outputs\causal\sim_study\runs\%RUN_ID%\%EXPERIMENT_NAME%\
+echo Results saved in: %EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\
 if "%RUN_BASELINE%"=="true" (
-    echo   - Baseline results: outputs\causal\sim_study\runs\%RUN_ID%\%EXPERIMENT_NAME%\estimate\baseline\
+    echo   - Baseline results: %EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\estimate\baseline\
 )
 if "%RUN_BERT%"=="true" (
-    echo   - BERT results: outputs\causal\sim_study\runs\%RUN_ID%\%EXPERIMENT_NAME%\estimate\bert\
+    echo   - BERT results: %EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\estimate\bert\
 )
 echo ========================================
 

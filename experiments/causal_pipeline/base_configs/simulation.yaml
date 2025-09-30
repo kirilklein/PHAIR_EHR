@@ -1,5 +1,5 @@
 # Base simulation config template
-# Variables like {{EXPERIMENT_NAME}} will be replaced by the script
+# Variables like {{EXPERIMENT_NAME}}, {{RUN_ID}}, {{EXPERIMENTS_DIR}} will be replaced by the script
 
 logging:
   level: INFO
@@ -8,7 +8,7 @@ logging:
 paths:
   data: ./example_data/synthea_meds_causal
   splits: ["tuning"]
-  outcomes: ./outputs/causal/sim_study/runs/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes
+  outcomes: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
 
 seed: 42
 debug: false

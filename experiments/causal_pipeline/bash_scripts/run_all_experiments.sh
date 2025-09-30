@@ -8,6 +8,7 @@ SKIP_EXISTING=false
 RUN_MODE="both"
 N_RUNS=1
 REUSE_DATA=true  # Default: reuse prepared data from run_01
+EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"  # Default base directory for experiments
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -22,9 +23,10 @@ while [[ $# -gt 0 ]]; do
             echo "OPTIONS:"
             echo "  -h, --help           Show this help message"
             echo "  -s, --skip-existing  Skip experiments that already have results"
-            echo "  --n_runs N           Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
+            echo "  --n_runs|-n N        Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
             echo "  -r, --reuse-data     Reuse prepared data from run_01 for all subsequent runs (default: true)"
             echo "  --no-reuse-data      Force regenerate data for each run (not recommended for variance studies)"
+            echo "  -e, --experiment-dir Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
             echo "  --baseline-only      Run only baseline (CatBoost) pipeline for all experiments"
             echo "  --bert-only          Run only BERT pipeline for all experiments (requires baseline data)"
             echo "  (no options)         Run both baseline and BERT pipelines for all experiments"
@@ -89,9 +91,13 @@ while [[ $# -gt 0 ]]; do
             REUSE_DATA=false
             shift
             ;;
+        -e|--experiment-dir)
+            EXPERIMENTS_DIR="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--skip-existing|-s] [--n_runs N] [-r|--reuse-data|--no-reuse-data] [--baseline-only|--bert-only] [-h|--help]"
+            echo "Usage: $0 [--skip-existing|-s] [--n_runs|-n N] [-r|--reuse-data|--no-reuse-data] [-e|--experiment-dir DIR] [--baseline-only|--bert-only] [-h|--help]"
             exit 1
             ;;
     esac
@@ -129,6 +135,8 @@ if [ "$REUSE_DATA" = "true" ]; then
 else
     echo "Data reuse: DISABLED (each run generates new data)"
 fi
+
+echo "Experiments directory: $EXPERIMENTS_DIR"
 echo "========================================"
 echo ""
 
@@ -196,21 +204,21 @@ for run_number in $(seq 1 $N_RUNS); do
                 # Check what exists based on run mode
                 case $RUN_MODE in
                     "baseline")
-                        if [ -f "../../../outputs/causal/sim_study/runs/$RUN_ID/$filename/estimate/baseline/estimate_results.csv" ] || 
-                           [ -f "../../../outputs/causal/sim_study/runs/$RUN_ID/$filename/estimate/estimate_results.csv" ]; then
+                        if [ -f "../../../$EXPERIMENTS_DIR/$RUN_ID/$filename/estimate/baseline/estimate_results.csv" ] || 
+                           [ -f "../../../$EXPERIMENTS_DIR/$RUN_ID/$filename/estimate/estimate_results.csv" ]; then
                             SHOULD_SKIP=true
                         fi
                         ;;
                     "bert")
-                        if [ -f "../../../outputs/causal/sim_study/runs/$RUN_ID/$filename/estimate/bert/estimate_results.csv" ]; then
+                        if [ -f "../../../$EXPERIMENTS_DIR/$RUN_ID/$filename/estimate/bert/estimate_results.csv" ]; then
                             SHOULD_SKIP=true
                         fi
                         ;;
                     "both")
                         # Skip only if both exist
-                        if { [ -f "../../../outputs/causal/sim_study/runs/$RUN_ID/$filename/estimate/baseline/estimate_results.csv" ] || 
-                             [ -f "../../../outputs/causal/sim_study/runs/$RUN_ID/$filename/estimate/estimate_results.csv" ]; } &&
-                           [ -f "../../../outputs/causal/sim_study/runs/$RUN_ID/$filename/estimate/bert/estimate_results.csv" ]; then
+                        if { [ -f "../../../$EXPERIMENTS_DIR/$RUN_ID/$filename/estimate/baseline/estimate_results.csv" ] || 
+                             [ -f "../../../$EXPERIMENTS_DIR/$RUN_ID/$filename/estimate/estimate_results.csv" ]; } &&
+                           [ -f "../../../$EXPERIMENTS_DIR/$RUN_ID/$filename/estimate/bert/estimate_results.csv" ]; then
                             SHOULD_SKIP=true
                         fi
                         ;;
@@ -252,8 +260,11 @@ for run_number in $(seq 1 $N_RUNS); do
                 EXPERIMENT_ARGS="$EXPERIMENT_ARGS --no-reuse-data"
             fi
             
+            # Add experiment directory
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --experiment-dir \"$EXPERIMENTS_DIR\""
+            
             # Run the experiment
-            ./run_experiment.sh $EXPERIMENT_ARGS
+            eval "./run_experiment.sh $EXPERIMENT_ARGS"
             experiment_result=$?
             
             # Log end time and result

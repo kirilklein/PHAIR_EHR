@@ -19,8 +19,9 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  -h, --help           Show this help message"
     echo "  --baseline-only      Run only baseline (CatBoost) pipeline"
     echo "  --bert-only          Run only BERT pipeline (requires baseline data)"
-    echo "  --reuse-data         Reuse prepared data from run_01 if available (default: true)"
+    echo "  --reuse-data|-r      Reuse prepared data from run_01 if available (default: true)"
     echo "  --no-reuse-data      Force regenerate all data even if run_01 exists"
+    echo "  --experiment-dir|-e  Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
     echo "  (no options)         Run both baseline and BERT pipelines"
     echo ""
     echo "EXAMPLES:"
@@ -56,7 +57,8 @@ RUN_BASELINE=true
 RUN_BERT=true
 RUN_ID="run_01"  # Default run ID
 REUSE_DATA=true  # Default: reuse data from run_01 if available
-echo "DEBUG: Initial flags - RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT, RUN_ID=$RUN_ID, REUSE_DATA=$REUSE_DATA"
+EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"  # Default base directory for experiments
+echo "DEBUG: Initial flags - RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT, RUN_ID=$RUN_ID, REUSE_DATA=$REUSE_DATA, EXPERIMENTS_DIR=$EXPERIMENTS_DIR"
 
 # Parse additional arguments
 shift
@@ -82,9 +84,13 @@ while [[ $# -gt 0 ]]; do
             REUSE_DATA=false
             shift
             ;;
+        --experiment-dir|-e)
+            EXPERIMENTS_DIR="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX] [--reuse-data|--no-reuse-data]"
+            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX] [--reuse-data|-r|--no-reuse-data] [--experiment-dir|-e DIR]"
             exit 1
             ;;
     esac
@@ -120,7 +126,7 @@ check_error() {
 
 # Generate experiment-specific configs
 echo "Step 1: Generating experiment configs..."
-python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME" --run_id "$RUN_ID"
+python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME" --run_id "$RUN_ID" --experiments_dir "$EXPERIMENTS_DIR"
 check_error
 
 echo ""
@@ -153,7 +159,7 @@ export PYTHONPATH="$PWD:$PYTHONPATH"
 SHOULD_REUSE=false
 if [ "$REUSE_DATA" = "true" ] && [ "$RUN_ID" != "run_01" ]; then
     # Check if run_01 data exists for this experiment
-    RUN_01_PREPARED="./outputs/causal/sim_study/runs/run_01/$EXPERIMENT_NAME/prepared_data"
+    RUN_01_PREPARED="$EXPERIMENTS_DIR/run_01/$EXPERIMENT_NAME/prepared_data"
     if [ -d "$RUN_01_PREPARED" ]; then
         SHOULD_REUSE=true
         echo ""
@@ -164,18 +170,18 @@ if [ "$REUSE_DATA" = "true" ] && [ "$RUN_ID" != "run_01" ]; then
         echo ""
         
         # Create target directories
-        TARGET_BASE="./outputs/causal/sim_study/runs/$RUN_ID/$EXPERIMENT_NAME"
+        TARGET_BASE="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
         mkdir -p "$TARGET_BASE"
         
         # Copy the prepared data directories from run_01
         echo "Copying simulated_outcomes..."
-        cp -r "./outputs/causal/sim_study/runs/run_01/$EXPERIMENT_NAME/simulated_outcomes" "$TARGET_BASE/"
+        cp -r "$EXPERIMENTS_DIR/run_01/$EXPERIMENT_NAME/simulated_outcomes" "$TARGET_BASE/"
         
         echo "Copying cohort..."
-        cp -r "./outputs/causal/sim_study/runs/run_01/$EXPERIMENT_NAME/cohort" "$TARGET_BASE/"
+        cp -r "$EXPERIMENTS_DIR/run_01/$EXPERIMENT_NAME/cohort" "$TARGET_BASE/"
         
         echo "Copying prepared_data..."
-        cp -r "./outputs/causal/sim_study/runs/run_01/$EXPERIMENT_NAME/prepared_data" "$TARGET_BASE/"
+        cp -r "$EXPERIMENTS_DIR/run_01/$EXPERIMENT_NAME/prepared_data" "$TARGET_BASE/"
         
         echo "Data reuse complete. Skipping simulation and preparation steps."
         echo ""
@@ -242,7 +248,7 @@ fi
 echo ""
 echo "========================================"
 echo "Experiment $RUN_ID/$EXPERIMENT_NAME completed successfully!"
-echo "Results saved in: outputs/causal/sim_study/runs/$RUN_ID/$EXPERIMENT_NAME/"
+echo "Results saved in: $EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME/"
 echo "========================================"
 
 if [ "$BATCH_MODE" != "true" ]; then

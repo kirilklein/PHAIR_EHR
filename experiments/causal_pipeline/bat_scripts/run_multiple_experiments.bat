@@ -9,6 +9,8 @@ set RUN_MODE=both
 set EXPERIMENT_LIST=
 set N_RUNS=1
 set RUN_ID_OVERRIDE=
+set REUSE_DATA=true
+set EXPERIMENTS_DIR=.\outputs\causal\sim_study\runs
 
 REM Parse command line arguments
 :parse_args
@@ -35,12 +37,57 @@ if "%1"=="--n_runs" (
     shift
     goto :parse_args
 )
+if "%1"=="-n" (
+    if "%2"=="" (
+        echo ERROR: -n requires a number
+        exit /b 1
+    )
+    set N_RUNS=%2
+    shift
+    shift
+    goto :parse_args
+)
 if "%1"=="--run_id" (
     if "%2"=="" (
         echo ERROR: --run_id requires a run ID ^(e.g., run_01^)
         exit /b 1
     )
     set RUN_ID_OVERRIDE=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="-r" (
+    set REUSE_DATA=true
+    shift
+    goto :parse_args
+)
+if "%1"=="--reuse-data" (
+    set REUSE_DATA=true
+    shift
+    goto :parse_args
+)
+if "%1"=="--no-reuse-data" (
+    set REUSE_DATA=false
+    shift
+    goto :parse_args
+)
+if "%1"=="-e" (
+    if "%2"=="" (
+        echo ERROR: -e requires a directory path
+        exit /b 1
+    )
+    set EXPERIMENTS_DIR=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--experiment-dir" (
+    if "%2"=="" (
+        echo ERROR: --experiment-dir requires a directory path
+        exit /b 1
+    )
+    set EXPERIMENTS_DIR=%2
     shift
     shift
     goto :parse_args
@@ -66,8 +113,11 @@ echo   experiment1 experiment2 ...    Names of experiments to run
 echo.
 echo OPTIONS:
 echo   -h, --help           Show this help message
-echo   --n_runs N           Number of runs to execute ^(default: 1, creates run_01, run_02, etc.^)
+echo   --n_runs^|-n N       Number of runs to execute ^(default: 1, creates run_01, run_02, etc.^)
 echo   --run_id run_XX      Specific run ID to use ^(overrides --n_runs^)
+echo   -r, --reuse-data     Reuse prepared data from run_01 for all subsequent runs ^(default: true^)
+echo   --no-reuse-data      Force regenerate data for each run
+echo   -e, --experiment-dir Base directory for experiments ^(default: .\outputs\causal\sim_study\runs^)
 echo   --baseline-only      Run only baseline ^(CatBoost^) pipeline for all experiments
 echo   --bert-only          Run only BERT pipeline for all experiments ^(requires baseline data^)
 echo   ^(no options^)         Run both baseline and BERT pipelines for all experiments
@@ -135,6 +185,14 @@ if "%RUN_MODE%"=="both" (
 ) else (
     echo Pipeline: BERT ONLY
 )
+
+if "%REUSE_DATA%"=="true" (
+    echo Data reuse: ENABLED ^(run_02+ will reuse run_01 data^)
+) else (
+    echo Data reuse: DISABLED ^(each run generates new data^)
+)
+
+echo Experiments directory: %EXPERIMENTS_DIR%
 echo ========================================
 
 REM Set batch mode to prevent pausing
@@ -187,13 +245,28 @@ for /L %%r in (1,1,%N_RUNS%) do (
 
         REM Call experiment with proper argument passing
         echo DEBUG: Calling run_experiment.bat with experiment: !EXPERIMENT_NAME!, run_id: !RUN_ID!, mode: %RUN_MODE%
+        
+        REM Build command arguments
+        set EXPERIMENT_ARGS=!EXPERIMENT_NAME! --run_id !RUN_ID!
+        
         if "%RUN_MODE%"=="baseline" (
-            call run_experiment.bat !EXPERIMENT_NAME! --run_id !RUN_ID! --baseline-only
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --baseline-only
         ) else if "%RUN_MODE%"=="bert" (
-            call run_experiment.bat !EXPERIMENT_NAME! --run_id !RUN_ID! --bert-only
-        ) else (
-            call run_experiment.bat !EXPERIMENT_NAME! --run_id !RUN_ID!
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --bert-only
         )
+        
+        REM Add data reuse flag
+        if "%REUSE_DATA%"=="true" (
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --reuse-data
+        ) else (
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --no-reuse-data
+        )
+        
+        REM Add experiment directory
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --experiment-dir "%EXPERIMENTS_DIR%"
+        
+        REM Run the experiment
+        call run_experiment.bat !EXPERIMENT_ARGS!
         set experiment_result=!errorlevel!
 
         if !experiment_result! neq 0 (

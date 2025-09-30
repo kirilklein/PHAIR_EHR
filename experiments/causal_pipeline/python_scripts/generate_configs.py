@@ -20,26 +20,38 @@ def merge_dicts(base_dict, override_dict):
     return result
 
 
-def replace_placeholders(config_dict, experiment_name, run_id="run_01"):
-    """Recursively replace {{EXPERIMENT_NAME}} and {{RUN_ID}} placeholders in config."""
+def replace_placeholders(
+    config_dict,
+    experiment_name,
+    run_id="run_01",
+    experiments_dir="./outputs/causal/sim_study/runs",
+):
+    """Recursively replace {{EXPERIMENT_NAME}}, {{RUN_ID}}, and {{EXPERIMENTS_DIR}} placeholders in config."""
     if isinstance(config_dict, dict):
         return {
-            key: replace_placeholders(value, experiment_name, run_id)
+            key: replace_placeholders(value, experiment_name, run_id, experiments_dir)
             for key, value in config_dict.items()
         }
     elif isinstance(config_dict, list):
         return [
-            replace_placeholders(item, experiment_name, run_id) for item in config_dict
+            replace_placeholders(item, experiment_name, run_id, experiments_dir)
+            for item in config_dict
         ]
     elif isinstance(config_dict, str):
         result = config_dict.replace("{{EXPERIMENT_NAME}}", experiment_name)
         result = result.replace("{{RUN_ID}}", run_id)
+        result = result.replace("{{EXPERIMENTS_DIR}}", experiments_dir)
         return result
     else:
         return config_dict
 
 
-def generate_experiment_configs(experiment_name, script_dir, run_id="run_01"):
+def generate_experiment_configs(
+    experiment_name,
+    script_dir,
+    run_id="run_01",
+    experiments_dir="./outputs/causal/sim_study/runs",
+):
     """Generate all config files for a specific experiment."""
 
     # Define paths relative to script directory
@@ -91,7 +103,9 @@ def generate_experiment_configs(experiment_name, script_dir, run_id="run_01"):
             final_config = base_config
 
         # Replace placeholders
-        final_config = replace_placeholders(final_config, experiment_name, run_id)
+        final_config = replace_placeholders(
+            final_config, experiment_name, run_id, experiments_dir
+        )
 
         # Write output config
         output_path = output_dir / output_file
@@ -110,10 +124,18 @@ def main():
     parser.add_argument(
         "--run_id", default="run_01", help="Run ID for output paths (default: run_01)"
     )
+    parser.add_argument(
+        "--experiments_dir",
+        "-e",
+        default="./outputs/causal/sim_study/runs",
+        help="Base directory for experiments (default: ./outputs/causal/sim_study/runs)",
+    )
     args = parser.parse_args()
 
     script_dir = Path(__file__).parent.parent
-    generate_experiment_configs(args.experiment_name, script_dir, args.run_id)
+    generate_experiment_configs(
+        args.experiment_name, script_dir, args.run_id, args.experiments_dir
+    )
 
 
 if __name__ == "__main__":
