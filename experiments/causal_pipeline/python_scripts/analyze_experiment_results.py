@@ -13,7 +13,7 @@ Generates six figures:
 All plots skip creating subplots that would only contain a single data point.
 
 Usage:
-    python analyze_experiment_results.py --results_dir outputs/causal/experiments
+    python analyze_experiment_results.py --experiment_dir outputs/causal/experiments
 """
 
 import argparse
@@ -316,13 +316,13 @@ def create_variance_vs_instrument_plot(variance_agg: pd.DataFrame, output_dir: s
 
 def main():
     parser = argparse.ArgumentParser(description="Create simplified bias, coverage, and variance analysis plots.")
-    parser.add_argument("--results_dir", required=True, help="Directory containing run subdirectories.")
+    parser.add_argument("-e", "--experiment_dir", required=True, help="Directory containing run subdirectories.")
     parser.add_argument("--output_dir", default="experiment_analysis_plots", help="Directory to save plots.")
     args = parser.parse_args()
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     # 1. Load raw data
-    raw_data = load_and_process_results(args.results_dir)
+    raw_data = load_and_process_results(args.experiment_dir)
 
     # 2. Perform aggregations for each analysis type
     agg_bias_data = perform_bias_aggregation(raw_data)

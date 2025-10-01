@@ -5,37 +5,38 @@ REM Analyze Causal Pipeline Experiment Results
 REM ========================================
 
 if "%1"=="" (
-    echo Usage: analyze_results.bat [OPTIONS] [all^|experiment1 experiment2 ...]
-    echo.
-    echo OPTIONS:
-    echo   --run_id run_XX    Analyze results from specific run only
-    echo   --help, -h         Show this help message
-    echo.
-    echo EXAMPLES:
-    echo   analyze_results.bat all                          ^(analyze all experiments, aggregate across runs^)
-    echo   analyze_results.bat ce0_cy0_y0_i0 ce1_cy1_y0_i0  ^(analyze specific experiments, aggregate across runs^)
-    echo   analyze_results.bat --run_id run_01 all          ^(analyze all experiments from run_01 only^)
-    echo   analyze_results.bat --run_id run_02 ce0_cy0_y0_i0 ^(analyze specific experiment from run_02 only^)
-    echo.
-    echo NOTES:
-    echo   - By default, results are aggregated across all runs ^(run_01, run_02, etc.^)
-    echo   - Use --run_id to analyze results from a specific run only
-    echo   - Results are saved to: ..\..\..\outputs\causal\sim_study\analysis\
-    echo.
     echo Running analysis of ALL experiments since no arguments provided...
+    echo Use 'analyze_results.bat --help' for more options.
+    echo.
     set RUN_ALL=true
     set RUN_ID=
+    set RESULTS_DIR=..\..\..\outputs\causal\sim_study\runs
+    set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
 ) else (
     set RUN_ALL=false
     set RUN_ID=
+    set RESULTS_DIR=..\..\..\outputs\causal\sim_study\runs
+    set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
 )
 
-REM Parse arguments for --run_id
+REM Parse arguments
 set EXPERIMENTS=
 :parse_args
 if "%1"=="" goto :start_analysis
 if "%1"=="--run_id" (
     set RUN_ID=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--results_dir" (
+    set RESULTS_DIR=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--output_dir" (
+    set OUTPUT_DIR=%2
     shift
     shift
     goto :parse_args
@@ -52,13 +53,62 @@ shift
 goto :parse_args
 
 :show_full_help
-REM Show help and exit
+echo CAUSAL PIPELINE RESULTS ANALYZER
+echo =================================
+echo.
+echo DESCRIPTION:
+echo   Analyzes results from causal pipeline experiments. Can process all experiments
+echo   or specific ones, with options to filter by run and customize input/output directories.
+echo.
+echo USAGE:
+echo   analyze_results.bat [OPTIONS] [EXPERIMENTS...]
+echo.
+echo OPTIONS:
+echo   --run_id RUN_ID           Analyze results from specific run only ^(e.g., run_01, run_02^)
+echo   --results_dir DIR         Directory containing experiment results
+echo                             Default: ..\..\..\outputs\causal\sim_study\runs
+echo   --output_dir DIR          Directory to save analysis outputs
+echo                             Default: ..\..\..\outputs\causal\sim_study\analysis
+echo   --help, -h                Show this help message
+echo.
+echo EXPERIMENTS:
+echo   all                       Analyze all available experiments ^(default if none specified^)
+echo   experiment_name           Specific experiment to analyze ^(e.g., ce0_cy0_y0_i0^)
+echo   exp1 exp2 exp3           Multiple specific experiments
+echo.
+echo EXAMPLES:
+echo   analyze_results.bat
+echo     -^> Analyze all experiments, aggregate across all runs
+echo.
+echo   analyze_results.bat all
+echo     -^> Same as above ^(explicit 'all'^)
+echo.
+echo   analyze_results.bat ce0_cy0_y0_i0 ce1_cy1_y0_i0
+echo     -^> Analyze specific experiments, aggregate across all runs
+echo.
+echo   analyze_results.bat --run_id run_01 all
+echo     -^> Analyze all experiments from run_01 only
+echo.
+echo   analyze_results.bat --run_id run_02 ce0_cy0_y0_i0
+echo     -^> Analyze specific experiment from run_02 only
+echo.
+echo   analyze_results.bat --results_dir C:\custom\path --output_dir C:\custom\output
+echo     -^> Use custom input and output directories
+echo.
+echo   analyze_results.bat --run_id run_01 --results_dir C:\custom\path ce0_cy0_y0_i0
+echo     -^> Combine multiple options
+echo.
+echo NOTES:
+echo   • By default, results are aggregated across all runs ^(run_01, run_02, etc.^)
+echo   • Use --run_id to analyze results from a specific run only
+echo   • When --run_id is used, it's appended to the results and output directories
+echo   • The script will create the output directory if it doesn't exist
+echo.
 pause
 exit /b 0
 
 :start_analysis
-set RESULTS_DIR=..\..\..\outputs\causal\sim_study\runs
-set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
+REM Directories are now set as defaults above and can be overridden by arguments
 
 REM If specific run ID specified, point to that run
 if not "%RUN_ID%"=="" (
@@ -79,16 +129,16 @@ if not "%RUN_ID%"=="" (
 
 if "%RUN_ALL%"=="true" (
     echo Analyzing ALL experiments in %RESULTS_DIR%
-    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+    python ..\python_scripts\analyze_experiment_results.py --experiment_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
 ) else if "%EXPERIMENTS%"=="all" (
     echo Analyzing ALL experiments in %RESULTS_DIR%
-    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+    python ..\python_scripts\analyze_experiment_results.py --experiment_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
 ) else if "%EXPERIMENTS%"=="" (
     echo Analyzing ALL experiments in %RESULTS_DIR%
-    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+    python ..\python_scripts\analyze_experiment_results.py --experiment_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
 ) else (
     echo Analyzing specific experiments: %EXPERIMENTS%
-    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR% --experiments %EXPERIMENTS%
+    python ..\python_scripts\analyze_experiment_results.py --experiment_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR% --experiments %EXPERIMENTS%
 )
 
 if errorlevel 1 (
