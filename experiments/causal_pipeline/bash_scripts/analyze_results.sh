@@ -129,16 +129,16 @@ fi
 
 if [ "$RUN_ALL" = "true" ]; then
     echo "Analyzing ALL experiments in $RESULTS_DIR"
-    python ../python_scripts/analyze_experiment_results.py --experiment_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
 elif [ "$EXPERIMENTS" = "all" ]; then
     echo "Analyzing ALL experiments in $RESULTS_DIR"
-    python ../python_scripts/analyze_experiment_results.py --experiment_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
 elif [ -z "$EXPERIMENTS" ]; then
     echo "Analyzing ALL experiments in $RESULTS_DIR"
-    python ../python_scripts/analyze_experiment_results.py --experiment_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
 else
-    echo "Analyzing specific experiments: $EXPERIMENTS"
-    python ../python_scripts/analyze_experiment_results.py --experiment_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR" --experiments $EXPERIMENTS
+    echo "WARNING: Specific experiment selection not supported by Python script. Analyzing ALL experiments in $RESULTS_DIR"
+    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
 fi
 
 if [ $? -ne 0 ]; then
