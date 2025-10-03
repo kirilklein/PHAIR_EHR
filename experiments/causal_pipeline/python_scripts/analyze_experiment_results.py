@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
 """
-Creates simplified, clean plots for bias, coverage, and variance analysis.
+Creates simplified, clean plots for bias, coverage, variance, and relative bias analysis.
 
-Generates six figures:
-1. Bias vs. Confounding Strength (faceted by instrument level).
-2. Bias vs. Instrument Strength (faceted by confounding level).
-3. Coverage vs. Confounding Strength (faceted by instrument level).
-4. Coverage vs. Instrument Strength (faceted by confounding level).
-5. Variance vs. Confounding Strength (faceted by instrument level).
-6. Variance vs. Instrument Strength (faceted by confounding level).
-
+Generates eight figures, two for each metric (vs. Confounding and vs. Instrument).
 All plots skip creating subplots that would only contain a single data point.
 
 Usage:
-    python analyze_experiment_results.py --experiment_dir outputs/causal/experiments
+    python analyze_experiment_results.py --results_dir outputs/causal/experiments
 """
 
 import argparse
@@ -31,10 +24,13 @@ plt.style.use("seaborn-v0_8-whitegrid")
 def parse_experiment_name(exp_name: str) -> Dict[str, float]:
     """Parse experiment name to extract parameter values, including negative 'm' values."""
     import re
+
     params = {}
     patterns = {
-        "ce": r"ce(m?\d+(?:p\d+)?)", "cy": r"cy(m?\d+(?:p\d+)?)",
-        "y": r"y(\d+(?:p\d+)?)", "i": r"i(\d+(?:p\d+)?)",
+        "ce": r"ce(m?\d+(?:p\d+)?)",
+        "cy": r"cy(m?\d+(?:p\d+)?)",
+        "y": r"y(\d+(?:p\d+)?)",
+        "i": r"i(\d+(?:p\d+)?)",
     }
     for param, pattern in patterns.items():
         match = re.search(pattern, exp_name)
@@ -49,13 +45,15 @@ def parse_experiment_name(exp_name: str) -> Dict[str, float]:
 def load_and_process_results(
     results_dir: str, experiment_names: Optional[list] = None
 ) -> pd.DataFrame:
-    """Loads all data, calculates bias, and checks for CI coverage."""
+    """Loads all data, calculates bias, coverage, and relative bias."""
     results_path = Path(results_dir)
     if not results_path.exists():
         raise FileNotFoundError(f"Results directory not found: {results_dir}")
 
     all_results = []
-    run_dirs = [d for d in results_path.iterdir() if d.is_dir() and d.name.startswith('run_')]
+    run_dirs = [
+        d for d in results_path.iterdir() if d.is_dir() and d.name.startswith("run_")
+    ]
     if not run_dirs:
         print("No 'run_XX' directories found. Treating results_dir as a single run.")
         run_dirs = [results_path]
@@ -69,23 +67,29 @@ def load_and_process_results(
             possible_paths = [
                 exp_dir / "estimate" / "estimate_results.csv",
                 exp_dir / "estimate" / "baseline" / "estimate_results.csv",
-                exp_dir / "estimate" / "bert" / "estimate_results.csv"
+                exp_dir / "estimate" / "bert" / "estimate_results.csv",
             ]
-            results_file = next((path for path in possible_paths if path.exists()), None)
+            results_file = next(
+                (path for path in possible_paths if path.exists()), None
+            )
 
             if not results_file:
                 continue
-            
+
             try:
                 df = pd.read_csv(results_file)
                 df["run_id"] = run_dir.name
                 params = parse_experiment_name(exp_dir.name)
                 for param, value in params.items():
                     df[param] = value
-                
+
                 df["bias"] = df["effect"] - df["true_effect"]
-                df["covered"] = ((df["true_effect"] >= df["CI95_lower"]) & 
-                                 (df["true_effect"] <= df["CI95_upper"]))
+                df["covered"] = (df["true_effect"] >= df["CI95_lower"]) & (
+                    df["true_effect"] <= df["CI95_upper"]
+                )
+                df["relative_bias"] = (df["bias"] / df["true_effect"]).replace(
+                    [np.inf, -np.inf], np.nan
+                )
                 all_results.append(df)
             except Exception as e:
                 print(f"Error loading {results_file}: {e}")
@@ -97,247 +101,542 @@ def load_and_process_results(
     print(f"Loaded {len(combined_df)} total rows from {len(run_dirs)} runs.")
     return combined_df
 
-def perform_bias_aggregation(df: pd.DataFrame) -> pd.DataFrame:
-    """Performs two-step aggregation for bias analysis."""
-    methods_df = df[df["method"].isin(["TMLE", "IPW"])].copy()
-    if methods_df.empty: return pd.DataFrame()
 
-    mean_bias_per_run = methods_df.groupby(['run_id', 'method', 'ce', 'cy', 'i', 'y'])['bias'].mean().reset_index()
-    mean_bias_per_run['avg_confounding'] = (mean_bias_per_run['ce'] + mean_bias_per_run['cy']) / 2
-    final_agg = mean_bias_per_run.groupby(['method', 'avg_confounding', 'i'])['bias'].agg(['mean', 'std']).reset_index()
+# --- AGGREGATION FUNCTIONS ---
+
+
+def perform_bias_aggregation(df: pd.DataFrame) -> pd.DataFrame:
+    """Performs two-step aggregation for absolute bias analysis."""
+    methods_df = df[df["method"].isin(["TMLE", "IPW"])].copy()
+    if methods_df.empty:
+        return pd.DataFrame()
+
+    mean_bias_per_run = (
+        methods_df.groupby(["run_id", "method", "ce", "cy", "i", "y"])["bias"]
+        .mean()
+        .reset_index()
+    )
+    mean_bias_per_run["avg_confounding"] = (
+        mean_bias_per_run["ce"] + mean_bias_per_run["cy"]
+    ) / 2
+    final_agg = (
+        mean_bias_per_run.groupby(["method", "avg_confounding", "i"])["bias"]
+        .agg(["mean", "std"])
+        .reset_index()
+    )
     return final_agg
+
+
+def perform_relative_bias_aggregation(df: pd.DataFrame) -> pd.DataFrame:
+    """Performs two-step aggregation for relative bias, excluding true_effect=0 cases."""
+    methods_df = df[df["method"].isin(["TMLE", "IPW"])].copy()
+    methods_df.dropna(subset=["relative_bias"], inplace=True)  # Exclude true_effect=0
+    if methods_df.empty:
+        return pd.DataFrame()
+
+    mean_rb_per_run = (
+        methods_df.groupby(["run_id", "method", "ce", "cy", "i", "y"])["relative_bias"]
+        .mean()
+        .reset_index()
+    )
+    mean_rb_per_run["avg_confounding"] = (
+        mean_rb_per_run["ce"] + mean_rb_per_run["cy"]
+    ) / 2
+    final_agg = (
+        mean_rb_per_run.groupby(["method", "avg_confounding", "i"])["relative_bias"]
+        .agg(["mean", "std"])
+        .reset_index()
+    )
+    return final_agg
+
 
 def perform_coverage_aggregation(df: pd.DataFrame) -> pd.DataFrame:
     """Performs single-step aggregation for coverage analysis."""
     methods_df = df[df["method"].isin(["TMLE", "IPW"])].copy()
-    if methods_df.empty: return pd.DataFrame()
-    
-    methods_df['avg_confounding'] = (methods_df['ce'] + methods_df['cy']) / 2
-    coverage_agg = methods_df.groupby(['method', 'avg_confounding', 'i'])['covered'].mean().reset_index()
+    if methods_df.empty:
+        return pd.DataFrame()
+
+    methods_df["avg_confounding"] = (methods_df["ce"] + methods_df["cy"]) / 2
+    coverage_agg = (
+        methods_df.groupby(["method", "avg_confounding", "i"])["covered"]
+        .mean()
+        .reset_index()
+    )
     return coverage_agg
+
 
 def perform_variance_aggregation(df: pd.DataFrame) -> pd.DataFrame:
     """Performs aggregation for empirical variance analysis."""
     methods_df = df[df["method"].isin(["TMLE", "IPW"])].copy()
-    if methods_df.empty: return pd.DataFrame()
+    if methods_df.empty:
+        return pd.DataFrame()
 
-    # Step 1: For each setting (including outcome), calculate variance of effects across runs
-    variance_per_outcome = methods_df.groupby(['method', 'ce', 'cy', 'i', 'y', 'outcome'])['effect'].var(ddof=1).reset_index()
-    variance_per_outcome.rename(columns={'effect': 'variance'}, inplace=True)
-    
-    # Step 2: Average these variances across outcomes for the final plot
-    variance_per_outcome['avg_confounding'] = (variance_per_outcome['ce'] + variance_per_outcome['cy']) / 2
-    final_variance_agg = variance_per_outcome.groupby(['method', 'avg_confounding', 'i'])['variance'].mean().reset_index()
-    
+    variance_per_outcome = (
+        methods_df.groupby(["method", "ce", "cy", "i", "y", "outcome"])["effect"]
+        .var(ddof=1)
+        .reset_index()
+    )
+    variance_per_outcome.rename(columns={"effect": "variance"}, inplace=True)
+
+    variance_per_outcome["avg_confounding"] = (
+        variance_per_outcome["ce"] + variance_per_outcome["cy"]
+    ) / 2
+    final_variance_agg = (
+        variance_per_outcome.groupby(["method", "avg_confounding", "i"])["variance"]
+        .mean()
+        .reset_index()
+    )
+
     return final_variance_agg
 
-# BIAS PLOTS
+
+# --- PLOTTING FUNCTIONS ---
+
+
 def create_bias_vs_confounder_plot(final_agg: pd.DataFrame, output_dir: str):
-    if final_agg.empty: return
-    all_instrument_levels = sorted(final_agg['i'].unique())
-    instrument_levels_to_plot = [lvl for lvl in all_instrument_levels if final_agg[final_agg['i'] == lvl]['avg_confounding'].nunique() > 1]
-    if not instrument_levels_to_plot:
-        print("No instrument levels with multiple confounder points found. Skipping Bias vs. Confounder plot.")
+    if final_agg.empty:
         return
-    print(f"Skipping Bias vs. Confounder plots for i={set(all_instrument_levels) - set(instrument_levels_to_plot)} (only one data point).")
+    all_instrument_levels = sorted(final_agg["i"].unique())
+    instrument_levels_to_plot = [
+        lvl
+        for lvl in all_instrument_levels
+        if final_agg[final_agg["i"] == lvl]["avg_confounding"].nunique() > 1
+    ]
+    if not instrument_levels_to_plot:
+        return
+    print(
+        f"Skipping Bias vs. Confounder plots for i={set(all_instrument_levels) - set(instrument_levels_to_plot)} (only one data point)."
+    )
     n_subplots = len(instrument_levels_to_plot)
-    fig, axes = plt.subplots(1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True)
-    if n_subplots == 1: axes = [axes]
-    fig.suptitle("Average Bias vs. Confounding Strength", fontsize=16, fontweight='bold')
+    fig, axes = plt.subplots(
+        1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True
+    )
+    if n_subplots == 1:
+        axes = [axes]
+    fig.suptitle(
+        "Average Bias vs. Confounding Strength", fontsize=16, fontweight="bold"
+    )
     for i, inst_level in enumerate(instrument_levels_to_plot):
         ax = axes[i]
-        subplot_data = final_agg[final_agg['i'] == inst_level]
+        subplot_data = final_agg[final_agg["i"] == inst_level]
         for method, color in [("TMLE", "blue"), ("IPW", "red")]:
-            method_data = subplot_data[subplot_data['method'] == method]
+            method_data = subplot_data[subplot_data["method"] == method]
             if not method_data.empty:
-                ax.errorbar(x=method_data['avg_confounding'], y=method_data['mean'], yerr=method_data['std'], label=method, color=color, marker='o', capsize=5, linestyle='-')
-        ax.axhline(0, color='black', linestyle='--', alpha=0.7)
-        ax.set_title(f'Instrument Strength (i) = {inst_level}')
-        ax.set_xlabel('Average Confounding Strength')
-        if i == 0: ax.set_ylabel('Average Bias (± Std Dev of Mean Bias)')
+                ax.errorbar(
+                    x=method_data["avg_confounding"],
+                    y=method_data["mean"],
+                    yerr=method_data["std"],
+                    label=method,
+                    color=color,
+                    marker="o",
+                    capsize=5,
+                    linestyle="-",
+                )
+        ax.axhline(0, color="black", linestyle="--", alpha=0.7)
+        ax.set_title(f"Instrument Strength (i) = {inst_level}")
+        ax.set_xlabel("Average Confounding Strength")
+        if i == 0:
+            ax.set_ylabel("Average Bias (± Std Dev of Mean Bias)")
         ax.legend()
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
     output_path = Path(output_dir) / "bias_vs_confounding_plot.png"
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved Bias vs. Confounding plot to: {output_path}")
 
+
 def create_bias_vs_instrument_plot(final_agg: pd.DataFrame, output_dir: str):
-    if final_agg.empty: return
-    all_conf_levels = sorted(final_agg['avg_confounding'].unique())
-    conf_levels_to_plot = [lvl for lvl in all_conf_levels if final_agg[final_agg['avg_confounding'] == lvl]['i'].nunique() > 1]
-    if not conf_levels_to_plot:
-        print("No confounding levels with multiple instrument points found. Skipping Bias vs. Instrument plot.")
+    if final_agg.empty:
         return
-    print(f"Skipping Bias vs. Instrument plots for avg_confounding={set(all_conf_levels) - set(conf_levels_to_plot)} (only one data point).")
+    all_conf_levels = sorted(final_agg["avg_confounding"].unique())
+    conf_levels_to_plot = [
+        lvl
+        for lvl in all_conf_levels
+        if final_agg[final_agg["avg_confounding"] == lvl]["i"].nunique() > 1
+    ]
+    if not conf_levels_to_plot:
+        return
+    print(
+        f"Skipping Bias vs. Instrument plots for avg_confounding={set(all_conf_levels) - set(conf_levels_to_plot)} (only one data point)."
+    )
     n_subplots = len(conf_levels_to_plot)
-    fig, axes = plt.subplots(1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True)
-    if n_subplots == 1: axes = [axes]
-    fig.suptitle("Average Bias vs. Instrument Strength", fontsize=16, fontweight='bold')
+    fig, axes = plt.subplots(
+        1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True
+    )
+    if n_subplots == 1:
+        axes = [axes]
+    fig.suptitle("Average Bias vs. Instrument Strength", fontsize=16, fontweight="bold")
     for i, conf_level in enumerate(conf_levels_to_plot):
         ax = axes[i]
-        subplot_data = final_agg[final_agg['avg_confounding'] == conf_level]
+        subplot_data = final_agg[final_agg["avg_confounding"] == conf_level]
         for method, color in [("TMLE", "blue"), ("IPW", "red")]:
-            method_data = subplot_data[subplot_data['method'] == method]
+            method_data = subplot_data[subplot_data["method"] == method]
             if not method_data.empty:
-                ax.errorbar(x=method_data['i'], y=method_data['mean'], yerr=method_data['std'], label=method, color=color, marker='o', capsize=5, linestyle='-')
-        ax.axhline(0, color='black', linestyle='--', alpha=0.7)
-        ax.set_title(f'Confounding Strength = {conf_level:.2f}')
-        ax.set_xlabel('Instrument Strength (i)')
-        if i == 0: ax.set_ylabel('Average Bias (± Std Dev of Mean Bias)')
+                ax.errorbar(
+                    x=method_data["i"],
+                    y=method_data["mean"],
+                    yerr=method_data["std"],
+                    label=method,
+                    color=color,
+                    marker="o",
+                    capsize=5,
+                    linestyle="-",
+                )
+        ax.axhline(0, color="black", linestyle="--", alpha=0.7)
+        ax.set_title(f"Confounding Strength = {conf_level:.2f}")
+        ax.set_xlabel("Instrument Strength (i)")
+        if i == 0:
+            ax.set_ylabel("Average Bias (± Std Dev of Mean Bias)")
         ax.legend()
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
     output_path = Path(output_dir) / "bias_vs_instrument_plot.png"
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved Bias vs. Instrument plot to: {output_path}")
 
-# COVERAGE PLOTS
-def create_coverage_vs_confounder_plot(coverage_agg: pd.DataFrame, output_dir: str):
-    if coverage_agg.empty: return
-    all_instrument_levels = sorted(coverage_agg['i'].unique())
-    instrument_levels_to_plot = [lvl for lvl in all_instrument_levels if coverage_agg[coverage_agg['i'] == lvl]['avg_confounding'].nunique() > 1]
-    if not instrument_levels_to_plot:
-        print("No instrument levels with multiple confounder points found. Skipping Coverage vs. Confounder plot.")
+
+def create_relative_bias_vs_confounder_plot(final_agg: pd.DataFrame, output_dir: str):
+    """Generates plot of Relative Bias vs. Confounding, faceted by Instrument."""
+    if final_agg.empty:
         return
-    print(f"Skipping Coverage vs. Confounder plots for i={set(all_instrument_levels) - set(instrument_levels_to_plot)} (only one data point).")
+    all_instrument_levels = sorted(final_agg["i"].unique())
+    instrument_levels_to_plot = [
+        lvl
+        for lvl in all_instrument_levels
+        if final_agg[final_agg["i"] == lvl]["avg_confounding"].nunique() > 1
+    ]
+    if not instrument_levels_to_plot:
+        return
+    print(
+        f"Skipping Relative Bias vs. Confounder plots for i={set(all_instrument_levels) - set(instrument_levels_to_plot)}."
+    )
     n_subplots = len(instrument_levels_to_plot)
-    fig, axes = plt.subplots(1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True)
-    if n_subplots == 1: axes = [axes]
-    fig.suptitle("95% CI Coverage vs. Confounding Strength", fontsize=16, fontweight='bold')
+    fig, axes = plt.subplots(
+        1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True
+    )
+    if n_subplots == 1:
+        axes = [axes]
+    fig.suptitle(
+        "Average Relative Bias vs. Confounding Strength", fontsize=16, fontweight="bold"
+    )
     for i, inst_level in enumerate(instrument_levels_to_plot):
         ax = axes[i]
-        subplot_data = coverage_agg[coverage_agg['i'] == inst_level]
+        subplot_data = final_agg[final_agg["i"] == inst_level]
         for method, color in [("TMLE", "blue"), ("IPW", "red")]:
-            method_data = subplot_data[subplot_data['method'] == method]
+            method_data = subplot_data[subplot_data["method"] == method]
             if not method_data.empty:
-                ax.plot(method_data['avg_confounding'], method_data['covered'], label=method, color=color, marker='o', markersize=7, linestyle='')
-        ax.axhline(0.95, color='gray', linestyle='--', alpha=0.9, label='95% Target')
-        ax.set_title(f'Instrument Strength (i) = {inst_level}')
-        ax.set_xlabel('Average Confounding Strength')
-        if i == 0: ax.set_ylabel('Coverage Probability')
+                ax.errorbar(
+                    x=method_data["avg_confounding"],
+                    y=method_data["mean"],
+                    yerr=method_data["std"],
+                    label=method,
+                    color=color,
+                    marker="o",
+                    capsize=5,
+                    linestyle="-",
+                )
+        ax.axhline(0, color="black", linestyle="--", alpha=0.7)
+        ax.set_title(f"Instrument Strength (i) = {inst_level}")
+        ax.set_xlabel("Average Confounding Strength")
+        if i == 0:
+            ax.set_ylabel("Average Relative Bias (± Std Dev)")
         ax.legend()
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+    output_path = Path(output_dir) / "relative_bias_vs_confounding_plot.png"
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved Relative Bias vs. Confounding plot to: {output_path}")
+
+
+def create_relative_bias_vs_instrument_plot(final_agg: pd.DataFrame, output_dir: str):
+    """Generates plot of Relative Bias vs. Instrument, faceted by Confounding."""
+    if final_agg.empty:
+        return
+    all_conf_levels = sorted(final_agg["avg_confounding"].unique())
+    conf_levels_to_plot = [
+        lvl
+        for lvl in all_conf_levels
+        if final_agg[final_agg["avg_confounding"] == lvl]["i"].nunique() > 1
+    ]
+    if not conf_levels_to_plot:
+        return
+    print(
+        f"Skipping Relative Bias vs. Instrument plots for avg_confounding={set(all_conf_levels) - set(conf_levels_to_plot)}."
+    )
+    n_subplots = len(conf_levels_to_plot)
+    fig, axes = plt.subplots(
+        1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True
+    )
+    if n_subplots == 1:
+        axes = [axes]
+    fig.suptitle(
+        "Average Relative Bias vs. Instrument Strength", fontsize=16, fontweight="bold"
+    )
+    for i, conf_level in enumerate(conf_levels_to_plot):
+        ax = axes[i]
+        subplot_data = final_agg[final_agg["avg_confounding"] == conf_level]
+        for method, color in [("TMLE", "blue"), ("IPW", "red")]:
+            method_data = subplot_data[subplot_data["method"] == method]
+            if not method_data.empty:
+                ax.errorbar(
+                    x=method_data["i"],
+                    y=method_data["mean"],
+                    yerr=method_data["std"],
+                    label=method,
+                    color=color,
+                    marker="o",
+                    capsize=5,
+                    linestyle="-",
+                )
+        ax.axhline(0, color="black", linestyle="--", alpha=0.7)
+        ax.set_title(f"Confounding Strength = {conf_level:.2f}")
+        ax.set_xlabel("Instrument Strength (i)")
+        if i == 0:
+            ax.set_ylabel("Average Relative Bias (± Std Dev)")
+        ax.legend()
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+    output_path = Path(output_dir) / "relative_bias_vs_instrument_plot.png"
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved Relative Bias vs. Instrument plot to: {output_path}")
+
+
+def create_coverage_vs_confounder_plot(coverage_agg: pd.DataFrame, output_dir: str):
+    if coverage_agg.empty:
+        return
+    all_instrument_levels = sorted(coverage_agg["i"].unique())
+    instrument_levels_to_plot = [
+        lvl
+        for lvl in all_instrument_levels
+        if coverage_agg[coverage_agg["i"] == lvl]["avg_confounding"].nunique() > 1
+    ]
+    if not instrument_levels_to_plot:
+        return
+    print(
+        f"Skipping Coverage vs. Confounder plots for i={set(all_instrument_levels) - set(instrument_levels_to_plot)}."
+    )
+    n_subplots = len(instrument_levels_to_plot)
+    fig, axes = plt.subplots(
+        1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True
+    )
+    if n_subplots == 1:
+        axes = [axes]
+    fig.suptitle(
+        "95% CI Coverage vs. Confounding Strength", fontsize=16, fontweight="bold"
+    )
+    for i, inst_level in enumerate(instrument_levels_to_plot):
+        ax = axes[i]
+        subplot_data = coverage_agg[coverage_agg["i"] == inst_level]
+        for method, color in [("TMLE", "blue"), ("IPW", "red")]:
+            method_data = subplot_data[subplot_data["method"] == method]
+            if not method_data.empty:
+                ax.plot(
+                    method_data["avg_confounding"],
+                    method_data["covered"],
+                    label=method,
+                    color=color,
+                    marker="o",
+                    markersize=7,
+                    linestyle="",
+                )
+        ax.axhline(0.95, color="gray", linestyle="--", alpha=0.9, label="95% Target")
+        ax.set_title(f"Instrument Strength (i) = {inst_level}")
+        ax.set_xlabel("Average Confounding Strength")
+        if i == 0:
+            ax.set_ylabel("Coverage Probability")
+        ax.legend()
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
     output_path = Path(output_dir) / "coverage_vs_confounding_plot.png"
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved Coverage vs. Confounding plot to: {output_path}")
 
+
 def create_coverage_vs_instrument_plot(coverage_agg: pd.DataFrame, output_dir: str):
-    if coverage_agg.empty: return
-    all_conf_levels = sorted(coverage_agg['avg_confounding'].unique())
-    conf_levels_to_plot = [lvl for lvl in all_conf_levels if coverage_agg[coverage_agg['avg_confounding'] == lvl]['i'].nunique() > 1]
-    if not conf_levels_to_plot:
-        print("No confounding levels with multiple instrument points found. Skipping Coverage vs. Instrument plot.")
+    if coverage_agg.empty:
         return
-    print(f"Skipping Coverage vs. Instrument plots for avg_confounding={set(all_conf_levels) - set(conf_levels_to_plot)} (only one data point).")
+    all_conf_levels = sorted(coverage_agg["avg_confounding"].unique())
+    conf_levels_to_plot = [
+        lvl
+        for lvl in all_conf_levels
+        if coverage_agg[coverage_agg["avg_confounding"] == lvl]["i"].nunique() > 1
+    ]
+    if not conf_levels_to_plot:
+        return
+    print(
+        f"Skipping Coverage vs. Instrument plots for avg_confounding={set(all_conf_levels) - set(conf_levels_to_plot)}."
+    )
     n_subplots = len(conf_levels_to_plot)
-    fig, axes = plt.subplots(1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True)
-    if n_subplots == 1: axes = [axes]
-    fig.suptitle("95% CI Coverage vs. Instrument Strength", fontsize=16, fontweight='bold')
+    fig, axes = plt.subplots(
+        1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True
+    )
+    if n_subplots == 1:
+        axes = [axes]
+    fig.suptitle(
+        "95% CI Coverage vs. Instrument Strength", fontsize=16, fontweight="bold"
+    )
     for i, conf_level in enumerate(conf_levels_to_plot):
         ax = axes[i]
-        subplot_data = coverage_agg[coverage_agg['avg_confounding'] == conf_level]
+        subplot_data = coverage_agg[coverage_agg["avg_confounding"] == conf_level]
         for method, color in [("TMLE", "blue"), ("IPW", "red")]:
-            method_data = subplot_data[subplot_data['method'] == method]
+            method_data = subplot_data[subplot_data["method"] == method]
             if not method_data.empty:
-                ax.plot(method_data['i'], method_data['covered'], label=method, color=color, marker='o', markersize=7, linestyle='')
-        ax.axhline(0.95, color='gray', linestyle='--', alpha=0.9, label='95% Target')
-        ax.set_title(f'Confounding Strength = {conf_level:.2f}')
-        ax.set_xlabel('Instrument Strength (i)')
-        if i == 0: ax.set_ylabel('Coverage Probability')
+                ax.plot(
+                    method_data["i"],
+                    method_data["covered"],
+                    label=method,
+                    color=color,
+                    marker="o",
+                    markersize=7,
+                    linestyle="",
+                )
+        ax.axhline(0.95, color="gray", linestyle="--", alpha=0.9, label="95% Target")
+        ax.set_title(f"Confounding Strength = {conf_level:.2f}")
+        ax.set_xlabel("Instrument Strength (i)")
+        if i == 0:
+            ax.set_ylabel("Coverage Probability")
         ax.legend()
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
     output_path = Path(output_dir) / "coverage_vs_instrument_plot.png"
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved Coverage vs. Instrument plot to: {output_path}")
 
-# VARIANCE PLOTS
+
 def create_variance_vs_confounder_plot(variance_agg: pd.DataFrame, output_dir: str):
-    """Generates plot of Variance vs. Confounding, faceted by Instrument."""
-    if variance_agg.empty: return
-    all_instrument_levels = sorted(variance_agg['i'].unique())
-    instrument_levels_to_plot = [lvl for lvl in all_instrument_levels if variance_agg[variance_agg['i'] == lvl]['avg_confounding'].nunique() > 1]
-    if not instrument_levels_to_plot:
-        print("No instrument levels with multiple confounder points found. Skipping Variance vs. Confounder plot.")
+    if variance_agg.empty:
         return
-    print(f"Skipping Variance vs. Confounder plots for i={set(all_instrument_levels) - set(instrument_levels_to_plot)} (only one data point).")
+    all_instrument_levels = sorted(variance_agg["i"].unique())
+    instrument_levels_to_plot = [
+        lvl
+        for lvl in all_instrument_levels
+        if variance_agg[variance_agg["i"] == lvl]["avg_confounding"].nunique() > 1
+    ]
+    if not instrument_levels_to_plot:
+        return
+    print(
+        f"Skipping Variance vs. Confounder plots for i={set(all_instrument_levels) - set(instrument_levels_to_plot)}."
+    )
     n_subplots = len(instrument_levels_to_plot)
-    fig, axes = plt.subplots(1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True)
-    if n_subplots == 1: axes = [axes]
-    fig.suptitle("Empirical Variance vs. Confounding Strength", fontsize=16, fontweight='bold')
+    fig, axes = plt.subplots(
+        1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True
+    )
+    if n_subplots == 1:
+        axes = [axes]
+    fig.suptitle(
+        "Empirical Variance vs. Confounding Strength", fontsize=16, fontweight="bold"
+    )
     for i, inst_level in enumerate(instrument_levels_to_plot):
         ax = axes[i]
-        subplot_data = variance_agg[variance_agg['i'] == inst_level]
+        subplot_data = variance_agg[variance_agg["i"] == inst_level]
         for method, color in [("TMLE", "blue"), ("IPW", "red")]:
-            method_data = subplot_data[subplot_data['method'] == method]
+            method_data = subplot_data[subplot_data["method"] == method]
             if not method_data.empty:
-                ax.plot(method_data['avg_confounding'], method_data['variance'], label=method, color=color, marker='o', markersize=7, linestyle='-')
-        ax.set_title(f'Instrument Strength (i) = {inst_level}')
-        ax.set_xlabel('Average Confounding Strength')
-        if i == 0: ax.set_ylabel('Average Empirical Variance')
+                ax.plot(
+                    method_data["avg_confounding"],
+                    method_data["variance"],
+                    label=method,
+                    color=color,
+                    marker="o",
+                    markersize=7,
+                    linestyle="-",
+                )
+        ax.set_title(f"Instrument Strength (i) = {inst_level}")
+        ax.set_xlabel("Average Confounding Strength")
+        if i == 0:
+            ax.set_ylabel("Average Empirical Variance")
         ax.legend()
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
     output_path = Path(output_dir) / "variance_vs_confounding_plot.png"
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved Variance vs. Confounding plot to: {output_path}")
 
+
 def create_variance_vs_instrument_plot(variance_agg: pd.DataFrame, output_dir: str):
-    """Generates plot of Variance vs. Instrument, faceted by Confounding."""
-    if variance_agg.empty: return
-    all_conf_levels = sorted(variance_agg['avg_confounding'].unique())
-    conf_levels_to_plot = [lvl for lvl in all_conf_levels if variance_agg[variance_agg['avg_confounding'] == lvl]['i'].nunique() > 1]
-    if not conf_levels_to_plot:
-        print("No confounding levels with multiple instrument points found. Skipping Variance vs. Instrument plot.")
+    if variance_agg.empty:
         return
-    print(f"Skipping Variance vs. Instrument plots for avg_confounding={set(all_conf_levels) - set(conf_levels_to_plot)} (only one data point).")
+    all_conf_levels = sorted(variance_agg["avg_confounding"].unique())
+    conf_levels_to_plot = [
+        lvl
+        for lvl in all_conf_levels
+        if variance_agg[variance_agg["avg_confounding"] == lvl]["i"].nunique() > 1
+    ]
+    if not conf_levels_to_plot:
+        return
+    print(
+        f"Skipping Variance vs. Instrument plots for avg_confounding={set(all_conf_levels) - set(conf_levels_to_plot)}."
+    )
     n_subplots = len(conf_levels_to_plot)
-    fig, axes = plt.subplots(1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True)
-    if n_subplots == 1: axes = [axes]
-    fig.suptitle("Empirical Variance vs. Instrument Strength", fontsize=16, fontweight='bold')
+    fig, axes = plt.subplots(
+        1, n_subplots, figsize=(6 * n_subplots, 5), sharey=True, constrained_layout=True
+    )
+    if n_subplots == 1:
+        axes = [axes]
+    fig.suptitle(
+        "Empirical Variance vs. Instrument Strength", fontsize=16, fontweight="bold"
+    )
     for i, conf_level in enumerate(conf_levels_to_plot):
         ax = axes[i]
-        subplot_data = variance_agg[variance_agg['avg_confounding'] == conf_level]
+        subplot_data = variance_agg[variance_agg["avg_confounding"] == conf_level]
         for method, color in [("TMLE", "blue"), ("IPW", "red")]:
-            method_data = subplot_data[subplot_data['method'] == method]
+            method_data = subplot_data[subplot_data["method"] == method]
             if not method_data.empty:
-                ax.plot(method_data['i'], method_data['variance'], label=method, color=color, marker='o', markersize=7, linestyle='-')
-        ax.set_title(f'Confounding Strength = {conf_level:.2f}')
-        ax.set_xlabel('Instrument Strength (i)')
-        if i == 0: ax.set_ylabel('Average Empirical Variance')
+                ax.plot(
+                    method_data["i"],
+                    method_data["variance"],
+                    label=method,
+                    color=color,
+                    marker="o",
+                    markersize=7,
+                    linestyle="-",
+                )
+        ax.set_title(f"Confounding Strength = {conf_level:.2f}")
+        ax.set_xlabel("Instrument Strength (i)")
+        if i == 0:
+            ax.set_ylabel("Average Empirical Variance")
         ax.legend()
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
     output_path = Path(output_dir) / "variance_vs_instrument_plot.png"
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved Variance vs. Instrument plot to: {output_path}")
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Create simplified bias, coverage, and variance analysis plots.")
-    parser.add_argument("-e", "--experiment_dir", required=True, help="Directory containing run subdirectories.")
-    parser.add_argument("--output_dir", default="experiment_analysis_plots", help="Directory to save plots.")
+    parser = argparse.ArgumentParser(
+        description="Create simplified bias, coverage, and variance analysis plots."
+    )
+    parser.add_argument(
+        "--results_dir", required=True, help="Directory containing run subdirectories."
+    )
+    parser.add_argument(
+        "--output_dir",
+        default="experiment_analysis_plots",
+        help="Directory to save plots.",
+    )
     args = parser.parse_args()
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     # 1. Load raw data
-    raw_data = load_and_process_results(args.experiment_dir)
+    raw_data = load_and_process_results(args.results_dir)
 
     # 2. Perform aggregations for each analysis type
     agg_bias_data = perform_bias_aggregation(raw_data)
+    agg_relative_bias_data = perform_relative_bias_aggregation(raw_data)
     agg_coverage_data = perform_coverage_aggregation(raw_data)
     agg_variance_data = perform_variance_aggregation(raw_data)
 
-    # 3. Create plots for bias
+    # 3. Create plots for each metric
     create_bias_vs_confounder_plot(agg_bias_data, args.output_dir)
     create_bias_vs_instrument_plot(agg_bias_data, args.output_dir)
-    
-    # 4. Create plots for coverage
+
+    create_relative_bias_vs_confounder_plot(agg_relative_bias_data, args.output_dir)
+    create_relative_bias_vs_instrument_plot(agg_relative_bias_data, args.output_dir)
+
     create_coverage_vs_confounder_plot(agg_coverage_data, args.output_dir)
     create_coverage_vs_instrument_plot(agg_coverage_data, args.output_dir)
 
-    # 5. Create plots for variance
     create_variance_vs_confounder_plot(agg_variance_data, args.output_dir)
     create_variance_vs_instrument_plot(agg_variance_data, args.output_dir)
 
