@@ -21,6 +21,8 @@ show_help() {
     echo "                            Default: ../../../outputs/causal/sim_study/runs"
     echo "  --output_dir DIR          Directory to save analysis outputs"
     echo "                            Default: ../../../outputs/causal/sim_study/analysis"
+    echo "  --outcomes OUTCOME1 OUTCOME2  Filter analysis to specific outcomes only"
+    echo "                            (e.g., --outcomes OUTCOME_1 OUTCOME_2)"
     echo "  --help, -h                Show this help message"
     echo ""
     echo "EXPERIMENTS:"
@@ -50,6 +52,12 @@ show_help() {
     echo "  ./analyze_results.sh --run_id run_01 --results_dir /custom/path ce0_cy0_y0_i0"
     echo "    → Combine multiple options"
     echo ""
+    echo "  ./analyze_results.sh --outcomes OUTCOME_1 OUTCOME_2"
+    echo "    → Analyze all experiments but only for specific outcomes"
+    echo ""
+    echo "  ./analyze_results.sh --run_id run_01 --outcomes OUTCOME_1"
+    echo "    → Combine run filtering with outcome filtering"
+    echo ""
     echo "NOTES:"
     echo "  • By default, results are aggregated across all runs (run_01, run_02, etc.)"
     echo "  • Use --run_id to analyze results from a specific run only"
@@ -66,11 +74,13 @@ if [ $# -eq 0 ]; then
     RUN_ID=""
     RESULTS_DIR="../../../outputs/causal/sim_study/runs"
     OUTPUT_DIR="../../../outputs/causal/sim_study/analysis"
+    OUTCOMES=""
 else
     RUN_ALL=false
     RUN_ID=""
     RESULTS_DIR="../../../outputs/causal/sim_study/runs"
     OUTPUT_DIR="../../../outputs/causal/sim_study/analysis"
+    OUTCOMES=""
 fi
 
 # Parse arguments (only if arguments were provided)
@@ -90,6 +100,18 @@ while [[ $# -gt 0 ]]; do
         --output_dir)
             OUTPUT_DIR="$2"
             shift 2
+            ;;
+        --outcomes)
+            shift  # Skip the --outcomes flag
+            # Collect all outcomes until we hit another flag or end of args
+            while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
+                if [ -z "$OUTCOMES" ]; then
+                    OUTCOMES="$1"
+                else
+                    OUTCOMES="$OUTCOMES $1"
+                fi
+                shift
+            done
             ;;
         -h|--help)
             show_help
@@ -127,18 +149,25 @@ else
     echo "Analyzing results aggregated across all runs"
 fi
 
+# Build the Python command with optional outcomes argument
+PYTHON_CMD="python ../python_scripts/analyze_experiment_results.py --results_dir \"$RESULTS_DIR\" --output_dir \"$OUTPUT_DIR\""
+if [ -n "$OUTCOMES" ]; then
+    PYTHON_CMD="$PYTHON_CMD --outcomes $OUTCOMES"
+    echo "Filtering analysis for outcomes: $OUTCOMES"
+fi
+
 if [ "$RUN_ALL" = "true" ]; then
     echo "Analyzing ALL experiments in $RESULTS_DIR"
-    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+    eval $PYTHON_CMD
 elif [ "$EXPERIMENTS" = "all" ]; then
     echo "Analyzing ALL experiments in $RESULTS_DIR"
-    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+    eval $PYTHON_CMD
 elif [ -z "$EXPERIMENTS" ]; then
     echo "Analyzing ALL experiments in $RESULTS_DIR"
-    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+    eval $PYTHON_CMD
 else
     echo "WARNING: Specific experiment selection not supported by Python script. Analyzing ALL experiments in $RESULTS_DIR"
-    python ../python_scripts/analyze_experiment_results.py --results_dir "$RESULTS_DIR" --output_dir "$OUTPUT_DIR"
+    eval $PYTHON_CMD
 fi
 
 if [ $? -ne 0 ]; then

@@ -7,6 +7,7 @@ All plots skip creating subplots that would only contain a single data point.
 
 Usage:
     python analyze_experiment_results.py --results_dir outputs/causal/experiments
+    python analyze_experiment_results.py --results_dir outputs/causal/experiments --outcomes OUTCOME_1 OUTCOME_2
 """
 
 import argparse
@@ -89,7 +90,6 @@ def load_and_process_results(
                 df["relative_bias"] = (df["bias"] / df["true_effect"]).replace(
                     [np.inf, -np.inf], np.nan
                 )
-                # **NEW**: Calculate Z-score (Standardized Bias)
                 df["z_score"] = (df["bias"] / df["std_err"]).replace(
                     [np.inf, -np.inf], np.nan
                 )
@@ -265,7 +265,7 @@ def create_plot_from_agg(
                             capsize=5,
                             linestyle="-",
                         )
-                    else:  # 'dot' or 'line'
+                    else:
                         ax.plot(
                             method_data["avg_confounding"],
                             method_data[metric_col],
@@ -373,11 +373,29 @@ def main():
         default="experiment_analysis_plots",
         help="Directory to save plots.",
     )
+    # **NEW**: Add argument to filter by outcome
+    parser.add_argument(
+        "--outcomes",
+        nargs="*",
+        help="Specific outcomes to include in the analysis (default: all).",
+    )
     args = parser.parse_args()
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     # 1. Load raw data
     raw_data = load_and_process_results(args.results_dir)
+
+    # **NEW**: Filter data based on the --outcomes argument
+    if args.outcomes:
+        print(f"Filtering results for specific outcomes: {', '.join(args.outcomes)}")
+        initial_rows = len(raw_data)
+        raw_data = raw_data[raw_data["outcome"].isin(args.outcomes)]
+        print(f"Filtered data from {initial_rows} to {len(raw_data)} rows.")
+        if raw_data.empty:
+            print(
+                "Warning: No data remains after filtering for specified outcomes. Exiting."
+            )
+            return
 
     # 2. Perform aggregations for each analysis type
     agg_bias_data = perform_bias_aggregation(raw_data)

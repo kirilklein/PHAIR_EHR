@@ -12,11 +12,13 @@ if "%1"=="" (
     set RUN_ID=
     set RESULTS_DIR=..\..\..\outputs\causal\sim_study\runs
     set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
+    set OUTCOMES=
 ) else (
     set RUN_ALL=false
     set RUN_ID=
     set RESULTS_DIR=..\..\..\outputs\causal\sim_study\runs
     set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
+    set OUTCOMES=
 )
 
 REM Parse arguments
@@ -37,6 +39,12 @@ if "%1"=="--results_dir" (
 )
 if "%1"=="--output_dir" (
     set OUTPUT_DIR=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--outcomes" (
+    set OUTCOMES=%~2
     shift
     shift
     goto :parse_args
@@ -69,6 +77,8 @@ echo   --results_dir DIR         Directory containing experiment results
 echo                             Default: ..\..\..\outputs\causal\sim_study\runs
 echo   --output_dir DIR          Directory to save analysis outputs
 echo                             Default: ..\..\..\outputs\causal\sim_study\analysis
+echo   --outcomes "OUTCOME1 OUTCOME2"  Filter analysis to specific outcomes only
+echo                             ^(e.g., --outcomes "OUTCOME_1 OUTCOME_2"^)
 echo   --help, -h                Show this help message
 echo.
 echo EXPERIMENTS:
@@ -97,6 +107,12 @@ echo     -^> Use custom input and output directories
 echo.
 echo   analyze_results.bat --run_id run_01 --results_dir C:\custom\path ce0_cy0_y0_i0
 echo     -^> Combine multiple options
+echo.
+echo   analyze_results.bat --outcomes "OUTCOME_1 OUTCOME_2"
+echo     -^> Analyze all experiments but only for specific outcomes
+echo.
+echo   analyze_results.bat --run_id run_01 --outcomes "OUTCOME_1"
+echo     -^> Combine run filtering with outcome filtering
 echo.
 echo NOTES:
 echo   • By default, results are aggregated across all runs ^(run_01, run_02, etc.^)
@@ -127,18 +143,25 @@ if not "%RUN_ID%"=="" (
     echo Analyzing results aggregated across all runs
 )
 
+REM Build the Python command with optional outcomes argument
+set PYTHON_CMD=python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+if not "%OUTCOMES%"=="" (
+    set PYTHON_CMD=%PYTHON_CMD% --outcomes %OUTCOMES%
+    echo Filtering analysis for outcomes: %OUTCOMES%
+)
+
 if "%RUN_ALL%"=="true" (
     echo Analyzing ALL experiments in %RESULTS_DIR%
-    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+    %PYTHON_CMD%
 ) else if "%EXPERIMENTS%"=="all" (
     echo Analyzing ALL experiments in %RESULTS_DIR%
-    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+    %PYTHON_CMD%
 ) else if "%EXPERIMENTS%"=="" (
     echo Analyzing ALL experiments in %RESULTS_DIR%
-    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+    %PYTHON_CMD%
 ) else (
     echo WARNING: Specific experiment selection not supported by Python script. Analyzing ALL experiments in %RESULTS_DIR%
-    python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
+    %PYTHON_CMD%
 )
 
 if errorlevel 1 (
