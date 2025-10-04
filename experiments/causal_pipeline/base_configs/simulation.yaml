@@ -6,7 +6,7 @@ logging:
   path: ./outputs/logs/causal
 
 paths:
-  data: ./example_data/synthea_meds_causal
+  data: "{{MEDS_DATA}}"
   splits: ["tuning"]
   outcomes: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
 

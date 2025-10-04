@@ -11,6 +11,10 @@ set N_RUNS=1
 set RUN_ID_OVERRIDE=
 set REUSE_DATA=true
 set EXPERIMENTS_DIR=.\outputs\causal\sim_study\runs
+set MEDS_DATA=./example_data/synthea_meds_causal
+set FEATURES_DATA=./outputs/causal/data/features
+set TOKENIZED_DATA=./outputs/causal/data/tokenized
+set PRETRAIN_MODEL=./outputs/causal/pretrain/model
 
 REM Parse command line arguments
 :parse_args
@@ -92,6 +96,46 @@ if "%1"=="--experiment-dir" (
     shift
     goto :parse_args
 )
+if "%1"=="--meds" (
+    if "%2"=="" (
+        echo ERROR: --meds requires a path
+        exit /b 1
+    )
+    set MEDS_DATA=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--features" (
+    if "%2"=="" (
+        echo ERROR: --features requires a path
+        exit /b 1
+    )
+    set FEATURES_DATA=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--tokenized" (
+    if "%2"=="" (
+        echo ERROR: --tokenized requires a path
+        exit /b 1
+    )
+    set TOKENIZED_DATA=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--pretrain-model" (
+    if "%2"=="" (
+        echo ERROR: --pretrain-model requires a path
+        exit /b 1
+    )
+    set PRETRAIN_MODEL=%2
+    shift
+    shift
+    goto :parse_args
+)
 REM Add experiment to list
 if "!EXPERIMENT_LIST!"=="" (
     set EXPERIMENT_LIST=%1
@@ -118,6 +162,10 @@ echo   --run_id run_XX      Specific run ID to use ^(overrides --n_runs^)
 echo   -r, --reuse-data     Reuse prepared data from run_01 for all subsequent runs ^(default: true^)
 echo   --no-reuse-data      Force regenerate data for each run
 echo   -e, --experiment-dir Base directory for experiments ^(default: .\outputs\causal\sim_study\runs^)
+echo   --meds               Path to MEDS data ^(default: ./example_data/synthea_meds_causal^)
+echo   --features           Path to features data ^(default: ./outputs/causal/data/features^)
+echo   --tokenized          Path to tokenized data ^(default: ./outputs/causal/data/tokenized^)
+echo   --pretrain-model     Path to pretrained model ^(default: ./outputs/causal/pretrain/model^)
 echo   --baseline-only      Run only baseline ^(CatBoost^) pipeline for all experiments
 echo   --bert-only          Run only BERT pipeline for all experiments ^(requires baseline data^)
 echo   ^(no options^)         Run both baseline and BERT pipelines for all experiments
@@ -262,8 +310,12 @@ for /L %%r in (1,1,%N_RUNS%) do (
             set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --no-reuse-data
         )
         
-        REM Add experiment directory
+        REM Add experiment directory and data paths
         set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --experiment-dir "%EXPERIMENTS_DIR%"
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --meds %MEDS_DATA%
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --features %FEATURES_DATA%
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --tokenized %TOKENIZED_DATA%
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --pretrain-model %PRETRAIN_MODEL%
         
         REM Run the experiment
         call run_experiment.bat !EXPERIMENT_ARGS!

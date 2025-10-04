@@ -10,6 +10,12 @@ N_RUNS=1
 REUSE_DATA=true  # Default: reuse prepared data from run_01
 EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"  # Default base directory for experiments
 
+# Configurable data paths with defaults
+MEDS_DATA="./example_data/synthea_meds_causal"
+FEATURES_DATA="./outputs/causal/data/features"
+TOKENIZED_DATA="./outputs/causal/data/tokenized"
+PRETRAIN_MODEL="./outputs/causal/pretrain/model"
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -26,10 +32,14 @@ while [[ $# -gt 0 ]]; do
             echo "  --n_runs|-n N        Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
             echo "  -r, --reuse-data     Reuse prepared data from run_01 for all subsequent runs (default: true)"
             echo "  --no-reuse-data      Force regenerate data for each run (not recommended for variance studies)"
-            echo "  -e, --experiment-dir Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
-            echo "  --baseline-only      Run only baseline (CatBoost) pipeline for all experiments"
-            echo "  --bert-only          Run only BERT pipeline for all experiments (requires baseline data)"
-            echo "  (no options)         Run both baseline and BERT pipelines for all experiments"
+            echo "  -e, --experiment-dir DIR  Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
+            echo "  --meds PATH              Path to MEDS data directory (default: ./example_data/synthea_meds_causal)"
+            echo "  --features PATH          Path to features directory (default: ./outputs/causal/data/features)"
+            echo "  --tokenized PATH         Path to tokenized data directory (default: ./outputs/causal/data/tokenized)"
+            echo "  --pretrain-model PATH    Path to pretrained BERT model (default: ./outputs/causal/pretrain/model)"
+            echo "  --baseline-only          Run only baseline (CatBoost) pipeline for all experiments"
+            echo "  --bert-only              Run only BERT pipeline for all experiments (requires baseline data)"
+            echo "  (no options)             Run both baseline and BERT pipelines for all experiments"
             echo ""
             echo "EXAMPLES:"
             echo "  $0"
@@ -95,9 +105,25 @@ while [[ $# -gt 0 ]]; do
             EXPERIMENTS_DIR="$2"
             shift 2
             ;;
+        --meds)
+            MEDS_DATA="$2"
+            shift 2
+            ;;
+        --features)
+            FEATURES_DATA="$2"
+            shift 2
+            ;;
+        --tokenized)
+            TOKENIZED_DATA="$2"
+            shift 2
+            ;;
+        --pretrain-model)
+            PRETRAIN_MODEL="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--skip-existing|-s] [--n_runs|-n N] [-r|--reuse-data|--no-reuse-data] [-e|--experiment-dir DIR] [--baseline-only|--bert-only] [-h|--help]"
+            echo "Usage: $0 [--skip-existing|-s] [--n_runs|-n N] [-r|--reuse-data|--no-reuse-data] [-e|--experiment-dir DIR] [--meds PATH] [--features PATH] [--tokenized PATH] [--pretrain-model PATH] [--baseline-only|--bert-only] [-h|--help]"
             exit 1
             ;;
     esac
@@ -262,6 +288,12 @@ for run_number in $(seq 1 $N_RUNS); do
             
             # Add experiment directory
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --experiment-dir \"$EXPERIMENTS_DIR\""
+            
+            # Add data path arguments
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --meds \"$MEDS_DATA\""
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --features \"$FEATURES_DATA\""
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --tokenized \"$TOKENIZED_DATA\""
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --pretrain-model \"$PRETRAIN_MODEL\""
             
             # Run the experiment
             eval "./run_experiment.sh $EXPERIMENT_ARGS"

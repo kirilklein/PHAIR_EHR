@@ -4,8 +4,8 @@ logging:
 
 paths:
   ## INPUTS
-  features: ./outputs/causal/data/features
-  tokenized: ./outputs/causal/data/tokenized
+  features: "{{FEATURES_DATA}}"
+  tokenized: "{{TOKENIZED_DATA}}"
   cohort: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/cohort"
 
   outcomes: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"

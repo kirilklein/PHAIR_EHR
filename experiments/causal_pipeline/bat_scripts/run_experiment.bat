@@ -34,6 +34,10 @@ echo   --bert-only          Run only BERT pipeline ^(requires baseline data^)
 echo   --reuse-data^|-r     Reuse prepared data from run_01 if available ^(default: true^)
 echo   --no-reuse-data      Force regenerate all data even if run_01 exists
 echo   -e, --experiment-dir Base directory for experiments ^(default: .\outputs\causal\sim_study\runs^)
+echo   --meds               Path to MEDS data ^(default: ./example_data/synthea_meds_causal^)
+echo   --features           Path to features data ^(default: ./outputs/causal/data/features^)
+echo   --tokenized          Path to tokenized data ^(default: ./outputs/causal/data/tokenized^)
+echo   --pretrain-model     Path to pretrained model ^(default: ./outputs/causal/pretrain/model^)
 echo   ^(no options^)         Run both baseline and BERT pipelines
 echo.
 echo AVAILABLE EXPERIMENTS:
@@ -87,6 +91,10 @@ set RUN_BERT=true
 set RUN_ID=run_01
 set REUSE_DATA=true
 set EXPERIMENTS_DIR=.\outputs\causal\sim_study\runs
+set MEDS_DATA=./example_data/synthea_meds_causal
+set FEATURES_DATA=./outputs/causal/data/features
+set TOKENIZED_DATA=./outputs/causal/data/tokenized
+set PRETRAIN_MODEL=./outputs/causal/pretrain/model
 echo DEBUG: Initial flags - RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%, RUN_ID=%RUN_ID%, REUSE_DATA=%REUSE_DATA%, EXPERIMENTS_DIR=%EXPERIMENTS_DIR%
 
 REM Parse additional arguments
@@ -150,6 +158,46 @@ if "%1"=="--experiment-dir" (
     shift
     goto :parse_args
 )
+if "%1"=="--meds" (
+    if "%2"=="" (
+        echo ERROR: --meds requires a path
+        exit /b 1
+    )
+    set MEDS_DATA=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--features" (
+    if "%2"=="" (
+        echo ERROR: --features requires a path
+        exit /b 1
+    )
+    set FEATURES_DATA=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--tokenized" (
+    if "%2"=="" (
+        echo ERROR: --tokenized requires a path
+        exit /b 1
+    )
+    set TOKENIZED_DATA=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--pretrain-model" (
+    if "%2"=="" (
+        echo ERROR: --pretrain-model requires a path
+        exit /b 1
+    )
+    set PRETRAIN_MODEL=%2
+    shift
+    shift
+    goto :parse_args
+)
 REM Unknown argument, skip it
 shift
 goto :parse_args
@@ -185,8 +233,8 @@ if not exist "..\experiment_configs\%EXPERIMENT_NAME%.yaml" (
 
 REM Generate experiment-specific configs
 echo Step 1: Generating experiment configs...
-echo DEBUG: About to run: python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR%
-python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR%
+echo DEBUG: About to run: python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR% --meds %MEDS_DATA% --features %FEATURES_DATA% --tokenized %TOKENIZED_DATA% --pretrain-model %PRETRAIN_MODEL%
+python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR% --meds %MEDS_DATA% --features %FEATURES_DATA% --tokenized %TOKENIZED_DATA% --pretrain-model %PRETRAIN_MODEL%
 set CONFIG_EXIT_CODE=!errorlevel!
 echo DEBUG: Config generation exit code: !CONFIG_EXIT_CODE!
 if !CONFIG_EXIT_CODE! neq 0 (

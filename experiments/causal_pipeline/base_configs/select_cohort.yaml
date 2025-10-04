@@ -4,8 +4,8 @@ logging:
 
 paths:
   ### Inputs
-  features: ./outputs/causal/data/features/
-  meds: ./example_data/synthea_meds_causal
+  features: "{{FEATURES_DATA}}/"
+  meds: "{{MEDS_DATA}}"
   splits: [tuning]
   exposures: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes/"
   exposure: exposure.csv

@@ -25,22 +25,49 @@ def replace_placeholders(
     experiment_name,
     run_id="run_01",
     experiments_dir="./outputs/causal/sim_study/runs",
+    meds_data="./example_data/synthea_meds_causal",
+    features_data="./outputs/causal/data/features",
+    tokenized_data="./outputs/causal/data/tokenized",
+    pretrain_model="./outputs/causal/pretrain/model",
 ):
-    """Recursively replace {{EXPERIMENT_NAME}}, {{RUN_ID}}, and {{EXPERIMENTS_DIR}} placeholders in config."""
+    """Recursively replace placeholders in config."""
     if isinstance(config_dict, dict):
         return {
-            key: replace_placeholders(value, experiment_name, run_id, experiments_dir)
+            key: replace_placeholders(
+                value,
+                experiment_name,
+                run_id,
+                experiments_dir,
+                meds_data,
+                features_data,
+                tokenized_data,
+                pretrain_model,
+            )
             for key, value in config_dict.items()
         }
     elif isinstance(config_dict, list):
         return [
-            replace_placeholders(item, experiment_name, run_id, experiments_dir)
+            replace_placeholders(
+                item,
+                experiment_name,
+                run_id,
+                experiments_dir,
+                meds_data,
+                features_data,
+                tokenized_data,
+                pretrain_model,
+            )
             for item in config_dict
         ]
     elif isinstance(config_dict, str):
         result = config_dict.replace("{{EXPERIMENT_NAME}}", experiment_name)
         result = result.replace("{{RUN_ID}}", run_id)
         result = result.replace("{{EXPERIMENTS_DIR}}", experiments_dir)
+        # Replace data path placeholders
+        result = result.replace("{{MEDS_DATA}}", meds_data)
+        result = result.replace("{{FEATURES_DATA}}", features_data)
+        result = result.replace("{{TOKENIZED_DATA}}", tokenized_data)
+        result = result.replace("{{PRETRAIN_MODEL}}", pretrain_model)
         return result
     else:
         return config_dict
@@ -51,6 +78,10 @@ def generate_experiment_configs(
     script_dir,
     run_id="run_01",
     experiments_dir="./outputs/causal/sim_study/runs",
+    meds_data="./example_data/synthea_meds_causal",
+    features_data="./outputs/causal/data/features",
+    tokenized_data="./outputs/causal/data/tokenized",
+    pretrain_model="./outputs/causal/pretrain/model",
 ):
     """Generate all config files for a specific experiment."""
 
@@ -104,7 +135,14 @@ def generate_experiment_configs(
 
         # Replace placeholders
         final_config = replace_placeholders(
-            final_config, experiment_name, run_id, experiments_dir
+            final_config,
+            experiment_name,
+            run_id,
+            experiments_dir,
+            meds_data,
+            features_data,
+            tokenized_data,
+            pretrain_model,
         )
 
         # Write output config
@@ -130,11 +168,38 @@ def main():
         default="./outputs/causal/sim_study/runs",
         help="Base directory for experiments (default: ./outputs/causal/sim_study/runs)",
     )
+    parser.add_argument(
+        "--meds",
+        default="./example_data/synthea_meds_causal",
+        help="Path to MEDS data (default: ./example_data/synthea_meds_causal)",
+    )
+    parser.add_argument(
+        "--features",
+        default="./outputs/causal/data/features",
+        help="Path to features data (default: ./outputs/causal/data/features)",
+    )
+    parser.add_argument(
+        "--tokenized",
+        default="./outputs/causal/data/tokenized",
+        help="Path to tokenized data (default: ./outputs/causal/data/tokenized)",
+    )
+    parser.add_argument(
+        "--pretrain-model",
+        default="./outputs/causal/pretrain/model",
+        help="Path to pretrained model (default: ./outputs/causal/pretrain/model)",
+    )
     args = parser.parse_args()
 
     script_dir = Path(__file__).parent.parent
     generate_experiment_configs(
-        args.experiment_name, script_dir, args.run_id, args.experiments_dir
+        args.experiment_name,
+        script_dir,
+        args.run_id,
+        args.experiments_dir,
+        args.meds,
+        args.features,
+        args.tokenized,
+        args.pretrain_model,
     )
 
 

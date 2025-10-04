@@ -58,6 +58,13 @@ RUN_BERT=true
 RUN_ID="run_01"  # Default run ID
 REUSE_DATA=true  # Default: reuse data from run_01 if available
 EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"  # Default base directory for experiments
+
+# Configurable data paths with defaults
+MEDS_DATA="./example_data/synthea_meds_causal"
+FEATURES_DATA="./outputs/causal/data/features"
+TOKENIZED_DATA="./outputs/causal/data/tokenized"
+PRETRAIN_MODEL="./outputs/causal/pretrain/model"
+
 echo "DEBUG: Initial flags - RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT, RUN_ID=$RUN_ID, REUSE_DATA=$REUSE_DATA, EXPERIMENTS_DIR=$EXPERIMENTS_DIR"
 
 # Parse additional arguments
@@ -88,9 +95,25 @@ while [[ $# -gt 0 ]]; do
             EXPERIMENTS_DIR="$2"
             shift 2
             ;;
+        --meds)
+            MEDS_DATA="$2"
+            shift 2
+            ;;
+        --features)
+            FEATURES_DATA="$2"
+            shift 2
+            ;;
+        --tokenized)
+            TOKENIZED_DATA="$2"
+            shift 2
+            ;;
+        --pretrain-model)
+            PRETRAIN_MODEL="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX] [--reuse-data|-r|--no-reuse-data] [--experiment-dir|-e DIR]"
+            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX] [--reuse-data|-r|--no-reuse-data] [--experiment-dir|-e DIR] [--meds PATH] [--features PATH] [--tokenized PATH] [--pretrain-model PATH]"
             exit 1
             ;;
     esac
@@ -126,7 +149,7 @@ check_error() {
 
 # Generate experiment-specific configs
 echo "Step 1: Generating experiment configs..."
-python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME" --run_id "$RUN_ID" --experiments_dir "$EXPERIMENTS_DIR"
+python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME" --run_id "$RUN_ID" --experiments_dir "$EXPERIMENTS_DIR" --meds "$MEDS_DATA" --features "$FEATURES_DATA" --tokenized "$TOKENIZED_DATA" --pretrain-model "$PRETRAIN_MODEL"
 check_error
 
 echo ""
