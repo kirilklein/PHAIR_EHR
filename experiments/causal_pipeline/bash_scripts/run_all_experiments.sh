@@ -9,6 +9,7 @@ RUN_MODE="both"
 N_RUNS=1
 REUSE_DATA=true  # Default: reuse prepared data from run_01
 OVERWRITE=true  # Default: overwrite existing outputs
+FAILFAST=false  # Default: continue on failure
 EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"  # Default base directory for experiments
 
 # Configurable data paths with defaults
@@ -34,6 +35,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -r, --reuse-data     Reuse prepared data from run_01 for all subsequent runs (default: true)"
             echo "  --no-reuse-data      Force regenerate data for each run (not recommended for variance studies)"
             echo "  --dont-overwrite     Skip steps if output already exists (useful for resuming failed runs)"
+            echo "  --failfast           Stop immediately if any experiment fails (default: continue to next)"
             echo "  -e, --experiment-dir DIR  Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
             echo "  --meds PATH              Path to MEDS data directory (default: ./example_data/synthea_meds_causal)"
             echo "  --features PATH          Path to features directory (default: ./outputs/causal/data/features)"
@@ -107,6 +109,10 @@ while [[ $# -gt 0 ]]; do
             OVERWRITE=false
             shift
             ;;
+        --failfast)
+            FAILFAST=true
+            shift
+            ;;
         -e|--experiment-dir)
             EXPERIMENTS_DIR="$2"
             shift 2
@@ -129,7 +135,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--skip-existing|-s] [--n_runs|-n N] [-r|--reuse-data|--no-reuse-data] [--dont-overwrite] [-e|--experiment-dir DIR] [--meds PATH] [--features PATH] [--tokenized PATH] [--pretrain-model PATH] [--baseline-only|--bert-only] [-h|--help]"
+            echo "Usage: $0 [--skip-existing|-s] [--n_runs|-n N] [-r|--reuse-data|--no-reuse-data] [--dont-overwrite] [--failfast] [-e|--experiment-dir DIR] [--meds PATH] [--features PATH] [--tokenized PATH] [--pretrain-model PATH] [--baseline-only|--bert-only] [-h|--help]"
             exit 1
             ;;
     esac
@@ -166,6 +172,18 @@ if [ "$REUSE_DATA" = "true" ]; then
     echo "Data reuse: ENABLED (run_02+ will reuse run_01 data)"
 else
     echo "Data reuse: DISABLED (each run generates new data)"
+fi
+
+if [ "$OVERWRITE" = "false" ]; then
+    echo "Overwrite mode: DISABLED (skip completed steps)"
+else
+    echo "Overwrite mode: ENABLED (re-run all steps)"
+fi
+
+if [ "$FAILFAST" = "true" ]; then
+    echo "Failfast mode: ENABLED (stop on first failure)"
+else
+    echo "Failfast mode: DISABLED (continue on failures)"
 fi
 
 echo "Experiments directory: $EXPERIMENTS_DIR"
@@ -325,6 +343,50 @@ for run_number in $(seq 1 $N_RUNS); do
                     FAILED_LIST="$RUN_ID/$filename"
                 else
                     FAILED_LIST="$FAILED_LIST, $RUN_ID/$filename"
+                fi
+                
+                # Check if failfast is enabled
+                if [ "$FAILFAST" = "true" ]; then
+                    echo ""
+                    echo "========================================"
+                    echo "FAILFAST MODE: Stopping due to failure"
+                    echo "========================================"
+                    echo "Failed experiment: $RUN_ID/$filename"
+                    echo "Error code: $experiment_result"
+                    echo ""
+                    echo "To resume, use: --dont-overwrite"
+                    echo ""
+                    
+                    # Print summary and exit
+                    echo "========================================"
+                    echo "BATCH RUN SUMMARY (INCOMPLETE)"
+                    echo "========================================"
+                    echo "Total experiments planned: $TOTAL_EXPERIMENTS"
+                    echo "Completed: $((SUCCESSFUL_EXPERIMENTS + FAILED_EXPERIMENTS + SKIPPED_EXPERIMENTS))"
+                    if [ "$SKIP_EXISTING" = "true" ]; then
+                        echo "Skipped: $SKIPPED_EXPERIMENTS"
+                    fi
+                    echo "Successful: $SUCCESSFUL_EXPERIMENTS"
+                    echo "Failed: $FAILED_EXPERIMENTS"
+                    echo ""
+                    echo "Failed experiments: $FAILED_LIST"
+                    echo ""
+                    echo "Results logged to: $LOG_FILE"
+                    
+                    # Log to file
+                    echo "=======================================" >> "$LOG_FILE"
+                    echo "BATCH RUN STOPPED (FAILFAST)" >> "$LOG_FILE"
+                    echo "=======================================" >> "$LOG_FILE"
+                    echo "Total experiments planned: $TOTAL_EXPERIMENTS" >> "$LOG_FILE"
+                    echo "Completed: $((SUCCESSFUL_EXPERIMENTS + FAILED_EXPERIMENTS + SKIPPED_EXPERIMENTS))" >> "$LOG_FILE"
+                    if [ "$SKIP_EXISTING" = "true" ]; then
+                        echo "Skipped: $SKIPPED_EXPERIMENTS" >> "$LOG_FILE"
+                    fi
+                    echo "Successful: $SUCCESSFUL_EXPERIMENTS" >> "$LOG_FILE"
+                    echo "Failed: $FAILED_EXPERIMENTS" >> "$LOG_FILE"
+                    echo "Failed experiments: $FAILED_LIST" >> "$LOG_FILE"
+                    
+                    exit 1
                 fi
             fi
             
