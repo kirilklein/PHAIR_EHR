@@ -18,4 +18,3 @@ umap-learn==0.5.9.post2
 lifelines==0.30.0
 catboost==1.2.8
 optuna==4.5.0
-catboost==1.2.8
