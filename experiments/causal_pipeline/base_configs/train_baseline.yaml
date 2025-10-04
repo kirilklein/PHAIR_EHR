@@ -22,6 +22,8 @@ include_age: true
 # ==============================================================================
 catboost:
   n_estimators: 100
+  task_type: GPU # Enable GPU
+  devices: "0" # Specify GPU device
   # learning_rate: 0.03
   # max_depth: 6
   # subsample: 0.8
