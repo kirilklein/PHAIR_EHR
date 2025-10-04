@@ -25,7 +25,6 @@ simulation_model:
 # Exposure and outcome settings will be merged from experiment config
 exposure:
   p_base: 0.3
-  age_effect: 0.005
 
 # Default outcomes - can be overridden in experiment config
 outcomes:

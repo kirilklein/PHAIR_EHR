@@ -1,12 +1,12 @@
 import logging
+import os
 from os.path import join
 from typing import Dict, List, Set, Tuple
-import os
-from sklearn.metrics import roc_auc_score
 
 import numpy as np
 import pandas as pd
 from scipy.special import expit, logit
+from sklearn.metrics import roc_auc_score
 
 from corebehrt.constants.causal.data import (
     CONTROL_PID_COL,
@@ -32,18 +32,18 @@ from corebehrt.constants.data import (
 )
 from corebehrt.functional.utils.filter import safe_control_pids
 from corebehrt.functional.utils.time import get_hours_since_epoch
+from corebehrt.modules.simulation.config_realistic import (
+    ExposureConfig,
+    InfluenceScalesConfig,
+    ModelWeightsConfig,
+    OutcomeConfig,
+    RealisticSimulationModelConfig,
+    SimulationConfig,
+)
 from corebehrt.modules.simulation.plot import (
     plot_hist,
     plot_probability_distributions,
     plot_true_effects_vs_risk_differences,
-)
-from corebehrt.modules.simulation.config_realistic import (
-    SimulationConfig,
-    RealisticSimulationModelConfig,
-    ExposureConfig,
-    OutcomeConfig,
-    InfluenceScalesConfig,
-    ModelWeightsConfig,
 )
 
 logger = logging.getLogger("simulate")
@@ -183,9 +183,22 @@ class RealisticCausalSimulator:
             [self.weights["factor_weights"], new_factor_weights]
         )
 
-    def _calculate_latent_factors(self, history_matrix: np.ndarray) -> np.ndarray:
+    def _calculate_latent_factors(
+        self, history_matrix: np.ndarray, ages: np.ndarray
+    ) -> np.ndarray:
         """Calculates the latent factor values for each patient."""
         latent_factors = history_matrix @ self.weights["factor_weights"]
+        if self.config.simulation_model.get("treat_age_as_latent_factor", True):
+            # Normalize age (e.g., standard scaling) to match the scale of other factors
+            mean_age, std_age = np.mean(ages), np.std(ages)
+            if std_age > 0:
+                normalized_ages = (ages - mean_age) / std_age
+            else:
+                # If all ages are the same, their normalized value is 0 (since they are at the mean)
+                normalized_ages = np.zeros_like(ages)
+            # Inject age as the first latent factor (assuming it's a shared factor)
+            latent_factors[:, 0] = normalized_ages
+
         return np.tanh(latent_factors)
 
     def _calculate_probabilities_decomposed(
@@ -193,7 +206,6 @@ class RealisticCausalSimulator:
         event_name: str,
         event_cfg: ExposureConfig | OutcomeConfig,
         latent_factors: np.ndarray,
-        ages: np.ndarray,
         is_exposed: bool = False,
         additional_logit_effect: np.ndarray = 0.0,
     ) -> np.ndarray:
@@ -229,8 +241,7 @@ class RealisticCausalSimulator:
 
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p_array += event_cfg.exposure_effect
-        if hasattr(event_cfg, "age_effect") and event_cfg.age_effect is not None:
-            logit_p_array += event_cfg.age_effect * ages
+
         logit_p_array += additional_logit_effect
 
         noise_scale = self.config.simulation_model.noise.logit_noise_scale
@@ -292,12 +303,13 @@ class RealisticCausalSimulator:
         confounder_exposure_effect: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Simulates exposure probabilities based on patient history and confounder effects."""
-        latent_factors = self._calculate_latent_factors(patient_history_matrix)
+        latent_factors = self._calculate_latent_factors(
+            patient_history_matrix, final_ages
+        )
         p_exposure = self._calculate_probabilities_decomposed(
             "exposure",
             self.config.exposure,
             latent_factors,
-            ages=final_ages,
             additional_logit_effect=confounder_exposure_effect,
         )
         is_exposed = self.rng.binomial(1, p_exposure).astype(bool)
@@ -311,7 +323,9 @@ class RealisticCausalSimulator:
         is_exposed: np.ndarray,
         confounder_outcome_effects: Dict[str, np.ndarray],
     ) -> Tuple[Dict, Dict, list, Dict]:
-        latent_factors = self._calculate_latent_factors(patient_history_matrix)
+        latent_factors = self._calculate_latent_factors(
+            patient_history_matrix, final_ages
+        )
         n_patients = len(pids)
         ite_records = {PID_COL: pids}
         cf_records = {PID_COL: pids, EXPOSURE_COL: is_exposed.astype(int)}
@@ -325,7 +339,6 @@ class RealisticCausalSimulator:
                 outcome_name,
                 outcome_cfg,
                 latent_factors,
-                ages=final_ages,
                 is_exposed=True,
                 additional_logit_effect=confounder_effect,
             )
@@ -333,7 +346,6 @@ class RealisticCausalSimulator:
                 outcome_name,
                 outcome_cfg,
                 latent_factors,
-                ages=final_ages,
                 is_exposed=False,
                 additional_logit_effect=confounder_effect,
             )
