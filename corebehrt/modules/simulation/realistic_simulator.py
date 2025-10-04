@@ -188,7 +188,7 @@ class RealisticCausalSimulator:
     ) -> np.ndarray:
         """Calculates the latent factor values for each patient."""
         latent_factors = history_matrix @ self.weights["factor_weights"]
-        if self.config.simulation_model.get("treat_age_as_latent_factor", True):
+        if self.config.simulation_model.treat_age_as_latent_factor:
             # Normalize age (e.g., standard scaling) to match the scale of other factors
             mean_age, std_age = np.mean(ages), np.std(ages)
             if std_age > 0:

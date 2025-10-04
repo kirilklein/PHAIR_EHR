@@ -180,6 +180,7 @@ class RealisticSimulationModelConfig:
     time_decay_halflife_days: Optional[float] = 365
     noise: NoiseConfig = field(default_factory=NoiseConfig)
     age: AgeConfig = field(default_factory=AgeConfig)
+    treat_age_as_latent_factor: bool = True
 
 
 @dataclass
@@ -238,6 +239,9 @@ def create_simulation_config(cfg: dict) -> SimulationConfig:
         time_decay_halflife_days=cfg["simulation_model"]["time_decay_halflife_days"],
         noise=noise_config,
         age=age_config,
+        treat_age_as_latent_factor=cfg["simulation_model"].get(
+            "treat_age_as_latent_factor", True
+        ),
     )
 
     exposure_config = ExposureConfig(**cfg["exposure"])
