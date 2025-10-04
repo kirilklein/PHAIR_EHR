@@ -8,6 +8,7 @@ SKIP_EXISTING=false
 RUN_MODE="both"
 N_RUNS=1
 REUSE_DATA=true  # Default: reuse prepared data from run_01
+OVERWRITE=true  # Default: overwrite existing outputs
 EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"  # Default base directory for experiments
 
 # Configurable data paths with defaults
@@ -32,6 +33,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --n_runs|-n N        Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
             echo "  -r, --reuse-data     Reuse prepared data from run_01 for all subsequent runs (default: true)"
             echo "  --no-reuse-data      Force regenerate data for each run (not recommended for variance studies)"
+            echo "  --dont-overwrite     Skip steps if output already exists (useful for resuming failed runs)"
             echo "  -e, --experiment-dir DIR  Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
             echo "  --meds PATH              Path to MEDS data directory (default: ./example_data/synthea_meds_causal)"
             echo "  --features PATH          Path to features directory (default: ./outputs/causal/data/features)"
@@ -101,6 +103,10 @@ while [[ $# -gt 0 ]]; do
             REUSE_DATA=false
             shift
             ;;
+        --dont-overwrite)
+            OVERWRITE=false
+            shift
+            ;;
         -e|--experiment-dir)
             EXPERIMENTS_DIR="$2"
             shift 2
@@ -123,7 +129,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--skip-existing|-s] [--n_runs|-n N] [-r|--reuse-data|--no-reuse-data] [-e|--experiment-dir DIR] [--meds PATH] [--features PATH] [--tokenized PATH] [--pretrain-model PATH] [--baseline-only|--bert-only] [-h|--help]"
+            echo "Usage: $0 [--skip-existing|-s] [--n_runs|-n N] [-r|--reuse-data|--no-reuse-data] [--dont-overwrite] [-e|--experiment-dir DIR] [--meds PATH] [--features PATH] [--tokenized PATH] [--pretrain-model PATH] [--baseline-only|--bert-only] [-h|--help]"
             exit 1
             ;;
     esac
@@ -284,6 +290,11 @@ for run_number in $(seq 1 $N_RUNS); do
                 EXPERIMENT_ARGS="$EXPERIMENT_ARGS --reuse-data"
             else
                 EXPERIMENT_ARGS="$EXPERIMENT_ARGS --no-reuse-data"
+            fi
+            
+            # Add overwrite flag
+            if [ "$OVERWRITE" = "false" ]; then
+                EXPERIMENT_ARGS="$EXPERIMENT_ARGS --dont-overwrite"
             fi
             
             # Add experiment directory

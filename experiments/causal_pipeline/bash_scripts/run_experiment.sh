@@ -21,6 +21,7 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  --bert-only          Run only BERT pipeline (requires baseline data)"
     echo "  --reuse-data|-r      Reuse prepared data from run_01 if available (default: true)"
     echo "  --no-reuse-data      Force regenerate all data even if run_01 exists"
+    echo "  --dont-overwrite     Skip steps if output already exists (useful for resuming failed runs)"
     echo "  --experiment-dir|-e  Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
     echo "  (no options)         Run both baseline and BERT pipelines"
     echo ""
@@ -57,6 +58,7 @@ RUN_BASELINE=true
 RUN_BERT=true
 RUN_ID="run_01"  # Default run ID
 REUSE_DATA=true  # Default: reuse data from run_01 if available
+OVERWRITE=true  # Default: overwrite existing outputs
 EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"  # Default base directory for experiments
 
 # Configurable data paths with defaults
@@ -91,6 +93,10 @@ while [[ $# -gt 0 ]]; do
             REUSE_DATA=false
             shift
             ;;
+        --dont-overwrite)
+            OVERWRITE=false
+            shift
+            ;;
         --experiment-dir|-e)
             EXPERIMENTS_DIR="$2"
             shift 2
@@ -113,7 +119,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX] [--reuse-data|-r|--no-reuse-data] [--experiment-dir|-e DIR] [--meds PATH] [--features PATH] [--tokenized PATH] [--pretrain-model PATH]"
+            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX] [--reuse-data|-r|--no-reuse-data] [--dont-overwrite] [--experiment-dir|-e DIR] [--meds PATH] [--features PATH] [--tokenized PATH] [--pretrain-model PATH]"
             exit 1
             ;;
     esac
@@ -217,17 +223,35 @@ fi
 
 # Only run data preparation if we're not reusing
 if [ "$SHOULD_REUSE" = "false" ]; then
-    echo "==== Running simulate_outcomes... ===="
-    python -m corebehrt.main_causal.simulate_from_sequence --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/simulation.yaml
-    check_error
+    # Set target directory for checks
+    TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
+    
+    # Simulation step
+    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/simulated_outcomes" ]; then
+        echo "==== Skipping simulate_outcomes (output already exists) ===="
+    else
+        echo "==== Running simulate_outcomes... ===="
+        python -m corebehrt.main_causal.simulate_from_sequence --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/simulation.yaml
+        check_error
+    fi
 
-    echo "==== Running select_cohort... ===="
-    python -m corebehrt.main_causal.select_cohort_full --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/select_cohort.yaml
-    check_error
+    # Select cohort step
+    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/cohort" ]; then
+        echo "==== Skipping select_cohort (output already exists) ===="
+    else
+        echo "==== Running select_cohort... ===="
+        python -m corebehrt.main_causal.select_cohort_full --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/select_cohort.yaml
+        check_error
+    fi
 
-    echo "==== Running prepare_finetune_data... ===="
-    python -m corebehrt.main_causal.prepare_ft_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/prepare_finetune.yaml
-    check_error
+    # Prepare data step
+    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/prepared_data" ]; then
+        echo "==== Skipping prepare_finetune_data (output already exists) ===="
+    else
+        echo "==== Running prepare_finetune_data... ===="
+        python -m corebehrt.main_causal.prepare_ft_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/prepare_finetune.yaml
+        check_error
+    fi
 fi
 
 # --- Baseline Pipeline ---
@@ -236,17 +260,34 @@ if [ "$RUN_BASELINE" = "true" ]; then
     echo "========================================"
     echo "==== Running Baseline Pipeline ===="
     echo "========================================"
-    echo "==== Running train_baseline... ===="
-    python -m corebehrt.main_causal.train_baseline --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/train_baseline.yaml
-    check_error
+    TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
+    
+    # Train baseline step
+    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/models/baseline" ]; then
+        echo "==== Skipping train_baseline (output already exists) ===="
+    else
+        echo "==== Running train_baseline... ===="
+        python -m corebehrt.main_causal.train_baseline --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/train_baseline.yaml
+        check_error
+    fi
 
-    echo "==== Running calibrate (Baseline)... ===="
-    python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/calibrate.yaml
-    check_error
+    # Calibrate baseline step
+    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/calibrated/baseline" ]; then
+        echo "==== Skipping calibrate (Baseline) (output already exists) ===="
+    else
+        echo "==== Running calibrate (Baseline)... ===="
+        python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/calibrate.yaml
+        check_error
+    fi
 
-    echo "==== Running estimate (Baseline)... ===="
-    python -m corebehrt.main_causal.estimate --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/estimate.yaml
-    check_error
+    # Estimate baseline step  
+    if [ "$OVERWRITE" = "false" ] && [ -f "$TARGET_DIR/estimate/baseline/estimate_results.csv" ]; then
+        echo "==== Skipping estimate (Baseline) (output already exists) ===="
+    else
+        echo "==== Running estimate (Baseline)... ===="
+        python -m corebehrt.main_causal.estimate --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/estimate.yaml
+        check_error
+    fi
 fi
 
 # --- BERT Pipeline ---
@@ -255,17 +296,34 @@ if [ "$RUN_BERT" = "true" ]; then
     echo "========================================"
     echo "==== Running BERT Pipeline ===="
     echo "========================================"
-    echo "==== Running finetune (BERT)... ===="
-    python -m corebehrt.main_causal.finetune_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/finetune_bert.yaml
-    check_error
+    TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
+    
+    # Finetune BERT step
+    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/models/bert" ]; then
+        echo "==== Skipping finetune (BERT) (output already exists) ===="
+    else
+        echo "==== Running finetune (BERT)... ===="
+        python -m corebehrt.main_causal.finetune_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/finetune_bert.yaml
+        check_error
+    fi
 
-    echo "==== Running calibrate (BERT)... ===="
-    python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/calibrate_bert.yaml
-    check_error
+    # Calibrate BERT step
+    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/calibrated/bert" ]; then
+        echo "==== Skipping calibrate (BERT) (output already exists) ===="
+    else
+        echo "==== Running calibrate (BERT)... ===="
+        python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/calibrate_bert.yaml
+        check_error
+    fi
 
-    echo "==== Running estimate (BERT)... ===="
-    python -m corebehrt.main_causal.estimate --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/estimate_bert.yaml
-    check_error
+    # Estimate BERT step
+    if [ "$OVERWRITE" = "false" ] && [ -f "$TARGET_DIR/estimate/bert/estimate_results.csv" ]; then
+        echo "==== Skipping estimate (BERT) (output already exists) ===="
+    else
+        echo "==== Running estimate (BERT)... ===="
+        python -m corebehrt.main_causal.estimate --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/estimate_bert.yaml
+        check_error
+    fi
 fi
 
 echo ""
