@@ -28,6 +28,7 @@ show_help() {
     echo "  --max-subplots N          Maximum subplots per figure (creates multiple figures if exceeded)"
     echo "                            (e.g., --max-subplots 4 creates 2x2 grids)"
     echo "  --min-points N            Minimum data points required to generate a plot (default: 2)"
+    echo "  --estimator TYPE          Which estimator(s) to analyze: baseline, bert, or both (default: both)"
     echo "  --help, -h                Show this help message"
     echo ""
     echo "EXPERIMENTS:"
@@ -66,7 +67,15 @@ show_help() {
     echo "  ./analyze_results.sh --max-subplots 4 --min-points 3"
     echo "    → Create 2x2 grids and only plot if 3+ data points available"
     echo ""
+    echo "  ./analyze_results.sh --estimator baseline"
+    echo "    → Analyze only baseline estimator results"
+    echo ""
+    echo "  ./analyze_results.sh --estimator bert"
+    echo "    → Analyze only BERT estimator results"
+    echo ""
     echo "NOTES:"
+    echo "  • Results are organized by estimator: output_dir/baseline/ and output_dir/bert/"
+    echo "  • Use --estimator to analyze specific estimator(s) or 'both' for all (default)"
     echo "  • By default, results are aggregated across all runs (run_01, run_02, etc.)"
     echo "  • Use --run_id to analyze results from a specific run only"
     echo "  • When --run_id is used, it's appended to the results and output directories"
@@ -85,6 +94,7 @@ if [ $# -eq 0 ]; then
     OUTCOMES=""
     MAX_SUBPLOTS=""
     MIN_POINTS=""
+    ESTIMATOR=""
 else
     RUN_ALL=false
     RUN_ID=""
@@ -93,6 +103,7 @@ else
     OUTCOMES=""
     MAX_SUBPLOTS=""
     MIN_POINTS=""
+    ESTIMATOR=""
 fi
 
 # Parse arguments (only if arguments were provided)
@@ -133,6 +144,10 @@ while [[ $# -gt 0 ]]; do
             MIN_POINTS="$2"
             shift 2
             ;;
+        --estimator)
+            ESTIMATOR="$2"
+            shift 2
+            ;;
         -h|--help)
             show_help
             exit 0
@@ -169,7 +184,7 @@ else
     echo "Analyzing results aggregated across all runs"
 fi
 
-# Build the Python command with optional outcomes, max-subplots, and min-points arguments
+# Build the Python command with optional arguments
 PYTHON_CMD="python ../python_scripts/analyze_experiment_results.py --results_dir \"$RESULTS_DIR\" --output_dir \"$OUTPUT_DIR\""
 if [ -n "$OUTCOMES" ]; then
     PYTHON_CMD="$PYTHON_CMD --outcomes $OUTCOMES"
@@ -182,6 +197,10 @@ fi
 if [ -n "$MIN_POINTS" ]; then
     PYTHON_CMD="$PYTHON_CMD --min-points $MIN_POINTS"
     echo "Minimum data points required per plot: $MIN_POINTS"
+fi
+if [ -n "$ESTIMATOR" ]; then
+    PYTHON_CMD="$PYTHON_CMD --estimator $ESTIMATOR"
+    echo "Analyzing estimator(s): $ESTIMATOR"
 fi
 
 if [ "$RUN_ALL" = "true" ]; then

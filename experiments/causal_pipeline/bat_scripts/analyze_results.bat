@@ -15,6 +15,7 @@ if "%1"=="" (
     set OUTCOMES=
     set MAX_SUBPLOTS=
     set MIN_POINTS=
+    set ESTIMATOR=
 ) else (
     set RUN_ALL=false
     set RUN_ID=
@@ -23,6 +24,7 @@ if "%1"=="" (
     set OUTCOMES=
     set MAX_SUBPLOTS=
     set MIN_POINTS=
+    set ESTIMATOR=
 )
 
 REM Parse arguments
@@ -77,6 +79,12 @@ if "%1"=="--min-points" (
     shift
     goto :parse_args
 )
+if "%1"=="--estimator" (
+    set ESTIMATOR=%2
+    shift
+    shift
+    goto :parse_args
+)
 if "%1"=="-h" goto :show_full_help
 if "%1"=="--help" goto :show_full_help
 REM Add to experiments list
@@ -112,6 +120,7 @@ echo                             ^(e.g., --outcomes "OUTCOME_1 OUTCOME_2"^)
 echo   --max-subplots N          Maximum subplots per figure ^(creates multiple figures if exceeded^)
 echo                             ^(e.g., --max-subplots 4 creates 2x2 grids^)
 echo   --min-points N            Minimum data points required to generate a plot ^(default: 2^)
+echo   --estimator TYPE          Which estimator^(s^) to analyze: baseline, bert, or both ^(default: both^)
 echo   --help, -h                Show this help message
 echo.
 echo EXPERIMENTS:
@@ -156,7 +165,15 @@ echo.
 echo   analyze_results.bat --max-subplots 4 --min-points 3
 echo     -^> Create 2x2 grids and only plot if 3+ data points available
 echo.
+echo   analyze_results.bat --estimator baseline
+echo     -^> Analyze only baseline estimator results
+echo.
+echo   analyze_results.bat --estimator bert
+echo     -^> Analyze only BERT estimator results
+echo.
 echo NOTES:
+echo   - Results are organized by estimator: output_dir\baseline\ and output_dir\bert\
+echo   - Use --estimator to analyze specific estimator^(s^) or 'both' for all ^(default^)
 echo   - By default, results are aggregated across all runs ^(run_01, run_02, etc.^)
 echo   - Use --run_id to analyze results from a specific run only
 echo   - When --run_id is used, it's appended to the results and output directories
@@ -185,7 +202,7 @@ if not "%RUN_ID%"=="" (
     echo Analyzing results aggregated across all runs
 )
 
-REM Build the Python command with optional outcomes, max-subplots, and min-points arguments
+REM Build the Python command with optional arguments
 set PYTHON_CMD=python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
 if not "%OUTCOMES%"=="" (
     set PYTHON_CMD=%PYTHON_CMD% --outcomes %OUTCOMES%
@@ -198,6 +215,10 @@ if not "%MAX_SUBPLOTS%"=="" (
 if not "%MIN_POINTS%"=="" (
     set PYTHON_CMD=%PYTHON_CMD% --min-points %MIN_POINTS%
     echo Minimum data points required per plot: %MIN_POINTS%
+)
+if not "%ESTIMATOR%"=="" (
+    set PYTHON_CMD=%PYTHON_CMD% --estimator %ESTIMATOR%
+    echo Analyzing estimator^(s^): %ESTIMATOR%
 )
 
 if "%RUN_ALL%"=="true" (
