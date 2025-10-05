@@ -1,4 +1,3 @@
-# analyze_results.py
 import argparse
 from pathlib import Path
 
@@ -35,7 +34,7 @@ def main():
         "--max-subplots",
         type=int,
         default=None,
-        help="Maximum number of subplots per figure (default: no limit, all in one figure).",
+        help="Maximum number of subplots per figure (default: no limit).",
     )
     parser.add_argument(
         "--min-points",
@@ -45,52 +44,55 @@ def main():
     )
     parser.add_argument(
         "--estimator",
-        nargs="*",
-        choices=["baseline", "bert", "both"],
-        default=["both"],
-        help="Which estimator(s) to analyze: baseline, bert, or both (default: both).",
+        nargs="+",  # Use '+' for one or more, as bash script will always provide at least one
+        default=["baseline", "bert"],
+        help="Which estimator(s) to analyze.",
     )
     args = parser.parse_args()
-    
-    # Handle estimator argument
-    if "both" in args.estimator or len(args.estimator) == 0:
-        estimators_to_load = ["baseline", "bert"]
-    else:
-        estimators_to_load = args.estimator
 
-    # 1. Load raw data
-    raw_data = load_and_process_results(args.results_dir, estimators=estimators_to_load)
+    # This logic correctly determines which estimators to run
+    estimators_to_process = args.estimator
 
-    # 2. Filter data based on the --outcomes argument
-    if args.outcomes:
-        print(f"Filtering results for specific outcomes: {', '.join(args.outcomes)}")
-        initial_rows = len(raw_data)
-        raw_data = raw_data[raw_data["outcome"].isin(args.outcomes)]
-        print(f"Filtered data from {initial_rows} to {len(raw_data)} rows.")
-        if raw_data.empty:
+    print(f"\n--- Analysis configured for estimators: {estimators_to_process} ---")
+
+    for estimator in estimators_to_process:
+        print(f"\n{'=' * 60}")
+        print(f"STARTING ANALYSIS FOR ESTIMATOR: {estimator.upper()}")
+        print(f"{'=' * 60}")
+
+        # 1. Load raw data for THIS estimator only.
+        # We pass a list with a single item, e.g., ['baseline'], which works correctly.
+        print(f"Loading data for '{estimator}'...")
+        estimator_data = load_and_process_results(
+            args.results_dir, estimators=[estimator]
+        )
+
+        if estimator_data.empty:
+            print(f"Warning: No data found for estimator '{estimator}'. Skipping.")
+            continue
+
+        # 2. Filter data based on the --outcomes argument
+        if args.outcomes:
             print(
-                "Warning: No data remains after filtering for specified outcomes. Exiting."
+                f"Filtering results for specific outcomes: {', '.join(args.outcomes)}"
             )
-            return
+            initial_rows = len(estimator_data)
+            estimator_data = estimator_data[
+                estimator_data["outcome"].isin(args.outcomes)
+            ]
+            print(f"Filtered data from {initial_rows} to {len(estimator_data)} rows.")
+            if estimator_data.empty:
+                print(
+                    "Warning: No data remains after filtering for specified outcomes. Skipping estimator."
+                )
+                continue
 
-    # 3. Process each estimator separately
-    estimators_in_data = raw_data["estimator"].unique()
-    print(f"\n--- Processing estimators: {list(estimators_in_data)} ---")
-    
-    for estimator in estimators_in_data:
-        print(f"\n{'='*60}")
-        print(f"Processing {estimator.upper()} estimator")
-        print(f"{'='*60}")
-        
-        # Filter data for this estimator
-        estimator_data = raw_data[raw_data["estimator"] == estimator]
-        
-        # Create estimator-specific output directory
+        # 3. Create estimator-specific output directory
         estimator_output_dir = Path(args.output_dir) / estimator
         estimator_output_dir.mkdir(parents=True, exist_ok=True)
         print(f"Output directory: {estimator_output_dir}")
-        
-        # Perform aggregations for this estimator
+
+        # 4. Perform aggregations for this estimator
         print("\n--- Performing Aggregations ---")
         agg_bias_data = perform_bias_aggregation(estimator_data)
         agg_relative_bias_data = perform_relative_bias_aggregation(estimator_data)
@@ -98,12 +100,8 @@ def main():
         agg_coverage_data = perform_coverage_aggregation(estimator_data)
         agg_variance_data = perform_variance_aggregation(estimator_data)
 
-        # Create plots for each metric
+        # 5. Create plots for each metric
         print("\n--- Generating Plots ---")
-        if args.max_subplots:
-            print(f"Using maximum {args.max_subplots} subplots per figure")
-        print(f"Minimum data points required per plot: {args.min_points}")
-        
         create_plot_from_agg(
             agg_bias_data,
             "bias",
@@ -154,11 +152,12 @@ def main():
             max_subplots_per_figure=args.max_subplots,
             min_points=args.min_points,
         )
+        print(f"\nCOMPLETED ANALYSIS FOR ESTIMATOR: {estimator.upper()}")
 
-    print(f"\n{'='*60}")
-    print("Analysis complete for all estimators!")
+    print(f"\n{'=' * 60}")
+    print("Analysis complete for all requested estimators!")
     print(f"Results saved in: {args.output_dir}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":
