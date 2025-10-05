@@ -229,6 +229,23 @@ echo "Starting batch run at $(date)"
 echo "Logging to: $LOG_FILE"
 echo ""
 
+# Write log file header
+{
+    echo "========================================"
+    echo "CAUSAL PIPELINE BATCH RUN LOG"
+    echo "========================================"
+    echo "Started: $(date)"
+    echo "Total runs: $N_RUNS"
+    echo "Total experiments: $TOTAL_EXPERIMENTS"
+    echo "Run mode: $RUN_MODE"
+    echo "Data reuse: $REUSE_DATA"
+    echo "Overwrite: $OVERWRITE"
+    echo "Failfast: $FAILFAST"
+    echo "Experiments directory: $EXPERIMENTS_DIR"
+    echo "========================================"
+    echo ""
+} > "$LOG_FILE"
+
 # Set batch mode to prevent pausing
 export BATCH_MODE=true
 
@@ -241,6 +258,12 @@ for run_number in $(seq 1 $N_RUNS); do
     echo "STARTING RUN $run_number of $N_RUNS: $RUN_ID"
     echo "========================================="
     echo ""
+    
+    # Log run start
+    echo "" >> "$LOG_FILE"
+    echo "=========================================" >> "$LOG_FILE"
+    echo "[$(date +"%H:%M:%S")] STARTING RUN $run_number of $N_RUNS: $RUN_ID" >> "$LOG_FILE"
+    echo "=========================================" >> "$LOG_FILE"
     
     for file in ../experiment_configs/*.yaml; do
         if [ -f "$file" ]; then
@@ -290,7 +313,10 @@ for run_number in $(seq 1 $N_RUNS); do
             
             # Log start time
             start_time=$(date +"%H:%M:%S")
-            echo "[$start_time] Starting experiment: $RUN_ID/$filename" >> "$LOG_FILE"
+            echo "" >> "$LOG_FILE"
+            echo "========================================" >> "$LOG_FILE"
+            echo "[$start_time] STARTING: $RUN_ID/$filename" >> "$LOG_FILE"
+            echo "========================================" >> "$LOG_FILE"
             
             # Build command arguments
             EXPERIMENT_ARGS="$filename --run_id $RUN_ID"
@@ -324,19 +350,27 @@ for run_number in $(seq 1 $N_RUNS); do
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --tokenized \"$TOKENIZED_DATA\""
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --pretrain-model \"$PRETRAIN_MODEL\""
             
-            # Run the experiment
-            eval "./run_experiment.sh $EXPERIMENT_ARGS"
-            experiment_result=$?
+            # Run the experiment and capture output
+            EXPERIMENT_LOG_FILE="../logs/experiment_${RUN_ID}_${filename}_${timestamp}.log"
+            eval "./run_experiment.sh $EXPERIMENT_ARGS" 2>&1 | tee "$EXPERIMENT_LOG_FILE" | while IFS= read -r line; do
+                # Log key steps to main log file
+                if [[ "$line" =~ "==== Running" ]] || [[ "$line" =~ "==== Skipping" ]] || [[ "$line" =~ "ERROR" ]] || [[ "$line" =~ "FAILED" ]]; then
+                    echo "[$(date +"%H:%M:%S")] $line" >> "$LOG_FILE"
+                fi
+            done
+            experiment_result=${PIPESTATUS[0]}
             
             # Log end time and result
             end_time=$(date +"%H:%M:%S")
             
             if [ $experiment_result -eq 0 ]; then
-                echo "[$end_time] SUCCESS: $RUN_ID/$filename" >> "$LOG_FILE"
+                echo "[$end_time] ✓ SUCCESS: $RUN_ID/$filename" >> "$LOG_FILE"
+                echo "[$end_time] Full log: $EXPERIMENT_LOG_FILE" >> "$LOG_FILE"
                 echo "SUCCESS: Experiment $RUN_ID/$filename completed successfully"
                 ((SUCCESSFUL_EXPERIMENTS++))
             else
-                echo "[$end_time] FAILED: $RUN_ID/$filename" >> "$LOG_FILE"
+                echo "[$end_time] ✗ FAILED: $RUN_ID/$filename (exit code: $experiment_result)" >> "$LOG_FILE"
+                echo "[$end_time] Full log: $EXPERIMENT_LOG_FILE" >> "$LOG_FILE"
                 echo "FAILED: Experiment $RUN_ID/$filename failed with error code $experiment_result"
                 ((FAILED_EXPERIMENTS++))
                 if [ -z "$FAILED_LIST" ]; then
@@ -402,6 +436,12 @@ for run_number in $(seq 1 $N_RUNS); do
     echo "COMPLETED RUN $run_number of $N_RUNS: $RUN_ID"
     echo "========================================="
     echo ""
+    
+    # Log run completion
+    echo "" >> "$LOG_FILE"
+    echo "=========================================" >> "$LOG_FILE"
+    echo "[$(date +"%H:%M:%S")] COMPLETED RUN $run_number of $N_RUNS: $RUN_ID" >> "$LOG_FILE"
+    echo "=========================================" >> "$LOG_FILE"
 done
 
 # Final summary

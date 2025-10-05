@@ -262,6 +262,19 @@ echo Starting batch run at %YYYY%-%MM%-%DD% %HH%:%NN%:%SS%
 echo Logging to: %LOG_FILE%
 echo.
 
+REM Write log file header
+echo ======================================== > %LOG_FILE%
+echo CAUSAL PIPELINE BATCH RUN LOG >> %LOG_FILE%
+echo ======================================== >> %LOG_FILE%
+echo Started: %YYYY%-%MM%-%DD% %HH%:%NN%:%SS% >> %LOG_FILE%
+echo Total runs: %N_RUNS% >> %LOG_FILE%
+echo Total experiments: %TOTAL_EXPERIMENTS% >> %LOG_FILE%
+echo Run mode: %RUN_MODE% >> %LOG_FILE%
+echo Data reuse: %REUSE_DATA% >> %LOG_FILE%
+echo Experiments directory: %EXPERIMENTS_DIR% >> %LOG_FILE%
+echo ======================================== >> %LOG_FILE%
+echo. >> %LOG_FILE%
+
 REM Set batch mode to prevent pausing
 set BATCH_MODE=true
 
@@ -280,6 +293,14 @@ for /L %%r in (1,1,%N_RUNS%) do (
     echo STARTING RUN %%r of %N_RUNS%: !RUN_ID!
     echo =========================================
     echo.
+    
+    REM Log run start
+    for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
+    set "run_time=%dt:~8,2%:%dt:~10,2%:%dt:~12,2%"
+    echo. >> %LOG_FILE%
+    echo ========================================= >> %LOG_FILE%
+    echo [!run_time!] STARTING RUN %%r of %N_RUNS%: !RUN_ID! >> %LOG_FILE%
+    echo ========================================= >> %LOG_FILE%
     
     for %%f in (..\experiment_configs\*.yaml) do (
         set filename=%%~nf
@@ -330,7 +351,10 @@ for /L %%r in (1,1,%N_RUNS%) do (
     REM Log start time
     for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
     set "start_time=%dt:~8,2%:%dt:~10,2%:%dt:~12,2%"
-    echo [!start_time!] Starting experiment: !RUN_ID!/!filename! >> %LOG_FILE%
+    echo. >> %LOG_FILE%
+    echo ======================================== >> %LOG_FILE%
+    echo [!start_time!] STARTING: !RUN_ID!/!filename! >> %LOG_FILE%
+    echo ======================================== >> %LOG_FILE%
     
     REM Build command with run_id and data reuse flag
     set EXPERIMENT_ARGS=!filename! --run_id !RUN_ID!
@@ -353,20 +377,30 @@ for /L %%r in (1,1,%N_RUNS%) do (
     set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --tokenized %TOKENIZED_DATA%
     set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --pretrain-model %PRETRAIN_MODEL%
     
-    REM Run the experiment
-    call run_experiment.bat !EXPERIMENT_ARGS!
+    REM Run the experiment and capture output
+    set EXPERIMENT_LOG_FILE=..\logs\experiment_!RUN_ID!_!filename!_%timestamp%.log
+    call run_experiment.bat !EXPERIMENT_ARGS! > "!EXPERIMENT_LOG_FILE!" 2>&1
     set experiment_result=!errorlevel!
+    
+    REM Extract key steps from experiment log and add to main log
+    for /f "delims=" %%i in ('findstr /C:"==== Running" /C:"==== Skipping" /C:"ERROR" /C:"FAILED" "!EXPERIMENT_LOG_FILE!"') do (
+        for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
+        set "log_time=!dt:~8,2!:!dt:~10,2!:!dt:~12,2!"
+        echo [!log_time!] %%i >> %LOG_FILE%
+    )
     
     REM Log end time and result
     for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
     set "end_time=%dt:~8,2%:%dt:~10,2%:%dt:~12,2%"
     
     if !experiment_result! equ 0 (
-        echo [!end_time!] SUCCESS: !RUN_ID!/!filename! >> %LOG_FILE%
+        echo [!end_time!] + SUCCESS: !RUN_ID!/!filename! >> %LOG_FILE%
+        echo [!end_time!] Full log: !EXPERIMENT_LOG_FILE! >> %LOG_FILE%
         echo SUCCESS: Experiment !RUN_ID!/!filename! completed successfully
         set /a SUCCESSFUL_EXPERIMENTS+=1
     ) else (
-        echo [!end_time!] FAILED: !RUN_ID!/!filename! >> %LOG_FILE%
+        echo [!end_time!] X FAILED: !RUN_ID!/!filename! ^(exit code: !experiment_result!^) >> %LOG_FILE%
+        echo [!end_time!] Full log: !EXPERIMENT_LOG_FILE! >> %LOG_FILE%
         echo FAILED: Experiment !RUN_ID!/!filename! failed with error code !experiment_result!
         set /a FAILED_EXPERIMENTS+=1
         if "!FAILED_LIST!"=="" (
@@ -388,6 +422,14 @@ for /L %%r in (1,1,%N_RUNS%) do (
     echo COMPLETED RUN %%r of %N_RUNS%: !RUN_ID!
     echo =========================================
     echo.
+    
+    REM Log run completion
+    for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
+    set "run_end_time=%dt:~8,2%:%dt:~10,2%:%dt:~12,2%"
+    echo. >> %LOG_FILE%
+    echo ========================================= >> %LOG_FILE%
+    echo [!run_end_time!] COMPLETED RUN %%r of %N_RUNS%: !RUN_ID! >> %LOG_FILE%
+    echo ========================================= >> %LOG_FILE%
 )
 
 REM Final summary
