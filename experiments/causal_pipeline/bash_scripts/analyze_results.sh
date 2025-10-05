@@ -18,11 +18,15 @@ show_help() {
     echo "OPTIONS:"
     echo "  --run_id RUN_ID           Analyze results from specific run only (e.g., run_01, run_02)"
     echo "  --results_dir DIR         Directory containing experiment results"
+    echo "  --results-dir DIR         (alternative: use hyphen instead of underscore)"
     echo "                            Default: ../../../outputs/causal/sim_study/runs"
     echo "  --output_dir DIR          Directory to save analysis outputs"
+    echo "  --output-dir DIR          (alternative: use hyphen instead of underscore)"
     echo "                            Default: ../../../outputs/causal/sim_study/analysis"
     echo "  --outcomes OUTCOME1 OUTCOME2  Filter analysis to specific outcomes only"
     echo "                            (e.g., --outcomes OUTCOME_1 OUTCOME_2)"
+    echo "  --max-subplots N          Maximum subplots per figure (creates multiple figures if exceeded)"
+    echo "                            (e.g., --max-subplots 4 creates 2x2 grids)"
     echo "  --help, -h                Show this help message"
     echo ""
     echo "EXPERIMENTS:"
@@ -75,12 +79,14 @@ if [ $# -eq 0 ]; then
     RESULTS_DIR="../../../outputs/causal/sim_study/runs"
     OUTPUT_DIR="../../../outputs/causal/sim_study/analysis"
     OUTCOMES=""
+    MAX_SUBPLOTS=""
 else
     RUN_ALL=false
     RUN_ID=""
     RESULTS_DIR="../../../outputs/causal/sim_study/runs"
     OUTPUT_DIR="../../../outputs/causal/sim_study/analysis"
     OUTCOMES=""
+    MAX_SUBPLOTS=""
 fi
 
 # Parse arguments (only if arguments were provided)
@@ -89,15 +95,15 @@ if [ "$RUN_ALL" = "false" ]; then
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --run_id)
+        --run_id|--run-id)
             RUN_ID="$2"
             shift 2
             ;;
-        --results_dir)
+        --results_dir|--results-dir)
             RESULTS_DIR="$2"
             shift 2
             ;;
-        --output_dir)
+        --output_dir|--output-dir)
             OUTPUT_DIR="$2"
             shift 2
             ;;
@@ -112,6 +118,10 @@ while [[ $# -gt 0 ]]; do
                 fi
                 shift
             done
+            ;;
+        --max-subplots)
+            MAX_SUBPLOTS="$2"
+            shift 2
             ;;
         -h|--help)
             show_help
@@ -149,11 +159,15 @@ else
     echo "Analyzing results aggregated across all runs"
 fi
 
-# Build the Python command with optional outcomes argument
+# Build the Python command with optional outcomes and max-subplots arguments
 PYTHON_CMD="python ../python_scripts/analyze_experiment_results.py --results_dir \"$RESULTS_DIR\" --output_dir \"$OUTPUT_DIR\""
 if [ -n "$OUTCOMES" ]; then
     PYTHON_CMD="$PYTHON_CMD --outcomes $OUTCOMES"
     echo "Filtering analysis for outcomes: $OUTCOMES"
+fi
+if [ -n "$MAX_SUBPLOTS" ]; then
+    PYTHON_CMD="$PYTHON_CMD --max-subplots $MAX_SUBPLOTS"
+    echo "Using maximum $MAX_SUBPLOTS subplots per figure"
 fi
 
 if [ "$RUN_ALL" = "true" ]; then

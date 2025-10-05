@@ -31,6 +31,12 @@ def main():
         nargs="*",
         help="Specific outcomes to include in the analysis (default: all).",
     )
+    parser.add_argument(
+        "--max-subplots",
+        type=int,
+        default=None,
+        help="Maximum number of subplots per figure (default: no limit, all in one figure).",
+    )
     args = parser.parse_args()
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -59,6 +65,9 @@ def main():
 
     # 4. Create plots for each metric
     print("\n--- Generating Plots ---")
+    if args.max_subplots:
+        print(f"Using maximum {args.max_subplots} subplots per figure")
+
     create_plot_from_agg(
         agg_bias_data,
         "bias",
@@ -66,6 +75,7 @@ def main():
         "Average Bias",
         args.output_dir,
         "errorbar",
+        max_subplots_per_figure=args.max_subplots,
     )
     create_plot_from_agg(
         agg_relative_bias_data,
@@ -74,6 +84,7 @@ def main():
         "Relative Bias",
         args.output_dir,
         "errorbar",
+        max_subplots_per_figure=args.max_subplots,
     )
     create_plot_from_agg(
         agg_zscore_data,
@@ -82,6 +93,7 @@ def main():
         "Standardized Bias (Z-Score)",
         args.output_dir,
         "errorbar",
+        max_subplots_per_figure=args.max_subplots,
     )
     create_plot_from_agg(
         agg_coverage_data,
@@ -90,6 +102,7 @@ def main():
         "95% CI Coverage",
         args.output_dir,
         "dot",
+        max_subplots_per_figure=args.max_subplots,
     )
     create_plot_from_agg(
         agg_variance_data,
@@ -98,6 +111,7 @@ def main():
         "Empirical Variance",
         args.output_dir,
         "line",
+        max_subplots_per_figure=args.max_subplots,
     )
 
     print("\nAnalysis complete.")

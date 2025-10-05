@@ -13,12 +13,14 @@ if "%1"=="" (
     set RESULTS_DIR=..\..\..\outputs\causal\sim_study\runs
     set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
     set OUTCOMES=
+    set MAX_SUBPLOTS=
 ) else (
     set RUN_ALL=false
     set RUN_ID=
     set RESULTS_DIR=..\..\..\outputs\causal\sim_study\runs
     set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
     set OUTCOMES=
+    set MAX_SUBPLOTS=
 )
 
 REM Parse arguments
@@ -37,7 +39,19 @@ if "%1"=="--results_dir" (
     shift
     goto :parse_args
 )
+if "%1"=="--results-dir" (
+    set RESULTS_DIR=%2
+    shift
+    shift
+    goto :parse_args
+)
 if "%1"=="--output_dir" (
+    set OUTPUT_DIR=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--output-dir" (
     set OUTPUT_DIR=%2
     shift
     shift
@@ -45,6 +59,12 @@ if "%1"=="--output_dir" (
 )
 if "%1"=="--outcomes" (
     set OUTCOMES=%~2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--max-subplots" (
+    set MAX_SUBPLOTS=%2
     shift
     shift
     goto :parse_args
@@ -74,11 +94,15 @@ echo.
 echo OPTIONS:
 echo   --run_id RUN_ID           Analyze results from specific run only ^(e.g., run_01, run_02^)
 echo   --results_dir DIR         Directory containing experiment results
+echo   --results-dir DIR         ^(alternative: use hyphen instead of underscore^)
 echo                             Default: ..\..\..\outputs\causal\sim_study\runs
 echo   --output_dir DIR          Directory to save analysis outputs
+echo   --output-dir DIR          ^(alternative: use hyphen instead of underscore^)
 echo                             Default: ..\..\..\outputs\causal\sim_study\analysis
 echo   --outcomes "OUTCOME1 OUTCOME2"  Filter analysis to specific outcomes only
 echo                             ^(e.g., --outcomes "OUTCOME_1 OUTCOME_2"^)
+echo   --max-subplots N          Maximum subplots per figure ^(creates multiple figures if exceeded^)
+echo                             ^(e.g., --max-subplots 4 creates 2x2 grids^)
 echo   --help, -h                Show this help message
 echo.
 echo EXPERIMENTS:
@@ -114,11 +138,17 @@ echo.
 echo   analyze_results.bat --run_id run_01 --outcomes "OUTCOME_1"
 echo     -^> Combine run filtering with outcome filtering
 echo.
+echo   analyze_results.bat --max-subplots 4
+echo     -^> Create 2x2 grids, multiple figures if needed
+echo.
+echo   analyze_results.bat --max-subplots 6 --outcomes "OUTCOME_1"
+echo     -^> Combine max-subplots with outcome filtering
+echo.
 echo NOTES:
-echo   • By default, results are aggregated across all runs ^(run_01, run_02, etc.^)
-echo   • Use --run_id to analyze results from a specific run only
-echo   • When --run_id is used, it's appended to the results and output directories
-echo   • The script will create the output directory if it doesn't exist
+echo   - By default, results are aggregated across all runs ^(run_01, run_02, etc.^)
+echo   - Use --run_id to analyze results from a specific run only
+echo   - When --run_id is used, it's appended to the results and output directories
+echo   - The script will create the output directory if it doesn't exist
 echo.
 pause
 exit /b 0
@@ -143,11 +173,15 @@ if not "%RUN_ID%"=="" (
     echo Analyzing results aggregated across all runs
 )
 
-REM Build the Python command with optional outcomes argument
+REM Build the Python command with optional outcomes and max-subplots arguments
 set PYTHON_CMD=python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
 if not "%OUTCOMES%"=="" (
     set PYTHON_CMD=%PYTHON_CMD% --outcomes %OUTCOMES%
     echo Filtering analysis for outcomes: %OUTCOMES%
+)
+if not "%MAX_SUBPLOTS%"=="" (
+    set PYTHON_CMD=%PYTHON_CMD% --max-subplots %MAX_SUBPLOTS%
+    echo Using maximum %MAX_SUBPLOTS% subplots per figure
 )
 
 if "%RUN_ALL%"=="true" (
