@@ -3,7 +3,7 @@
 
 logging:
   level: INFO
-  path: ./outputs/logs/causal
+  path: ./outputs/logs/sim_study
 
 paths:
   data: "{{MEDS_DATA}}"

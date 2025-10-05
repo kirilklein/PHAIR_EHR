@@ -1,6 +1,6 @@
 logging:
   level: INFO
-  path: ./outputs/logs/causal
+  path: ./outputs/logs/sim_study
 
 paths:
   ### Inputs
