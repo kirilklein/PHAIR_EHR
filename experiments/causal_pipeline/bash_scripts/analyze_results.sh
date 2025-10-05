@@ -27,6 +27,7 @@ show_help() {
     echo "                            (e.g., --outcomes OUTCOME_1 OUTCOME_2)"
     echo "  --max-subplots N          Maximum subplots per figure (creates multiple figures if exceeded)"
     echo "                            (e.g., --max-subplots 4 creates 2x2 grids)"
+    echo "  --min-points N            Minimum data points required to generate a plot (default: 2)"
     echo "  --help, -h                Show this help message"
     echo ""
     echo "EXPERIMENTS:"
@@ -62,6 +63,9 @@ show_help() {
     echo "  ./analyze_results.sh --run_id run_01 --outcomes OUTCOME_1"
     echo "    → Combine run filtering with outcome filtering"
     echo ""
+    echo "  ./analyze_results.sh --max-subplots 4 --min-points 3"
+    echo "    → Create 2x2 grids and only plot if 3+ data points available"
+    echo ""
     echo "NOTES:"
     echo "  • By default, results are aggregated across all runs (run_01, run_02, etc.)"
     echo "  • Use --run_id to analyze results from a specific run only"
@@ -80,6 +84,7 @@ if [ $# -eq 0 ]; then
     OUTPUT_DIR="../../../outputs/causal/sim_study/analysis"
     OUTCOMES=""
     MAX_SUBPLOTS=""
+    MIN_POINTS=""
 else
     RUN_ALL=false
     RUN_ID=""
@@ -87,6 +92,7 @@ else
     OUTPUT_DIR="../../../outputs/causal/sim_study/analysis"
     OUTCOMES=""
     MAX_SUBPLOTS=""
+    MIN_POINTS=""
 fi
 
 # Parse arguments (only if arguments were provided)
@@ -121,6 +127,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --max-subplots)
             MAX_SUBPLOTS="$2"
+            shift 2
+            ;;
+        --min-points|--min-point)
+            MIN_POINTS="$2"
             shift 2
             ;;
         -h|--help)
@@ -159,7 +169,7 @@ else
     echo "Analyzing results aggregated across all runs"
 fi
 
-# Build the Python command with optional outcomes and max-subplots arguments
+# Build the Python command with optional outcomes, max-subplots, and min-points arguments
 PYTHON_CMD="python ../python_scripts/analyze_experiment_results.py --results_dir \"$RESULTS_DIR\" --output_dir \"$OUTPUT_DIR\""
 if [ -n "$OUTCOMES" ]; then
     PYTHON_CMD="$PYTHON_CMD --outcomes $OUTCOMES"
@@ -168,6 +178,10 @@ fi
 if [ -n "$MAX_SUBPLOTS" ]; then
     PYTHON_CMD="$PYTHON_CMD --max-subplots $MAX_SUBPLOTS"
     echo "Using maximum $MAX_SUBPLOTS subplots per figure"
+fi
+if [ -n "$MIN_POINTS" ]; then
+    PYTHON_CMD="$PYTHON_CMD --min-points $MIN_POINTS"
+    echo "Minimum data points required per plot: $MIN_POINTS"
 fi
 
 if [ "$RUN_ALL" = "true" ]; then

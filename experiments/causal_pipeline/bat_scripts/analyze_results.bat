@@ -14,6 +14,7 @@ if "%1"=="" (
     set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
     set OUTCOMES=
     set MAX_SUBPLOTS=
+    set MIN_POINTS=
 ) else (
     set RUN_ALL=false
     set RUN_ID=
@@ -21,6 +22,7 @@ if "%1"=="" (
     set OUTPUT_DIR=..\..\..\outputs\causal\sim_study\analysis
     set OUTCOMES=
     set MAX_SUBPLOTS=
+    set MIN_POINTS=
 )
 
 REM Parse arguments
@@ -69,6 +71,12 @@ if "%1"=="--max-subplots" (
     shift
     goto :parse_args
 )
+if "%1"=="--min-points" (
+    set MIN_POINTS=%2
+    shift
+    shift
+    goto :parse_args
+)
 if "%1"=="-h" goto :show_full_help
 if "%1"=="--help" goto :show_full_help
 REM Add to experiments list
@@ -103,6 +111,7 @@ echo   --outcomes "OUTCOME1 OUTCOME2"  Filter analysis to specific outcomes only
 echo                             ^(e.g., --outcomes "OUTCOME_1 OUTCOME_2"^)
 echo   --max-subplots N          Maximum subplots per figure ^(creates multiple figures if exceeded^)
 echo                             ^(e.g., --max-subplots 4 creates 2x2 grids^)
+echo   --min-points N            Minimum data points required to generate a plot ^(default: 2^)
 echo   --help, -h                Show this help message
 echo.
 echo EXPERIMENTS:
@@ -144,6 +153,9 @@ echo.
 echo   analyze_results.bat --max-subplots 6 --outcomes "OUTCOME_1"
 echo     -^> Combine max-subplots with outcome filtering
 echo.
+echo   analyze_results.bat --max-subplots 4 --min-points 3
+echo     -^> Create 2x2 grids and only plot if 3+ data points available
+echo.
 echo NOTES:
 echo   - By default, results are aggregated across all runs ^(run_01, run_02, etc.^)
 echo   - Use --run_id to analyze results from a specific run only
@@ -173,7 +185,7 @@ if not "%RUN_ID%"=="" (
     echo Analyzing results aggregated across all runs
 )
 
-REM Build the Python command with optional outcomes and max-subplots arguments
+REM Build the Python command with optional outcomes, max-subplots, and min-points arguments
 set PYTHON_CMD=python ..\python_scripts\analyze_experiment_results.py --results_dir %RESULTS_DIR% --output_dir %OUTPUT_DIR%
 if not "%OUTCOMES%"=="" (
     set PYTHON_CMD=%PYTHON_CMD% --outcomes %OUTCOMES%
@@ -182,6 +194,10 @@ if not "%OUTCOMES%"=="" (
 if not "%MAX_SUBPLOTS%"=="" (
     set PYTHON_CMD=%PYTHON_CMD% --max-subplots %MAX_SUBPLOTS%
     echo Using maximum %MAX_SUBPLOTS% subplots per figure
+)
+if not "%MIN_POINTS%"=="" (
+    set PYTHON_CMD=%PYTHON_CMD% --min-points %MIN_POINTS%
+    echo Minimum data points required per plot: %MIN_POINTS%
 )
 
 if "%RUN_ALL%"=="true" (

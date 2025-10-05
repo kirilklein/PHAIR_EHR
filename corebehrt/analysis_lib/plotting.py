@@ -53,6 +53,7 @@ def create_plot_from_agg(
     output_dir: str,
     plot_type: str = "errorbar",
     max_subplots_per_figure: int = None,
+    min_points: int = 2,
 ):
     """
     Generic plotting function for creating faceted plots with optimal grid layout.
@@ -65,6 +66,7 @@ def create_plot_from_agg(
         output_dir: Directory to save plots
         plot_type: Type of plot ('errorbar', 'line', 'dot')
         max_subplots_per_figure: Maximum subplots per figure (creates multiple figures if exceeded)
+        min_points: Minimum number of data points required to generate a plot (default: 2)
     """
     if agg_data.empty:
         return
@@ -74,13 +76,13 @@ def create_plot_from_agg(
     instrument_levels_to_plot = [
         lvl
         for lvl in all_instrument_levels
-        if agg_data[agg_data["i"] == lvl]["avg_confounding"].nunique() > 1
+        if agg_data[agg_data["i"] == lvl]["avg_confounding"].nunique() >= min_points
     ]
     if instrument_levels_to_plot:
         skipped = set(all_instrument_levels) - set(instrument_levels_to_plot)
         if skipped:
             print(
-                f"Skipping {title_prefix} vs. Confounder plots for i={skipped} (only one data point)."
+                f"Skipping {title_prefix} vs. Confounder plots for i={skipped} (fewer than {min_points} data points)."
             )
 
         # Split into batches if max_subplots_per_figure is specified
@@ -175,13 +177,13 @@ def create_plot_from_agg(
     conf_levels_to_plot = [
         lvl
         for lvl in all_conf_levels
-        if agg_data[agg_data["avg_confounding"] == lvl]["i"].nunique() > 1
+        if agg_data[agg_data["avg_confounding"] == lvl]["i"].nunique() >= min_points
     ]
     if conf_levels_to_plot:
         skipped = set(all_conf_levels) - set(conf_levels_to_plot)
         if skipped:
             print(
-                f"Skipping {title_prefix} vs. Instrument plots for avg_confounding={skipped} (only one data point)."
+                f"Skipping {title_prefix} vs. Instrument plots for avg_confounding={skipped} (fewer than {min_points} data points)."
             )
 
         # Split into batches if max_subplots_per_figure is specified

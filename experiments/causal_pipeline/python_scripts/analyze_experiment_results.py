@@ -37,6 +37,12 @@ def main():
         default=None,
         help="Maximum number of subplots per figure (default: no limit, all in one figure).",
     )
+    parser.add_argument(
+        "--min-points",
+        type=int,
+        default=2,
+        help="Minimum number of data points required to generate a plot (default: 2).",
+    )
     args = parser.parse_args()
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -67,7 +73,8 @@ def main():
     print("\n--- Generating Plots ---")
     if args.max_subplots:
         print(f"Using maximum {args.max_subplots} subplots per figure")
-
+    print(f"Minimum data points required per plot: {args.min_points}")
+    
     create_plot_from_agg(
         agg_bias_data,
         "bias",
@@ -76,6 +83,7 @@ def main():
         args.output_dir,
         "errorbar",
         max_subplots_per_figure=args.max_subplots,
+        min_points=args.min_points,
     )
     create_plot_from_agg(
         agg_relative_bias_data,
@@ -85,6 +93,7 @@ def main():
         args.output_dir,
         "errorbar",
         max_subplots_per_figure=args.max_subplots,
+        min_points=args.min_points,
     )
     create_plot_from_agg(
         agg_zscore_data,
@@ -94,6 +103,7 @@ def main():
         args.output_dir,
         "errorbar",
         max_subplots_per_figure=args.max_subplots,
+        min_points=args.min_points,
     )
     create_plot_from_agg(
         agg_coverage_data,
@@ -103,6 +113,7 @@ def main():
         args.output_dir,
         "dot",
         max_subplots_per_figure=args.max_subplots,
+        min_points=args.min_points,
     )
     create_plot_from_agg(
         agg_variance_data,
@@ -112,6 +123,7 @@ def main():
         args.output_dir,
         "line",
         max_subplots_per_figure=args.max_subplots,
+        min_points=args.min_points,
     )
 
     print("\nAnalysis complete.")
