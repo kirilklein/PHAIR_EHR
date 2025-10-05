@@ -2,10 +2,30 @@
 
 # ========================================
 # Causal Pipeline Full Experiment Runner (Baseline + BERT)
+# Refactored for clarity and maintainability
 # ========================================
 
-# Check for help or no arguments
+# --- Script Configuration ---
+set -e # Exit immediately if a command exits with a non-zero status.
+
+# Default timeouts in seconds
+TIMEOUT_SIMULATE=1800   # 30 mins
+TIMEOUT_COHORT=900      # 15 mins
+TIMEOUT_PREPARE=1200    # 20 mins
+TIMEOUT_TRAIN_BL=3600   # 1 hour
+TIMEOUT_CAL_BL=1800     # 30 mins
+TIMEOUT_EST_BL=1800     # 30 mins
+TIMEOUT_FINETUNE_BERT=7200 # 2 hours
+TIMEOUT_CAL_BERT=1800   # 30 mins
+TIMEOUT_EST_BERT=1800   # 30 mins
+TIMEOUT_FACTOR=1.0      # Default timeout scaling factor
+
+# --- Argument Parsing ---
 if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "Usage: $0 <experiment_name> [OPTIONS]"
+    echo ""
+    echo "OPTIONS:"
+    echo "  --timeout-factor F    Multiply all timeouts by this factor (e.g., 0.1 for quick tests)"
     echo "========================================"
     echo "Full Causal Pipeline Experiment Runner"
     echo "========================================"
@@ -41,66 +61,31 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  - Results are saved to: ../../../outputs/causal/sim_study/runs/<experiment_name>/"
     echo "  - Use Ctrl+C to stop the experiment at any time"
     echo ""
-    if [ "$BATCH_MODE" != "true" ]; then
-        read -p "Press Enter to continue..."
-    fi
     exit 1
 fi
 
-echo "DEBUG: run_experiment.sh called with arguments: $*"
-echo "DEBUG: First argument \$1 = \"$1\""
-echo "DEBUG: Second argument \$2 = \"$2\""
-echo "DEBUG: All arguments \$* = $*"
-
 EXPERIMENT_NAME="$1"
-echo "DEBUG: EXPERIMENT_NAME set to: $EXPERIMENT_NAME"
+shift
+
+# Default values
 RUN_BASELINE=true
 RUN_BERT=true
-RUN_ID="run_01"  # Default run ID
-REUSE_DATA=true  # Default: reuse data from run_01 if available
-OVERWRITE=true  # Default: overwrite existing outputs
-EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"  # Default base directory for experiments
+RUN_ID="run_01"
+REUSE_DATA=true
+OVERWRITE=true
+EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"
 
-# Configurable data paths with defaults
-MEDS_DATA="./example_data/synthea_meds_causal"
-FEATURES_DATA="./outputs/causal/data/features"
-TOKENIZED_DATA="./outputs/causal/data/tokenized"
-PRETRAIN_MODEL="./outputs/causal/pretrain/model"
 
-echo "DEBUG: Initial flags - RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT, RUN_ID=$RUN_ID, REUSE_DATA=$REUSE_DATA, EXPERIMENTS_DIR=$EXPERIMENTS_DIR"
-
-# Parse additional arguments
-shift
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --baseline-only)
-            RUN_BERT=false
-            shift
-            ;;
-        --bert-only)
-            RUN_BASELINE=false
-            shift
-            ;;
-        --run_id)
-            RUN_ID="$2"
-            shift 2
-            ;;
-        --reuse-data|-r)
-            REUSE_DATA=true
-            shift
-            ;;
-        --no-reuse-data)
-            REUSE_DATA=false
-            shift
-            ;;
-        --dont-overwrite)
-            OVERWRITE=false
-            shift
-            ;;
-        --experiment-dir|-e)
-            EXPERIMENTS_DIR="$2"
-            shift 2
-            ;;
+        --baseline-only) RUN_BERT=false; shift ;;
+        --bert-only) RUN_BASELINE=false; shift ;;
+        --run_id) RUN_ID="$2"; shift 2 ;;
+        --reuse-data|-r) REUSE_DATA=true; shift ;;
+        --no-reuse-data) REUSE_DATA=false; shift ;;
+        --dont-overwrite) OVERWRITE=false; shift ;;
+        --experiment-dir|-e) EXPERIMENTS_DIR="$2"; shift 2 ;;
+        --timeout-factor) TIMEOUT_FACTOR="$2"; shift 2;;
         --meds)
             MEDS_DATA="$2"
             shift 2
@@ -117,222 +102,118 @@ while [[ $# -gt 0 ]]; do
             PRETRAIN_MODEL="$2"
             shift 2
             ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Usage: $0 <experiment_name> [--baseline-only|--bert-only] [--run_id run_XX] [--reuse-data|-r|--no-reuse-data] [--dont-overwrite] [--experiment-dir|-e DIR] [--meds PATH] [--features PATH] [--tokenized PATH] [--pretrain-model PATH]"
-            exit 1
-            ;;
+        *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
 echo "========================================"
-echo "Running Full Causal Pipeline Experiment: $RUN_ID/$EXPERIMENT_NAME"
-echo "DEBUG: RUN_BASELINE=$RUN_BASELINE, RUN_BERT=$RUN_BERT, RUN_ID=$RUN_ID"
-if [ "$RUN_BASELINE" = "true" ] && [ "$RUN_BERT" = "true" ]; then
-    echo "Mode: BASELINE + BERT"
-elif [ "$RUN_BASELINE" = "true" ]; then
-    echo "Mode: BASELINE ONLY"
-else
-    echo "Mode: BERT ONLY"
-fi
+echo "Running Experiment: $RUN_ID/$EXPERIMENT_NAME"
+echo "Timeout Factor: $TIMEOUT_FACTOR"
 echo "========================================"
 
-# Function to check for errors
-check_error() {
-    if [ $? -ne 0 ]; then
-        echo ""
-        echo "======================================"
-        echo "An error occurred in the $EXPERIMENT_NAME experiment."
-        echo "Check the output above for the Python traceback."
-        echo "Terminating pipeline."
-        echo "======================================"
-        if [ "$BATCH_MODE" != "true" ]; then
-            read -p "Press Enter to continue..."
-        fi
-        exit 1
+run_step() {
+    local step_name=$1
+    local python_module=$2
+    local config_name=$3
+    local check_file=$4
+    local timeout_secs=$5
+
+    # Scale timeout by the factor
+    local effective_timeout=$(echo "$timeout_secs * $TIMEOUT_FACTOR" | bc)
+    
+    echo "" # Add spacing
+    if [ "$OVERWRITE" = "false" ] && [ -f "$check_file" ]; then
+        echo "==== Skipping $step_name (output already exists) ===="
+        return
     fi
+
+    echo "==== Running $step_name... ===="
+    local config_path="experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/$config_name.yaml"
+    
+    timeout "$effective_timeout" python -m "$python_module" --config_path "$config_path"
+    local exit_code=$?
+    
+    if [ $exit_code -eq 124 ]; then
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "ERROR: Step '$step_name' timed out after $effective_timeout seconds."
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        exit 124
+    elif [ $exit_code -ne 0 ]; then
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "ERROR: Step '$step_name' failed with exit code $exit_code."
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        exit $exit_code
+    fi
+    echo "==== Success: $step_name completed. ===="
 }
 
-# Generate experiment-specific configs
+
+# --- Main Execution ---
+
+# 1. Generate Configs
 echo "Step 1: Generating experiment configs..."
 python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME" --run_id "$RUN_ID" --experiments_dir "$EXPERIMENTS_DIR" --meds "$MEDS_DATA" --features "$FEATURES_DATA" --tokenized "$TOKENIZED_DATA" --pretrain-model "$PRETRAIN_MODEL"
-check_error
-
-echo ""
-echo "Step 2: Running pipeline steps..."
+if [ $? -ne 0 ]; then echo "ERROR: Config generation failed."; exit 1; fi
+echo "All configs generated successfully."
 echo ""
 
-# Change to project root for running pipeline commands
+# 2. Change to Project Root
 cd ../../..
-echo "DEBUG: Current directory after cd: $(pwd)"
-echo "DEBUG: Config path will be: experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/simulation.yaml"
-
-# Verify the config file exists from this directory
-if [ -f "experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/simulation.yaml" ]; then
-    echo "DEBUG: Config file exists at expected path from current directory"
-else
-    echo "ERROR: Config file NOT found at expected path from current directory"
-    echo "DEBUG: Let's see what's in the generated_configs directory:"
-    ls -la "experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/" 2>/dev/null || echo "Directory does not exist"
-    if [ "$BATCH_MODE" != "true" ]; then
-        read -p "Press Enter to continue..."
-    fi
-    exit 1
-fi
-
-# Add the project root to Python path (if needed)
 export PYTHONPATH="$PWD:$PYTHONPATH"
 
-# --- Shared Data Preparation ---
-# Check if we should reuse data from run_01
+# 3. Handle Data Reuse
 SHOULD_REUSE=false
 if [ "$REUSE_DATA" = "true" ] && [ "$RUN_ID" != "run_01" ]; then
-    # Check if run_01 data exists for this experiment
     RUN_01_PREPARED="$EXPERIMENTS_DIR/run_01/$EXPERIMENT_NAME/prepared_data"
     if [ -d "$RUN_01_PREPARED" ]; then
         SHOULD_REUSE=true
-        echo ""
-        echo "======================================="
-        echo "Reusing prepared data from run_01"
-        echo "======================================="
-        echo "This ensures identical data across runs for proper variance measurement."
-        echo ""
-        
-        # Create target directories
+        echo "Reusing and copying prepared data from run_01..."
         TARGET_BASE="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
         mkdir -p "$TARGET_BASE"
-        
-        # Copy the prepared data directories from run_01
-        echo "Copying simulated_outcomes..."
         cp -r "$EXPERIMENTS_DIR/run_01/$EXPERIMENT_NAME/simulated_outcomes" "$TARGET_BASE/"
-        
-        echo "Copying cohort..."
         cp -r "$EXPERIMENTS_DIR/run_01/$EXPERIMENT_NAME/cohort" "$TARGET_BASE/"
-        
-        echo "Copying prepared_data..."
         cp -r "$EXPERIMENTS_DIR/run_01/$EXPERIMENT_NAME/prepared_data" "$TARGET_BASE/"
-        
-        echo "Data reuse complete. Skipping simulation and preparation steps."
-        echo ""
+        echo "Data reuse complete."
     else
-        echo "Note: --reuse-data enabled but run_01 data not found at $RUN_01_PREPARED"
-        echo "Will generate new data for this run."
-        echo ""
+        echo "Note: --reuse-data enabled but run_01 data not found. Will generate new data for this run."
     fi
 fi
 
-# Only run data preparation if we're not reusing
+# 4. Run Data Preparation Steps (if not reusing)
 if [ "$SHOULD_REUSE" = "false" ]; then
-    # Set target directory for checks
+    echo "Step 2: Running Data Preparation Pipeline..."
     TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
-    
-    # Simulation step
-    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/simulated_outcomes" ]; then
-        echo "==== Skipping simulate_outcomes (output already exists) ===="
-    else
-        echo "==== Running simulate_outcomes... ===="
-        python -m corebehrt.main_causal.simulate_from_sequence --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/simulation.yaml
-        check_error
-    fi
-
-    # Select cohort step
-    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/cohort" ]; then
-        echo "==== Skipping select_cohort (output already exists) ===="
-    else
-        echo "==== Running select_cohort... ===="
-        python -m corebehrt.main_causal.select_cohort_full --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/select_cohort.yaml
-        check_error
-    fi
-
-    # Prepare data step
-    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/prepared_data" ]; then
-        echo "==== Skipping prepare_finetune_data (output already exists) ===="
-    else
-        echo "==== Running prepare_finetune_data... ===="
-        python -m corebehrt.main_causal.prepare_ft_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/prepare_finetune.yaml
-        check_error
-    fi
+    run_step "simulate_outcomes" "corebehrt.main_causal.simulate_from_sequence" "simulation" "$TARGET_DIR/simulated_outcomes/counterfactuals.csv" $TIMEOUT_SIMULATE
+    run_step "select_cohort" "corebehrt.main_causal.select_cohort_full" "select_cohort" "$TARGET_DIR/cohort/pids.pt" $TIMEOUT_COHORT
+    run_step "prepare_finetune_data" "corebehrt.main_causal.prepare_ft_exp_y" "prepare_finetune" "$TARGET_DIR/prepared_data/patients.pt" $TIMEOUT_PREPARE
 fi
 
-# --- Baseline Pipeline ---
+# 5. Run Baseline Pipeline (if enabled)
 if [ "$RUN_BASELINE" = "true" ]; then
     echo ""
     echo "========================================"
     echo "==== Running Baseline Pipeline ===="
     echo "========================================"
     TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
-    
-    # Train baseline step
-    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/models/baseline" ]; then
-        echo "==== Skipping train_baseline (output already exists) ===="
-    else
-        echo "==== Running train_baseline... ===="
-        python -m corebehrt.main_causal.train_baseline --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/train_baseline.yaml
-        check_error
-    fi
-
-    # Calibrate baseline step
-    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/calibrated/baseline" ]; then
-        echo "==== Skipping calibrate (Baseline) (output already exists) ===="
-    else
-        echo "==== Running calibrate (Baseline)... ===="
-        python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/calibrate.yaml
-        check_error
-    fi
-
-    # Estimate baseline step  
-    if [ "$OVERWRITE" = "false" ] && [ -f "$TARGET_DIR/estimate/baseline/estimate_results.csv" ]; then
-        echo "==== Skipping estimate (Baseline) (output already exists) ===="
-    else
-        echo "==== Running estimate (Baseline)... ===="
-        python -m corebehrt.main_causal.estimate --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/estimate.yaml
-        check_error
-    fi
+    run_step "train_baseline" "corebehrt.main_causal.train_baseline" "train_baseline" "$TARGET_DIR/models/baseline/combined_predictions.csv" $TIMEOUT_TRAIN_BL
+    run_step "calibrate (Baseline)" "corebehrt.main_causal.calibrate_exp_y" "calibrate" "$TARGET_DIR/calibrated/baseline/combined_calibrated_predictions.csv" $TIMEOUT_CAL_BL
+    run_step "estimate (Baseline)" "corebehrt.main_causal.estimate" "estimate" "$TARGET_DIR/estimate/baseline/estimate_results.csv" $TIMEOUT_EST_BL
 fi
 
-# --- BERT Pipeline ---
+# 6. Run BERT Pipeline (if enabled)
 if [ "$RUN_BERT" = "true" ]; then
     echo ""
     echo "========================================"
     echo "==== Running BERT Pipeline ===="
     echo "========================================"
     TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
-    
-    # Finetune BERT step
-    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/models/bert" ]; then
-        echo "==== Skipping finetune (BERT) (output already exists) ===="
-    else
-        echo "==== Running finetune (BERT)... ===="
-        python -m corebehrt.main_causal.finetune_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/finetune_bert.yaml
-        check_error
-    fi
-
-    # Calibrate BERT step
-    if [ "$OVERWRITE" = "false" ] && [ -d "$TARGET_DIR/calibrated/bert" ]; then
-        echo "==== Skipping calibrate (BERT) (output already exists) ===="
-    else
-        echo "==== Running calibrate (BERT)... ===="
-        python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/calibrate_bert.yaml
-        check_error
-    fi
-
-    # Estimate BERT step
-    if [ "$OVERWRITE" = "false" ] && [ -f "$TARGET_DIR/estimate/bert/estimate_results.csv" ]; then
-        echo "==== Skipping estimate (BERT) (output already exists) ===="
-    else
-        echo "==== Running estimate (BERT)... ===="
-        python -m corebehrt.main_causal.estimate --config_path experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/estimate_bert.yaml
-        check_error
-    fi
+    run_step "finetune (BERT)" "corebehrt.main_causal.finetune_exp_y" "finetune_bert" "$TARGET_DIR/models/bert/combined_predictions.csv" $TIMEOUT_FINETUNE_BERT
+    run_step "calibrate (BERT)" "corebehrt.main_causal.calibrate_exp_y" "calibrate_bert" "$TARGET_DIR/calibrated/bert/combined_calibrated_predictions.csv" $TIMEOUT_CAL_BERT
+    run_step "estimate (BERT)" "corebehrt.main_causal.estimate" "estimate_bert" "$TARGET_DIR/estimate/bert/estimate_results.csv" $TIMEOUT_EST_BERT
 fi
 
 echo ""
 echo "========================================"
 echo "Experiment $RUN_ID/$EXPERIMENT_NAME completed successfully!"
-echo "Results saved in: $EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME/"
 echo "========================================"
-
-if [ "$BATCH_MODE" != "true" ]; then
-    read -p "Press Enter to continue..."
-fi
 exit 0
