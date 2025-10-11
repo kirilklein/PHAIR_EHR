@@ -143,11 +143,8 @@ class EffectEstimator:
             # 1. Prepare data with potential outcomes for the current outcome
             df_for_outcome = prepare_data_for_outcome(self.analysis_df, outcome_name)
 
-            # 2. Build estimators with the correct outcome column
-            estimator = self._build_multi_estimator()
-
-            # 3. Estimate effects
-            effect_df = self._estimate_effects(df_for_outcome, estimator)
+            # 2. Estimate effects using the new logic
+            effect_df = self._estimate_effects(df_for_outcome)
 
             if self.counterfactual_df is not None:
                 effect_df = append_true_effect(
@@ -182,18 +179,65 @@ class EffectEstimator:
         self._visualize_effects(final_results_df, combined_stats_df, tmle_analysis_df)
         self.logger.info("Effect estimation complete for all outcomes.")
 
-    def _estimate_effects(
-        self, df: pd.DataFrame, estimator: MultiEstimator
-    ) -> pd.DataFrame:
-        """Estimate effects using the provided estimator instance."""
-        effect_dict = estimator.compute_effects(
-            df,
-            n_bootstraps=self.n_bootstrap,
-            apply_common_support=False,  # we already filtered for common support
-            common_support_threshold=None,
-            return_bootstrap_samples=False,
-        )
-        return convert_effect_to_dataframe(effect_dict)
+    def _estimate_effects(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Estimate effects, separating bootstrap methods from theoretical (single-shot) methods.
+        """
+        all_methods = self.estimator_cfg.methods
+
+        # Separate methods into bootstrap and theoretical groups
+        bootstrap_methods = [m for m in all_methods if m.lower() != "tmle_th"]
+        theoretical_methods = [m for m in all_methods if m.lower() == "tmle_th"]
+
+        all_effect_dicts = {}
+
+        # --- 1. Run Theoretical Estimators (if any) ---
+        if theoretical_methods:
+            self.logger.info(f"Running theoretical estimator: {theoretical_methods[0]}")
+            # Build only the TMLE estimator for a single run
+            tmle_th_estimator = TMLE(
+                effect_type=self.effect_type,
+                treatment_col=EXPOSURE_COL,
+                outcome_col=OUTCOME,
+                ps_col=PS_COL,
+                probas_col=PROBAS,
+                probas_t1_col=PROBAS_EXPOSED,
+                probas_t0_col=PROBAS_CONTROL,
+                clip_percentile=self.clip_percentile,
+            )
+            # Compute effect once, directly getting theoretical CI
+            effect_dict_th = tmle_th_estimator.compute_effect(df)
+            all_effect_dicts["TMLE_TH"] = effect_dict_th
+
+        # --- 2. Run Bootstrap Estimators (if any) ---
+        if bootstrap_methods:
+            self.logger.info(f"Running bootstrap estimators: {bootstrap_methods}")
+            # Build a MultiEstimator for the remaining methods
+            bootstrap_estimator_list = self._build_estimators_for_methods(
+                bootstrap_methods
+            )
+
+            if bootstrap_estimator_list:
+                multi_estimator = MultiEstimator(
+                    estimators=bootstrap_estimator_list, verbose=False
+                )
+                # Run with bootstrapping only if n_bootstrap is greater than 0
+                n_boot = self.n_bootstrap if self.n_bootstrap > 0 else 0
+                if n_boot == 0:
+                    self.logger.warning(
+                        "n_bootstrap is 0, running bootstrap methods without CI."
+                    )
+
+                effect_dict_bs = multi_estimator.compute_effects(
+                    df,
+                    n_bootstraps=n_boot,
+                    apply_common_support=False,
+                    common_support_threshold=None,
+                    return_bootstrap_samples=False,
+                )
+                all_effect_dicts.update(effect_dict_bs)
+
+        return convert_effect_to_dataframe(all_effect_dicts)
 
     def _visualize_effects(
         self,
@@ -276,9 +320,10 @@ class EffectEstimator:
             self.exp_dir, self.analysis_df, final_results_df, combined_stats_df
         )
 
+        # UPDATED: Check for both TMLE and TMLE_TH for adjustment plots
         tmle_analysis_df = (
             prepare_tmle_analysis_df(initial_estimates_df)
-            if any(m.upper() == "TMLE" for m in self.estimator_cfg.methods)
+            if any(m.upper() in ["TMLE", "TMLE_TH"] for m in self.estimator_cfg.methods)
             else None
         )
         save_tmle_analysis(
@@ -286,11 +331,12 @@ class EffectEstimator:
         ) if tmle_analysis_df is not None else None
         return final_results_df, combined_stats_df, tmle_analysis_df
 
-    def _build_multi_estimator(self) -> MultiEstimator:
-        """Builds a MultiEstimator for a specific outcome."""
+    def _build_estimators_for_methods(self, methods: list) -> list:
+        """
+        Builds a list of estimator objects for the given method names.
+        """
         estimators = []
-
-        for method in self.estimator_cfg.methods:
+        for method in methods:
             method_upper = method.upper()
             if method_upper == "TMLE":
                 estimators.append(
@@ -326,7 +372,7 @@ class EffectEstimator:
                         probas_t0_col=PROBAS_CONTROL,
                     )
                 )
-        return MultiEstimator(estimators=estimators, verbose=False)
+        return estimators
 
     def init_estimator_args(self, cfg) -> None:
         """
@@ -409,10 +455,8 @@ class EffectEstimator:
             )
 
             df_for_outcome = prepare_data_for_outcome(self.analysis_df, outcome_name)
-            estimator = self._build_multi_estimator()
 
             # Get unbiased cohort and calculate true effect once as a reference
-
             dummy_effect_df = pd.DataFrame([{"estimator": "placeholder"}])
             true_effect_df = append_true_effect(
                 dummy_effect_df,
@@ -428,7 +472,8 @@ class EffectEstimator:
                     df_for_outcome.copy(), ps_bias, y_bias
                 )
 
-                effect_df = self._estimate_effects(df_biased, estimator)
+                # UPDATED: Call the refactored estimation method
+                effect_df = self._estimate_effects(df_biased)
 
                 effect_df[EffectColumns.ps_bias] = ps_bias
                 effect_df[EffectColumns.y_bias] = y_bias

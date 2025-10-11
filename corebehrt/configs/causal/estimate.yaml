@@ -11,7 +11,7 @@ paths:
   estimate: ./outputs/causal/estimate/simple
 
 estimator:
-  methods: ["IPW", "TMLE"]
+  methods: ["IPW", "TMLE", "TMLE_TH"]
   effect_type: "ATE"
   n_bootstrap: 30
   common_support_threshold: 0.001

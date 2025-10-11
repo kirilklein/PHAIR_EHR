@@ -142,7 +142,9 @@ def prepare_tmle_analysis_df(initial_estimates_df: pd.DataFrame) -> pd.DataFrame
 
     # Filter TMLE rows
     tmle_df = initial_estimates_df.loc[
-        initial_estimates_df[TMLEAnalysisColumns.method].eq("TMLE")
+        initial_estimates_df[TMLEAnalysisColumns.method]
+        .str.upper()
+        .isin(["TMLE", "TMLE_TH"])
     ].copy()
     if tmle_df.empty:
         print("Skipping TMLE analysis: no TMLE results found.")
