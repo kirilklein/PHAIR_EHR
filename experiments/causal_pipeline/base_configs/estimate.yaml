@@ -11,7 +11,7 @@ paths:
   estimate: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/estimate/baseline"
 
 estimator:
-  methods: ["IPW", "TMLE"]
+  methods: ["IPW", "TMLE", "TMLE_TH"]
   effect_type: "ATE"
   n_bootstrap: 30
   clip_percentile: 0.99
