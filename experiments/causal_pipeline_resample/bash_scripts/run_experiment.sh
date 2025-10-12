@@ -78,6 +78,10 @@ OVERWRITE=false  # Safe default: don't overwrite existing results
 EXPERIMENTS_DIR="./outputs/causal/sim_study_sampling/runs"
 BASE_SEED=42
 SAMPLE_FRACTION=0.5
+MEDS_DATA="./example_data/synthea_meds_causal"
+FEATURES_DATA="./outputs/causal/data/features"
+TOKENIZED_DATA="./outputs/causal/data/tokenized"
+PRETRAIN_MODEL="./outputs/causal/pretrain/model"
 
 
 while [[ $# -gt 0 ]]; do
