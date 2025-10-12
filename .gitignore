@@ -25,4 +25,7 @@ debug/
 experiments/causal_pipeline/generated_configs/
 experiments/causal_pipeline/logs/
 
+experiments/causal_pipeline_resample/generated_configs/
+experiments/causal_pipeline_resample/logs/
+
 **.log
