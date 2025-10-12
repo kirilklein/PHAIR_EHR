@@ -11,7 +11,7 @@ paths:
   estimate: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/estimate/bert"
 
 estimator:
-  methods: ["IPW", "TMLE"]
+  methods: ["IPW", "TMLE", "TMLE_TH"]
   effect_type: "ATE"
   n_bootstrap: 30
   clip_percentile: 0.99
@@ -23,7 +23,7 @@ plot:
   effect_size:
     max_outcomes_per_figure: 10
     max_number_of_figures: 10
-    plot_individual_effects: true
+    plot_individual_effects: false
   adjustment:
     max_outcomes_per_figure: 8
     max_number_of_figures: 10
