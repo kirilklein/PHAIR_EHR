@@ -40,5 +40,5 @@ outcomes:
 
   effect_1p39:
     run_in_days: 1
-    p_base: 0.5
+    p_base: 0.3
     exposure_effect: 1.39 # Strong positive effect
