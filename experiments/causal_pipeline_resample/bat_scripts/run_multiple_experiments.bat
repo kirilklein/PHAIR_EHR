@@ -297,6 +297,7 @@ if "%RUN_MODE%"=="both" (
 
 echo Experiments directory: %EXPERIMENTS_DIR%
 echo Base seed: %BASE_SEED%
+echo Sample size: %SAMPLE_SIZE%
 echo Sample fraction: %SAMPLE_FRACTION%
 if "%OVERWRITE%"=="true" (
     echo Overwrite mode: ENABLED ^(re-run all steps^)
@@ -388,8 +389,10 @@ for /L %%r in (1,1,%N_RUNS%) do (
         set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --base-seed %BASE_SEED%
         if not "%SAMPLE_SIZE%"=="" (
             set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-size %SAMPLE_SIZE%
-        ) else if not "%SAMPLE_FRACTION%"=="" (
-            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-fraction %SAMPLE_FRACTION%
+        ) else (
+            if not "%SAMPLE_FRACTION%"=="" (
+                set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-fraction %SAMPLE_FRACTION%
+            )
         )
         
         REM Add data path arguments

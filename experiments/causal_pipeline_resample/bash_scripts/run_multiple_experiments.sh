@@ -307,17 +307,17 @@ for run_number in $(seq 1 $N_RUNS); do
 
         # Add experiment directory
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --experiment-dir \"$EXPERIMENTS_DIR\""
-        
+
         # Add base configs directory if specified
         if [ -n "$BASE_CONFIGS_DIR" ]; then
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-configs-dir \"$BASE_CONFIGS_DIR\""
         fi
-        
+
         # Add overwrite flag
         if [ "$OVERWRITE" = "true" ]; then
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --overwrite"
         fi
-        
+
         # Add resampling-specific arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-seed $BASE_SEED"
         if [ -n "$SAMPLE_SIZE" ]; then
@@ -325,7 +325,7 @@ for run_number in $(seq 1 $N_RUNS); do
         elif [ -n "$SAMPLE_FRACTION" ]; then
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-fraction $SAMPLE_FRACTION"
         fi
-        
+
         # Add data path arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --meds \"$MEDS_DATA\""
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --features \"$FEATURES_DATA\""
@@ -347,7 +347,7 @@ for run_number in $(seq 1 $N_RUNS); do
             else
                 FAILED_EXPERIMENTS="$FAILED_EXPERIMENTS, $RUN_ID/$EXPERIMENT_NAME"
             fi
-            
+
             # Check if failfast is enabled
             if [ "$FAILFAST" = "true" ]; then
                 echo ""
@@ -359,7 +359,7 @@ for run_number in $(seq 1 $N_RUNS); do
                 echo ""
                 echo "To resume, run without --failfast or use --overwrite"
                 echo ""
-                
+
                 # Print summary and exit
                 FAILED_COUNT=$((CURRENT_COUNT - SUCCESS_COUNT))
                 echo "========================================"

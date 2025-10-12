@@ -14,8 +14,8 @@ paths:
 # NOTE: Specify EITHER 'size' OR 'fraction', not both
 sampling:
   enabled: true
-  size: "{{SAMPLE_SIZE}}"           # Absolute number of patients to sample (takes precedence)
-  fraction: "{{SAMPLE_FRACTION}}"   # OR: Fraction of patients to sample (0 < fraction <= 1)
+  size: "{{SAMPLE_SIZE}}" # Absolute number of patients to sample (takes precedence)
+  fraction: "{{SAMPLE_FRACTION}}" # OR: Fraction of patients to sample (0 < fraction <= 1)
 
 seed: "{{SEED}}"
 debug: false
