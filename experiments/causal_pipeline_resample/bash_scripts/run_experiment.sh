@@ -126,8 +126,10 @@ run_step() {
     local check_file=$4
     local timeout_secs=$5
 
-    # Scale timeout by the factor
-    local effective_timeout=$(echo "$timeout_secs * $TIMEOUT_FACTOR" | bc)
+    # Scale timeout by the factor (using bash arithmetic, no bc required)
+    # Convert to integer calculation: timeout * (factor * 100) / 100
+    local factor_int=$(echo "$TIMEOUT_FACTOR * 100" | awk '{printf "%d", $1 * 100}')
+    local effective_timeout=$(( (timeout_secs * factor_int) / 100 ))
 
     echo "" # Add spacing
     if [ "$OVERWRITE" = "false" ] && [ -f "$check_file" ]; then
