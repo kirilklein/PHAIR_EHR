@@ -1,0 +1,10 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  ## INPUTS
+  finetune_model: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/bert"
+
+  ## OUTPUTS
+  calibrated_predictions: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/bert/calibrated"

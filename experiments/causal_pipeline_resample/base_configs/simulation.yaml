@@ -1,0 +1,101 @@
+# Base simulation config template
+# Variables like {{EXPERIMENT_NAME}}, {{RUN_ID}}, {{EXPERIMENTS_DIR}} will be replaced by the script
+
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  data: "{{MEDS_DATA}}"
+  splits: ["tuning"]
+  outcomes: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
+  cohort: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/cohort"
+
+# Sampling configuration for resampling experiments
+sampling:
+  enabled: true
+  fraction: {{SAMPLE_FRACTION}}  # Fraction of base cohort to sample (0 < fraction <= 1)
+  base_cohort_path: "{{BASE_COHORT_PATH}}"  # Path to pre-built full cohort
+
+seed: {{SEED}}
+debug: false
+min_num_codes: 3
+include_code_prefixes: ["D/"]
+index_date_str: "2020-01-01"
+
+# Simulation model parameters will be merged from experiment config
+simulation_model:
+  time_decay_halflife_days: 6000
+  noise:
+    logit_noise_scale: 0
+
+# Exposure and outcome settings will be merged from experiment config
+exposure:
+  p_base: 0.3
+
+# Default outcomes - can be overridden in experiment config
+outcomes:
+  OUTCOME_01:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: 2.2 # Weaker positive effect
+
+  OUTCOME_02:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: 1.39 # Weaker positive effect
+
+  OUTCOME_03:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: 0.85 # Even weaker positive effect
+
+  OUTCOME_04:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: 0.62 # True ZERO causal effect
+
+  OUTCOME_05:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: 0.41 # Strong positive effect
+
+  OUTCOME_06:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: 0.2 # Weak positive effect
+
+  OUTCOME_07:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: 0.0 # Negative effect
+
+  OUTCOME_08:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: -0.2 # True ZERO causal effect
+
+  OUTCOME_09:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: -0.41 # Strong negative effect
+
+  OUTCOME_10:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: -0.62 # Strong positive effect
+
+  OUTCOME_11:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: -0.85 # Strong positive effect
+
+  OUTCOME_12:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: -1.39 # Strong positive effect
+
+  OUTCOME_13:
+    run_in_days: 1
+    p_base: 0.5
+    exposure_effect: -2.2 # Strong positive effect
