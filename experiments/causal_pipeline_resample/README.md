@@ -39,7 +39,7 @@ Each run follows these steps:
 
 **The key difference**: Steps 1-2 are repeated for each run with a different random seed, creating variation in both the population and the simulated effects.
 
-```
+```text
 Run 1: Sample 50% (seed=43) → Simulate → Train → Calibrate → Estimate
 Run 2: Sample 50% (seed=44) → Simulate → Train → Calibrate → Estimate
 Run N: Sample 50% (seed=42+N) → Simulate → Train → Calibrate → Estimate
@@ -47,7 +47,7 @@ Run N: Sample 50% (seed=42+N) → Simulate → Train → Calibrate → Estimate
 
 ## Directory Structure
 
-```
+```bash
 causal_pipeline_resample/
 ├── base_configs/           # Base config templates
 │   ├── simulation.yaml     # Modified with sampling parameters
@@ -108,6 +108,7 @@ cd bash_scripts
 ```
 
 **Options:**
+
 - `--base-seed N`: Base seed for sampling (default: 42). Actual seed = base_seed + run_number
 - `--sample-fraction F`: Fraction of base cohort to sample (default: 0.5)
 - `--base-cohort PATH`: Path to base cohort (default: ./outputs/causal/sim_study/base_cohort)
@@ -116,6 +117,7 @@ cd bash_scripts
 - `--experiment-dir DIR`: Base directory for results
 
 **Example:**
+
 ```bash
 ./run_experiment.sh my_experiment --run_id run_01 --sample-fraction 0.6
 ```
@@ -130,17 +132,20 @@ cd bash_scripts
 ```
 
 **Options:**
+
 - `--n_runs|-n N`: Number of runs (creates run_01, run_02, ..., run_N)
 - `--base-seed N`: Base random seed (default: 42)
 - `--sample-fraction F`: Fraction to sample per run (default: 0.5)
 - Other options same as `run_experiment.sh`
 
 **Example:**
+
 ```bash
 ./run_multiple_experiments.sh --n_runs 100 --sample-fraction 0.5 my_experiment
 ```
 
 This will run 100 iterations, each with:
+
 - Seed = 42 + run_number (43, 44, ..., 142)
 - 50% of base cohort randomly sampled
 - Fresh simulation on that sample
@@ -159,7 +164,8 @@ python analyze_experiment_results.py \
 ```
 
 **Output structure:**
-```
+
+```bash
 analysis_results/
 ├── baseline/
 │   ├── OUTCOME_1/
@@ -174,6 +180,7 @@ analysis_results/
 ```
 
 Each outcome gets its own directory with separate plots showing:
+
 - Average bias ± std dev across runs
 - Relative bias
 - Z-scores
@@ -196,16 +203,19 @@ seed: {{SEED}}  # Replaced with base_seed + run_number
 ### Seed Calculation
 
 The seed for each run is calculated as:
-```
+
+```text
 seed = base_seed + run_number
 ```
 
 For example, with `base_seed=42`:
+
 - run_01 → seed=43
 - run_02 → seed=44
 - run_100 → seed=142
 
 This ensures:
+
 1. Different samples across runs
 2. Reproducibility when re-running
 3. Independence between runs
@@ -213,6 +223,7 @@ This ensures:
 ## When to Use This Pipeline
 
 **Use the resampling pipeline when:**
+
 - You want to quantify uncertainty due to **population sampling**
 - You're studying how causal estimates vary across different subpopulations
 - You want the true causal effect to vary per run (sampling from effect distributions)
@@ -220,6 +231,7 @@ This ensures:
 - You want separate analysis per outcome (no averaging over outcomes)
 
 **Use the standard pipeline when:**
+
 - You want to study uncertainty only from model fitting and bootstrapping
 - You need many independent fits on the same fixed population
 - You want results aggregated across multiple outcomes
@@ -236,6 +248,7 @@ This ensures:
 ### Reused Components (No Modifications)
 
 All core causal inference modules are reused as-is:
+
 - `corebehrt.modules.simulation.realistic_simulator`
 - `corebehrt.modules.causal.estimate`
 - Training, calibration, and preparation modules
@@ -246,7 +259,7 @@ All core causal inference modules are reused as-is:
    - Larger fractions → more stable estimates per run, less population variability
    - Smaller fractions → more population variability, noisier estimates
 
-2. **Number of Runs**: 
+2. **Number of Runs**:
    - Start with 10-20 runs for quick tests
    - Use 100+ runs for final analyses and publication results
    - More runs → smoother empirical distributions
@@ -262,25 +275,29 @@ All core causal inference modules are reused as-is:
 
 ## Troubleshooting
 
-**"Base cohort not found"**
+### "Base cohort not found"**
+
 - Make sure you ran the one-time base cohort setup (see "One-Time Setup" above)
 - Check that `--base-cohort` path is correct
 
-**"No data after sampling"**
+### "No data after sampling"**
+
 - Your `sample_fraction` might be too small
 - Check that base cohort has enough patients
 
-**"Analysis produces empty plots"**
+### "Analysis produces empty plots"**
+
 - Ensure you have at least 2 runs completed
 - Check that `--outcomes` filter isn't excluding all data
 
-**"Seeds seem the same across runs"**
+### "Seeds seem the same across runs"**
+
 - Verify run IDs follow format `run_01`, `run_02`, etc.
 - Check that `--base-seed` is being passed correctly
 
 ## Contact & Support
 
 This resampling pipeline is an extension of the standard causal pipeline. For questions:
+
 - See main project README at `../../README.md`
 - Standard pipeline README at `../causal_pipeline/README.md`
-
