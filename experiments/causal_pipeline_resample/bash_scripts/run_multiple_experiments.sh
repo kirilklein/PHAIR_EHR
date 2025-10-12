@@ -24,7 +24,8 @@ PRETRAIN_MODEL="./outputs/causal/pretrain/model"
 
 # Resampling-specific parameters
 BASE_SEED=42
-SAMPLE_FRACTION=0.5
+SAMPLE_FRACTION=""   # Either fraction or size must be provided
+SAMPLE_SIZE=""       # Takes precedence over fraction
 
 # Parse command line arguments
 echo "DEBUG: Starting argument parsing with arguments: $*"
@@ -48,7 +49,8 @@ while [[ $# -gt 0 ]]; do
             echo "  -e, --experiment-dir DIR  Base directory for experiments (default: ./outputs/causal/sim_study_sampling/runs)"
             echo "  --base-configs-dir DIR    Custom base configs directory (default: ../base_configs)"
             echo "  --base-seed N             Base seed for sampling (default: 42). Actual seed = base_seed + run_number"
-            echo "  --sample-fraction F       Fraction of MEDS patients to sample per run (default: 0.5)"
+            echo "  --sample-fraction F       Fraction of patients to sample (0 < F <= 1, mutually exclusive with --sample-size)"
+            echo "  --sample-size N           Absolute number of patients to sample (takes precedence, mutually exclusive with --sample-fraction)"
             echo "  --meds PATH               Path to MEDS data directory (default: ./example_data/synthea_meds_causal)"
             echo "  --features PATH           Path to features directory (default: ./outputs/causal/data/features)"
             echo "  --tokenized PATH          Path to tokenized data directory (default: ./outputs/causal/data/tokenized)"
@@ -154,6 +156,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --sample-fraction)
             SAMPLE_FRACTION="$2"
+            shift 2
+            ;;
+        --sample-size)
+            SAMPLE_SIZE="$2"
             shift 2
             ;;
         --meds)
@@ -314,8 +320,12 @@ for run_number in $(seq 1 $N_RUNS); do
         
         # Add resampling-specific arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-seed $BASE_SEED"
-        EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-fraction $SAMPLE_FRACTION"
-
+        if [ -n "$SAMPLE_SIZE" ]; then
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-size $SAMPLE_SIZE"
+        elif [ -n "$SAMPLE_FRACTION" ]; then
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-fraction $SAMPLE_FRACTION"
+        fi
+        
         # Add data path arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --meds \"$MEDS_DATA\""
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --features \"$FEATURES_DATA\""

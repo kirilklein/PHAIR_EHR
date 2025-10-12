@@ -15,7 +15,8 @@ set FAILFAST=false
 set EXPERIMENTS_DIR=.\outputs\causal\sim_study_sampling\runs
 set BASE_CONFIGS_DIR=
 set BASE_SEED=42
-set SAMPLE_FRACTION=0.5
+set SAMPLE_FRACTION=
+set SAMPLE_SIZE=
 set MEDS_DATA=./example_data/synthea_meds_causal
 set FEATURES_DATA=./outputs/causal/data/features
 set TOKENIZED_DATA=./outputs/causal/data/tokenized
@@ -126,6 +127,16 @@ if "%1"=="--sample-fraction" (
     shift
     goto :parse_args
 )
+if "%1"=="--sample-size" (
+    if "%2"=="" (
+        echo ERROR: --sample-size requires a number
+        exit /b 1
+    )
+    set SAMPLE_SIZE=%2
+    shift
+    shift
+    goto :parse_args
+)
 if "%1"=="--meds" (
     if "%2"=="" (
         echo ERROR: --meds requires a path
@@ -192,7 +203,8 @@ echo   --run_id run_XX           Specific run ID to use ^(overrides --n_runs^)
 echo   -e, --experiment-dir DIR  Base directory for experiments ^(default: .\outputs\causal\sim_study_sampling\runs^)
 echo   --base-configs-dir DIR    Custom base configs directory ^(default: ..\base_configs^)
 echo   --base-seed N             Base seed for sampling ^(default: 42^). Actual seed = base_seed + run_number
-echo   --sample-fraction F       Fraction of MEDS patients to sample per run ^(default: 0.5^)
+echo   --sample-fraction F       Fraction of patients to sample ^(0 ^< F ^<= 1, mutually exclusive with --sample-size^)
+echo   --sample-size N           Absolute number of patients to sample ^(takes precedence, mutually exclusive with --sample-fraction^)
 echo   --meds PATH               Path to MEDS data directory ^(default: ./example_data/synthea_meds_causal^)
 echo   --features PATH           Path to features directory ^(default: ./outputs/causal/data/features^)
 echo   --tokenized PATH          Path to tokenized data directory ^(default: ./outputs/causal/data/tokenized^)
@@ -374,7 +386,11 @@ for /L %%r in (1,1,%N_RUNS%) do (
         
         REM Add resampling-specific arguments
         set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --base-seed %BASE_SEED%
-        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-fraction %SAMPLE_FRACTION%
+        if not "%SAMPLE_SIZE%"=="" (
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-size %SAMPLE_SIZE%
+        ) else if not "%SAMPLE_FRACTION%"=="" (
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-fraction %SAMPLE_FRACTION%
+        )
         
         REM Add data path arguments
         set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --meds %MEDS_DATA%

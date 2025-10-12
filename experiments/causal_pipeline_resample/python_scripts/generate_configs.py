@@ -30,7 +30,8 @@ def replace_placeholders(
     tokenized_data="./outputs/causal/data/tokenized",
     pretrain_model="./outputs/causal/pretrain/model",
     seed=42,
-    sample_fraction=0.5,
+    sample_fraction=None,
+    sample_size=None,
 ):
     """Recursively replace placeholders in config."""
     if isinstance(config_dict, dict):
@@ -46,6 +47,7 @@ def replace_placeholders(
                 pretrain_model,
                 seed,
                 sample_fraction,
+                sample_size,
             )
             for key, value in config_dict.items()
         }
@@ -62,6 +64,7 @@ def replace_placeholders(
                 pretrain_model,
                 seed,
                 sample_fraction,
+                sample_size,
             )
             for item in config_dict
         ]
@@ -91,13 +94,16 @@ def generate_experiment_configs(
     tokenized_data="./outputs/causal/data/tokenized",
     pretrain_model="./outputs/causal/pretrain/model",
     base_seed=42,
-    sample_fraction=0.5,
+    sample_fraction=None,  # Default to None, must specify either fraction or size
+    sample_size=None,  # Absolute number of patients to sample
     base_configs_dir=None,
 ):
     """Generate all config files for a specific experiment.
 
     For resampling experiments, seed is calculated as base_seed + run_number
     extracted from run_id (e.g., run_01 -> 1, run_15 -> 15).
+
+    Either sample_fraction or sample_size must be provided (but not both).
     """
 
     # Extract run number from run_id (e.g., "run_01" -> 1)
@@ -173,6 +179,7 @@ def generate_experiment_configs(
             pretrain_model,
             seed,
             sample_fraction,
+            sample_size,
         )
 
         # Replace numeric placeholders (after initial load, so they become actual numbers)
@@ -181,7 +188,15 @@ def generate_experiment_configs(
             if "sampling" in final_config and isinstance(
                 final_config["sampling"], dict
             ):
-                final_config["sampling"]["fraction"] = sample_fraction
+                # Only set the parameter that was provided (size takes precedence)
+                if sample_size is not None:
+                    final_config["sampling"]["size"] = sample_size
+                    # Remove fraction key if it exists
+                    final_config["sampling"].pop("fraction", None)
+                elif sample_fraction is not None:
+                    final_config["sampling"]["fraction"] = sample_fraction
+                    # Remove size key if it exists
+                    final_config["sampling"].pop("size", None)
 
         # Write output config
         output_path = output_dir / output_file
@@ -235,8 +250,16 @@ def main():
     parser.add_argument(
         "--sample-fraction",
         type=float,
-        default=0.5,
-        help="Fraction of MEDS patients to sample per run (default: 0.5)",
+        default=None,
+        help="Fraction of MEDS patients to sample per run (0 < fraction <= 1). "
+        "Mutually exclusive with --sample-size.",
+    )
+    parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=None,
+        help="Absolute number of patients to sample per run. Takes precedence over --sample-fraction. "
+        "Mutually exclusive with --sample-fraction.",
     )
     parser.add_argument(
         "--base-configs-dir",
@@ -244,6 +267,13 @@ def main():
         help="Custom base configs directory (default: ../base_configs)",
     )
     args = parser.parse_args()
+
+    # Validate that at least one sampling parameter is provided
+    if args.sample_fraction is None and args.sample_size is None:
+        parser.error("Either --sample-fraction or --sample-size must be provided")
+
+    if args.sample_fraction is not None and args.sample_size is not None:
+        parser.error("Cannot specify both --sample-fraction and --sample-size")
 
     script_dir = Path(__file__).parent.parent
     generate_experiment_configs(
@@ -257,6 +287,7 @@ def main():
         args.pretrain_model,
         args.base_seed,
         args.sample_fraction,
+        args.sample_size,
         args.base_configs_dir,
     )
 

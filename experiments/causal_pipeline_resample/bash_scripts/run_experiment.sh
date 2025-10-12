@@ -43,7 +43,8 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  --experiment-dir|-e DIR Base directory for experiments (default: ./outputs/causal/sim_study_sampling/runs)"
     echo "  --base-configs-dir DIR  Custom base configs directory (default: ../base_configs)"
     echo "  --base-seed N           Base seed for sampling (default: 42)"
-    echo "  --sample-fraction F     Fraction of MEDS patients to sample (default: 0.5)"
+    echo "  --sample-fraction F     Fraction of patients to sample (0 < F <= 1, mutually exclusive with --sample-size)"
+    echo "  --sample-size N         Absolute number of patients to sample (takes precedence, mutually exclusive with --sample-fraction)"
     echo "  (no options)            Run both baseline and BERT pipelines"
     echo ""
     echo "EXAMPLES:"
@@ -79,7 +80,8 @@ OVERWRITE=false  # Safe default: don't overwrite existing results
 EXPERIMENTS_DIR="./outputs/causal/sim_study_sampling/runs"
 BASE_CONFIGS_DIR=""  # Empty means use default in generate_configs.py
 BASE_SEED=42
-SAMPLE_FRACTION=0.5
+SAMPLE_FRACTION=""   # Either fraction or size must be provided
+SAMPLE_SIZE=""       # Takes precedence over fraction
 MEDS_DATA="./example_data/synthea_meds_causal"
 FEATURES_DATA="./outputs/causal/data/features"
 TOKENIZED_DATA="./outputs/causal/data/tokenized"
@@ -97,6 +99,7 @@ while [[ $# -gt 0 ]]; do
         --timeout-factor) TIMEOUT_FACTOR="$2"; shift 2 ;;
         --base-seed) BASE_SEED="$2"; shift 2 ;;
         --sample-fraction) SAMPLE_FRACTION="$2"; shift 2 ;;
+        --sample-size) SAMPLE_SIZE="$2"; shift 2 ;;
         --meds)
             MEDS_DATA="$2"
             shift 2
@@ -165,7 +168,12 @@ run_step() {
 
 # 1. Generate Configs
 echo "Step 1: Generating experiment configs..."
-CONFIG_GEN_CMD="python ../python_scripts/generate_configs.py \"$EXPERIMENT_NAME\" --run_id \"$RUN_ID\" --experiments_dir \"$EXPERIMENTS_DIR\" --meds \"$MEDS_DATA\" --features \"$FEATURES_DATA\" --tokenized \"$TOKENIZED_DATA\" --pretrain-model \"$PRETRAIN_MODEL\" --base-seed \"$BASE_SEED\" --sample-fraction \"$SAMPLE_FRACTION\""
+CONFIG_GEN_CMD="python ../python_scripts/generate_configs.py \"$EXPERIMENT_NAME\" --run_id \"$RUN_ID\" --experiments_dir \"$EXPERIMENTS_DIR\" --meds \"$MEDS_DATA\" --features \"$FEATURES_DATA\" --tokenized \"$TOKENIZED_DATA\" --pretrain-model \"$PRETRAIN_MODEL\" --base-seed \"$BASE_SEED\""
+if [ -n "$SAMPLE_SIZE" ]; then
+    CONFIG_GEN_CMD="$CONFIG_GEN_CMD --sample-size \"$SAMPLE_SIZE\""
+elif [ -n "$SAMPLE_FRACTION" ]; then
+    CONFIG_GEN_CMD="$CONFIG_GEN_CMD --sample-fraction \"$SAMPLE_FRACTION\""
+fi
 if [ -n "$BASE_CONFIGS_DIR" ]; then
     CONFIG_GEN_CMD="$CONFIG_GEN_CMD --base-configs-dir \"$BASE_CONFIGS_DIR\""
 fi

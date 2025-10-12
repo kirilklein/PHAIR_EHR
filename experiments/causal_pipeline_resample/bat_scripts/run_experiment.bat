@@ -36,7 +36,8 @@ echo   --overwrite             Force re-run all steps ^(default: skip completed 
 echo   -e, --experiment-dir    Base directory for experiments ^(default: .\outputs\causal\sim_study_sampling\runs^)
 echo   --base-configs-dir DIR  Custom base configs directory ^(default: ..\base_configs^)
 echo   --base-seed N           Base seed for sampling ^(default: 42^). Actual seed = base_seed + run_number
-echo   --sample-fraction F     Fraction of MEDS patients to sample ^(default: 0.5^)
+echo   --sample-fraction F     Fraction of patients to sample ^(0 ^< F ^<= 1, mutually exclusive with --sample-size^)
+echo   --sample-size N         Absolute number of patients to sample ^(takes precedence, mutually exclusive with --sample-fraction^)
 echo   --meds PATH             Path to MEDS data ^(default: ./example_data/synthea_meds_causal^)
 echo   --features PATH         Path to features data ^(default: ./outputs/causal/data/features^)
 echo   --tokenized PATH        Path to tokenized data ^(default: ./outputs/causal/data/tokenized^)
@@ -84,7 +85,8 @@ set OVERWRITE=false
 set EXPERIMENTS_DIR=.\outputs\causal\sim_study_sampling\runs
 set BASE_CONFIGS_DIR=
 set BASE_SEED=42
-set SAMPLE_FRACTION=0.5
+set SAMPLE_FRACTION=
+set SAMPLE_SIZE=
 set MEDS_DATA=./example_data/synthea_meds_causal
 set FEATURES_DATA=./outputs/causal/data/features
 set TOKENIZED_DATA=./outputs/causal/data/tokenized
@@ -172,6 +174,16 @@ if "%1"=="--sample-fraction" (
     shift
     goto :parse_args
 )
+if "%1"=="--sample-size" (
+    if "%2"=="" (
+        echo ERROR: --sample-size requires a number
+        exit /b 1
+    )
+    set SAMPLE_SIZE=%2
+    shift
+    shift
+    goto :parse_args
+)
 if "%1"=="--meds" (
     if "%2"=="" (
         echo ERROR: --meds requires a path
@@ -249,7 +261,12 @@ if not exist "..\experiment_configs\%EXPERIMENT_NAME%.yaml" (
 
 REM Generate experiment-specific configs
 echo Step 1: Generating experiment configs...
-set CONFIG_CMD=python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR% --base-seed %BASE_SEED% --sample-fraction %SAMPLE_FRACTION% --meds %MEDS_DATA% --features %FEATURES_DATA% --tokenized %TOKENIZED_DATA% --pretrain-model %PRETRAIN_MODEL%
+set CONFIG_CMD=python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR% --base-seed %BASE_SEED% --meds %MEDS_DATA% --features %FEATURES_DATA% --tokenized %TOKENIZED_DATA% --pretrain-model %PRETRAIN_MODEL%
+if not "%SAMPLE_SIZE%"=="" (
+    set CONFIG_CMD=%CONFIG_CMD% --sample-size %SAMPLE_SIZE%
+) else if not "%SAMPLE_FRACTION%"=="" (
+    set CONFIG_CMD=%CONFIG_CMD% --sample-fraction %SAMPLE_FRACTION%
+)
 if not "%BASE_CONFIGS_DIR%"=="" (
     set CONFIG_CMD=%CONFIG_CMD% --base-configs-dir %BASE_CONFIGS_DIR%
 )

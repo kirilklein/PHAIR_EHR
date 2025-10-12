@@ -54,12 +54,27 @@ def main_simulate(config_path):
     full_pids = torch.tensor(sorted(all_pids))
     logger.info(f"Found {len(full_pids)} unique patients in MEDS data")
 
-    # Sample subset of PIDs
-    sample_fraction = sampling_cfg.get("fraction", 0.5)
+    # Sample subset of PIDs (either by size or fraction)
+    sample_size = sampling_cfg.get("size", None)
+    sample_fraction = sampling_cfg.get("fraction", None)
     seed = cfg.get("seed", 42)
-    logger.info(f"Sampling {sample_fraction * 100:.1f}% of patients with seed {seed}")
-    sampled_pids = sample_cohort(full_pids, sample_fraction, seed)
-    logger.info(f"Sampled {len(sampled_pids)} patients")
+
+    if sample_size is not None:
+        logger.info(f"Sampling {sample_size} patients with seed {seed}")
+        sampled_pids = sample_cohort(full_pids, sample_size=sample_size, seed=seed)
+    elif sample_fraction is not None:
+        logger.info(
+            f"Sampling {sample_fraction * 100:.1f}% of patients with seed {seed}"
+        )
+        sampled_pids = sample_cohort(
+            full_pids, sample_fraction=sample_fraction, seed=seed
+        )
+    else:
+        raise ValueError(
+            "Either 'sampling.size' or 'sampling.fraction' must be specified in config"
+        )
+
+    logger.info(f"Sampled {len(sampled_pids)} patients from {len(full_pids)} total")
 
     # Save sampled PIDs to cohort directory (will be used by downstream steps)
     cohort_dir = cfg.paths.get("cohort")
