@@ -11,6 +11,7 @@ set EXPERIMENT_LIST=
 set N_RUNS=1
 set RUN_ID_OVERRIDE=
 set OVERWRITE=false
+set FAILFAST=false
 set EXPERIMENTS_DIR=.\outputs\causal\sim_study_sampling\runs
 set BASE_SEED=42
 set SAMPLE_FRACTION=0.5
@@ -36,6 +37,11 @@ if "%1"=="--bert-only" (
 )
 if "%1"=="--overwrite" (
     set OVERWRITE=true
+    shift
+    goto :parse_args
+)
+if "%1"=="--failfast" (
+    set FAILFAST=true
     shift
     goto :parse_args
 )
@@ -182,6 +188,7 @@ echo   --pretrain-model PATH     Path to pretrained BERT model ^(default: ./outp
 echo   --baseline-only           Run only baseline ^(CatBoost^) pipeline for all experiments
 echo   --bert-only               Run only BERT pipeline for all experiments ^(requires baseline data^)
 echo   --overwrite               Force re-run all steps ^(default: skip completed steps^)
+echo   --failfast                Stop immediately if any experiment fails ^(default: continue to next^)
 echo   ^(no options^)            Run both baseline and BERT pipelines for all experiments
 echo.
 echo AVAILABLE EXPERIMENTS:
@@ -208,6 +215,9 @@ echo     ^> Runs my_experiment 100 times, automatically resuming from where it l
 echo.
 echo   run_multiple_experiments.bat --n_runs 100 --overwrite my_experiment
 echo     ^> Runs my_experiment 100 times, forcing re-run of all steps
+echo.
+echo   run_multiple_experiments.bat --n_runs 100 --failfast my_experiment
+echo     ^> Runs my_experiment 100 times, stopping immediately if any run fails
 echo.
 echo NOTES:
 echo   - This is the RESAMPLING variant: samples from MEDS data -^> simulates -^> selects cohort for each run
@@ -268,6 +278,11 @@ if "%OVERWRITE%"=="true" (
     echo Overwrite mode: ENABLED ^(re-run all steps^)
 ) else (
     echo Overwrite mode: DISABLED ^(skip completed steps^)
+)
+if "%FAILFAST%"=="true" (
+    echo Failfast mode: ENABLED ^(stop on first failure^)
+) else (
+    echo Failfast mode: DISABLED ^(continue on failures^)
 )
 echo ========================================
 
@@ -364,6 +379,37 @@ for /L %%r in (1,1,%N_RUNS%) do (
                 set FAILED_EXPERIMENTS=!RUN_ID!/!EXPERIMENT_NAME!
             ) else (
                 set FAILED_EXPERIMENTS=!FAILED_EXPERIMENTS!, !RUN_ID!/!EXPERIMENT_NAME!
+            )
+            
+            REM Check if failfast is enabled
+            if "%FAILFAST%"=="true" (
+                echo.
+                echo ========================================
+                echo FAILFAST MODE: Stopping due to failure
+                echo ========================================
+                echo Failed experiment: !RUN_ID!/!EXPERIMENT_NAME!
+                echo Error code: !EXPERIMENT_RESULT!
+                echo.
+                echo To resume, run without --failfast or use --overwrite
+                echo.
+                
+                REM Print summary and exit
+                set /a FAILED_COUNT=!CURRENT_COUNT!-!SUCCESS_COUNT!
+                echo ========================================
+                echo SUMMARY: Batch Run Stopped ^(INCOMPLETE^)
+                echo ========================================
+                echo Total experiments planned: %TOTAL_COUNT%
+                echo Completed: !CURRENT_COUNT!
+                echo Successful: !SUCCESS_COUNT!
+                echo Failed: !FAILED_COUNT!
+                echo.
+                echo Failed experiments:
+                echo !FAILED_EXPERIMENTS!
+                echo.
+                if not "%BATCH_MODE%"=="true" (
+                    pause
+                )
+                exit /b 1
             )
         ) else (
             echo SUCCESS: Experiment !RUN_ID!/!EXPERIMENT_NAME! completed!

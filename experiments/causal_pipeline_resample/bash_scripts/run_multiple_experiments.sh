@@ -12,6 +12,7 @@ EXPERIMENT_LIST=""
 N_RUNS=1
 RUN_ID_OVERRIDE=""
 OVERWRITE=false  # Safe default: don't overwrite existing results
+FAILFAST=false    # Default: continue on failure
 EXPERIMENTS_DIR="./outputs/causal/sim_study_sampling/runs"
 
 # Configurable data paths with defaults
@@ -53,6 +54,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --baseline-only           Run only baseline (CatBoost) pipeline for all experiments"
             echo "  --bert-only               Run only BERT pipeline for all experiments (requires baseline data)"
             echo "  --overwrite               Force re-run all steps (default: skip completed steps)"
+            echo "  --failfast                Stop immediately if any experiment fails (default: continue to next)"
             echo "  (no options)              Run both baseline and BERT pipelines for all experiments"
             echo ""
             echo "AVAILABLE EXPERIMENTS:"
@@ -88,6 +90,9 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "  $0 --n_runs 100 --overwrite my_experiment"
             echo "    > Runs my_experiment 100 times, forcing re-run of all steps"
+            echo ""
+            echo "  $0 --n_runs 100 --failfast my_experiment"
+            echo "    > Runs my_experiment 100 times, stopping immediately if any run fails"
             echo ""
             echo "NOTES:"
             echo "  - This is the RESAMPLING variant: samples from MEDS → simulates → selects cohort for each run"
@@ -127,6 +132,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --overwrite)
             OVERWRITE=true
+            shift
+            ;;
+        --failfast)
+            FAILFAST=true
             shift
             ;;
         -e|--experiment-dir)
@@ -213,6 +222,11 @@ if [ "$OVERWRITE" = "true" ]; then
     echo "Overwrite mode: ENABLED (re-run all steps)"
 else
     echo "Overwrite mode: DISABLED (skip completed steps)"
+fi
+if [ "$FAILFAST" = "true" ]; then
+    echo "Failfast mode: ENABLED (stop on first failure)"
+else
+    echo "Failfast mode: DISABLED (continue on failures)"
 fi
 echo "========================================"
 
@@ -310,7 +324,34 @@ for run_number in $(seq 1 $N_RUNS); do
             if [ -z "$FAILED_EXPERIMENTS" ]; then
                 FAILED_EXPERIMENTS="$RUN_ID/$EXPERIMENT_NAME"
             else
-                FAILED_EXPERIMENTS="$FAILED_EXPERIMENTS $RUN_ID/$EXPERIMENT_NAME"
+                FAILED_EXPERIMENTS="$FAILED_EXPERIMENTS, $RUN_ID/$EXPERIMENT_NAME"
+            fi
+            
+            # Check if failfast is enabled
+            if [ "$FAILFAST" = "true" ]; then
+                echo ""
+                echo "========================================"
+                echo "FAILFAST MODE: Stopping due to failure"
+                echo "========================================"
+                echo "Failed experiment: $RUN_ID/$EXPERIMENT_NAME"
+                echo "Error code: $experiment_result"
+                echo ""
+                echo "To resume, run without --failfast or use --overwrite"
+                echo ""
+                
+                # Print summary and exit
+                FAILED_COUNT=$((CURRENT_COUNT - SUCCESS_COUNT))
+                echo "========================================"
+                echo "SUMMARY: Batch Run Stopped (INCOMPLETE)"
+                echo "========================================"
+                echo "Total experiments planned: $TOTAL_COUNT"
+                echo "Completed: $CURRENT_COUNT"
+                echo "Successful: $SUCCESS_COUNT"
+                echo "Failed: $FAILED_COUNT"
+                echo ""
+                echo "Failed experiments: $FAILED_EXPERIMENTS"
+                echo ""
+                exit 1
             fi
         else
             echo "SUCCESS: Experiment $RUN_ID/$EXPERIMENT_NAME completed!"
