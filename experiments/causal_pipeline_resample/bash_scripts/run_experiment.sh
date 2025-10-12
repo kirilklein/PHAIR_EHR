@@ -87,7 +87,7 @@ while [[ $# -gt 0 ]]; do
         --run_id) RUN_ID="$2"; shift 2 ;;
         --overwrite) OVERWRITE=true; shift ;;
         --experiment-dir|-e) EXPERIMENTS_DIR="$2"; shift 2 ;;
-        --timeout-factor) TIMEOUT_FACTOR="$2"; shift 2;;
+        --timeout-factor) TIMEOUT_FACTOR="$2"; shift 2 ;;
         --base-seed) BASE_SEED="$2"; shift 2 ;;
         --sample-fraction) SAMPLE_FRACTION="$2"; shift 2 ;;
         --meds)
@@ -124,7 +124,7 @@ run_step() {
 
     # Scale timeout by the factor
     local effective_timeout=$(echo "$timeout_secs * $TIMEOUT_FACTOR" | bc)
-    
+
     echo "" # Add spacing
     if [ "$OVERWRITE" = "false" ] && [ -f "$check_file" ]; then
         echo "==== Skipping $step_name (output already exists) ===="
@@ -133,10 +133,10 @@ run_step() {
 
     echo "==== Running $step_name... ===="
     local config_path="experiments/causal_pipeline_resample/generated_configs/$EXPERIMENT_NAME/$config_name.yaml"
-    
+
     timeout "$effective_timeout" python -m "$python_module" --config_path "$config_path"
     local exit_code=$?
-    
+
     if [ $exit_code -eq 124 ]; then
         echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
         echo "ERROR: Step '$step_name' timed out after $effective_timeout seconds."

@@ -248,13 +248,13 @@ for run_number in $(seq 1 $N_RUNS); do
     else
         RUN_ID=$(printf "run_%02d" $run_number)
     fi
-    
+
     echo ""
     echo "========================================="
     echo "STARTING RUN $run_number of $N_RUNS: $RUN_ID"
     echo "========================================="
     echo ""
-    
+
     for experiment in $EXPERIMENT_LIST; do
         EXPERIMENT_NAME="$experiment"
         ((CURRENT_COUNT++))
@@ -266,10 +266,10 @@ for run_number in $(seq 1 $N_RUNS); do
 
         # Call experiment with proper argument passing
         echo "DEBUG: Calling run_experiment.sh with experiment: $EXPERIMENT_NAME, run_id: $RUN_ID, mode: $RUN_MODE"
-        
+
         # Build command arguments
         EXPERIMENT_ARGS="$EXPERIMENT_NAME --run_id $RUN_ID"
-        
+
         case $RUN_MODE in
             "baseline")
                 EXPERIMENT_ARGS="$EXPERIMENT_ARGS --baseline-only"
@@ -278,28 +278,28 @@ for run_number in $(seq 1 $N_RUNS); do
                 EXPERIMENT_ARGS="$EXPERIMENT_ARGS --bert-only"
                 ;;
         esac
-        
+
         # Add experiment directory
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --experiment-dir \"$EXPERIMENTS_DIR\""
-        
+
         # Add overwrite flag
         if [ "$OVERWRITE" = "true" ]; then
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --overwrite"
         fi
-        
+
         # Add resampling-specific arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-seed $BASE_SEED"
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-fraction $SAMPLE_FRACTION"
-        
+
         # Add data path arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --meds \"$MEDS_DATA\""
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --features \"$FEATURES_DATA\""
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --tokenized \"$TOKENIZED_DATA\""
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --pretrain-model \"$PRETRAIN_MODEL\""
-        
+
         # Run the experiment
         eval "./run_experiment.sh $EXPERIMENT_ARGS"
-        
+
         experiment_result=$?
 
         if [ $experiment_result -ne 0 ]; then
@@ -317,7 +317,7 @@ for run_number in $(seq 1 $N_RUNS); do
             ((SUCCESS_COUNT++))
         fi
     done
-    
+
     echo ""
     echo "========================================="
     echo "COMPLETED RUN $run_number of $N_RUNS: $RUN_ID"
