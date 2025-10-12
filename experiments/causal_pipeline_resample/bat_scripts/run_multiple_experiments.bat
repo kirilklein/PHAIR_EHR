@@ -10,6 +10,7 @@ set RUN_MODE=both
 set EXPERIMENT_LIST=
 set N_RUNS=1
 set RUN_ID_OVERRIDE=
+set OVERWRITE=false
 set EXPERIMENTS_DIR=.\outputs\causal\sim_study_sampling\runs
 set BASE_SEED=42
 set SAMPLE_FRACTION=0.5
@@ -30,6 +31,11 @@ if "%1"=="--baseline-only" (
 )
 if "%1"=="--bert-only" (
     set RUN_MODE=bert
+    shift
+    goto :parse_args
+)
+if "%1"=="--overwrite" (
+    set OVERWRITE=true
     shift
     goto :parse_args
 )
@@ -99,16 +105,6 @@ if "%1"=="--sample-fraction" (
         exit /b 1
     )
     set SAMPLE_FRACTION=%2
-    shift
-    shift
-    goto :parse_args
-)
-if "%1"=="--base-cohort" (
-    if "%2"=="" (
-        echo ERROR: --base-cohort requires a path
-        exit /b 1
-    )
-    set BASE_COHORT_PATH=%2
     shift
     shift
     goto :parse_args
@@ -185,6 +181,7 @@ echo   --tokenized PATH          Path to tokenized data directory ^(default: ./o
 echo   --pretrain-model PATH     Path to pretrained BERT model ^(default: ./outputs/causal/pretrain/model^)
 echo   --baseline-only           Run only baseline ^(CatBoost^) pipeline for all experiments
 echo   --bert-only               Run only BERT pipeline for all experiments ^(requires baseline data^)
+echo   --overwrite               Force re-run all steps ^(default: skip completed steps^)
 echo   ^(no options^)            Run both baseline and BERT pipelines for all experiments
 echo.
 echo AVAILABLE EXPERIMENTS:
@@ -205,6 +202,12 @@ echo     ^> Runs my_experiment 100 times, creating run_01 through run_100
 echo.
 echo   run_multiple_experiments.bat --run_id run_05 my_experiment
 echo     ^> Runs my_experiment in run_05 folder specifically
+echo.
+echo   run_multiple_experiments.bat --n_runs 100 my_experiment
+echo     ^> Runs my_experiment 100 times, automatically resuming from where it left off if interrupted
+echo.
+echo   run_multiple_experiments.bat --n_runs 100 --overwrite my_experiment
+echo     ^> Runs my_experiment 100 times, forcing re-run of all steps
 echo.
 echo NOTES:
 echo   - This is the RESAMPLING variant: samples from MEDS data -^> simulates -^> selects cohort for each run
@@ -261,6 +264,11 @@ if "%RUN_MODE%"=="both" (
 echo Experiments directory: %EXPERIMENTS_DIR%
 echo Base seed: %BASE_SEED%
 echo Sample fraction: %SAMPLE_FRACTION%
+if "%OVERWRITE%"=="true" (
+    echo Overwrite mode: ENABLED ^(re-run all steps^)
+) else (
+    echo Overwrite mode: DISABLED ^(skip completed steps^)
+)
 echo ========================================
 
 REM Set batch mode to prevent pausing
@@ -326,6 +334,11 @@ for /L %%r in (1,1,%N_RUNS%) do (
         
         REM Add experiment directory
         set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --experiment-dir %EXPERIMENTS_DIR%
+        
+        REM Add overwrite flag
+        if "%OVERWRITE%"=="true" (
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --overwrite
+        )
         
         REM Add resampling-specific arguments
         set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --base-seed %BASE_SEED%

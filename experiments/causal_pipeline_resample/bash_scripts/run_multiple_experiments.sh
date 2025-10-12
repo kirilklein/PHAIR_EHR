@@ -11,6 +11,7 @@ RUN_MODE="both"
 EXPERIMENT_LIST=""
 N_RUNS=1
 RUN_ID_OVERRIDE=""
+OVERWRITE=false  # Safe default: don't overwrite existing results
 EXPERIMENTS_DIR="./outputs/causal/sim_study_sampling/runs"
 
 # Configurable data paths with defaults
@@ -51,6 +52,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --pretrain-model PATH     Path to pretrained BERT model (default: ./outputs/causal/pretrain/model)"
             echo "  --baseline-only           Run only baseline (CatBoost) pipeline for all experiments"
             echo "  --bert-only               Run only BERT pipeline for all experiments (requires baseline data)"
+            echo "  --overwrite               Force re-run all steps (default: skip completed steps)"
             echo "  (no options)              Run both baseline and BERT pipelines for all experiments"
             echo ""
             echo "AVAILABLE EXPERIMENTS:"
@@ -80,6 +82,12 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "  $0 --run_id run_05 ce1_cy1_y0_i0"
             echo "    > Runs specified experiment in run_05 folder specifically"
+            echo ""
+            echo "  $0 --n_runs 100 my_experiment"
+            echo "    > Runs my_experiment 100 times, automatically resuming from where it left off if interrupted"
+            echo ""
+            echo "  $0 --n_runs 100 --overwrite my_experiment"
+            echo "    > Runs my_experiment 100 times, forcing re-run of all steps"
             echo ""
             echo "NOTES:"
             echo "  - This is the RESAMPLING variant: samples from MEDS → simulates → selects cohort for each run"
@@ -117,6 +125,10 @@ while [[ $# -gt 0 ]]; do
             RUN_MODE="bert"
             shift
             ;;
+        --overwrite)
+            OVERWRITE=true
+            shift
+            ;;
         -e|--experiment-dir)
             EXPERIMENTS_DIR="$2"
             shift 2
@@ -127,10 +139,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --sample-fraction)
             SAMPLE_FRACTION="$2"
-            shift 2
-            ;;
-        --base-cohort)
-            BASE_COHORT_PATH="$2"
             shift 2
             ;;
         --meds)
@@ -201,6 +209,11 @@ esac
 echo "Experiments directory: $EXPERIMENTS_DIR"
 echo "Base seed: $BASE_SEED"
 echo "Sample fraction: $SAMPLE_FRACTION"
+if [ "$OVERWRITE" = "true" ]; then
+    echo "Overwrite mode: ENABLED (re-run all steps)"
+else
+    echo "Overwrite mode: DISABLED (skip completed steps)"
+fi
 echo "========================================"
 
 # Set batch mode to prevent pausing
@@ -268,6 +281,11 @@ for run_number in $(seq 1 $N_RUNS); do
         
         # Add experiment directory
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --experiment-dir \"$EXPERIMENTS_DIR\""
+        
+        # Add overwrite flag
+        if [ "$OVERWRITE" = "true" ]; then
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --overwrite"
+        fi
         
         # Add resampling-specific arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-seed $BASE_SEED"

@@ -32,6 +32,7 @@ echo OPTIONS:
 echo   -h, --help              Show this help message
 echo   --baseline-only         Run only baseline ^(CatBoost^) pipeline
 echo   --bert-only             Run only BERT pipeline ^(requires baseline data^)
+echo   --overwrite             Force re-run all steps ^(default: skip completed steps^)
 echo   -e, --experiment-dir    Base directory for experiments ^(default: .\outputs\causal\sim_study_sampling\runs^)
 echo   --base-seed N           Base seed for sampling ^(default: 42^). Actual seed = base_seed + run_number
 echo   --sample-fraction F     Fraction of MEDS patients to sample ^(default: 0.5^)
@@ -78,6 +79,7 @@ echo DEBUG: EXPERIMENT_NAME set to: %EXPERIMENT_NAME%
 set RUN_BASELINE=true
 set RUN_BERT=true
 set RUN_ID=run_01
+set OVERWRITE=false
 set EXPERIMENTS_DIR=.\outputs\causal\sim_study_sampling\runs
 set BASE_SEED=42
 set SAMPLE_FRACTION=0.5
@@ -85,7 +87,7 @@ set MEDS_DATA=./example_data/synthea_meds_causal
 set FEATURES_DATA=./outputs/causal/data/features
 set TOKENIZED_DATA=./outputs/causal/data/tokenized
 set PRETRAIN_MODEL=./outputs/causal/pretrain/model
-echo DEBUG: Initial flags - RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%, RUN_ID=%RUN_ID%
+echo DEBUG: Initial flags - RUN_BASELINE=%RUN_BASELINE%, RUN_BERT=%RUN_BERT%, RUN_ID=%RUN_ID%, OVERWRITE=%OVERWRITE%
 
 REM Parse additional arguments
 :parse_args
@@ -100,6 +102,11 @@ if "%1"=="--baseline-only" (
 )
 if "%1"=="--bert-only" (
     set RUN_BASELINE=false
+    shift
+    goto :parse_args
+)
+if "%1"=="--overwrite" (
+    set OVERWRITE=true
     shift
     goto :parse_args
 )
@@ -149,16 +156,6 @@ if "%1"=="--sample-fraction" (
         exit /b 1
     )
     set SAMPLE_FRACTION=%2
-    shift
-    shift
-    goto :parse_args
-)
-if "%1"=="--base-cohort" (
-    if "%2"=="" (
-        echo ERROR: --base-cohort requires a path
-        exit /b 1
-    )
-    set BASE_COHORT_PATH=%2
     shift
     shift
     goto :parse_args
@@ -291,23 +288,35 @@ echo ======================================
 echo PHASE 1: DATA PREPARATION WITH RESAMPLING
 echo ======================================
 
-echo ==== Running simulate_outcomes_with_sampling... ====
-echo DEBUG: About to run: python -m corebehrt.main_causal.simulate_with_sampling --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\simulation.yaml
-python -m corebehrt.main_causal.simulate_with_sampling --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\simulation.yaml
-set PYTHON_EXIT_CODE=!errorlevel!
-echo DEBUG: Python exit code: !PYTHON_EXIT_CODE!
-if !PYTHON_EXIT_CODE! neq 0 (
-    echo ERROR: simulate_outcomes_with_sampling failed with exit code !PYTHON_EXIT_CODE!
-    goto :error
+REM Step: simulate_outcomes_with_sampling
+set TARGET_FILE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\simulated_outcomes\counterfactuals.csv
+if "%OVERWRITE%"=="false" if exist "%TARGET_FILE%" (
+    echo ==== Skipping simulate_outcomes_with_sampling ^(output already exists^) ====
+) else (
+    echo ==== Running simulate_outcomes_with_sampling... ====
+    python -m corebehrt.main_causal.simulate_with_sampling --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\simulation.yaml
+    if errorlevel 1 goto :error
 )
 
-echo ==== Running select_cohort... ====
-python -m corebehrt.main_causal.select_cohort_full --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\select_cohort.yaml
-if errorlevel 1 goto :error
+REM Step: select_cohort
+set TARGET_FILE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\cohort\pids.pt
+if "%OVERWRITE%"=="false" if exist "%TARGET_FILE%" (
+    echo ==== Skipping select_cohort ^(output already exists^) ====
+) else (
+    echo ==== Running select_cohort... ====
+    python -m corebehrt.main_causal.select_cohort_full --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\select_cohort.yaml
+    if errorlevel 1 goto :error
+)
 
-echo ==== Running prepare_finetune_data... ====
-python -m corebehrt.main_causal.prepare_ft_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\prepare_finetune.yaml
-if errorlevel 1 goto :error
+REM Step: prepare_finetune_data
+set TARGET_FILE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\prepared_data\patients.pt
+if "%OVERWRITE%"=="false" if exist "%TARGET_FILE%" (
+    echo ==== Skipping prepare_finetune_data ^(output already exists^) ====
+) else (
+    echo ==== Running prepare_finetune_data... ====
+    python -m corebehrt.main_causal.prepare_ft_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\prepare_finetune.yaml
+    if errorlevel 1 goto :error
+)
 
 REM --- Baseline Pipeline ---
 if "%RUN_BASELINE%"=="true" (
@@ -316,17 +325,35 @@ if "%RUN_BASELINE%"=="true" (
     echo PHASE 2: BASELINE MODELS ^(CATBOOST^)
     echo ======================================
 
-    echo ==== Running train_baseline... ====
-    python -m corebehrt.main_causal.train_baseline --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\train_baseline.yaml
-    if errorlevel 1 goto :error
+    REM Step: train_baseline
+    set TARGET_FILE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\models\baseline\combined_predictions.csv
+    if "%OVERWRITE%"=="false" if exist "%TARGET_FILE%" (
+        echo ==== Skipping train_baseline ^(output already exists^) ====
+    ) else (
+        echo ==== Running train_baseline... ====
+        python -m corebehrt.main_causal.train_baseline --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\train_baseline.yaml
+        if errorlevel 1 goto :error
+    )
 
-    echo ==== Running calibrate ^(Baseline^)... ====
-    python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\calibrate.yaml
-    if errorlevel 1 goto :error
+    REM Step: calibrate (Baseline)
+    set TARGET_FILE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\calibrated\baseline\combined_calibrated_predictions.csv
+    if "%OVERWRITE%"=="false" if exist "%TARGET_FILE%" (
+        echo ==== Skipping calibrate ^(Baseline^) ^(output already exists^) ====
+    ) else (
+        echo ==== Running calibrate ^(Baseline^)... ====
+        python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\calibrate.yaml
+        if errorlevel 1 goto :error
+    )
 
-    echo ==== Running estimate ^(Baseline^)... ====
-    python -m corebehrt.main_causal.estimate --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\estimate.yaml
-    if errorlevel 1 goto :error
+    REM Step: estimate (Baseline)
+    set TARGET_FILE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\estimate\baseline\estimate_results.csv
+    if "%OVERWRITE%"=="false" if exist "%TARGET_FILE%" (
+        echo ==== Skipping estimate ^(Baseline^) ^(output already exists^) ====
+    ) else (
+        echo ==== Running estimate ^(Baseline^)... ====
+        python -m corebehrt.main_causal.estimate --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\estimate.yaml
+        if errorlevel 1 goto :error
+    )
 )
 
 REM --- BERT Pipeline ---
@@ -336,17 +363,35 @@ if "%RUN_BERT%"=="true" (
     echo PHASE 3: BERT MODELS
     echo ======================================
 
-    echo ==== Running finetune ^(BERT^)... ====
-    python -m corebehrt.main_causal.finetune_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\finetune_bert.yaml
-    if errorlevel 1 goto :error
+    REM Step: finetune (BERT)
+    set TARGET_FILE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\models\bert\combined_predictions.csv
+    if "%OVERWRITE%"=="false" if exist "%TARGET_FILE%" (
+        echo ==== Skipping finetune ^(BERT^) ^(output already exists^) ====
+    ) else (
+        echo ==== Running finetune ^(BERT^)... ====
+        python -m corebehrt.main_causal.finetune_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\finetune_bert.yaml
+        if errorlevel 1 goto :error
+    )
 
-    echo ==== Running calibrate ^(BERT^)... ====
-    python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\calibrate_bert.yaml
-    if errorlevel 1 goto :error
+    REM Step: calibrate (BERT)
+    set TARGET_FILE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\calibrated\bert\combined_calibrated_predictions.csv
+    if "%OVERWRITE%"=="false" if exist "%TARGET_FILE%" (
+        echo ==== Skipping calibrate ^(BERT^) ^(output already exists^) ====
+    ) else (
+        echo ==== Running calibrate ^(BERT^)... ====
+        python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\calibrate_bert.yaml
+        if errorlevel 1 goto :error
+    )
 
-    echo ==== Running estimate ^(BERT^)... ====
-    python -m corebehrt.main_causal.estimate --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\estimate_bert.yaml
-    if errorlevel 1 goto :error
+    REM Step: estimate (BERT)
+    set TARGET_FILE=%EXPERIMENTS_DIR%\%RUN_ID%\%EXPERIMENT_NAME%\estimate\bert\estimate_results.csv
+    if "%OVERWRITE%"=="false" if exist "%TARGET_FILE%" (
+        echo ==== Skipping estimate ^(BERT^) ^(output already exists^) ====
+    ) else (
+        echo ==== Running estimate ^(BERT^)... ====
+        python -m corebehrt.main_causal.estimate --config_path experiments\causal_pipeline_resample\generated_configs\%EXPERIMENT_NAME%\estimate_bert.yaml
+        if errorlevel 1 goto :error
+    )
 )
 
 echo.

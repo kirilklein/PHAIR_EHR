@@ -39,7 +39,7 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  -h, --help              Show this help message"
     echo "  --baseline-only         Run only baseline (CatBoost) pipeline"
     echo "  --bert-only             Run only BERT pipeline (requires baseline data)"
-    echo "  --dont-overwrite        Skip steps if output already exists (useful for resuming failed runs)"
+    echo "  --overwrite             Force re-run all steps (default: skip completed steps)"
     echo "  --experiment-dir|-e DIR Base directory for experiments (default: ./outputs/causal/sim_study_sampling/runs)"
     echo "  --base-seed N           Base seed for sampling (default: 42)"
     echo "  --sample-fraction F     Fraction of MEDS patients to sample (default: 0.5)"
@@ -74,7 +74,7 @@ shift
 RUN_BASELINE=true
 RUN_BERT=true
 RUN_ID="run_01"
-OVERWRITE=true
+OVERWRITE=false  # Safe default: don't overwrite existing results
 EXPERIMENTS_DIR="./outputs/causal/sim_study_sampling/runs"
 BASE_SEED=42
 SAMPLE_FRACTION=0.5
@@ -85,7 +85,7 @@ while [[ $# -gt 0 ]]; do
         --baseline-only) RUN_BERT=false; shift ;;
         --bert-only) RUN_BASELINE=false; shift ;;
         --run_id) RUN_ID="$2"; shift 2 ;;
-        --dont-overwrite) OVERWRITE=false; shift ;;
+        --overwrite) OVERWRITE=true; shift ;;
         --experiment-dir|-e) EXPERIMENTS_DIR="$2"; shift 2 ;;
         --timeout-factor) TIMEOUT_FACTOR="$2"; shift 2;;
         --base-seed) BASE_SEED="$2"; shift 2 ;;
@@ -132,7 +132,7 @@ run_step() {
     fi
 
     echo "==== Running $step_name... ===="
-    local config_path="experiments/causal_pipeline/generated_configs/$EXPERIMENT_NAME/$config_name.yaml"
+    local config_path="experiments/causal_pipeline_resample/generated_configs/$EXPERIMENT_NAME/$config_name.yaml"
     
     timeout "$effective_timeout" python -m "$python_module" --config_path "$config_path"
     local exit_code=$?
