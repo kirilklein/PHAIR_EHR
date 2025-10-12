@@ -11,7 +11,7 @@ RUN_MODE="both"
 EXPERIMENT_LIST=""
 N_RUNS=1
 RUN_ID_OVERRIDE=""
-EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"
+EXPERIMENTS_DIR="./outputs/causal/sim_study_sampling/runs"
 
 # Configurable data paths with defaults
 MEDS_DATA="./example_data/synthea_meds_causal"
@@ -22,7 +22,6 @@ PRETRAIN_MODEL="./outputs/causal/pretrain/model"
 # Resampling-specific parameters
 BASE_SEED=42
 SAMPLE_FRACTION=0.5
-BASE_COHORT_PATH="./outputs/causal/sim_study/base_cohort"
 
 # Parse command line arguments
 echo "DEBUG: Starting argument parsing with arguments: $*"
@@ -43,10 +42,9 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help                Show this help message"
             echo "  --n_runs|-n N             Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
             echo "  --run_id run_XX           Specific run ID to use (overrides --n_runs)"
-            echo "  -e, --experiment-dir DIR  Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
+            echo "  -e, --experiment-dir DIR  Base directory for experiments (default: ./outputs/causal/sim_study_sampling/runs)"
             echo "  --base-seed N             Base seed for sampling (default: 42). Actual seed = base_seed + run_number"
-            echo "  --sample-fraction F       Fraction of base cohort to sample per run (default: 0.5)"
-            echo "  --base-cohort PATH        Path to pre-built base cohort (default: ./outputs/causal/sim_study/base_cohort)"
+            echo "  --sample-fraction F       Fraction of MEDS patients to sample per run (default: 0.5)"
             echo "  --meds PATH               Path to MEDS data directory (default: ./example_data/synthea_meds_causal)"
             echo "  --features PATH           Path to features directory (default: ./outputs/causal/data/features)"
             echo "  --tokenized PATH          Path to tokenized data directory (default: ./outputs/causal/data/tokenized)"
@@ -84,11 +82,11 @@ while [[ $# -gt 0 ]]; do
             echo "    > Runs specified experiment in run_05 folder specifically"
             echo ""
             echo "NOTES:"
-            echo "  - This is the RESAMPLING variant: each run samples a different subset of the base cohort"
-            echo "  - Requires a pre-built base cohort (see README for setup instructions)"
+            echo "  - This is the RESAMPLING variant: samples from MEDS → simulates → selects cohort for each run"
+            echo "  - No pre-built cohort needed; sampling happens from raw MEDS data"
             echo "  - Seed varies per run: base_seed + run_number"
             echo "  - Experiment configs are read from: ../experiment_configs/<experiment_name>.yaml"
-            echo "  - Results are saved to: ../../../outputs/causal/sim_study/runs/run_XX/<experiment_name>/"
+            echo "  - Results are saved to: ../../../outputs/causal/sim_study_sampling/runs/run_XX/<experiment_name>/"
             echo "  - Use Ctrl+C to stop the batch run at any time"
             echo ""
             exit 0
@@ -203,7 +201,6 @@ esac
 echo "Experiments directory: $EXPERIMENTS_DIR"
 echo "Base seed: $BASE_SEED"
 echo "Sample fraction: $SAMPLE_FRACTION"
-echo "Base cohort path: $BASE_COHORT_PATH"
 echo "========================================"
 
 # Set batch mode to prevent pausing
@@ -275,7 +272,6 @@ for run_number in $(seq 1 $N_RUNS); do
         # Add resampling-specific arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-seed $BASE_SEED"
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-fraction $SAMPLE_FRACTION"
-        EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-cohort \"$BASE_COHORT_PATH\""
         
         # Add data path arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --meds \"$MEDS_DATA\""

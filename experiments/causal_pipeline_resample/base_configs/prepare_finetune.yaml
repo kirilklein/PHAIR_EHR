@@ -10,19 +10,9 @@ paths:
 
   outcomes: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
   outcome_files:
-    - OUTCOME_01.csv
-    - OUTCOME_02.csv
-    - OUTCOME_03.csv
-    - OUTCOME_04.csv
-    - OUTCOME_05.csv
-    - OUTCOME_06.csv
-    - OUTCOME_07.csv
-    - OUTCOME_08.csv
-    - OUTCOME_09.csv
-    - OUTCOME_10.csv
-    - OUTCOME_11.csv
-    - OUTCOME_12.csv
-    - OUTCOME_13.csv
+    - effect_0.csv
+    - effect_1p39.csv
+
   exposures: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
   exposure: exposure.csv
 

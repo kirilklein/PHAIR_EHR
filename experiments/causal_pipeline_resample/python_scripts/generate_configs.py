@@ -31,7 +31,6 @@ def replace_placeholders(
     pretrain_model="./outputs/causal/pretrain/model",
     seed=42,
     sample_fraction=0.5,
-    base_cohort_path="./outputs/causal/sim_study/base_cohort",
 ):
     """Recursively replace placeholders in config."""
     if isinstance(config_dict, dict):
@@ -47,7 +46,6 @@ def replace_placeholders(
                 pretrain_model,
                 seed,
                 sample_fraction,
-                base_cohort_path,
             )
             for key, value in config_dict.items()
         }
@@ -64,7 +62,6 @@ def replace_placeholders(
                 pretrain_model,
                 seed,
                 sample_fraction,
-                base_cohort_path,
             )
             for item in config_dict
         ]
@@ -77,11 +74,9 @@ def replace_placeholders(
         result = result.replace("{{FEATURES_DATA}}", features_data)
         result = result.replace("{{TOKENIZED_DATA}}", tokenized_data)
         result = result.replace("{{PRETRAIN_MODEL}}", pretrain_model)
-        # Replace resampling-specific placeholders
-        result = result.replace("{{SEED}}", str(seed))
-        result = result.replace("{{SAMPLE_FRACTION}}", str(sample_fraction))
-        result = result.replace("{{BASE_COHORT_PATH}}", base_cohort_path)
         return result
+    elif isinstance(config_dict, (int, float)):
+        return config_dict
     else:
         return config_dict
 
@@ -97,7 +92,6 @@ def generate_experiment_configs(
     pretrain_model="./outputs/causal/pretrain/model",
     base_seed=42,
     sample_fraction=0.5,
-    base_cohort_path="./outputs/causal/sim_study/base_cohort",
 ):
     """Generate all config files for a specific experiment.
 
@@ -175,8 +169,13 @@ def generate_experiment_configs(
             pretrain_model,
             seed,
             sample_fraction,
-            base_cohort_path,
         )
+        
+        # Replace numeric placeholders (after initial load, so they become actual numbers)
+        if base_file == "simulation.yaml" and isinstance(final_config, dict):
+            final_config["seed"] = seed
+            if "sampling" in final_config and isinstance(final_config["sampling"], dict):
+                final_config["sampling"]["fraction"] = sample_fraction
 
         # Write output config
         output_path = output_dir / output_file
@@ -231,12 +230,7 @@ def main():
         "--sample-fraction",
         type=float,
         default=0.5,
-        help="Fraction of base cohort to sample per run (default: 0.5)",
-    )
-    parser.add_argument(
-        "--base-cohort-path",
-        default="./outputs/causal/sim_study/base_cohort",
-        help="Path to pre-built base cohort (default: ./outputs/causal/sim_study/base_cohort)",
+        help="Fraction of MEDS patients to sample per run (default: 0.5)",
     )
     args = parser.parse_args()
 
@@ -252,7 +246,6 @@ def main():
         args.pretrain_model,
         args.base_seed,
         args.sample_fraction,
-        args.base_cohort_path,
     )
 
 

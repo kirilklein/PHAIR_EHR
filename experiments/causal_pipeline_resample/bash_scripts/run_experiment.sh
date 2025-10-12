@@ -40,10 +40,9 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  --baseline-only         Run only baseline (CatBoost) pipeline"
     echo "  --bert-only             Run only BERT pipeline (requires baseline data)"
     echo "  --dont-overwrite        Skip steps if output already exists (useful for resuming failed runs)"
-    echo "  --experiment-dir|-e DIR Base directory for experiments (default: ./outputs/causal/sim_study/runs)"
+    echo "  --experiment-dir|-e DIR Base directory for experiments (default: ./outputs/causal/sim_study_sampling/runs)"
     echo "  --base-seed N           Base seed for sampling (default: 42)"
-    echo "  --sample-fraction F     Fraction of base cohort to sample (default: 0.5)"
-    echo "  --base-cohort PATH      Path to pre-built base cohort (default: ./outputs/causal/sim_study/base_cohort)"
+    echo "  --sample-fraction F     Fraction of MEDS patients to sample (default: 0.5)"
     echo "  (no options)            Run both baseline and BERT pipelines"
     echo ""
     echo "EXAMPLES:"
@@ -57,12 +56,12 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "    > Runs only BERT pipeline for experiment ce1_cy1_y0_i0 (baseline data must exist)"
     echo ""
     echo "NOTES:"
-    echo "  - This is the RESAMPLING variant: each run samples a different subset of the base cohort"
-    echo "  - Requires a pre-built base cohort (see README for setup instructions)"
+    echo "  - This is the RESAMPLING variant: samples from MEDS → simulates → selects cohort for each run"
+    echo "  - No pre-built cohort needed; sampling happens from raw MEDS data"
     echo "  - Seed is calculated as: base_seed + run_number (extracted from run_id)"
     echo "  - Experiment configs are read from: ../experiment_configs/<experiment_name>.yaml"
     echo "  - Generated configs are saved to: ../generated_configs/<experiment_name>/"
-    echo "  - Results are saved to: ../../../outputs/causal/sim_study/runs/<experiment_name>/"
+    echo "  - Results are saved to: ../../../outputs/causal/sim_study_sampling/runs/<experiment_name>/"
     echo "  - Use Ctrl+C to stop the experiment at any time"
     echo ""
     exit 1
@@ -76,10 +75,9 @@ RUN_BASELINE=true
 RUN_BERT=true
 RUN_ID="run_01"
 OVERWRITE=true
-EXPERIMENTS_DIR="./outputs/causal/sim_study/runs"
+EXPERIMENTS_DIR="./outputs/causal/sim_study_sampling/runs"
 BASE_SEED=42
 SAMPLE_FRACTION=0.5
-BASE_COHORT_PATH="./outputs/causal/sim_study/base_cohort"
 
 
 while [[ $# -gt 0 ]]; do
@@ -92,7 +90,6 @@ while [[ $# -gt 0 ]]; do
         --timeout-factor) TIMEOUT_FACTOR="$2"; shift 2;;
         --base-seed) BASE_SEED="$2"; shift 2 ;;
         --sample-fraction) SAMPLE_FRACTION="$2"; shift 2 ;;
-        --base-cohort) BASE_COHORT_PATH="$2"; shift 2 ;;
         --meds)
             MEDS_DATA="$2"
             shift 2
@@ -159,7 +156,7 @@ run_step() {
 
 # 1. Generate Configs
 echo "Step 1: Generating experiment configs..."
-python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME" --run_id "$RUN_ID" --experiments_dir "$EXPERIMENTS_DIR" --meds "$MEDS_DATA" --features "$FEATURES_DATA" --tokenized "$TOKENIZED_DATA" --pretrain-model "$PRETRAIN_MODEL" --base-seed "$BASE_SEED" --sample-fraction "$SAMPLE_FRACTION" --base-cohort-path "$BASE_COHORT_PATH"
+python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME" --run_id "$RUN_ID" --experiments_dir "$EXPERIMENTS_DIR" --meds "$MEDS_DATA" --features "$FEATURES_DATA" --tokenized "$TOKENIZED_DATA" --pretrain-model "$PRETRAIN_MODEL" --base-seed "$BASE_SEED" --sample-fraction "$SAMPLE_FRACTION"
 if [ $? -ne 0 ]; then echo "ERROR: Config generation failed."; exit 1; fi
 echo "All configs generated successfully."
 echo ""
@@ -170,9 +167,10 @@ export PYTHONPATH="$PWD:$PYTHONPATH"
 
 # 3. Run Data Preparation Steps (ALWAYS run for resampling experiments)
 echo "Step 2: Running Data Preparation Pipeline with Resampling..."
-echo "NOTE: Each run samples a different subset of the base cohort"
+echo "NOTE: Each run samples from MEDS data, then simulates and selects cohort"
 TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
 run_step "simulate_outcomes_with_sampling" "corebehrt.main_causal.simulate_with_sampling" "simulation" "$TARGET_DIR/simulated_outcomes/counterfactuals.csv" $TIMEOUT_SIMULATE
+run_step "select_cohort" "corebehrt.main_causal.select_cohort_full" "select_cohort" "$TARGET_DIR/cohort/pids.pt" $TIMEOUT_COHORT
 run_step "prepare_finetune_data" "corebehrt.main_causal.prepare_ft_exp_y" "prepare_finetune" "$TARGET_DIR/prepared_data/patients.pt" $TIMEOUT_PREPARE
 
 # 4. Run Baseline Pipeline (if enabled)

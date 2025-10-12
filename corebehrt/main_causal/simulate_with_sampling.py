@@ -2,8 +2,7 @@
 Simulation with per-run cohort sampling for resampling experiments.
 
 This module extends the standard simulation workflow by first sampling a subset
-of patients from a pre-built base cohort, then simulating outcomes only for
-those sampled patients.
+of patients from MEDS data, then simulating outcomes only for those sampled patients.
 """
 
 from corebehrt.functional.setup.args import get_args
@@ -35,7 +34,7 @@ def main_simulate(config_path):
     # Setup directories
     CausalDirectoryPreparer(cfg).setup_simulate_from_sequence()
 
-    # Load base cohort PIDs
+    # Check sampling configuration
     sampling_cfg = cfg.get("sampling", {})
     if not sampling_cfg.get("enabled", False):
         raise ValueError(
@@ -43,20 +42,22 @@ def main_simulate(config_path):
             "Set sampling.enabled: true in config."
         )
 
-    base_cohort_path = sampling_cfg.get("base_cohort_path")
-    if not base_cohort_path:
-        raise ValueError("sampling.base_cohort_path must be specified in config")
+    # Initialize shard loader to get all available PIDs from MEDS data
+    shard_loader = ShardLoader(cfg.paths.data, cfg.paths.splits)
 
-    # Load full cohort PIDs
-    full_pids_file = join(base_cohort_path, PID_FILE)
-    logger.info(f"Loading base cohort from {full_pids_file}")
-    full_pids = torch.load(full_pids_file)
-    logger.info(f"Loaded {len(full_pids)} patients from base cohort")
+    # Extract all unique PIDs from MEDS data
+    logger.info("Extracting all patient IDs from MEDS data...")
+    all_pids = set()
+    for shard, _ in tqdm(shard_loader(), desc="Scanning MEDS shards"):
+        all_pids.update(shard[PID_COL].unique())
+
+    full_pids = torch.tensor(sorted(all_pids))
+    logger.info(f"Found {len(full_pids)} unique patients in MEDS data")
 
     # Sample subset of PIDs
     sample_fraction = sampling_cfg.get("fraction", 0.5)
     seed = cfg.get("seed", 42)
-    logger.info(f"Sampling {sample_fraction * 100:.1f}% of cohort with seed {seed}")
+    logger.info(f"Sampling {sample_fraction * 100:.1f}% of patients with seed {seed}")
     sampled_pids = sample_cohort(full_pids, sample_fraction, seed)
     logger.info(f"Sampled {len(sampled_pids)} patients")
 
@@ -73,7 +74,7 @@ def main_simulate(config_path):
     # Convert to set for fast lookup
     sampled_pids_set = set(sampled_pids.tolist())
 
-    # Initialize simulation components
+    # Re-initialize shard loader for simulation (need fresh iterator)
     shard_loader = ShardLoader(cfg.paths.data, cfg.paths.splits)
     simulation_config = create_simulation_config(cfg)
     simulator = CausalSimulator(simulation_config)

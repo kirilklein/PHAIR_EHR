@@ -22,8 +22,8 @@ include_age: true
 # ==============================================================================
 catboost:
   n_estimators: 100
-  task_type: GPU # Enable GPU
-  devices: "0" # Specify GPU device
+  # task_type: CPU # Default is CPU. Set to GPU if you have CUDA available
+  # devices: "0" # Only needed for GPU mode
   # learning_rate: 0.03
   # max_depth: 6
   # subsample: 0.8

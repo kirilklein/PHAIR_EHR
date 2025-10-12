@@ -9,15 +9,13 @@ paths:
   data: "{{MEDS_DATA}}"
   splits: ["tuning"]
   outcomes: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
-  cohort: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/cohort"
 
 # Sampling configuration for resampling experiments
 sampling:
   enabled: true
-  fraction: {{SAMPLE_FRACTION}}  # Fraction of base cohort to sample (0 < fraction <= 1)
-  base_cohort_path: "{{BASE_COHORT_PATH}}"  # Path to pre-built full cohort
+  fraction: "{{SAMPLE_FRACTION}}" # Fraction of all MEDS patients to sample (0 < fraction <= 1)
 
-seed: {{SEED}}
+seed: "{{SEED}}"
 debug: false
 min_num_codes: 3
 include_code_prefixes: ["D/"]
@@ -35,67 +33,12 @@ exposure:
 
 # Default outcomes - can be overridden in experiment config
 outcomes:
-  OUTCOME_01:
+  effect_0:
     run_in_days: 1
-    p_base: 0.5
-    exposure_effect: 2.2 # Weaker positive effect
+    p_base: 0.3
+    exposure_effect: 0.0
 
-  OUTCOME_02:
+  effect_1p39:
     run_in_days: 1
     p_base: 0.5
-    exposure_effect: 1.39 # Weaker positive effect
-
-  OUTCOME_03:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: 0.85 # Even weaker positive effect
-
-  OUTCOME_04:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: 0.62 # True ZERO causal effect
-
-  OUTCOME_05:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: 0.41 # Strong positive effect
-
-  OUTCOME_06:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: 0.2 # Weak positive effect
-
-  OUTCOME_07:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: 0.0 # Negative effect
-
-  OUTCOME_08:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: -0.2 # True ZERO causal effect
-
-  OUTCOME_09:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: -0.41 # Strong negative effect
-
-  OUTCOME_10:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: -0.62 # Strong positive effect
-
-  OUTCOME_11:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: -0.85 # Strong positive effect
-
-  OUTCOME_12:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: -1.39 # Strong positive effect
-
-  OUTCOME_13:
-    run_in_days: 1
-    p_base: 0.5
-    exposure_effect: -2.2 # Strong positive effect
+    exposure_effect: 1.39 # Strong positive effect
