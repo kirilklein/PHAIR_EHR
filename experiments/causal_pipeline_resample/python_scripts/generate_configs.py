@@ -92,6 +92,7 @@ def generate_experiment_configs(
     pretrain_model="./outputs/causal/pretrain/model",
     base_seed=42,
     sample_fraction=0.5,
+    base_configs_dir=None,
 ):
     """Generate all config files for a specific experiment.
 
@@ -110,7 +111,10 @@ def generate_experiment_configs(
         seed = base_seed  # fallback if run_id doesn't match pattern
 
     # Define paths relative to script directory
-    base_configs_dir = script_dir / "base_configs"
+    if base_configs_dir is None:
+        base_configs_dir = script_dir / "base_configs"
+    else:
+        base_configs_dir = Path(base_configs_dir)
     experiment_configs_dir = script_dir / "experiment_configs"
     output_dir = script_dir / "generated_configs" / experiment_name
 
@@ -170,11 +174,13 @@ def generate_experiment_configs(
             seed,
             sample_fraction,
         )
-        
+
         # Replace numeric placeholders (after initial load, so they become actual numbers)
         if base_file == "simulation.yaml" and isinstance(final_config, dict):
             final_config["seed"] = seed
-            if "sampling" in final_config and isinstance(final_config["sampling"], dict):
+            if "sampling" in final_config and isinstance(
+                final_config["sampling"], dict
+            ):
                 final_config["sampling"]["fraction"] = sample_fraction
 
         # Write output config
@@ -232,6 +238,11 @@ def main():
         default=0.5,
         help="Fraction of MEDS patients to sample per run (default: 0.5)",
     )
+    parser.add_argument(
+        "--base-configs-dir",
+        default=None,
+        help="Custom base configs directory (default: ../base_configs)",
+    )
     args = parser.parse_args()
 
     script_dir = Path(__file__).parent.parent
@@ -246,6 +257,7 @@ def main():
         args.pretrain_model,
         args.base_seed,
         args.sample_fraction,
+        args.base_configs_dir,
     )
 
 

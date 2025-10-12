@@ -41,6 +41,7 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  --bert-only             Run only BERT pipeline (requires baseline data)"
     echo "  --overwrite             Force re-run all steps (default: skip completed steps)"
     echo "  --experiment-dir|-e DIR Base directory for experiments (default: ./outputs/causal/sim_study_sampling/runs)"
+    echo "  --base-configs-dir DIR  Custom base configs directory (default: ../base_configs)"
     echo "  --base-seed N           Base seed for sampling (default: 42)"
     echo "  --sample-fraction F     Fraction of MEDS patients to sample (default: 0.5)"
     echo "  (no options)            Run both baseline and BERT pipelines"
@@ -76,6 +77,7 @@ RUN_BERT=true
 RUN_ID="run_01"
 OVERWRITE=false  # Safe default: don't overwrite existing results
 EXPERIMENTS_DIR="./outputs/causal/sim_study_sampling/runs"
+BASE_CONFIGS_DIR=""  # Empty means use default in generate_configs.py
 BASE_SEED=42
 SAMPLE_FRACTION=0.5
 MEDS_DATA="./example_data/synthea_meds_causal"
@@ -91,6 +93,7 @@ while [[ $# -gt 0 ]]; do
         --run_id) RUN_ID="$2"; shift 2 ;;
         --overwrite) OVERWRITE=true; shift ;;
         --experiment-dir|-e) EXPERIMENTS_DIR="$2"; shift 2 ;;
+        --base-configs-dir) BASE_CONFIGS_DIR="$2"; shift 2 ;;
         --timeout-factor) TIMEOUT_FACTOR="$2"; shift 2 ;;
         --base-seed) BASE_SEED="$2"; shift 2 ;;
         --sample-fraction) SAMPLE_FRACTION="$2"; shift 2 ;;
@@ -162,7 +165,11 @@ run_step() {
 
 # 1. Generate Configs
 echo "Step 1: Generating experiment configs..."
-python ../python_scripts/generate_configs.py "$EXPERIMENT_NAME" --run_id "$RUN_ID" --experiments_dir "$EXPERIMENTS_DIR" --meds "$MEDS_DATA" --features "$FEATURES_DATA" --tokenized "$TOKENIZED_DATA" --pretrain-model "$PRETRAIN_MODEL" --base-seed "$BASE_SEED" --sample-fraction "$SAMPLE_FRACTION"
+CONFIG_GEN_CMD="python ../python_scripts/generate_configs.py \"$EXPERIMENT_NAME\" --run_id \"$RUN_ID\" --experiments_dir \"$EXPERIMENTS_DIR\" --meds \"$MEDS_DATA\" --features \"$FEATURES_DATA\" --tokenized \"$TOKENIZED_DATA\" --pretrain-model \"$PRETRAIN_MODEL\" --base-seed \"$BASE_SEED\" --sample-fraction \"$SAMPLE_FRACTION\""
+if [ -n "$BASE_CONFIGS_DIR" ]; then
+    CONFIG_GEN_CMD="$CONFIG_GEN_CMD --base-configs-dir \"$BASE_CONFIGS_DIR\""
+fi
+eval $CONFIG_GEN_CMD
 if [ $? -ne 0 ]; then echo "ERROR: Config generation failed."; exit 1; fi
 echo "All configs generated successfully."
 echo ""

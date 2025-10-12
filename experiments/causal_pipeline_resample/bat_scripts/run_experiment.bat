@@ -34,6 +34,7 @@ echo   --baseline-only         Run only baseline ^(CatBoost^) pipeline
 echo   --bert-only             Run only BERT pipeline ^(requires baseline data^)
 echo   --overwrite             Force re-run all steps ^(default: skip completed steps^)
 echo   -e, --experiment-dir    Base directory for experiments ^(default: .\outputs\causal\sim_study_sampling\runs^)
+echo   --base-configs-dir DIR  Custom base configs directory ^(default: ..\base_configs^)
 echo   --base-seed N           Base seed for sampling ^(default: 42^). Actual seed = base_seed + run_number
 echo   --sample-fraction F     Fraction of MEDS patients to sample ^(default: 0.5^)
 echo   --meds PATH             Path to MEDS data ^(default: ./example_data/synthea_meds_causal^)
@@ -81,6 +82,7 @@ set RUN_BERT=true
 set RUN_ID=run_01
 set OVERWRITE=false
 set EXPERIMENTS_DIR=.\outputs\causal\sim_study_sampling\runs
+set BASE_CONFIGS_DIR=
 set BASE_SEED=42
 set SAMPLE_FRACTION=0.5
 set MEDS_DATA=./example_data/synthea_meds_causal
@@ -136,6 +138,16 @@ if "%1"=="--experiment-dir" (
         exit /b 1
     )
     set EXPERIMENTS_DIR=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--base-configs-dir" (
+    if "%2"=="" (
+        echo ERROR: --base-configs-dir requires a directory path
+        exit /b 1
+    )
+    set BASE_CONFIGS_DIR=%2
     shift
     shift
     goto :parse_args
@@ -237,8 +249,12 @@ if not exist "..\experiment_configs\%EXPERIMENT_NAME%.yaml" (
 
 REM Generate experiment-specific configs
 echo Step 1: Generating experiment configs...
-echo DEBUG: About to run: python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR% --base-seed %BASE_SEED% --sample-fraction %SAMPLE_FRACTION% --meds %MEDS_DATA% --features %FEATURES_DATA% --tokenized %TOKENIZED_DATA% --pretrain-model %PRETRAIN_MODEL%
-python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR% --base-seed %BASE_SEED% --sample-fraction %SAMPLE_FRACTION% --meds %MEDS_DATA% --features %FEATURES_DATA% --tokenized %TOKENIZED_DATA% --pretrain-model %PRETRAIN_MODEL%
+set CONFIG_CMD=python ..\python_scripts\generate_configs.py %EXPERIMENT_NAME% --run_id %RUN_ID% --experiments_dir %EXPERIMENTS_DIR% --base-seed %BASE_SEED% --sample-fraction %SAMPLE_FRACTION% --meds %MEDS_DATA% --features %FEATURES_DATA% --tokenized %TOKENIZED_DATA% --pretrain-model %PRETRAIN_MODEL%
+if not "%BASE_CONFIGS_DIR%"=="" (
+    set CONFIG_CMD=%CONFIG_CMD% --base-configs-dir %BASE_CONFIGS_DIR%
+)
+echo DEBUG: About to run: %CONFIG_CMD%
+%CONFIG_CMD%
 set CONFIG_EXIT_CODE=!errorlevel!
 echo DEBUG: Config generation exit code: !CONFIG_EXIT_CODE!
 if !CONFIG_EXIT_CODE! neq 0 (

@@ -13,6 +13,7 @@ set RUN_ID_OVERRIDE=
 set OVERWRITE=false
 set FAILFAST=false
 set EXPERIMENTS_DIR=.\outputs\causal\sim_study_sampling\runs
+set BASE_CONFIGS_DIR=
 set BASE_SEED=42
 set SAMPLE_FRACTION=0.5
 set MEDS_DATA=./example_data/synthea_meds_causal
@@ -91,6 +92,16 @@ if "%1"=="--experiment-dir" (
         exit /b 1
     )
     set EXPERIMENTS_DIR=%2
+    shift
+    shift
+    goto :parse_args
+)
+if "%1"=="--base-configs-dir" (
+    if "%2"=="" (
+        echo ERROR: --base-configs-dir requires a directory path
+        exit /b 1
+    )
+    set BASE_CONFIGS_DIR=%2
     shift
     shift
     goto :parse_args
@@ -179,6 +190,7 @@ echo   -h, --help                Show this help message
 echo   --n_runs^|-n N             Number of runs to execute ^(default: 1, creates run_01, run_02, etc.^)
 echo   --run_id run_XX           Specific run ID to use ^(overrides --n_runs^)
 echo   -e, --experiment-dir DIR  Base directory for experiments ^(default: .\outputs\causal\sim_study_sampling\runs^)
+echo   --base-configs-dir DIR    Custom base configs directory ^(default: ..\base_configs^)
 echo   --base-seed N             Base seed for sampling ^(default: 42^). Actual seed = base_seed + run_number
 echo   --sample-fraction F       Fraction of MEDS patients to sample per run ^(default: 0.5^)
 echo   --meds PATH               Path to MEDS data directory ^(default: ./example_data/synthea_meds_causal^)
@@ -349,6 +361,11 @@ for /L %%r in (1,1,%N_RUNS%) do (
         
         REM Add experiment directory
         set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --experiment-dir %EXPERIMENTS_DIR%
+        
+        REM Add base configs directory if specified
+        if not "%BASE_CONFIGS_DIR%"=="" (
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --base-configs-dir %BASE_CONFIGS_DIR%
+        )
         
         REM Add overwrite flag
         if "%OVERWRITE%"=="true" (

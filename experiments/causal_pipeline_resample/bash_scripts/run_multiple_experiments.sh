@@ -14,6 +14,7 @@ RUN_ID_OVERRIDE=""
 OVERWRITE=false  # Safe default: don't overwrite existing results
 FAILFAST=false    # Default: continue on failure
 EXPERIMENTS_DIR="./outputs/causal/sim_study_sampling/runs"
+BASE_CONFIGS_DIR=""  # Empty means use default
 
 # Configurable data paths with defaults
 MEDS_DATA="./example_data/synthea_meds_causal"
@@ -45,6 +46,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --n_runs|-n N             Number of runs to execute (default: 1, creates run_01, run_02, etc.)"
             echo "  --run_id run_XX           Specific run ID to use (overrides --n_runs)"
             echo "  -e, --experiment-dir DIR  Base directory for experiments (default: ./outputs/causal/sim_study_sampling/runs)"
+            echo "  --base-configs-dir DIR    Custom base configs directory (default: ../base_configs)"
             echo "  --base-seed N             Base seed for sampling (default: 42). Actual seed = base_seed + run_number"
             echo "  --sample-fraction F       Fraction of MEDS patients to sample per run (default: 0.5)"
             echo "  --meds PATH               Path to MEDS data directory (default: ./example_data/synthea_meds_causal)"
@@ -140,6 +142,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -e|--experiment-dir)
             EXPERIMENTS_DIR="$2"
+            shift 2
+            ;;
+        --base-configs-dir)
+            BASE_CONFIGS_DIR="$2"
             shift 2
             ;;
         --base-seed)
@@ -295,12 +301,17 @@ for run_number in $(seq 1 $N_RUNS); do
 
         # Add experiment directory
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --experiment-dir \"$EXPERIMENTS_DIR\""
-
+        
+        # Add base configs directory if specified
+        if [ -n "$BASE_CONFIGS_DIR" ]; then
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-configs-dir \"$BASE_CONFIGS_DIR\""
+        fi
+        
         # Add overwrite flag
         if [ "$OVERWRITE" = "true" ]; then
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --overwrite"
         fi
-
+        
         # Add resampling-specific arguments
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-seed $BASE_SEED"
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-fraction $SAMPLE_FRACTION"
