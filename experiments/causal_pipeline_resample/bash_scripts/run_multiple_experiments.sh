@@ -202,6 +202,22 @@ fi
 echo "========================================"
 echo "Running Multiple Causal Pipeline Experiments"
 
+# Set up logging
+mkdir -p "$EXPERIMENTS_DIR"
+LOG_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_FILE="$EXPERIMENTS_DIR/batch_run_${LOG_TIMESTAMP}.log"
+echo "Log file: $LOG_FILE"
+echo "========================================"
+
+# Redirect all output (stdout and stderr) to both terminal and log file
+exec > >(tee -a "$LOG_FILE")
+exec 2>&1
+
+echo ""
+echo "========================================"
+echo "Logging initialized at $(date)"
+echo "Log file: $LOG_FILE"
+
 # Determine run configuration
 if [ -n "$RUN_ID_OVERRIDE" ]; then
     echo "Run mode: Specific run ($RUN_ID_OVERRIDE)"
@@ -372,6 +388,10 @@ for run_number in $(seq 1 $N_RUNS); do
                 echo ""
                 echo "Failed experiments: $FAILED_EXPERIMENTS"
                 echo ""
+                echo "========================================"
+                echo "Logging completed at $(date)"
+                echo "Full log saved to: $LOG_FILE"
+                echo "========================================"
                 exit 1
             fi
         else
@@ -401,9 +421,19 @@ if [ -n "$FAILED_EXPERIMENTS" ]; then
     echo "Failed experiments: $FAILED_EXPERIMENTS"
     echo ""
     echo "Some experiments failed. Check the output above for details."
+    echo ""
+    echo "========================================"
+    echo "Logging completed at $(date)"
+    echo "Full log saved to: $LOG_FILE"
+    echo "========================================"
     exit 1
 else
     echo ""
     echo "All experiments completed successfully!"
+    echo ""
+    echo "========================================"
+    echo "Logging completed at $(date)"
+    echo "Full log saved to: $LOG_FILE"
+    echo "========================================"
     exit 0
 fi
