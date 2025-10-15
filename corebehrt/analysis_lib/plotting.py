@@ -272,3 +272,251 @@ def create_plot_from_agg(
             plt.savefig(output_path, dpi=300, bbox_inches="tight")
             plt.close(fig)
             print(f"Saved {title_prefix} vs. Instrument plot to: {output_path}")
+
+
+def create_method_comparison_plot(
+    agg_data: pd.DataFrame,
+    metric_name: str,
+    y_label: str,
+    title: str,
+    output_dir: str,
+    plot_type: str = "errorbar",
+    min_points: int = 2,
+):
+    """
+    Creates a method comparison plot with subplots for each (ce, cy, i) combination.
+
+    Args:
+        agg_data: Aggregated data with columns [method, ce, cy, i, outcome, mean, std]
+        metric_name: Name of the metric (for filename)
+        y_label: Label for y-axis
+        title: Title for the overall figure
+        output_dir: Directory to save the plot
+        plot_type: Type of plot ('errorbar', 'line', 'dot')
+        min_points: Minimum number of data points required to generate a plot
+    """
+    if agg_data.empty:
+        print(f"No data to plot for {metric_name}")
+        return
+
+    # Get unique combinations of (ce, cy, i)
+    param_combinations = (
+        agg_data[["ce", "cy", "i"]]
+        .drop_duplicates()
+        .sort_values(["ce", "cy", "i"])
+        .reset_index(drop=True)
+    )
+
+    # Filter out combinations with too few data points
+    valid_combinations = []
+    for _, row in param_combinations.iterrows():
+        subset = agg_data[
+            (agg_data["ce"] == row["ce"])
+            & (agg_data["cy"] == row["cy"])
+            & (agg_data["i"] == row["i"])
+        ]
+        if len(subset) >= min_points:
+            valid_combinations.append(row)
+
+    if not valid_combinations:
+        print(
+            f"No valid parameter combinations with >= {min_points} data points for {metric_name}"
+        )
+        return
+
+    n_subplots = len(valid_combinations)
+    nrows, ncols = calculate_subplot_layout(n_subplots)
+
+    # Calculate figure size
+    fig_width = 6 * ncols
+    fig_height = 5 * nrows
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(fig_width, fig_height),
+        sharey=True,
+        constrained_layout=True,
+        facecolor="white",
+    )
+
+    # Flatten axes array
+    if n_subplots == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten() if nrows > 1 or ncols > 1 else [axes]
+
+    fig.suptitle(title, fontsize=18, fontweight="bold", y=0.995)
+
+    # Define method colors and markers with improved color palette
+    method_styles = {
+        "TMLE": {
+            "color": "#2E86AB",
+            "marker": "o",
+            "linestyle": "",
+            "label": "TMLE",
+        },  # Deep blue
+        "IPW": {
+            "color": "#E63946",
+            "marker": "s",
+            "linestyle": "",
+            "label": "IPW",
+        },  # Red
+        "TMLE_TH": {
+            "color": "#06A77D",
+            "marker": "^",
+            "linestyle": "",
+            "label": "TMLE-TH",
+        },  # Teal/green
+    }
+
+    # Get all unique methods in the data
+    unique_methods = sorted(agg_data["method"].unique())
+
+    # Plot each subplot
+    for idx, params in enumerate(valid_combinations):
+        ax = axes[idx]
+        ce, cy, i = params["ce"], params["cy"], params["i"]
+
+        # Filter data for this parameter combination
+        subplot_data = agg_data[
+            (agg_data["ce"] == ce) & (agg_data["cy"] == cy) & (agg_data["i"] == i)
+        ].copy()
+
+        # Get unique outcomes and sort them
+        outcomes = sorted(subplot_data["outcome"].unique())
+
+        # Plot each method
+        for method in unique_methods:
+            method_data = subplot_data[subplot_data["method"] == method].copy()
+            if method_data.empty:
+                continue
+
+            # Sort by outcome to ensure consistent ordering
+            method_data = method_data.sort_values("outcome")
+
+            style = method_styles.get(
+                method,
+                {"color": "#6C757D", "marker": "o", "linestyle": "", "label": method},
+            )
+
+            if plot_type == "errorbar":
+                # Plot with error bars (no connecting lines)
+                ax.errorbar(
+                    x=range(len(method_data)),
+                    y=method_data["mean"],
+                    yerr=method_data["std"] if "std" in method_data.columns else None,
+                    label=style["label"],
+                    color=style["color"],
+                    marker=style["marker"],
+                    linestyle="",  # No connecting lines
+                    capsize=4,
+                    capthick=1.5,
+                    markersize=8,
+                    markeredgewidth=1.5,
+                    markeredgecolor="white",
+                    elinewidth=2,
+                    alpha=0.85,
+                    zorder=3,
+                )
+            elif plot_type == "dot":
+                # Plot dots without error bars (for coverage)
+                ax.plot(
+                    range(len(method_data)),
+                    method_data["mean"],
+                    label=style["label"],
+                    color=style["color"],
+                    marker=style["marker"],
+                    linestyle="",
+                    markersize=10,
+                    markeredgewidth=1.5,
+                    markeredgecolor="white",
+                    alpha=0.85,
+                    zorder=3,
+                )
+            else:  # line
+                # Plot with markers only
+                ax.plot(
+                    range(len(method_data)),
+                    method_data["mean"],
+                    label=style["label"],
+                    color=style["color"],
+                    marker=style["marker"],
+                    linestyle="",  # No connecting lines
+                    markersize=8,
+                    markeredgewidth=1.5,
+                    markeredgecolor="white",
+                    alpha=0.85,
+                    zorder=3,
+                )
+
+        # Add reference lines
+        if plot_type == "errorbar":
+            ax.axhline(
+                0, color="#2C3E50", linestyle="--", alpha=0.4, linewidth=1.5, zorder=1
+            )
+
+        if metric_name == "coverage":
+            ax.axhline(
+                0.95,
+                color="#E74C3C",
+                linestyle=":",
+                alpha=0.6,
+                linewidth=2,
+                label="95% Target",
+                zorder=1,
+            )
+
+        # Set subplot title with improved styling
+        ax.set_title(
+            f"ce={ce}, cy={cy}, i={i}", fontsize=12, fontweight="semibold", pad=10
+        )
+        ax.set_xlabel(
+            "Outcome (Effect Strength)", fontsize=11, fontweight="medium", labelpad=8
+        )
+        ax.set_ylabel(y_label, fontsize=11, fontweight="medium", labelpad=8)
+
+        # Set x-axis ticks to outcome names
+        ax.set_xticks(range(len(outcomes)))
+        ax.set_xticklabels(outcomes, rotation=45, ha="right", fontsize=9)
+
+        # Improve legend styling
+        legend = ax.legend(
+            fontsize=10,
+            loc="best",
+            framealpha=0.95,
+            edgecolor="#CCCCCC",
+            fancybox=True,
+            shadow=False,
+        )
+        legend.get_frame().set_linewidth(1.5)
+
+        # Improve grid styling
+        ax.grid(True, which="both", linestyle="--", linewidth=0.7, alpha=0.3, zorder=0)
+        ax.set_axisbelow(True)  # Ensure grid is below data points
+
+        # Improve spine styling
+        for spine in ax.spines.values():
+            spine.set_edgecolor("#CCCCCC")
+            spine.set_linewidth(1.2)
+
+        # Set clean white background for subplot
+        ax.set_facecolor("white")
+
+    # Hide unused subplots and remove their borders
+    for idx in range(n_subplots, len(axes)):
+        axes[idx].set_visible(False)
+
+    # Save the figure with high quality settings
+    output_path = Path(output_dir) / f"{metric_name}_method_comparison.png"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(
+        output_path,
+        dpi=300,
+        bbox_inches="tight",
+        facecolor="white",
+        edgecolor="none",
+        pad_inches=0.1,
+    )
+    plt.close(fig)
+    print(f"Saved {metric_name} method comparison plot to: {output_path}")

@@ -4,19 +4,19 @@ from pathlib import Path
 # Import the functions from your new submodules
 from corebehrt.analysis_lib.data_loader import load_and_process_results
 from corebehrt.analysis_lib.aggregation import (
-    perform_bias_aggregation,
-    perform_relative_bias_aggregation,
-    perform_zscore_aggregation,
-    perform_coverage_aggregation,
-    perform_variance_aggregation,
+    perform_bias_aggregation_v2,
+    perform_relative_bias_aggregation_v2,
+    perform_zscore_aggregation_v2,
+    perform_coverage_aggregation_v2,
+    perform_variance_aggregation_v2,
 )
-from corebehrt.analysis_lib.plotting import create_plot_from_agg
+from corebehrt.analysis_lib.plotting import create_method_comparison_plot
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Create analysis plots for resampling causal inference experiments. "
-        "This version keeps outcomes separate and aggregates only over runs."
+        "Compares different methods (TMLE, IPW, TMLE_TH) across outcomes with subplots for (ce, cy, i) combinations."
     )
     parser.add_argument(
         "--results_dir", required=True, help="Directory containing run subdirectories."
@@ -32,12 +32,6 @@ def main():
         help="Specific outcomes to include in the analysis (default: all).",
     )
     parser.add_argument(
-        "--max-subplots",
-        type=int,
-        default=None,
-        help="Maximum number of subplots per figure (default: no limit).",
-    )
-    parser.add_argument(
         "--min-points",
         type=int,
         default=2,
@@ -45,7 +39,7 @@ def main():
     )
     parser.add_argument(
         "--estimator",
-        nargs="+",  # Use '+' for one or more, as bash script will always provide at least one
+        nargs="+",
         default=["baseline", "bert"],
         help="Which estimator(s) to analyze.",
     )
@@ -61,12 +55,16 @@ def main():
         print(f"STARTING ANALYSIS FOR ESTIMATOR: {estimator.upper()}")
         print(f"{'=' * 60}")
 
-        # 1. Load raw data for THIS estimator only.
-        # We pass a list with a single item, e.g., ['baseline'], which works correctly.
+        # 1. Load raw data for THIS estimator only
         print(f"Loading data for '{estimator}'...")
-        estimator_data = load_and_process_results(
-            args.results_dir, estimators=[estimator]
-        )
+        try:
+            estimator_data = load_and_process_results(
+                args.results_dir, estimators=[estimator]
+            )
+        except ValueError as e:
+            print(f"Warning: No data found for estimator '{estimator}'. Skipping.")
+            print(f"  Details: {e}")
+            continue
 
         if estimator_data.empty:
             print(f"Warning: No data found for estimator '{estimator}'. Skipping.")
@@ -93,86 +91,86 @@ def main():
         estimator_output_dir.mkdir(parents=True, exist_ok=True)
         print(f"Output directory: {estimator_output_dir}")
 
-        # 4. Get unique outcomes and process each separately
+        # 4. Get summary statistics
         unique_outcomes = estimator_data["outcome"].unique()
-        print(f"\nFound {len(unique_outcomes)} unique outcomes to process")
-        print(f"Outcomes: {', '.join(sorted(unique_outcomes))}")
+        unique_methods = estimator_data["method"].unique()
+        unique_params = estimator_data[["ce", "cy", "i"]].drop_duplicates()
 
-        for outcome in sorted(unique_outcomes):
-            print(f"\n{'*' * 50}")
-            print(f"Processing outcome: {outcome}")
-            print(f"{'*' * 50}")
+        print(f"\nData Summary:")
+        print(
+            f"  - Outcomes: {len(unique_outcomes)} ({', '.join(sorted(unique_outcomes))})"
+        )
+        print(
+            f"  - Methods: {len(unique_methods)} ({', '.join(sorted(unique_methods))})"
+        )
+        print(f"  - Parameter combinations (ce, cy, i): {len(unique_params)}")
 
-            # Filter data for this outcome
-            outcome_data = estimator_data[estimator_data["outcome"] == outcome]
-            print(f"Data rows for {outcome}: {len(outcome_data)}")
+        # 5. Perform aggregations across all data (grouped by method, ce, cy, i, outcome)
+        print(f"\n--- Performing Aggregations ---")
+        agg_bias_data = perform_bias_aggregation_v2(estimator_data)
+        agg_relative_bias_data = perform_relative_bias_aggregation_v2(estimator_data)
+        agg_zscore_data = perform_zscore_aggregation_v2(estimator_data)
+        agg_coverage_data = perform_coverage_aggregation_v2(estimator_data)
+        agg_variance_data = perform_variance_aggregation_v2(estimator_data)
 
-            # Create outcome-specific output directory
-            outcome_output_dir = estimator_output_dir / outcome
-            outcome_output_dir.mkdir(parents=True, exist_ok=True)
-            print(f"Output directory for {outcome}: {outcome_output_dir}")
+        print(f"  - Bias aggregation: {len(agg_bias_data)} rows")
+        print(f"  - Relative bias aggregation: {len(agg_relative_bias_data)} rows")
+        print(f"  - Z-score aggregation: {len(agg_zscore_data)} rows")
+        print(f"  - Coverage aggregation: {len(agg_coverage_data)} rows")
+        print(f"  - Variance aggregation: {len(agg_variance_data)} rows")
 
-            # Perform aggregations for this outcome
-            print(f"\n--- Performing Aggregations for {outcome} ---")
-            agg_bias_data = perform_bias_aggregation(outcome_data)
-            agg_relative_bias_data = perform_relative_bias_aggregation(outcome_data)
-            agg_zscore_data = perform_zscore_aggregation(outcome_data)
-            agg_coverage_data = perform_coverage_aggregation(outcome_data)
-            agg_variance_data = perform_variance_aggregation(outcome_data)
+        # 6. Create method comparison plots for each metric
+        print(f"\n--- Generating Method Comparison Plots ---")
 
-            # 5. Create plots for each metric (outcome-specific)
-            print(f"\n--- Generating Plots for {outcome} ---")
-            create_plot_from_agg(
-                agg_bias_data,
-                "bias",
-                f"Average Bias (± Std Dev) - {outcome}",
-                "Average Bias",
-                str(outcome_output_dir),
-                "errorbar",
-                max_subplots_per_figure=args.max_subplots,
-                min_points=args.min_points,
-            )
-            create_plot_from_agg(
-                agg_relative_bias_data,
-                "relative_bias",
-                f"Average Relative Bias (± Std Dev) - {outcome}",
-                "Relative Bias",
-                str(outcome_output_dir),
-                "errorbar",
-                max_subplots_per_figure=args.max_subplots,
-                min_points=args.min_points,
-            )
-            create_plot_from_agg(
-                agg_zscore_data,
-                "z_score",
-                f"Average Z-Score (± Std Dev) - {outcome}",
-                "Standardized Bias (Z-Score)",
-                str(outcome_output_dir),
-                "errorbar",
-                max_subplots_per_figure=args.max_subplots,
-                min_points=args.min_points,
-            )
-            create_plot_from_agg(
-                agg_coverage_data,
-                "covered",
-                f"Coverage Probability - {outcome}",
-                "95% CI Coverage",
-                str(outcome_output_dir),
-                "dot",
-                max_subplots_per_figure=args.max_subplots,
-                min_points=args.min_points,
-            )
-            create_plot_from_agg(
-                agg_variance_data,
-                "variance",
-                f"Average Empirical Variance - {outcome}",
-                "Empirical Variance",
-                str(outcome_output_dir),
-                "line",
-                max_subplots_per_figure=args.max_subplots,
-                min_points=args.min_points,
-            )
-            print(f"\nCompleted plots for {outcome}")
+        create_method_comparison_plot(
+            agg_bias_data,
+            metric_name="bias",
+            y_label="Average Bias",
+            title="Method Comparison: Bias Across Outcomes",
+            output_dir=str(estimator_output_dir),
+            plot_type="errorbar",
+            min_points=args.min_points,
+        )
+
+        create_method_comparison_plot(
+            agg_relative_bias_data,
+            metric_name="relative_bias",
+            y_label="Relative Bias",
+            title="Method Comparison: Relative Bias Across Outcomes",
+            output_dir=str(estimator_output_dir),
+            plot_type="errorbar",
+            min_points=args.min_points,
+        )
+
+        create_method_comparison_plot(
+            agg_zscore_data,
+            metric_name="z_score",
+            y_label="Standardized Bias (Z-Score)",
+            title="Method Comparison: Z-Score Across Outcomes",
+            output_dir=str(estimator_output_dir),
+            plot_type="errorbar",
+            min_points=args.min_points,
+        )
+
+        create_method_comparison_plot(
+            agg_coverage_data,
+            metric_name="coverage",
+            y_label="95% CI Coverage",
+            title="Method Comparison: Coverage Probability Across Outcomes",
+            output_dir=str(estimator_output_dir),
+            plot_type="dot",
+            min_points=args.min_points,
+        )
+
+        create_method_comparison_plot(
+            agg_variance_data,
+            metric_name="variance",
+            y_label="Empirical Variance",
+            title="Method Comparison: Variance Across Outcomes",
+            output_dir=str(estimator_output_dir),
+            plot_type="line",
+            min_points=args.min_points,
+        )
 
         print(f"\nCOMPLETED ANALYSIS FOR ESTIMATOR: {estimator.upper()}")
 
