@@ -2,6 +2,8 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 import math
+from matplotlib.offsetbox import AnchoredText
+from matplotlib.lines import Line2D
 
 plt.style.use("seaborn-v0_8-whitegrid")
 
@@ -282,232 +284,122 @@ def create_method_comparison_plot(
     output_dir: str,
     plot_type: str = "errorbar",
     min_points: int = 2,
+    description: str | None = None,
+    desc_on: str = "first",          # "each" | "first"
+    legend_location: str = "right",  # "right" | "bottom"
 ):
     """
-    Creates a method comparison plot with subplots for each (ce, cy, i) combination.
-
-    Args:
-        agg_data: Aggregated data with columns [method, ce, cy, i, outcome, mean, std]
-        metric_name: Name of the metric (for filename)
-        y_label: Label for y-axis
-        title: Title for the overall figure
-        output_dir: Directory to save the plot
-        plot_type: Type of plot ('errorbar', 'line', 'dot')
-        min_points: Minimum number of data points required to generate a plot
+    Create a method comparison plot with subplots for each (ce, cy, i) combination.
+    - Adds an inset description box (inside the plot).
+    - Moves the legend outside the plot area as a single figure-level legend.
     """
     if agg_data.empty:
         print(f"No data to plot for {metric_name}")
         return
 
-    # Get unique combinations of (ce, cy, i)
+    # method styling
+    method_styles = {
+        "TMLE":    {"color": "#2E86AB", "marker": "o", "label": "TMLE"},
+        "IPW":     {"color": "#E63946", "marker": "s", "label": "IPW"},
+        "TMLE_TH": {"color": "#06A77D", "marker": "^", "label": "TMLE-TH"},
+    }
+
+    # find valid parameter triplets
     param_combinations = (
         agg_data[["ce", "cy", "i"]]
         .drop_duplicates()
         .sort_values(["ce", "cy", "i"])
         .reset_index(drop=True)
     )
-
-    # Filter out combinations with too few data points
-    valid_combinations = []
+    valid = []
     for _, row in param_combinations.iterrows():
-        subset = agg_data[
-            (agg_data["ce"] == row["ce"])
-            & (agg_data["cy"] == row["cy"])
-            & (agg_data["i"] == row["i"])
-        ]
+        subset = agg_data[(agg_data["ce"] == row["ce"]) & (agg_data["cy"] == row["cy"]) & (agg_data["i"] == row["i"])]
         if len(subset) >= min_points:
-            valid_combinations.append(row)
-
-    if not valid_combinations:
-        print(
-            f"No valid parameter combinations with >= {min_points} data points for {metric_name}"
-        )
+            valid.append(row)
+    if not valid:
+        print(f"No valid parameter combinations with >= {min_points} data points for {metric_name}")
         return
 
-    n_subplots = len(valid_combinations)
+    n_subplots = len(valid)
     nrows, ncols = calculate_subplot_layout(n_subplots)
-
-    # Calculate figure size
-    fig_width = 6 * ncols
-    fig_height = 5 * nrows
-
     fig, axes = plt.subplots(
-        nrows,
-        ncols,
-        figsize=(fig_width, fig_height),
+        nrows, ncols,
+        figsize=(6 * ncols, 5 * nrows),
         sharey=True,
-        constrained_layout=True,
+        constrained_layout=False,
         facecolor="white",
     )
+    axes = [axes] if n_subplots == 1 else axes.flatten()
+    fig.suptitle(title, fontsize=18, fontweight="bold", y=0.98)
 
-    # Flatten axes array
-    if n_subplots == 1:
-        axes = [axes]
-    else:
-        axes = axes.flatten() if nrows > 1 or ncols > 1 else [axes]
+    methods_present = set()
 
-    fig.suptitle(title, fontsize=18, fontweight="bold", y=0.995)
-
-    # Define method colors and markers with improved color palette
-    method_styles = {
-        "TMLE": {
-            "color": "#2E86AB",
-            "marker": "o",
-            "linestyle": "",
-            "label": "TMLE",
-        },  # Deep blue
-        "IPW": {
-            "color": "#E63946",
-            "marker": "s",
-            "linestyle": "",
-            "label": "IPW",
-        },  # Red
-        "TMLE_TH": {
-            "color": "#06A77D",
-            "marker": "^",
-            "linestyle": "",
-            "label": "TMLE-TH",
-        },  # Teal/green
-    }
-
-    # Get all unique methods in the data
-    unique_methods = sorted(agg_data["method"].unique())
-
-    # Plot each subplot
-    for idx, params in enumerate(valid_combinations):
+    for idx, params in enumerate(valid):
         ax = axes[idx]
         ce, cy, i = params["ce"], params["cy"], params["i"]
+        subplot_data = agg_data[(agg_data["ce"] == ce) & (agg_data["cy"] == cy) & (agg_data["i"] == i)].copy()
 
-        # Filter data for this parameter combination
-        subplot_data = agg_data[
-            (agg_data["ce"] == ce) & (agg_data["cy"] == cy) & (agg_data["i"] == i)
-        ].copy()
-
-        # Get unique outcomes and sort them
+        # outcomes for ticks
         outcomes = sorted(subplot_data["outcome"].unique())
 
-        # Plot each method
-        for method in unique_methods:
-            method_data = subplot_data[subplot_data["method"] == method].copy()
-            if method_data.empty:
+        for method in sorted(subplot_data["method"].unique()):
+            md = subplot_data[subplot_data["method"] == method].sort_values("outcome").copy()
+            if md.empty:
                 continue
+            st = method_styles.get(method, {"color": "#6C757D", "marker": "o", "label": method})
+            methods_present.add(method)
 
-            # Sort by outcome to ensure consistent ordering
-            method_data = method_data.sort_values("outcome")
-
-            style = method_styles.get(
-                method,
-                {"color": "#6C757D", "marker": "o", "linestyle": "", "label": method},
-            )
-
+            x = range(len(md))
             if plot_type == "errorbar":
-                # Plot with error bars (no connecting lines)
                 ax.errorbar(
-                    x=range(len(method_data)),
-                    y=method_data["mean"],
-                    yerr=method_data["std"] if "std" in method_data.columns else None,
-                    label=style["label"],
-                    color=style["color"],
-                    marker=style["marker"],
-                    linestyle="",  # No connecting lines
-                    capsize=4,
-                    capthick=1.5,
-                    markersize=8,
-                    markeredgewidth=1.5,
-                    markeredgecolor="white",
-                    elinewidth=2,
-                    alpha=0.85,
-                    zorder=3,
+                    x, md["mean"],
+                    yerr=md["std"] if "std" in md.columns else None,
+                    marker=st["marker"], linestyle="",
+                    color=st["color"], capsize=4, capthick=1.5,
+                    markersize=8, markeredgewidth=1.5, markeredgecolor="white",
+                    elinewidth=2, alpha=0.85, zorder=3,
                 )
             elif plot_type == "dot":
-                # Plot dots without error bars (for coverage)
                 ax.plot(
-                    range(len(method_data)),
-                    method_data["mean"],
-                    label=style["label"],
-                    color=style["color"],
-                    marker=style["marker"],
-                    linestyle="",
-                    markersize=10,
-                    markeredgewidth=1.5,
-                    markeredgecolor="white",
-                    alpha=0.85,
-                    zorder=3,
+                    x, md["mean"],
+                    marker=st["marker"], linestyle="",
+                    color=st["color"], markersize=10,
+                    markeredgewidth=1.5, markeredgecolor="white",
+                    alpha=0.85, zorder=3,
                 )
-            else:  # line
-                # Plot with markers only
+            else:
                 ax.plot(
-                    range(len(method_data)),
-                    method_data["mean"],
-                    label=style["label"],
-                    color=style["color"],
-                    marker=style["marker"],
-                    linestyle="",  # No connecting lines
-                    markersize=8,
-                    markeredgewidth=1.5,
-                    markeredgecolor="white",
-                    alpha=0.85,
-                    zorder=3,
+                    x, md["mean"],
+                    marker=st["marker"], linestyle="",
+                    color=st["color"], markersize=8,
+                    markeredgewidth=1.5, markeredgecolor="white",
+                    alpha=0.85, zorder=3,
                 )
 
-        # Add reference lines
         if plot_type == "errorbar":
-            ax.axhline(
-                0, color="#2C3E50", linestyle="--", alpha=0.4, linewidth=1.5, zorder=1
-            )
+            ax.axhline(0, color="#2C3E50", linestyle="--", alpha=0.4, linewidth=1.5, zorder=1)
+        if metric_name.lower() == "coverage":
+            ax.axhline(0.95, color="#E74C3C", linestyle=":", alpha=0.6, linewidth=2, zorder=1)
 
-        if metric_name == "coverage":
-            ax.axhline(
-                0.95,
-                color="#E74C3C",
-                linestyle=":",
-                alpha=0.6,
-                linewidth=2,
-                label="95% Target",
-                zorder=1,
-            )
-
-        # Set subplot title with improved styling
-        ax.set_title(
-            f"ce={ce}, cy={cy}, i={i}", fontsize=12, fontweight="semibold", pad=10
-        )
-        ax.set_xlabel(
-            "Outcome (Effect Strength)", fontsize=11, fontweight="medium", labelpad=8
-        )
-        ax.set_ylabel(y_label, fontsize=11, fontweight="medium", labelpad=8)
-
-        # Set x-axis ticks to outcome names
+        ax.set_title(f"ce={ce}, cy={cy}, i={i}", fontsize=12, fontweight="semibold", pad=10)
+        ax.set_xlabel("Outcome (Effect Strength)", fontsize=11, fontweight="medium")
+        ax.set_ylabel(y_label, fontsize=11, fontweight="medium")
         ax.set_xticks(range(len(outcomes)))
         ax.set_xticklabels(outcomes, rotation=45, ha="right", fontsize=9)
+        _apply_axis_polish(ax)
 
-        # Improve legend styling
-        legend = ax.legend(
-            fontsize=10,
-            loc="best",
-            framealpha=0.95,
-            edgecolor="#CCCCCC",
-            fancybox=True,
-            shadow=False,
-        )
-        legend.get_frame().set_linewidth(1.5)
+        # description box
+        if description and (desc_on == "each" or (desc_on == "first" and idx == 0)):
+            _add_description_box(ax, description)
 
-        # Improve grid styling
-        ax.grid(True, which="both", linestyle="--", linewidth=0.7, alpha=0.3, zorder=0)
-        ax.set_axisbelow(True)  # Ensure grid is below data points
-
-        # Improve spine styling
-        for spine in ax.spines.values():
-            spine.set_edgecolor("#CCCCCC")
-            spine.set_linewidth(1.2)
-
-        # Set clean white background for subplot
-        ax.set_facecolor("white")
-
-    # Hide unused subplots and remove their borders
+    # hide unused axes
     for idx in range(n_subplots, len(axes)):
         axes[idx].set_visible(False)
 
-    # Save the figure with high quality settings
+    # single figure-level legend outside plots
+    _figure_level_legend(fig, method_styles, methods_present, legend_location)
+
+    # save
     output_path = Path(output_dir) / f"{metric_name}_method_comparison.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(
@@ -520,3 +412,62 @@ def create_method_comparison_plot(
     )
     plt.close(fig)
     print(f"Saved {metric_name} method comparison plot to: {output_path}")
+
+def _add_description_box(ax, description: str):
+    """Place a rounded description box inside an axis."""
+    at = AnchoredText(
+        description,
+        loc="upper left",
+        prop=dict(size=9),
+        frameon=True,
+        borderpad=0.6,
+        pad=0.4,
+    )
+    at.patch.set_boxstyle("round,pad=0.5")
+    at.patch.set_alpha(0.9)
+    at.patch.set_edgecolor("#CCCCCC")
+    ax.add_artist(at)
+
+
+def _apply_axis_polish(ax):
+    """Consistent small visual polish on axes."""
+    ax.grid(True, which="both", linestyle="--", linewidth=0.7, alpha=0.3, zorder=0)
+    ax.set_axisbelow(True)
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#CCCCCC")
+        spine.set_linewidth(1.2)
+    ax.set_facecolor("white")
+
+
+def _figure_level_legend(fig, method_styles, methods_present, location="right"):
+    """
+    Add a single figure-level legend using proxy artists so it never looks like data.
+    location: "right" or "bottom"
+    """
+    proxies, labels = [], []
+    for m in methods_present:
+        st = method_styles[m]
+        proxies.append(
+            Line2D([0], [0], marker=st["marker"], linestyle="",
+                   markerfacecolor=st["color"], markeredgecolor="white",
+                   markeredgewidth=1.5, markersize=9)
+        )
+        labels.append(st["label"])
+
+    if not proxies:
+        return
+
+    if location == "bottom":
+        fig.legend(
+            proxies, labels, title="Method",
+            loc="lower center", ncol=len(labels),
+            frameon=True, edgecolor="#CCCCCC", framealpha=0.95
+        )
+        fig.subplots_adjust(bottom=0.14, top=0.9)
+    else:  # right
+        fig.legend(
+            proxies, labels, title="Method",
+            loc="center left", bbox_to_anchor=(1.0, 0.5),
+            frameon=True, edgecolor="#CCCCCC", framealpha=0.95
+        )
+        fig.subplots_adjust(right=0.82, top=0.92)
