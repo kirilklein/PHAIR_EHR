@@ -346,7 +346,7 @@ for /L %%r in (1,1,%N_RUNS%) do (
     
     echo.
     echo =========================================
-    echo STARTING RUN %%r of %N_RUNS%: !RUN_ID!
+    echo STARTING RUN %%r of !N_RUNS!: !RUN_ID!
     echo =========================================
     echo.
     
@@ -356,50 +356,50 @@ for /L %%r in (1,1,%N_RUNS%) do (
 
         echo.
         echo ----------------------------------------
-        echo Running experiment !CURRENT_COUNT! of %TOTAL_COUNT%: !RUN_ID!/!EXPERIMENT_NAME!
+        echo Running experiment !CURRENT_COUNT! of !TOTAL_COUNT!: !RUN_ID!/!EXPERIMENT_NAME!
         echo ----------------------------------------
 
         REM Call experiment with proper argument passing
-        echo DEBUG: Calling run_experiment.bat with experiment: !EXPERIMENT_NAME!, run_id: !RUN_ID!, mode: %RUN_MODE%
+        echo DEBUG: Calling run_experiment.bat with experiment: !EXPERIMENT_NAME!, run_id: !RUN_ID!, mode: !RUN_MODE!
         
         REM Build command arguments
         set EXPERIMENT_ARGS=!EXPERIMENT_NAME! --run_id !RUN_ID!
         
-        if "%RUN_MODE%"=="baseline" (
+        if "!RUN_MODE!"=="baseline" (
             set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --baseline-only
         )
-        if "%RUN_MODE%"=="bert" (
+        if "!RUN_MODE!"=="bert" (
             set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --bert-only
         )
         
         REM Add experiment directory
-        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --experiment-dir %EXPERIMENTS_DIR%
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --experiment-dir !EXPERIMENTS_DIR!
         
         REM Add base configs directory if specified
-        if not "%BASE_CONFIGS_DIR%"=="" (
-            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --base-configs-dir %BASE_CONFIGS_DIR%
+        if not "!BASE_CONFIGS_DIR!"=="" (
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --base-configs-dir !BASE_CONFIGS_DIR!
         )
         
         REM Add overwrite flag
-        if "%OVERWRITE%"=="true" (
+        if "!OVERWRITE!"=="true" (
             set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --overwrite
         )
         
         REM Add resampling-specific arguments
-        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --base-seed %BASE_SEED%
-        if not "%SAMPLE_SIZE%"=="" (
-            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-size %SAMPLE_SIZE%
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --base-seed !BASE_SEED!
+        if not "!SAMPLE_SIZE!"=="" (
+            set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-size !SAMPLE_SIZE!
         ) else (
-            if not "%SAMPLE_FRACTION%"=="" (
-                set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-fraction %SAMPLE_FRACTION%
+            if not "!SAMPLE_FRACTION!"=="" (
+                set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --sample-fraction !SAMPLE_FRACTION!
             )
         )
         
         REM Add data path arguments
-        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --meds %MEDS_DATA%
-        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --features %FEATURES_DATA%
-        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --tokenized %TOKENIZED_DATA%
-        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --pretrain-model %PRETRAIN_MODEL%
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --meds !MEDS_DATA!
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --features !FEATURES_DATA!
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --tokenized !TOKENIZED_DATA!
+        set EXPERIMENT_ARGS=!EXPERIMENT_ARGS! --pretrain-model !PRETRAIN_MODEL!
         
         REM Run the experiment
         call run_experiment.bat !EXPERIMENT_ARGS!
@@ -418,7 +418,7 @@ for /L %%r in (1,1,%N_RUNS%) do (
             )
             
             REM Check if failfast is enabled
-            if "%FAILFAST%"=="true" (
+            if "!FAILFAST!"=="true" (
                 echo.
                 echo ========================================
                 echo FAILFAST MODE: Stopping due to failure
@@ -434,7 +434,7 @@ for /L %%r in (1,1,%N_RUNS%) do (
                 echo ========================================
                 echo SUMMARY: Batch Run Stopped ^(INCOMPLETE^)
                 echo ========================================
-                echo Total experiments planned: %TOTAL_COUNT%
+                echo Total experiments planned: !TOTAL_COUNT!
                 echo Completed: !CURRENT_COUNT!
                 echo Successful: !SUCCESS_COUNT!
                 echo Failed: !FAILED_COUNT!
@@ -442,7 +442,7 @@ for /L %%r in (1,1,%N_RUNS%) do (
                 echo Failed experiments:
                 echo !FAILED_EXPERIMENTS!
                 echo.
-                if not "%BATCH_MODE%"=="true" (
+                if not "!BATCH_MODE!"=="true" (
                     pause
                 )
                 exit /b 1
@@ -455,7 +455,7 @@ for /L %%r in (1,1,%N_RUNS%) do (
     
     echo.
     echo =========================================
-    echo COMPLETED RUN %%r of %N_RUNS%: !RUN_ID!
+    echo COMPLETED RUN %%r of !N_RUNS!: !RUN_ID!
     echo =========================================
     echo.
 )
@@ -464,24 +464,24 @@ echo.
 echo ========================================
 echo SUMMARY: Multiple Experiments Completed
 echo ========================================
-echo Total experiments: %TOTAL_COUNT%
-echo Successful: %SUCCESS_COUNT%
-set /a FAILED_COUNT=%TOTAL_COUNT%-%SUCCESS_COUNT%
-echo Failed: %FAILED_COUNT%
+echo Total experiments: !TOTAL_COUNT!
+echo Successful: !SUCCESS_COUNT!
+set /a FAILED_COUNT=!TOTAL_COUNT!-!SUCCESS_COUNT!
+echo Failed: !FAILED_COUNT!
 echo.
 
-if %FAILED_COUNT% gtr 0 (
+if !FAILED_COUNT! gtr 0 (
     echo Failed experiments:
-    echo %FAILED_EXPERIMENTS%
+    echo !FAILED_EXPERIMENTS!
     echo.
     echo Some experiments failed. Check the logs above for details.
-    if not "%BATCH_MODE%"=="true" (
+    if not "!BATCH_MODE!"=="true" (
         pause
     )
     exit /b 1
 ) else (
     echo All experiments completed successfully!
-    if not "%BATCH_MODE%"=="true" (
+    if not "!BATCH_MODE!"=="true" (
         pause
     )
     exit /b 0
