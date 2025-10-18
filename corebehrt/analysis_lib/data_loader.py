@@ -101,7 +101,7 @@ def load_and_process_results(
                         [np.inf, -np.inf], np.nan
                     )
                     all_results.append(df)
-                    break  # Only load one version per estimator type
+                    # Continue to next estimator type (don't break)
                 except Exception as e:
                     print(f"Error loading {results_file}: {e}")
 
