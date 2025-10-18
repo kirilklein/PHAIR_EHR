@@ -1,4 +1,5 @@
 from pathlib import Path
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import math
@@ -32,6 +33,34 @@ def calculate_subplot_layout(n_subplots):
     else:
         # For larger numbers, calculate square-ish layout
         ncols = math.ceil(math.sqrt(n_subplots))
+        nrows = math.ceil(n_subplots / ncols)
+        return (nrows, ncols)
+
+
+def calculate_horizontal_subplot_layout(n_subplots):
+    """
+    Calculate horizontal-first subplot grid layout.
+    
+    Returns (nrows, ncols) for the subplot grid.
+    Prefers layouts like 1x2, 2x2, 2x3, 3x3, etc.
+    """
+    if n_subplots == 1:
+        return (1, 1)
+    elif n_subplots == 2:
+        return (1, 2)
+    elif n_subplots <= 4:
+        return (2, 2)
+    elif n_subplots <= 6:
+        return (2, 3)
+    elif n_subplots <= 9:
+        return (3, 3)
+    elif n_subplots <= 12:
+        return (3, 4)
+    elif n_subplots <= 16:
+        return (4, 4)
+    else:
+        # For larger numbers, prefer wider layouts
+        ncols = math.ceil(math.sqrt(n_subplots * 1.2))  # Slightly wider
         nrows = math.ceil(n_subplots / ncols)
         return (nrows, ncols)
 
@@ -284,6 +313,7 @@ def create_method_comparison_plot(
     output_dir: str,
     plot_type: str = "errorbar",
     min_points: int = 2,
+    max_subplots: int = None,
     description: str | None = None,
     desc_on: str = "first",          # "each" | "first"
     legend_location: str = "right",  # "right" | "bottom"
@@ -320,98 +350,124 @@ def create_method_comparison_plot(
         print(f"No valid parameter combinations with >= {min_points} data points for {metric_name}")
         return
 
-    n_subplots = len(valid)
-    nrows, ncols = calculate_subplot_layout(n_subplots)
-    fig, axes = plt.subplots(
-        nrows, ncols,
-        figsize=(6 * ncols, 5 * nrows),
-        sharey=True,
-        constrained_layout=False,
-        facecolor="white",
-    )
-    axes = [axes] if n_subplots == 1 else axes.flatten()
-    fig.suptitle(title, fontsize=18, fontweight="bold", y=0.98)
+    # Split into batches if max_subplots is specified
+    batches = split_into_batches(valid, max_subplots)
+    
+    for batch_idx, batch in enumerate(batches, start=1):
+        n_subplots = len(batch)
+        nrows, ncols = calculate_horizontal_subplot_layout(n_subplots)
+        
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=(6 * ncols, 5 * nrows),
+            sharey=True,
+            constrained_layout=False,
+            facecolor="white",
+        )
+        fig.subplots_adjust(top=0.85)  # Add more top margin for suptitle
+        axes = [axes] if n_subplots == 1 else axes.flatten()
+        
+        # Add batch number to title if multiple batches
+        batch_title = title
+        if len(batches) > 1:
+            batch_title = f"{title} (Part {batch_idx}/{len(batches)})"
+        fig.suptitle(batch_title, fontsize=14, fontweight="bold", y=0.92)
 
-    methods_present = set()
+        methods_present = set()
+        
+        # Calculate method offsets for better visibility
+        unique_methods = sorted(agg_data["method"].unique())
+        method_offsets = {}
+        if len(unique_methods) > 1:
+            offset_range = 0.2  # Total offset range (reduced from 0.3)
+            offsets = np.linspace(-offset_range/2, offset_range/2, len(unique_methods))
+            method_offsets = {method: offset for method, offset in zip(unique_methods, offsets)}
 
-    for idx, params in enumerate(valid):
-        ax = axes[idx]
-        ce, cy, i = params["ce"], params["cy"], params["i"]
-        subplot_data = agg_data[(agg_data["ce"] == ce) & (agg_data["cy"] == cy) & (agg_data["i"] == i)].copy()
+        for idx, params in enumerate(batch):
+            ax = axes[idx]
+            ce, cy, i = params["ce"], params["cy"], params["i"]
+            subplot_data = agg_data[(agg_data["ce"] == ce) & (agg_data["cy"] == cy) & (agg_data["i"] == i)].copy()
 
-        # outcomes for ticks
-        outcomes = sorted(subplot_data["outcome"].unique())
+            # outcomes for ticks
+            outcomes = sorted(subplot_data["outcome"].unique())
 
-        for method in sorted(subplot_data["method"].unique()):
-            md = subplot_data[subplot_data["method"] == method].sort_values("outcome").copy()
-            if md.empty:
-                continue
-            st = method_styles.get(method, {"color": "#6C757D", "marker": "o", "label": method})
-            methods_present.add(method)
+            for method in sorted(subplot_data["method"].unique()):
+                md = subplot_data[subplot_data["method"] == method].sort_values("outcome").copy()
+                if md.empty:
+                    continue
+                st = method_styles.get(method, {"color": "#6C757D", "marker": "o", "label": method})
+                methods_present.add(method)
 
-            x = range(len(md))
+                # Apply method offset
+                base_x = np.array(range(len(md)))
+                x = base_x + method_offsets.get(method, 0)
+                if plot_type == "errorbar":
+                    # Only show error bars for metrics that have std (bias, relative_bias, z_score)
+                    yerr = md["std"] if "std" in md.columns and not md["std"].isna().all() else None
+                    ax.errorbar(
+                        x, md["mean"],
+                        yerr=yerr,
+                        marker=st["marker"], linestyle="",
+                        color=st["color"], capsize=4, capthick=1.5,
+                        markersize=8, markeredgewidth=1.5, markeredgecolor="white",
+                        elinewidth=2, alpha=0.85, zorder=3, label=st["label"]
+                    )
+                elif plot_type == "dot":
+                    ax.plot(
+                        x, md["mean"],
+                        marker=st["marker"], linestyle="",
+                        color=st["color"], markersize=10,
+                        markeredgewidth=1.5, markeredgecolor="white",
+                        alpha=0.85, zorder=3, label=st["label"]
+                    )
+                else:  # line
+                    ax.plot(
+                        x, md["mean"],
+                        marker=st["marker"], linestyle="",
+                        color=st["color"], markersize=8,
+                        markeredgewidth=1.5, markeredgecolor="white",
+                        alpha=0.85, zorder=3, label=st["label"]
+                    )
+
             if plot_type == "errorbar":
-                ax.errorbar(
-                    x, md["mean"],
-                    yerr=md["std"] if "std" in md.columns else None,
-                    marker=st["marker"], linestyle="",
-                    color=st["color"], capsize=4, capthick=1.5,
-                    markersize=8, markeredgewidth=1.5, markeredgecolor="white",
-                    elinewidth=2, alpha=0.85, zorder=3,
-                )
-            elif plot_type == "dot":
-                ax.plot(
-                    x, md["mean"],
-                    marker=st["marker"], linestyle="",
-                    color=st["color"], markersize=10,
-                    markeredgewidth=1.5, markeredgecolor="white",
-                    alpha=0.85, zorder=3,
-                )
-            else:
-                ax.plot(
-                    x, md["mean"],
-                    marker=st["marker"], linestyle="",
-                    color=st["color"], markersize=8,
-                    markeredgewidth=1.5, markeredgecolor="white",
-                    alpha=0.85, zorder=3,
-                )
+                ax.axhline(0, color="#2C3E50", linestyle="--", alpha=0.4, linewidth=1.5, zorder=1)
+            if metric_name.lower() == "coverage":
+                ax.axhline(0.95, color="#E74C3C", linestyle=":", alpha=0.6, linewidth=2, zorder=1)
 
-        if plot_type == "errorbar":
-            ax.axhline(0, color="#2C3E50", linestyle="--", alpha=0.4, linewidth=1.5, zorder=1)
-        if metric_name.lower() == "coverage":
-            ax.axhline(0.95, color="#E74C3C", linestyle=":", alpha=0.6, linewidth=2, zorder=1)
+            ax.set_title(f"ce={ce}, cy={cy}, i={i}", fontsize=9, fontweight="medium", pad=6)
+            ax.set_xlabel("Outcome (Effect Strength)", fontsize=11, fontweight="medium")
+            ax.set_ylabel(y_label, fontsize=11, fontweight="medium")
+            ax.set_xticks(range(len(outcomes)))
+            ax.set_xticklabels(outcomes, rotation=45, ha="right", fontsize=9)
+            _apply_axis_polish(ax)
 
-        ax.set_title(f"ce={ce}, cy={cy}, i={i}", fontsize=12, fontweight="semibold", pad=10)
-        ax.set_xlabel("Outcome (Effect Strength)", fontsize=11, fontweight="medium")
-        ax.set_ylabel(y_label, fontsize=11, fontweight="medium")
-        ax.set_xticks(range(len(outcomes)))
-        ax.set_xticklabels(outcomes, rotation=45, ha="right", fontsize=9)
-        _apply_axis_polish(ax)
+            # description box
+            if description and (desc_on == "each" or (desc_on == "first" and idx == 0)):
+                _add_description_box(ax, description)
 
-        # description box
-        if description and (desc_on == "each" or (desc_on == "first" and idx == 0)):
-            _add_description_box(ax, description)
+        # hide unused axes
+        for idx in range(n_subplots, len(axes)):
+            axes[idx].set_visible(False)
 
-    # hide unused axes
-    for idx in range(n_subplots, len(axes)):
-        axes[idx].set_visible(False)
+        # single figure-level legend outside plots
+        _figure_level_legend(fig, method_styles, methods_present, legend_location)
 
-    # single figure-level legend outside plots
-    _figure_level_legend(fig, method_styles, methods_present, legend_location)
-
-    # save
-    output_path = Path(output_dir) / f"{metric_name}_method_comparison.png"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(
-        output_path,
-        dpi=300,
-        bbox_inches="tight",
-        facecolor="white",
-        edgecolor="none",
-        pad_inches=0.1,
-    )
-    plt.close(fig)
-    print(f"Saved {metric_name} method comparison plot to: {output_path}")
+        # save with batch number if multiple batches
+        if len(batches) > 1:
+            output_path = Path(output_dir) / f"{metric_name}_method_comparison_part_{batch_idx}.png"
+        else:
+            output_path = Path(output_dir) / f"{metric_name}_method_comparison.png"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(
+            output_path,
+            dpi=300,
+            bbox_inches="tight",
+            facecolor="white",
+            edgecolor="none",
+            pad_inches=0.1,
+        )
+        plt.close(fig)
+        print(f"Saved {metric_name} method comparison plot to: {output_path}")
 
 def _add_description_box(ax, description: str):
     """Place a rounded description box inside an axis."""
@@ -470,4 +526,4 @@ def _figure_level_legend(fig, method_styles, methods_present, location="right"):
             loc="center left", bbox_to_anchor=(1.0, 0.5),
             frameon=True, edgecolor="#CCCCCC", framealpha=0.95
         )
-        fig.subplots_adjust(right=0.82, top=0.92)
+        # fig.subplots_adjust(right=0.82, top=0.92)

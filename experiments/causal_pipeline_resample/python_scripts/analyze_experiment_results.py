@@ -38,6 +38,12 @@ def main():
         help="Minimum number of data points required to generate a plot (default: 2).",
     )
     parser.add_argument(
+        "--max-subplots",
+        type=int,
+        default=None,
+        help="Maximum number of subplots per figure (default: no limit).",
+    )
+    parser.add_argument(
         "--estimator",
         nargs="+",
         default=["baseline", "bert"],
@@ -130,6 +136,7 @@ def main():
             output_dir=str(estimator_output_dir),
             plot_type="errorbar",
             min_points=args.min_points,
+            max_subplots=args.max_subplots,
         )
 
         create_method_comparison_plot(
@@ -140,6 +147,7 @@ def main():
             output_dir=str(estimator_output_dir),
             plot_type="errorbar",
             min_points=args.min_points,
+            max_subplots=args.max_subplots,
         )
 
         create_method_comparison_plot(
@@ -150,6 +158,7 @@ def main():
             output_dir=str(estimator_output_dir),
             plot_type="errorbar",
             min_points=args.min_points,
+            max_subplots=args.max_subplots,
         )
 
         create_method_comparison_plot(
@@ -160,6 +169,7 @@ def main():
             output_dir=str(estimator_output_dir),
             plot_type="dot",
             min_points=args.min_points,
+            max_subplots=args.max_subplots,
         )
 
         create_method_comparison_plot(
@@ -170,6 +180,7 @@ def main():
             output_dir=str(estimator_output_dir),
             plot_type="line",
             min_points=args.min_points,
+            max_subplots=args.max_subplots,
         )
 
         print(f"\nCOMPLETED ANALYSIS FOR ESTIMATOR: {estimator.upper()}")
