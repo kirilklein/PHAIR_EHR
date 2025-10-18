@@ -121,7 +121,7 @@ def test_plotting_with_both_estimators(agg_bias, agg_coverage):
     print("TEST 2: Plotting with both estimators")
     print("=" * 60)
 
-    output_dir = Path("test_output_unified")
+    output_dir = Path("outputs/test_modules/test_output_unified")
     output_dir.mkdir(exist_ok=True)
 
     try:
@@ -179,7 +179,7 @@ def test_backward_compatibility():
     print(f"  - Bias: {len(agg_bias)} rows")
     print(f"  - Coverage: {len(agg_coverage)} rows")
 
-    output_dir = Path("test_output_baseline_only")
+    output_dir = Path("outputs/test_modules/test_output_baseline_only")
     output_dir.mkdir(exist_ok=True)
 
     try:
@@ -231,7 +231,7 @@ def test_with_real_data():
 
         print(f"Aggregated to {len(agg_bias)} rows")
 
-        output_dir = Path("test_output_real")
+        output_dir = Path("outputs/test_modules/test_output_real")
         output_dir.mkdir(exist_ok=True)
 
         create_method_comparison_plot(
