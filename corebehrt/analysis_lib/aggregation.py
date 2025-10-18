@@ -114,7 +114,10 @@ def perform_bias_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
 
     Returns DataFrame with columns: [method, ce, cy, i, outcome, mean, std]
     """
-    methods_df = df[df["method"].isin(["TMLE", "IPW", "TMLE_TH"])].copy()
+    # Accept any method that ends with known method names (supports baseline_ and bert_ prefixes)
+    methods_df = df[
+        df["method"].str.contains(r"(?:TMLE|IPW|TMLE_TH)$", regex=True, na=False)
+    ].copy()
     if methods_df.empty:
         return pd.DataFrame()
 
@@ -134,7 +137,10 @@ def perform_relative_bias_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
 
     Returns DataFrame with columns: [method, ce, cy, i, outcome, mean, std]
     """
-    methods_df = df[df["method"].isin(["TMLE", "IPW", "TMLE_TH"])].copy()
+    # Accept any method that ends with known method names (supports baseline_ and bert_ prefixes)
+    methods_df = df[
+        df["method"].str.contains(r"(?:TMLE|IPW|TMLE_TH)$", regex=True, na=False)
+    ].copy()
     methods_df.dropna(subset=["relative_bias"], inplace=True)
     if methods_df.empty:
         return pd.DataFrame()
@@ -155,7 +161,10 @@ def perform_zscore_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
 
     Returns DataFrame with columns: [method, ce, cy, i, outcome, mean, std]
     """
-    methods_df = df[df["method"].isin(["TMLE", "IPW", "TMLE_TH"])].copy()
+    # Accept any method that ends with known method names (supports baseline_ and bert_ prefixes)
+    methods_df = df[
+        df["method"].str.contains(r"(?:TMLE|IPW|TMLE_TH)$", regex=True, na=False)
+    ].copy()
     methods_df.dropna(subset=["z_score"], inplace=True)
     if methods_df.empty:
         return pd.DataFrame()
@@ -176,7 +185,10 @@ def perform_coverage_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
 
     Returns DataFrame with columns: [method, ce, cy, i, outcome, mean]
     """
-    methods_df = df[df["method"].isin(["TMLE", "IPW", "TMLE_TH"])].copy()
+    # Accept any method that ends with known method names (supports baseline_ and bert_ prefixes)
+    methods_df = df[
+        df["method"].str.contains(r"(?:TMLE|IPW|TMLE_TH)$", regex=True, na=False)
+    ].copy()
     if methods_df.empty:
         return pd.DataFrame()
 
@@ -197,7 +209,10 @@ def perform_variance_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
 
     Returns DataFrame with columns: [method, ce, cy, i, outcome, mean, std]
     """
-    methods_df = df[df["method"].isin(["TMLE", "IPW", "TMLE_TH"])].copy()
+    # Accept any method that ends with known method names (supports baseline_ and bert_ prefixes)
+    methods_df = df[
+        df["method"].str.contains(r"(?:TMLE|IPW|TMLE_TH)$", regex=True, na=False)
+    ].copy()
     if methods_df.empty:
         return pd.DataFrame()
 

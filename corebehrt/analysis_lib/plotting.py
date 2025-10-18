@@ -40,7 +40,7 @@ def calculate_subplot_layout(n_subplots):
 def calculate_horizontal_subplot_layout(n_subplots):
     """
     Calculate horizontal-first subplot grid layout.
-    
+
     Returns (nrows, ncols) for the subplot grid.
     Prefers layouts like 1x2, 2x2, 2x3, 3x3, etc.
     """
@@ -315,7 +315,7 @@ def create_method_comparison_plot(
     min_points: int = 2,
     max_subplots: int = None,
     description: str | None = None,
-    desc_on: str = "first",          # "each" | "first"
+    desc_on: str = "first",  # "each" | "first"
     legend_location: str = "right",  # "right" | "bottom"
 ):
     """
@@ -327,11 +327,61 @@ def create_method_comparison_plot(
         print(f"No data to plot for {metric_name}")
         return
 
-    # method styling
+    # method styling - supports both baseline and BERT estimators
+    # Baseline: filled markers (o, s, ^)
+    # BERT: different markers (D, P, *)
+    # Same colors for same method types across estimators
     method_styles = {
-        "TMLE":    {"color": "#2E86AB", "marker": "o", "label": "TMLE"},
-        "IPW":     {"color": "#E63946", "marker": "s", "label": "IPW"},
-        "TMLE_TH": {"color": "#06A77D", "marker": "^", "label": "TMLE-TH"},
+        "baseline_TMLE": {
+            "color": "#2E86AB",
+            "marker": "o",
+            "label": "TMLE",
+            "group": "Baseline",
+        },
+        "baseline_IPW": {
+            "color": "#E63946",
+            "marker": "o",
+            "label": "IPW",
+            "group": "Baseline",
+        },
+        "baseline_TMLE_TH": {
+            "color": "#06A77D",
+            "marker": "o",
+            "label": "TMLE-TH",
+            "group": "Baseline",
+        },
+        "bert_TMLE": {
+            "color": "#2E86AB",
+            "marker": "s",
+            "label": "TMLE",
+            "group": "BERT",
+        },
+        "bert_IPW": {
+            "color": "#E63946",
+            "marker": "s",
+            "label": "IPW",
+            "group": "BERT",
+        },
+        "bert_TMLE_TH": {
+            "color": "#06A77D",
+            "marker": "s",
+            "label": "TMLE-TH",
+            "group": "BERT",
+        },
+        # Fallback for unprefixed methods (backward compatibility)
+        "TMLE": {
+            "color": "#2E86AB",
+            "marker": "o",
+            "label": "TMLE",
+            "group": "Methods",
+        },
+        "IPW": {"color": "#E63946", "marker": "o", "label": "IPW", "group": "Methods"},
+        "TMLE_TH": {
+            "color": "#06A77D",
+            "marker": "o",
+            "label": "TMLE-TH",
+            "group": "Methods",
+        },
     }
 
     # find valid parameter triplets
@@ -343,22 +393,29 @@ def create_method_comparison_plot(
     )
     valid = []
     for _, row in param_combinations.iterrows():
-        subset = agg_data[(agg_data["ce"] == row["ce"]) & (agg_data["cy"] == row["cy"]) & (agg_data["i"] == row["i"])]
+        subset = agg_data[
+            (agg_data["ce"] == row["ce"])
+            & (agg_data["cy"] == row["cy"])
+            & (agg_data["i"] == row["i"])
+        ]
         if len(subset) >= min_points:
             valid.append(row)
     if not valid:
-        print(f"No valid parameter combinations with >= {min_points} data points for {metric_name}")
+        print(
+            f"No valid parameter combinations with >= {min_points} data points for {metric_name}"
+        )
         return
 
     # Split into batches if max_subplots is specified
     batches = split_into_batches(valid, max_subplots)
-    
+
     for batch_idx, batch in enumerate(batches, start=1):
         n_subplots = len(batch)
         nrows, ncols = calculate_horizontal_subplot_layout(n_subplots)
-        
+
         fig, axes = plt.subplots(
-            nrows, ncols,
+            nrows,
+            ncols,
             figsize=(6 * ncols, 5 * nrows),
             sharey=True,
             constrained_layout=False,
@@ -366,7 +423,7 @@ def create_method_comparison_plot(
         )
         fig.subplots_adjust(top=0.85)  # Add more top margin for suptitle
         axes = [axes] if n_subplots == 1 else axes.flatten()
-        
+
         # Add batch number to title if multiple batches
         batch_title = title
         if len(batches) > 1:
@@ -374,28 +431,40 @@ def create_method_comparison_plot(
         fig.suptitle(batch_title, fontsize=14, fontweight="bold", y=0.92)
 
         methods_present = set()
-        
+
         # Calculate method offsets for better visibility
         unique_methods = sorted(agg_data["method"].unique())
         method_offsets = {}
         if len(unique_methods) > 1:
             offset_range = 0.2  # Total offset range (reduced from 0.3)
-            offsets = np.linspace(-offset_range/2, offset_range/2, len(unique_methods))
-            method_offsets = {method: offset for method, offset in zip(unique_methods, offsets)}
+            offsets = np.linspace(
+                -offset_range / 2, offset_range / 2, len(unique_methods)
+            )
+            method_offsets = {
+                method: offset for method, offset in zip(unique_methods, offsets)
+            }
 
         for idx, params in enumerate(batch):
             ax = axes[idx]
             ce, cy, i = params["ce"], params["cy"], params["i"]
-            subplot_data = agg_data[(agg_data["ce"] == ce) & (agg_data["cy"] == cy) & (agg_data["i"] == i)].copy()
+            subplot_data = agg_data[
+                (agg_data["ce"] == ce) & (agg_data["cy"] == cy) & (agg_data["i"] == i)
+            ].copy()
 
             # outcomes for ticks
             outcomes = sorted(subplot_data["outcome"].unique())
 
             for method in sorted(subplot_data["method"].unique()):
-                md = subplot_data[subplot_data["method"] == method].sort_values("outcome").copy()
+                md = (
+                    subplot_data[subplot_data["method"] == method]
+                    .sort_values("outcome")
+                    .copy()
+                )
                 if md.empty:
                     continue
-                st = method_styles.get(method, {"color": "#6C757D", "marker": "o", "label": method})
+                st = method_styles.get(
+                    method, {"color": "#6C757D", "marker": "o", "label": method}
+                )
                 methods_present.add(method)
 
                 # Apply method offset
@@ -403,38 +472,79 @@ def create_method_comparison_plot(
                 x = base_x + method_offsets.get(method, 0)
                 if plot_type == "errorbar":
                     # Only show error bars for metrics that have std (bias, relative_bias, z_score)
-                    yerr = md["std"] if "std" in md.columns and not md["std"].isna().all() else None
+                    yerr = (
+                        md["std"]
+                        if "std" in md.columns and not md["std"].isna().all()
+                        else None
+                    )
                     ax.errorbar(
-                        x, md["mean"],
+                        x,
+                        md["mean"],
                         yerr=yerr,
-                        marker=st["marker"], linestyle="",
-                        color=st["color"], capsize=4, capthick=1.5,
-                        markersize=8, markeredgewidth=1.5, markeredgecolor="white",
-                        elinewidth=2, alpha=0.85, zorder=3, label=st["label"]
+                        marker=st["marker"],
+                        linestyle="",
+                        color=st["color"],
+                        capsize=4,
+                        capthick=1.5,
+                        markersize=8,
+                        markeredgewidth=1.5,
+                        markeredgecolor="white",
+                        elinewidth=2,
+                        alpha=0.85,
+                        zorder=3,
+                        label=st["label"],
                     )
                 elif plot_type == "dot":
                     ax.plot(
-                        x, md["mean"],
-                        marker=st["marker"], linestyle="",
-                        color=st["color"], markersize=10,
-                        markeredgewidth=1.5, markeredgecolor="white",
-                        alpha=0.85, zorder=3, label=st["label"]
+                        x,
+                        md["mean"],
+                        marker=st["marker"],
+                        linestyle="",
+                        color=st["color"],
+                        markersize=10,
+                        markeredgewidth=1.5,
+                        markeredgecolor="white",
+                        alpha=0.85,
+                        zorder=3,
+                        label=st["label"],
                     )
                 else:  # line
                     ax.plot(
-                        x, md["mean"],
-                        marker=st["marker"], linestyle="",
-                        color=st["color"], markersize=8,
-                        markeredgewidth=1.5, markeredgecolor="white",
-                        alpha=0.85, zorder=3, label=st["label"]
+                        x,
+                        md["mean"],
+                        marker=st["marker"],
+                        linestyle="",
+                        color=st["color"],
+                        markersize=8,
+                        markeredgewidth=1.5,
+                        markeredgecolor="white",
+                        alpha=0.85,
+                        zorder=3,
+                        label=st["label"],
                     )
 
             if plot_type == "errorbar":
-                ax.axhline(0, color="#2C3E50", linestyle="--", alpha=0.4, linewidth=1.5, zorder=1)
+                ax.axhline(
+                    0,
+                    color="#2C3E50",
+                    linestyle="--",
+                    alpha=0.4,
+                    linewidth=1.5,
+                    zorder=1,
+                )
             if metric_name.lower() == "coverage":
-                ax.axhline(0.95, color="#E74C3C", linestyle=":", alpha=0.6, linewidth=2, zorder=1)
+                ax.axhline(
+                    0.95,
+                    color="#E74C3C",
+                    linestyle=":",
+                    alpha=0.6,
+                    linewidth=2,
+                    zorder=1,
+                )
 
-            ax.set_title(f"ce={ce}, cy={cy}, i={i}", fontsize=9, fontweight="medium", pad=6)
+            ax.set_title(
+                f"ce={ce}, cy={cy}, i={i}", fontsize=9, fontweight="medium", pad=6
+            )
             ax.set_xlabel("Outcome (Effect Strength)", fontsize=11, fontweight="medium")
             ax.set_ylabel(y_label, fontsize=11, fontweight="medium")
             ax.set_xticks(range(len(outcomes)))
@@ -454,7 +564,10 @@ def create_method_comparison_plot(
 
         # save with batch number if multiple batches
         if len(batches) > 1:
-            output_path = Path(output_dir) / f"{metric_name}_method_comparison_part_{batch_idx}.png"
+            output_path = (
+                Path(output_dir)
+                / f"{metric_name}_method_comparison_part_{batch_idx}.png"
+            )
         else:
             output_path = Path(output_dir) / f"{metric_name}_method_comparison.png"
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -468,6 +581,7 @@ def create_method_comparison_plot(
         )
         plt.close(fig)
         print(f"Saved {metric_name} method comparison plot to: {output_path}")
+
 
 def _add_description_box(ax, description: str):
     """Place a rounded description box inside an axis."""
@@ -497,33 +611,143 @@ def _apply_axis_polish(ax):
 
 def _figure_level_legend(fig, method_styles, methods_present, location="right"):
     """
-    Add a single figure-level legend using proxy artists so it never looks like data.
+    Add figure-level legend(s) using proxy artists with grouped layout.
+    Groups methods by estimator (Baseline, BERT, etc.).
+    For multiple groups, creates separate stacked legends (one per group).
     location: "right" or "bottom"
     """
-    proxies, labels = [], []
-    for m in methods_present:
-        st = method_styles[m]
-        proxies.append(
-            Line2D([0], [0], marker=st["marker"], linestyle="",
-                   markerfacecolor=st["color"], markeredgecolor="white",
-                   markeredgewidth=1.5, markersize=9)
-        )
-        labels.append(st["label"])
+    from collections import OrderedDict
 
-    if not proxies:
+    # Organize methods by group
+    groups = OrderedDict()
+    for m in sorted(methods_present):
+        st = method_styles.get(
+            m, {"color": "#6C757D", "marker": "o", "label": m, "group": "Other"}
+        )
+        group_name = st.get("group", "Other")
+        if group_name not in groups:
+            groups[group_name] = []
+        groups[group_name].append((m, st))
+
+    if not groups:
         return
 
+    # Sort methods within each group by their label (base method name)
+    # This ensures IPW, TMLE, TMLE-TH order is consistent across groups
+    for group_name in groups:
+        groups[group_name] = sorted(groups[group_name], key=lambda x: x[1]["label"])
+
+    # If only one group, use simpler legend without grouping
+    if len(groups) == 1:
+        proxies = []
+        labels = []
+        for method_name, st in list(groups.values())[0]:
+            proxies.append(
+                Line2D(
+                    [0],
+                    [0],
+                    marker=st["marker"],
+                    linestyle="",
+                    markerfacecolor=st["color"],
+                    markeredgecolor="white",
+                    markeredgewidth=1.5,
+                    markersize=9,
+                )
+            )
+            labels.append(st["label"])
+
+        if location == "bottom":
+            fig.legend(
+                proxies,
+                labels,
+                title=list(groups.keys())[0],
+                loc="lower center",
+                ncol=len(labels),
+                frameon=True,
+                edgecolor="#CCCCCC",
+                framealpha=0.95,
+            )
+            fig.subplots_adjust(bottom=0.14, top=0.9)
+        else:  # right
+            fig.legend(
+                proxies,
+                labels,
+                title=list(groups.keys())[0],
+                loc="center left",
+                bbox_to_anchor=(1.02, 0.5),
+                frameon=True,
+                edgecolor="#CCCCCC",
+                framealpha=0.95,
+            )
+        return
+
+    # Multiple groups: create separate side-by-side legends
+    group_list = list(groups.items())
+    n_groups = len(group_list)
+
+    legends = []
+    for idx, (group_name, methods) in enumerate(group_list):
+        proxies = []
+        labels = []
+
+        for method_name, st in methods:
+            proxies.append(
+                Line2D(
+                    [0],
+                    [0],
+                    marker=st["marker"],
+                    linestyle="",
+                    markerfacecolor=st["color"],
+                    markeredgecolor="white",
+                    markeredgewidth=1.5,
+                    markersize=9,
+                )
+            )
+            labels.append(st["label"])
+
+        if location == "bottom":
+            # For bottom, arrange legends horizontally
+            x_pos = 0.1 + (idx * 0.2)  # Space them out horizontally
+            leg = fig.legend(
+                proxies,
+                labels,
+                title=group_name,
+                loc="lower left",
+                bbox_to_anchor=(x_pos, 0),
+                frameon=True,
+                edgecolor="#CCCCCC",
+                framealpha=0.95,
+                title_fontsize=10,
+            )
+        else:  # right
+            # For right, stack legends vertically with fixed spacing
+            # Use a simple fixed vertical offset between legends
+            vertical_spacing = 0.15  # Fixed spacing between legend tops
+            y_start = 0.85  # Start position for first legend
+            y_pos = y_start - (idx * vertical_spacing)
+
+            leg = fig.legend(
+                proxies,
+                labels,
+                title=group_name,
+                loc="upper left",
+                bbox_to_anchor=(1.0, y_pos),  # Right at plot edge
+                frameon=True,
+                edgecolor="#CCCCCC",
+                framealpha=0.95,
+                title_fontsize=10,
+                fontsize=9,
+            )
+
+        # Make title bold
+        leg.get_title().set_fontweight("bold")
+
+        # Add all legends except the last one as artists
+        # The last one is automatically added by fig.legend()
+        if idx < n_groups - 1:
+            fig.add_artist(leg)
+
+        legends.append(leg)
+
     if location == "bottom":
-        fig.legend(
-            proxies, labels, title="Method",
-            loc="lower center", ncol=len(labels),
-            frameon=True, edgecolor="#CCCCCC", framealpha=0.95
-        )
-        fig.subplots_adjust(bottom=0.14, top=0.9)
-    else:  # right
-        fig.legend(
-            proxies, labels, title="Method",
-            loc="center left", bbox_to_anchor=(1.0, 0.5),
-            frameon=True, edgecolor="#CCCCCC", framealpha=0.95
-        )
-        # fig.subplots_adjust(right=0.82, top=0.92)
+        fig.subplots_adjust(bottom=0.18, top=0.9)
