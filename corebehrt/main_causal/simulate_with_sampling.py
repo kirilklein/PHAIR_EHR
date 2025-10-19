@@ -187,11 +187,15 @@ def simulate_with_filtering(
     for k, df_list in simulated_outcomes.items():
         if df_list:
             df = pd.concat(df_list, ignore_index=True)
-            unique_pids = df[PID_COL].nunique()
             df.to_csv(join(outcomes_dir, f"{k}.csv"), index=False)
-            logger.info(
-                f"Saved {len(df)} rows to {k}.csv (unique patients: {unique_pids})"
-            )
+            # Only log unique patients if the dataframe has a PID_COL
+            if PID_COL in df.columns:
+                unique_pids = df[PID_COL].nunique()
+                logger.info(
+                    f"Saved {len(df)} rows to {k}.csv (unique patients: {unique_pids})"
+                )
+            else:
+                logger.info(f"Saved {len(df)} rows to {k}.csv")
 
     logger.info("=" * 60)
 
