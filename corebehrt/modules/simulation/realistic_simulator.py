@@ -253,17 +253,20 @@ class RealisticCausalSimulator:
         history_df, initial_pids = self._filter_initial_history(df)
         if history_df.empty:
             return {}
+        logger.debug(f"[Filter 1] Patients with history before index date: {len(initial_pids)}")
 
         ages = self._calculate_ages(history_df, initial_pids)
         history_df = self._filter_by_codes(history_df)
         if history_df.empty:
             return {}
+        logger.debug(f"[Filter 2] After code filtering: {history_df[PID_COL].nunique()} patients")
 
         patient_history_matrix, pids, final_ages = self._prepare_simulation_inputs(
             history_df, ages
         )
         if len(pids) == 0:
             return {}
+        logger.debug(f"[Filter 3] After history matrix preparation: {len(pids)} patients")
 
         confounder_exposure_effect, confounder_outcome_effects = (
             self._simulate_unobserved_confounder_effects(len(pids))
@@ -387,12 +390,15 @@ class RealisticCausalSimulator:
         """
         history_df = df[df[TIMESTAMP_COL] <= self.index_date].copy()
         pids_with_history = history_df[PID_COL].unique()
+        logger.debug(f"  Patients with any events before {self.index_date}: {len(pids_with_history)}")
         if len(pids_with_history) == 0:
             return pd.DataFrame(), np.array([])
         dead_pids = history_df[history_df[CONCEPT_COL] == DEATH_CODE][PID_COL].unique()
         if len(dead_pids) > 0:
+            logger.debug(f"  Excluding {len(dead_pids)} deceased patients")
             history_df = history_df[~history_df[PID_COL].isin(dead_pids)]
         all_pids = history_df[PID_COL].unique()
+        logger.debug(f"  Patients after history filter: {len(all_pids)}")
         if len(all_pids) == 0:
             return pd.DataFrame(), np.array([])
         return history_df, all_pids
@@ -417,15 +423,33 @@ class RealisticCausalSimulator:
     def _filter_by_codes(self, history_df: pd.DataFrame) -> pd.DataFrame:
         """Only use certain codes for simulation."""
         if self.config.include_code_prefixes:
+            before_count = history_df[PID_COL].nunique()
             history_df = history_df[
                 history_df[CONCEPT_COL].str.startswith(
                     tuple(self.config.include_code_prefixes)
                 )
             ].copy()
+            after_count = history_df[PID_COL].nunique()
+            if before_count > 0:
+                retention_pct = (after_count / before_count) * 100
+                logger.debug(f"  After code prefix filter {self.config.include_code_prefixes}: {after_count} patients ({retention_pct:.1f}% retained)")
+            
         if self.config.min_num_codes > 1:
+            before_count = history_df[PID_COL].nunique()
             code_counts = history_df.groupby(PID_COL)[CONCEPT_COL].nunique()
+            
+            # Log distribution of code counts
+            patients_by_code_count = code_counts.value_counts().sort_index()
+            top_counts = dict(patients_by_code_count.head(10))
+            logger.debug(f"  Code count distribution (top 10): {top_counts}")
+            
             pids_to_keep = code_counts[code_counts >= self.config.min_num_codes].index
             history_df = history_df[history_df[PID_COL].isin(pids_to_keep)].copy()
+            after_count = history_df[PID_COL].nunique()
+            excluded = before_count - after_count
+            logger.debug(f"  After min_codes filter (>={self.config.min_num_codes}): {after_count} patients")
+            if excluded > 0:
+                logger.debug(f"  Excluded {excluded} patients with <{self.config.min_num_codes} codes")
         return history_df
 
     def _prepare_simulation_inputs(

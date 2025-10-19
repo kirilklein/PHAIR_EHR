@@ -74,7 +74,7 @@ def main_simulate(config_path):
             "Either 'sampling.size' or 'sampling.fraction' must be specified in config"
         )
 
-    logger.info(f"Sampled {len(sampled_pids)} patients from {len(full_pids)} total")
+    logger.info(f"Sampled {len(sampled_pids)} patients from {len(full_pids)} total ({len(sampled_pids)/len(full_pids)*100:.1f}%)")
 
     # Save sampled PIDs to cohort directory (will be used by downstream steps)
     cohort_dir = cfg.paths.get("cohort")
@@ -116,15 +116,23 @@ def simulate_with_filtering(
         sampled_pids_set: Set of sampled patient IDs to include
     """
     logger.info("--- Starting simulation with sampling ---")
+    logger.info(f"Total patients to simulate: {len(sampled_pids_set)}")
     simulated_outcomes = defaultdict(list)
+    total_shards_processed = 0
+    total_patients_in_shards = 0
 
     for shard, _ in tqdm(shard_loader(), desc="Simulating from shards"):
+        total_shards_processed += 1
         # Filter shard to only include sampled patients
         mask = shard[PID_COL].isin(sampled_pids_set)
         filtered_shard = shard[mask]
 
         if len(filtered_shard) == 0:
             continue
+
+        sampled_patients_in_shard = filtered_shard[PID_COL].nunique()
+        total_patients_in_shards += sampled_patients_in_shard
+        logger.debug(f"Shard {total_shards_processed}: {sampled_patients_in_shard} sampled patients present")
 
         # Simulate on filtered shard
         simulated_temp = simulator.simulate_dataset(filtered_shard)
@@ -133,12 +141,32 @@ def simulate_with_filtering(
                 simulated_outcomes[k].append(df)
 
     logger.info("--- Simulation complete, saving results ---")
+    logger.info("=" * 60)
+    logger.info("SIMULATION SUMMARY")
+    logger.info("=" * 60)
+    logger.info(f"Shards processed: {total_shards_processed}")
+    logger.info(f"Patient appearances across shards: {total_patients_in_shards}")
+    logger.info(f"Note: Patients may appear in multiple shards")
 
+    # Track unique patients across all outputs
+    total_simulated = 0
+    
     for k, df_list in simulated_outcomes.items():
         if df_list:
             df = pd.concat(df_list, ignore_index=True)
+            unique_pids = df[PID_COL].nunique()
             df.to_csv(join(outcomes_dir, f"{k}.csv"), index=False)
-            logger.info(f"Saved {len(df)} rows to {k}.csv")
+            logger.info(f"Saved {len(df)} rows to {k}.csv (unique patients: {unique_pids})")
+            
+            # Track total from a patient-level output
+            if k in ['counterfactuals', 'ite'] and total_simulated == 0:
+                total_simulated = unique_pids
+
+    if total_simulated > 0:
+        logger.info("=" * 60)
+        logger.info(f"Final simulated patients: {total_simulated}")
+        logger.info(f"Patient retention: {total_simulated}/{len(sampled_pids_set)} ({total_simulated/len(sampled_pids_set)*100:.1f}%)")
+        logger.info("=" * 60)
 
 
 if __name__ == "__main__":
