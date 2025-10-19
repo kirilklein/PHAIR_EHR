@@ -204,6 +204,7 @@ echo "Running Multiple Causal Pipeline Experiments"
 
 # Set up logging
 mkdir -p "$EXPERIMENTS_DIR"
+mkdir -p "../logs"  # Create logs directory for per-experiment logs
 LOG_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="$EXPERIMENTS_DIR/batch_run_${LOG_TIMESTAMP}.log"
 echo "Log file: $LOG_FILE"
@@ -306,6 +307,13 @@ for run_number in $(seq 1 $N_RUNS); do
         echo "Running experiment $CURRENT_COUNT of $TOTAL_COUNT: $RUN_ID/$EXPERIMENT_NAME"
         echo "----------------------------------------"
 
+        # Log start time
+        start_time=$(date +"%H:%M:%S")
+        echo "" >> "$LOG_FILE"
+        echo "========================================" >> "$LOG_FILE"
+        echo "[$start_time] STARTING: $RUN_ID/$EXPERIMENT_NAME" >> "$LOG_FILE"
+        echo "========================================" >> "$LOG_FILE"
+
         # Call experiment with proper argument passing
         echo "DEBUG: Calling run_experiment.sh with experiment: $EXPERIMENT_NAME, run_id: $RUN_ID, mode: $RUN_MODE"
 
@@ -348,15 +356,25 @@ for run_number in $(seq 1 $N_RUNS); do
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --tokenized \"$TOKENIZED_DATA\""
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --pretrain-model \"$PRETRAIN_MODEL\""
 
-        # Run the experiment
-        eval "./run_experiment.sh $EXPERIMENT_ARGS"
+        # Run the experiment and capture output
+        EXPERIMENT_LOG_FILE="../logs/experiment_${RUN_ID}_${EXPERIMENT_NAME}_${LOG_TIMESTAMP}.log"
+        eval "./run_experiment.sh $EXPERIMENT_ARGS" 2>&1 | tee "$EXPERIMENT_LOG_FILE" | while IFS= read -r line; do
+            # Log key steps to main log file
+            if [[ "$line" =~ "==== Running" ]] || [[ "$line" =~ "==== Skipping" ]] || [[ "$line" =~ "ERROR" ]] || [[ "$line" =~ "FAILED" ]]; then
+                echo "[$(date +"%H:%M:%S")] $line" >> "$LOG_FILE"
+            fi
+        done
+        experiment_result=${PIPESTATUS[0]}
 
-        experiment_result=$?
+        # Log end time and result
+        end_time=$(date +"%H:%M:%S")
 
         if [ $experiment_result -ne 0 ]; then
+            echo "[$end_time] ✗ FAILED: $RUN_ID/$EXPERIMENT_NAME (exit code: $experiment_result)" >> "$LOG_FILE"
+            echo "[$end_time] Full log: $EXPERIMENT_LOG_FILE" >> "$LOG_FILE"
             echo ""
             echo "ERROR: Experiment $RUN_ID/$EXPERIMENT_NAME failed with error code $experiment_result"
-            echo "Check the output above for detailed error information."
+            echo "Full log available at: $EXPERIMENT_LOG_FILE"
             echo ""
             if [ -z "$FAILED_EXPERIMENTS" ]; then
                 FAILED_EXPERIMENTS="$RUN_ID/$EXPERIMENT_NAME"
@@ -395,6 +413,8 @@ for run_number in $(seq 1 $N_RUNS); do
                 exit 1
             fi
         else
+            echo "[$end_time] ✓ SUCCESS: $RUN_ID/$EXPERIMENT_NAME" >> "$LOG_FILE"
+            echo "[$end_time] Full log: $EXPERIMENT_LOG_FILE" >> "$LOG_FILE"
             echo "SUCCESS: Experiment $RUN_ID/$EXPERIMENT_NAME completed!"
             ((SUCCESS_COUNT++))
         fi
