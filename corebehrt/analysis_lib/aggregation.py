@@ -229,3 +229,49 @@ def perform_variance_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
     variance_agg["std"] = 0.0
 
     return variance_agg
+
+
+def perform_se_calibration_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Computes Standard Error Calibration ratio: empirical SE / mean estimated SE.
+
+    A well-calibrated estimator should have a ratio near 1.0:
+    - Ratio < 1.0: Standard errors are overestimated (too conservative)
+    - Ratio > 1.0: Standard errors are underestimated (too optimistic)
+
+    Groups by [method, ce, cy, i, outcome] and computes:
+    - Empirical SE: std(effect) across runs
+    - Mean estimated SE: mean(std_err) across runs
+    - Ratio: empirical SE / mean estimated SE
+
+    Returns DataFrame with columns: [method, ce, cy, i, outcome, mean, std]
+    where 'mean' is the calibration ratio and 'std' is set to 0.
+    """
+    # Accept any method that ends with known method names (supports baseline_ and bert_ prefixes)
+    methods_df = df[
+        df["method"].str.contains(r"(?:TMLE|IPW|TMLE_TH)$", regex=True, na=False)
+    ].copy()
+    if methods_df.empty:
+        return pd.DataFrame()
+
+    # Group by method, parameters, and outcome
+    grouped = methods_df.groupby(["method", "ce", "cy", "i", "outcome"])
+
+    # Compute empirical SE (standard deviation of effects across runs)
+    empirical_se = grouped["effect"].std(ddof=1)
+
+    # Compute mean of the estimated standard errors
+    mean_estimated_se = grouped["std_err"].mean()
+
+    # Compute calibration ratio
+    calibration_ratio = empirical_se / mean_estimated_se
+
+    # Create result dataframe
+    result = pd.DataFrame(
+        {
+            "mean": calibration_ratio,
+            "std": 0.0,  # No std for a ratio metric
+        }
+    ).reset_index()
+
+    return result

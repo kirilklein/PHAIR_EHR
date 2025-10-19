@@ -9,6 +9,7 @@ from corebehrt.analysis_lib.aggregation import (
     perform_zscore_aggregation_v2,
     perform_coverage_aggregation_v2,
     perform_variance_aggregation_v2,
+    perform_se_calibration_aggregation_v2,
 )
 from corebehrt.analysis_lib.plotting import create_method_comparison_plot
 
@@ -116,12 +117,14 @@ def main():
     agg_zscore_data = perform_zscore_aggregation_v2(all_data)
     agg_coverage_data = perform_coverage_aggregation_v2(all_data)
     agg_variance_data = perform_variance_aggregation_v2(all_data)
+    agg_se_calibration_data = perform_se_calibration_aggregation_v2(all_data)
 
     print(f"  - Bias aggregation: {len(agg_bias_data)} rows")
     print(f"  - Relative bias aggregation: {len(agg_relative_bias_data)} rows")
     print(f"  - Z-score aggregation: {len(agg_zscore_data)} rows")
     print(f"  - Coverage aggregation: {len(agg_coverage_data)} rows")
     print(f"  - Variance aggregation: {len(agg_variance_data)} rows")
+    print(f"  - SE calibration aggregation: {len(agg_se_calibration_data)} rows")
 
     # 7. Create unified method comparison plots for each metric
     print(f"\n--- Generating Unified Method Comparison Plots ---")
@@ -177,6 +180,17 @@ def main():
         title="Method Comparison: Variance Across Outcomes",
         output_dir=str(output_path),
         plot_type="line",
+        min_points=args.min_points,
+        max_subplots=args.max_subplots,
+    )
+
+    create_method_comparison_plot(
+        agg_se_calibration_data,
+        metric_name="se_calibration",
+        y_label="SE Calibration Ratio (Empirical SE / Estimated SE)",
+        title="Method Comparison: Standard Error Calibration",
+        output_dir=str(output_path),
+        plot_type="dot",
         min_points=args.min_points,
         max_subplots=args.max_subplots,
     )
