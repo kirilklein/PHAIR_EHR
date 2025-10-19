@@ -548,7 +548,8 @@ def create_method_comparison_plot(
             ax.set_xlabel("Outcome (Effect Strength)", fontsize=11, fontweight="medium")
             ax.set_ylabel(y_label, fontsize=11, fontweight="medium")
             ax.set_xticks(range(len(outcomes)))
-            ax.set_xticklabels(outcomes, rotation=45, ha="right", fontsize=9)
+            xticklabels = [o.removeprefix("effect_") for o in outcomes]
+            ax.set_xticklabels(xticklabels, rotation=45, ha="right", fontsize=9)
             _apply_axis_polish(ax)
 
             # description box
