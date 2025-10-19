@@ -98,6 +98,11 @@ def add_parser(subparsers) -> None:
         default=False,
         help="If set, system metrics such as CPU, GPU and memory usage are logged in Azure.",
     )
+    parser.add_argument(
+        "extra_args",
+        nargs="*",
+        help="Additional arguments to pass to the job (for run_batch_experiments)",
+    )
     parser.set_defaults(func=create_and_run_job)
 
 
@@ -110,12 +115,16 @@ def create_and_run_job(args) -> None:
 
     register_output = parse_pair_args(args.register_output)
 
+    # Get extra args if present (for run_batch_experiments)
+    extra_args = getattr(args, 'extra_args', [])
+
     job = util.job.create(
         args.JOB,
         cfg,
         compute=args.COMPUTE,
         register_output=register_output,
         log_system_metrics=args.log_system_metrics,
+        extra_args=extra_args,
     )
 
     # Start job

@@ -23,6 +23,7 @@ def create(
     log_system_metrics: bool = False,
     test_cfg_file: str = None,
     as_component: bool = False,
+    extra_args: list = None,
 ) -> "command":  # noqa: F821
     """
     Creates the Azure command/job object. Job input/output
@@ -42,6 +43,7 @@ def create(
         log_system_metrics=log_system_metrics,
         test_cfg_file=test_cfg_file,
         as_component=as_component,
+        extra_args=extra_args or [],
     )
 
 
@@ -55,6 +57,7 @@ def setup(
     log_system_metrics: bool = False,
     test_cfg_file: str = None,
     as_component: bool = False,
+    extra_args: list = None,
 ):
     """
     Sets up the Azure job.
@@ -68,6 +71,7 @@ def setup(
     :register_output: A mapping from output id to name, if the output should be
         registered as a data asset.
     :log_system_metrics: If true, logs GPU/CPU/mem usage
+    :extra_args: Additional arguments to append to the command (for run_batch_experiments)
     """
     check_azure()
 
@@ -99,6 +103,10 @@ def setup(
     # Add test argument if test_cfg_file is set
     if test_cfg_file:
         cmd += f" --test {test_cfg_file}"
+
+    # Add extra arguments if provided (for run_batch_experiments)
+    if extra_args:
+        cmd += " " + " ".join(extra_args)
 
     # Description = config as yaml in code block
     config_str = to_yaml_str(config)
