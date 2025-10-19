@@ -397,7 +397,7 @@ if "%RUN_BASELINE%"=="true" (
     )
 
     REM Step: calibrate (Baseline)
-    set TARGET_FILE=!EXPERIMENTS_DIR!\!RUN_ID!\!EXPERIMENT_NAME!\calibrated\baseline\combined_calibrated_predictions.csv
+    set TARGET_FILE=!EXPERIMENTS_DIR!\!RUN_ID!\!EXPERIMENT_NAME!\models\baseline\calibrated\combined_calibrated_predictions.csv
     if "%OVERWRITE%"=="true" (
         echo ==== Running calibrate ^(Baseline^)... ====
         python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\!EXPERIMENT_NAME!\calibrate.yaml
@@ -453,7 +453,7 @@ if "%RUN_BERT%"=="true" (
     )
 
     REM Step: calibrate (BERT)
-    set TARGET_FILE=!EXPERIMENTS_DIR!\!RUN_ID!\!EXPERIMENT_NAME!\calibrated\bert\combined_calibrated_predictions.csv
+    set TARGET_FILE=!EXPERIMENTS_DIR!\!RUN_ID!\!EXPERIMENT_NAME!\models\bert\calibrated\combined_calibrated_predictions.csv
     if "%OVERWRITE%"=="true" (
         echo ==== Running calibrate ^(BERT^)... ====
         python -m corebehrt.main_causal.calibrate_exp_y --config_path experiments\causal_pipeline_resample\generated_configs\!EXPERIMENT_NAME!\calibrate_bert.yaml

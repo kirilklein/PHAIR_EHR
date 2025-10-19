@@ -202,7 +202,7 @@ if [ "$RUN_BASELINE" = "true" ]; then
     echo "========================================"
     TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
     run_step "train_baseline" "corebehrt.main_causal.train_baseline" "train_baseline" "$TARGET_DIR/models/baseline/combined_predictions.csv" $TIMEOUT_TRAIN_BL
-    run_step "calibrate (Baseline)" "corebehrt.main_causal.calibrate_exp_y" "calibrate" "$TARGET_DIR/calibrated/baseline/combined_calibrated_predictions.csv" $TIMEOUT_CAL_BL
+    run_step "calibrate (Baseline)" "corebehrt.main_causal.calibrate_exp_y" "calibrate" "$TARGET_DIR/models/baseline/calibrated/combined_calibrated_predictions.csv" $TIMEOUT_CAL_BL
     run_step "estimate (Baseline)" "corebehrt.main_causal.estimate" "estimate" "$TARGET_DIR/estimate/baseline/estimate_results.csv" $TIMEOUT_EST_BL
 fi
 
@@ -214,7 +214,7 @@ if [ "$RUN_BERT" = "true" ]; then
     echo "========================================"
     TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
     run_step "finetune (BERT)" "corebehrt.main_causal.finetune_exp_y" "finetune_bert" "$TARGET_DIR/models/bert/combined_predictions.csv" $TIMEOUT_FINETUNE_BERT
-    run_step "calibrate (BERT)" "corebehrt.main_causal.calibrate_exp_y" "calibrate_bert" "$TARGET_DIR/calibrated/bert/combined_calibrated_predictions.csv" $TIMEOUT_CAL_BERT
+    run_step "calibrate (BERT)" "corebehrt.main_causal.calibrate_exp_y" "calibrate_bert" "$TARGET_DIR/models/bert/calibrated/combined_calibrated_predictions.csv" $TIMEOUT_CAL_BERT
     run_step "estimate (BERT)" "corebehrt.main_causal.estimate" "estimate_bert" "$TARGET_DIR/estimate/bert/estimate_results.csv" $TIMEOUT_EST_BERT
 fi
 
