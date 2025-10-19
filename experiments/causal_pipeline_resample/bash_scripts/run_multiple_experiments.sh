@@ -26,6 +26,7 @@ PRETRAIN_MODEL="./outputs/causal/pretrain/model"
 BASE_SEED=42
 SAMPLE_FRACTION=""   # Either fraction or size must be provided
 SAMPLE_SIZE=""       # Takes precedence over fraction
+TIMEOUT_FACTOR=""    # Optional timeout scaling factor
 
 # Parse command line arguments
 echo "DEBUG: Starting argument parsing with arguments: $*"
@@ -51,6 +52,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --base-seed N             Base seed for sampling (default: 42). Actual seed = base_seed + run_number"
             echo "  --sample-fraction F       Fraction of patients to sample (0 < F <= 1, mutually exclusive with --sample-size)"
             echo "  --sample-size N           Absolute number of patients to sample (takes precedence, mutually exclusive with --sample-fraction)"
+            echo "  --timeout-factor F        Multiply all timeouts by this factor (e.g., 2.0 for 2x longer, default: 1.0)"
             echo "  --meds PATH               Path to MEDS data directory (default: ./example_data/synthea_meds_causal)"
             echo "  --features PATH           Path to features directory (default: ./outputs/causal/data/features)"
             echo "  --tokenized PATH          Path to tokenized data directory (default: ./outputs/causal/data/tokenized)"
@@ -162,6 +164,10 @@ while [[ $# -gt 0 ]]; do
             SAMPLE_SIZE="$2"
             shift 2
             ;;
+        --timeout-factor)
+            TIMEOUT_FACTOR="$2"
+            shift 2
+            ;;
         --meds)
             MEDS_DATA="$2"
             shift 2
@@ -247,6 +253,9 @@ esac
 echo "Experiments directory: $EXPERIMENTS_DIR"
 echo "Base seed: $BASE_SEED"
 echo "Sample fraction: $SAMPLE_FRACTION"
+if [ -n "$TIMEOUT_FACTOR" ]; then
+    echo "Timeout factor: $TIMEOUT_FACTOR"
+fi
 if [ "$OVERWRITE" = "true" ]; then
     echo "Overwrite mode: ENABLED (re-run all steps)"
 else
@@ -348,6 +357,11 @@ for run_number in $(seq 1 $N_RUNS); do
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-size $SAMPLE_SIZE"
         elif [ -n "$SAMPLE_FRACTION" ]; then
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-fraction $SAMPLE_FRACTION"
+        fi
+        
+        # Add timeout factor if specified
+        if [ -n "$TIMEOUT_FACTOR" ]; then
+            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --timeout-factor $TIMEOUT_FACTOR"
         fi
 
         # Add data path arguments
