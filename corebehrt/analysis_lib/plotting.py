@@ -674,7 +674,7 @@ def _figure_level_legend(fig, method_styles, methods_present, location="right"):
                 labels,
                 title=list(groups.keys())[0],
                 loc="center left",
-                bbox_to_anchor=(1.02, 0.5),
+                bbox_to_anchor=(1.01, 0.5),
                 frameon=True,
                 edgecolor="#CCCCCC",
                 framealpha=0.95,
@@ -731,7 +731,7 @@ def _figure_level_legend(fig, method_styles, methods_present, location="right"):
                 labels,
                 title=group_name,
                 loc="upper left",
-                bbox_to_anchor=(1.0, y_pos),  # Right at plot edge
+                bbox_to_anchor=(0.9, y_pos),  # Right at plot edge
                 frameon=True,
                 edgecolor="#CCCCCC",
                 framealpha=0.95,
