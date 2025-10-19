@@ -142,14 +142,16 @@ def prepare_config(args: dict, inputs: dict, outputs: dict) -> str:
     return save_job_config(args["config"], cfg)
 
 
-def parse_args(args: set) -> dict:
+def parse_args(args: set, allow_unknown: bool = False) -> tuple[dict, list]:
     """
     Parses the arguments from the command line
 
     :param parse_args: The argument configuration mapping for inputs and outputs.
+    :param allow_unknown: If True, returns unknown args separately.
 
-    :return: A dictionary mapping keys from args to the values passed to the
-        command line.
+    :return: If allow_unknown is False, returns a dictionary mapping keys from args
+        to the values passed to the command line. If allow_unknown is True, returns
+        a tuple of (args_dict, unknown_args_list).
     """
     parser = argparse.ArgumentParser()
     for arg in args:
@@ -157,7 +159,12 @@ def parse_args(args: set) -> dict:
     parser.add_argument("--log_system_metrics", action="store_true", default=False)
     parser.add_argument("--config", type=str)
     parser.add_argument("--test", type=str)
-    return vars(parser.parse_args())
+
+    if allow_unknown:
+        parsed_args, unknown = parser.parse_known_args()
+        return vars(parsed_args), unknown
+    else:
+        return vars(parser.parse_args()), []
 
 
 def prepare_job_command_args(

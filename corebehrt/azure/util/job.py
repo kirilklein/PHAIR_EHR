@@ -139,6 +139,7 @@ def run_main(
     main: callable,
     inputs: dict,
     outputs: dict,
+    allow_unknown: bool = False,
 ) -> None:
     """
     Implements a wrapper for running CoreBEHRT scrips on the cluster.
@@ -149,13 +150,17 @@ def run_main(
     :param main: The main callable.
     :param inputs: inputs configuration.
     :param outputs: outputs configuration.
+    :param allow_unknown: If True, passes unknown args to main callable.
     """
     # Parse command line args
-    args = parse_args(inputs | outputs)
+    args, unknown_args = parse_args(inputs | outputs, allow_unknown=allow_unknown)
     with log.start_run(log_system_metrics=args.get("log_system_metrics", False)) as run:
         run_id = run.info.run_id
         cfg_path = prepare_config(args, inputs, outputs)
-        main(cfg_path)
+        if allow_unknown:
+            main(cfg_path, unknown_args)
+        else:
+            main(cfg_path)
 
     # Evaluate run if test param is given
     if test_cfg_file := args.get("test", False):

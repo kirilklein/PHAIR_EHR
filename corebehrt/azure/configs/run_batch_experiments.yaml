@@ -1,0 +1,25 @@
+# Configuration for running batch resampling experiments on Azure
+# This config provides data paths for the batch experiments runner
+
+paths:
+  # Input data directories
+  meds: "researcher-data:TRACE/meds"
+  features: "researcher-data:PHAIR_EHR/features"
+  tokenized: "researcher-data:PHAIR_EHR/tokenized"
+  pretrain_model: "researcher-data:PHAIR_EHR/pretrain/model"
+  
+  # Output directory for batch experiment results
+  results: "researcher-data:PHAIR_EHR/experiments/batch_results"
+
+# Note: Additional arguments (experiment names, flags, etc.) are passed
+# via command line and forwarded to run_multiple_experiments.sh
+# 
+# Example usage:
+#   python -m corebehrt.azure job run_batch_experiments CPU-20-LP \
+#       -e "batch_run_resampling" \
+#       -c azure_configs/run_batch_experiments.yaml \
+#       -- ce0p62_cy0p62_y0p62_i0p62 ce0p62_cy0p62_y0p2_i0p2 \
+#       --n_runs 100 \
+#       --sample-fraction 0.1 \
+#       --baseline-only
+
