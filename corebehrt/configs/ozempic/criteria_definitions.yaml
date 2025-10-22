@@ -88,6 +88,14 @@ criteria_definitions:
     operator: ">="
     start_days: -90
 
+  # Example: Extract raw HbA1c values for statistical analysis (without threshold filtering)
+  # This creates both a binary flag and a numeric value column for statistics
+  hba1c_value_for_stats:
+    codes:
+      - ^L/.*HBA1C.*
+    extract_value: true # Extract the last recorded value before index date
+    start_days: -90 # Look back 90 days
+
   ###############################################
   #### Exclusion Criteria ####
   type1_diabetes:

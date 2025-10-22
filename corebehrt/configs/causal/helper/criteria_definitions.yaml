@@ -26,3 +26,11 @@ criteria_definitions:
 
   criteria_5:
     expression: criteria_1
+
+  # Example: Extract numeric lab values for statistical analysis
+  # Use extract_value: true to get raw numeric values without threshold filtering
+  example_lab_value:
+    codes:
+      - ^L/.* # Lab test codes
+    extract_value: true # Creates both a binary flag and a _numeric_value column
+    start_days: -365 # Look back 1 year
