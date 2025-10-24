@@ -12,6 +12,7 @@ from corebehrt.constants.paths import (
     TEST_PIDS_FILE,
 )
 from corebehrt.functional.setup.args import get_args
+from corebehrt.functional.features.split import create_folds
 from corebehrt.main.helper.finetune_cv import check_for_overlap
 from corebehrt.main_causal.helper.finetune_exp_y import cv_loop
 from corebehrt.modules.monitoring.causal.metric_aggregation import (
@@ -87,15 +88,44 @@ def main_finetune(config_path):
 
 def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
     """
-    Load folds and check for overlap with test pids.
+    Load or regenerate folds and check for overlap with test pids.
     Save folds to model directory.
     Return folds.
+
+    If cfg.data.reshuffle_seed is provided, regenerates folds with that seed
+    instead of loading from prepared_data. This allows running multiple
+    experiments with different fold splits without re-preparing data.
     """
-    folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
-    folds = torch.load(folds_path)
+    reshuffle_seed = cfg.data.get("reshuffle_seed", None)
+
+    if reshuffle_seed is not None:
+        # Regenerate folds with new seed
+        logger.info(f"Regenerating folds with reshuffle_seed={reshuffle_seed}")
+
+        # Load prepared data to get all PIDs
+        loaded_data = torch.load(join(cfg.paths.prepared_data, PREPARED_ALL_PATIENTS))
+        all_pids = [p.pid for p in loaded_data]
+
+        # Remove test pids if they exist
+        train_val_pids = [pid for pid in all_pids if pid not in test_pids]
+
+        # Create new folds
+        folds = create_folds(
+            train_val_pids,
+            cfg.data.get("cv_folds", 5),
+            reshuffle_seed,
+            cfg.data.get("val_ratio", 0.2),
+        )
+        n_folds = len(folds)
+        logger.info(f"Created {n_folds} new folds with seed {reshuffle_seed}")
+    else:
+        # Load existing folds from prepared data
+        folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
+        folds = torch.load(folds_path)
+        n_folds = len(folds)
+        logger.info(f"Using {n_folds} predefined folds from prepared data")
+
     check_for_overlap(folds, test_pids, logger)
-    n_folds = len(folds)
-    logger.info(f"Using {n_folds} predefined folds")
     torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
     return folds
 
