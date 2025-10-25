@@ -117,33 +117,29 @@ def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
 
         logger.info(f"Reshuffling folds with seed={reshuffle_seed}")
 
-        # Collect all PIDs from all folds
+        # Extract unique PIDs from first fold (each fold contains all PIDs split into train/val)
+        # This avoids duplicates that would occur if we collected from all folds
+        all_pids = folds[0][TRAIN_KEY] + folds[0][VAL_KEY]
+
+        # Shuffle the PIDs
         random.seed(reshuffle_seed)
-
-        all_train_pids = []
-        all_val_pids = []
-
-        for fold in folds:
-            all_train_pids.extend(fold[TRAIN_KEY])
-            all_val_pids.extend(fold[VAL_KEY])
-
-        # Combine and shuffle all PIDs
-        all_pids = all_train_pids + all_val_pids
         random.shuffle(all_pids)
 
-        # Redistribute PIDs back into folds with same structure
-        pid_idx = 0
-        for fold in folds:
-            n_train = len(fold[TRAIN_KEY])
-            n_val = len(fold[VAL_KEY])
+        # Split into k validation slices and redistribute
+        total_pids = len(all_pids)
+        for i, fold in enumerate(folds):
+            # Calculate validation slice for this fold
+            val_size = len(fold[VAL_KEY])
+            val_start = i * val_size
+            val_end = val_start + val_size
 
-            fold[TRAIN_KEY] = all_pids[pid_idx : pid_idx + n_train]
-            pid_idx += n_train
+            # Assign validation PIDs for this fold
+            fold[VAL_KEY] = all_pids[val_start:val_end]
 
-            fold[VAL_KEY] = all_pids[pid_idx : pid_idx + n_val]
-            pid_idx += n_val
+            # Assign training PIDs (all PIDs except this fold's validation set)
+            fold[TRAIN_KEY] = all_pids[:val_start] + all_pids[val_end:]
 
-        logger.info(f"Reshuffled {len(all_pids)} PIDs across {n_folds} folds")
+        logger.info(f"Reshuffled {total_pids} unique PIDs across {n_folds} folds")
     else:
         logger.info("Using folds as loaded (no reshuffling)")
 

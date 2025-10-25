@@ -30,6 +30,10 @@ model:
     # gamma: 4.0
   initialize_sigmoid_bias: false
 
+data:
+  reshuffle: true # Enable reshuffling
+  # reshuffle_seed: 42  # Optional: specify seed for reproducibility
+
 trainer_args:
   loss_weight_function:
     _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt # function to calculate positive weights. Possible options: sqrt and effective_n_samples
