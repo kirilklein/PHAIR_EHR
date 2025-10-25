@@ -51,9 +51,23 @@ def main_run_batch(config_path):
     print(f"Running command: {' '.join(cmd)}")
 
     # Run the bash script
-    result = subprocess.run(cmd, check=True)
-
-    return result.returncode
+    try:
+        result = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=3600,  # 1 hour timeout, adjust as needed
+        )
+        print(f"Script output:\n{result.stdout}")
+        return result.returncode
+    except subprocess.CalledProcessError as e:
+        print(f"Script failed with exit code {e.returncode}")
+        print(f"stderr:\n{e.stderr}")
+        raise
+    except subprocess.TimeoutExpired:
+        print(f"Script timed out after 3600 seconds")
+        raise
 
 
 if __name__ == "__main__":
