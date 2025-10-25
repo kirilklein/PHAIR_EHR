@@ -176,8 +176,8 @@ def main():
     create_method_comparison_plot(
         agg_variance_data,
         metric_name="variance",
-        y_label="Empirical Variance",
-        title="Method Comparison: Variance Across Outcomes",
+        y_label="Empirical Standard Deviation",
+        title="Method Comparison: Standard Deviation Across Outcomes",
         output_dir=str(output_path),
         plot_type="line",
         min_points=args.min_points,

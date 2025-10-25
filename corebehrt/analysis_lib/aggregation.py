@@ -81,25 +81,25 @@ def perform_coverage_aggregation(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def perform_variance_aggregation(df: pd.DataFrame) -> pd.DataFrame:
-    """Performs aggregation for empirical variance analysis."""
+    """Performs aggregation for empirical standard deviation analysis."""
     methods_df = df[df["method"].isin(["TMLE", "IPW"])].copy()
     if methods_df.empty:
         return pd.DataFrame()
-    variance_per_outcome = (
+    std_per_outcome = (
         methods_df.groupby(["method", "ce", "cy", "i", "y", "outcome"])["effect"]
-        .var(ddof=1)
+        .std(ddof=1)
         .reset_index()
     )
-    variance_per_outcome.rename(columns={"effect": "variance"}, inplace=True)
-    variance_per_outcome["avg_confounding"] = (
-        variance_per_outcome["ce"] + variance_per_outcome["cy"]
+    std_per_outcome.rename(columns={"effect": "std_dev"}, inplace=True)
+    std_per_outcome["avg_confounding"] = (
+        std_per_outcome["ce"] + std_per_outcome["cy"]
     ) / 2
-    final_variance_agg = (
-        variance_per_outcome.groupby(["method", "avg_confounding", "i"])["variance"]
+    final_std_agg = (
+        std_per_outcome.groupby(["method", "avg_confounding", "i"])["std_dev"]
         .mean()
         .reset_index()
     )
-    return final_variance_agg
+    return final_std_agg
 
 
 # ============================================================================
@@ -203,11 +203,11 @@ def perform_coverage_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
 
 def perform_variance_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Computes empirical variance of effects over runs for each outcome.
-    Groups by [method, ce, cy, i, outcome] and computes variance of effect estimates,
-    then computes mean and std of this variance.
+    Computes empirical standard deviation of effects over runs for each outcome.
+    Groups by [method, ce, cy, i, outcome] and computes standard deviation of effect estimates.
 
     Returns DataFrame with columns: [method, ce, cy, i, outcome, mean, std]
+    where 'mean' contains the standard deviation and 'std' is set to 0.
     """
     # Accept any method that ends with known method names (supports baseline_ and bert_ prefixes)
     methods_df = df[
@@ -216,19 +216,19 @@ def perform_variance_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
     if methods_df.empty:
         return pd.DataFrame()
 
-    # Compute variance of effects over runs for each (method, ce, cy, i, outcome) group
-    variance_agg = (
+    # Compute standard deviation of effects over runs for each (method, ce, cy, i, outcome) group
+    std_agg = (
         methods_df.groupby(["method", "ce", "cy", "i", "outcome"])["effect"]
-        .var(ddof=1)
+        .std(ddof=1)
         .reset_index()
         .rename(columns={"effect": "mean"})
     )
 
-    # For variance, std is not typically computed the same way, but we'll use 0 as placeholder
-    # or we could compute the standard error of the variance estimate
-    variance_agg["std"] = 0.0
+    # For standard deviation, std is not typically computed the same way, but we'll use 0 as placeholder
+    # or we could compute the standard error of the standard deviation estimate
+    std_agg["std"] = 0.0
 
-    return variance_agg
+    return std_agg
 
 
 def perform_se_calibration_aggregation_v2(df: pd.DataFrame) -> pd.DataFrame:
