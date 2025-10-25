@@ -25,7 +25,7 @@ import torch
 
 logger = logging.getLogger("simulate_with_sampling")
 
-CONFIG_PATH = "./corebehrt/configs/causal/simulate_realistic.yaml"
+CONFIG_PATH = "./corebehrt/configs/causal/simulate_realistic_with_sampling.yaml"
 
 
 def main_simulate(config_path):
@@ -173,14 +173,20 @@ def simulate_with_filtering(
     logger.info("SIMULATION SUMMARY")
     logger.info("=" * 60)
     logger.info(f"Sampled patients (target): {len(sampled_pids_set)}")
-    logger.info(
-        f"Patients found in shards: {len(cumulative_patients_found)} ({len(cumulative_patients_found) / len(sampled_pids_set) * 100:.1f}%)"
+
+    found_total = len(cumulative_patients_found)
+    found_pct = (found_total / len(sampled_pids_set) * 100) if found_total else 0.0
+    logger.info(f"Patients found in shards: {found_total} ({found_pct:.1f}%)")
+    simulated_total = len(cumulative_patients_simulated)
+    simulated_pct_of_found = (
+        (simulated_total / found_total) * 100 if found_total else 0.0
     )
     logger.info(
-        f"Patients after filtering: {len(cumulative_patients_simulated)} ({len(cumulative_patients_simulated) / len(cumulative_patients_found) * 100:.1f}% of found)"
+        f"Patients after filtering: {simulated_total} ({simulated_pct_of_found:.1f}% of found)"
     )
+
     logger.info(
-        f"Overall retention: {len(cumulative_patients_simulated)}/{len(sampled_pids_set)} ({len(cumulative_patients_simulated) / len(sampled_pids_set) * 100:.1f}%)"
+        f"Overall retention: {simulated_total}/{len(sampled_pids_set)} ({simulated_pct_of_found:.1f}%)"
     )
     logger.info("-" * 60)
 

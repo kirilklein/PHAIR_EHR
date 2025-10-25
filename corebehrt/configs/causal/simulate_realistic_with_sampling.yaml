@@ -1,0 +1,113 @@
+# --------------------------------------------------------------------------
+# General Settings
+# --------------------------------------------------------------------------
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  # Input directory for real patient sequence data
+  data: ./example_data/synthea_meds_causal
+  splits: ["tuning"]
+  # Output directory for the new simulation results
+  outcomes: ./outputs/causal/simulated_outcomes
+
+seed: 42
+debug: false
+min_num_codes: 3
+include_code_prefixes: ["D/"]
+index_date_str: "2020-01-01"
+
+sampling:
+  enabled: true
+  fraction: 0.8
+
+# --------------------------------------------------------------------------
+# Simulation Model - Latent Factor Structure
+# --------------------------------------------------------------------------
+simulation_model:
+  # --- 1. Define the Latent Space Structure ---
+  # These parameters define the "hidden layer" of the simulation.
+  num_shared_factors: 10 # Factors that cause BOTH exposure and outcome (confounders)
+  num_exposure_only_factors: 10 # Factors that ONLY cause exposure (instruments)
+  num_outcome_only_factors: 10 # Factors that ONLY cause outcomes (independent risks)
+
+  # --- 2. Define How Medical Codes Map to Latent Factors ---
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4 # Small scale means individual codes have a small effect on a factor.
+    sparsity_factor: 0.8 # High sparsity means each code only relates to a few factors.
+
+  # --- 3. Control the Causal Structure (CRUCIAL PARAMETERS) ---
+  # These scalars allow you to control the strength of the causal pathways.
+  # Set a value to 0 to remove that pathway entirely.
+  influence_scales:
+    # How strongly shared factors affect exposure (Path 1 of Confounding)
+    shared_to_exposure: 5.0
+    # How strongly shared factors affect outcomes (Path 2 of Confounding)
+    shared_to_outcome: 5.0
+    # How strongly non-confounding factors predict treatment
+    exposure_only_to_exposure: 0.4
+    # How strongly non-confounding factors predict outcomes
+    outcome_only_to_outcome: 0.4
+
+  time_decay_halflife_days: 6000
+  noise:
+    logit_noise_scale: 0
+
+# --------------------------------------------------------------------------
+# Exposure and Outcome Settings
+# --------------------------------------------------------------------------
+exposure:
+  p_base: 0.3
+
+outcomes:
+  OUTCOME:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 3.0 # True logit-scale ATE
+
+  OUTCOME_2:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 2.0 # Weaker positive effect
+
+  OUTCOME_3:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 0.0 # Even weaker positive effect
+
+  OUTCOME_4:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: 0.0 # True ZERO causal effect
+
+  OUTCOME_5:
+    run_in_days: 1
+    p_base: 0.1
+    exposure_effect: 3.0 # Strong positive effect
+
+  OUTCOME_6:
+    run_in_days: 1
+    p_base: 0.1
+    exposure_effect: 1.0 # Weak positive effect
+
+  OUTCOME_7:
+    run_in_days: 1
+    p_base: 0.1
+    exposure_effect: -1.0 # Negative effect
+
+  OUTCOME_8:
+    run_in_days: 1
+    p_base: 0.1
+    exposure_effect: 0.0 # True ZERO causal effect
+
+  OUTCOME_9:
+    run_in_days: 1
+    p_base: 0.2
+    exposure_effect: -3.0 # Strong negative effect
+
+  OUTCOME_10:
+    run_in_days: 1
+    p_base: 0.3
+    exposure_effect: 2.5 # Strong positive effect
