@@ -4,6 +4,8 @@ from os.path import join
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 import torch
+import random
+import time
 
 from corebehrt.constants.paths import (
     FOLDS_FILE,
@@ -12,12 +14,12 @@ from corebehrt.constants.paths import (
     TEST_PIDS_FILE,
 )
 from corebehrt.functional.setup.args import get_args
-from corebehrt.functional.features.split import create_folds
 from corebehrt.main.helper.finetune_cv import check_for_overlap
 from corebehrt.main_causal.helper.finetune_exp_y import cv_loop
 from corebehrt.modules.monitoring.causal.metric_aggregation import (
     compute_and_save_combined_scores_mean_std,
 )
+from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
 
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.functional.io_operations.load import load_vocabulary
@@ -88,42 +90,62 @@ def main_finetune(config_path):
 
 def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
     """
-    Load or regenerate folds and check for overlap with test pids.
+    Load folds and optionally reshuffle PIDs across them.
     Save folds to model directory.
     Return folds.
 
-    If cfg.data.reshuffle_seed is provided, regenerates folds with that seed
-    instead of loading from prepared_data. This allows running multiple
-    experiments with different fold splits without re-preparing data.
+    If cfg.data.reshuffle is True, shuffles PIDs across the loaded folds
+    using cfg.data.reshuffle_seed (or auto-generated seed if not provided).
+    This allows running multiple experiments with different fold splits
+    without re-preparing data.
     """
-    reshuffle_seed = cfg.data.get("reshuffle_seed", None)
+    # Always load folds from prepared data
+    folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
+    folds = torch.load(folds_path)
+    n_folds = len(folds)
+    logger.info(f"Loaded {n_folds} folds from prepared data")
+    data_cfg = cfg.get("data", {})
+    # Check if we should reshuffle
+    reshuffle = data_cfg.get("reshuffle", False)
 
-    if reshuffle_seed is not None:
-        # Regenerate folds with new seed
-        logger.info(f"Regenerating folds with reshuffle_seed={reshuffle_seed}")
+    if reshuffle:
+        # Get or generate seed
+        reshuffle_seed = data_cfg.get("reshuffle_seed", None)
+        if reshuffle_seed is None:
+            # Auto-generate time-based seed
+            reshuffle_seed = int(time.time() * 1000) % (2**32)
 
-        # Load prepared data to get all PIDs
-        loaded_data = torch.load(join(cfg.paths.prepared_data, PREPARED_ALL_PATIENTS))
-        all_pids = [p.pid for p in loaded_data]
+        logger.info(f"Reshuffling folds with seed={reshuffle_seed}")
 
-        # Remove test pids if they exist
-        train_val_pids = [pid for pid in all_pids if pid not in test_pids]
+        # Collect all PIDs from all folds
+        random.seed(reshuffle_seed)
 
-        # Create new folds
-        folds = create_folds(
-            train_val_pids,
-            cfg.data.get("cv_folds", 5),
-            reshuffle_seed,
-            cfg.data.get("val_ratio", 0.2),
-        )
-        n_folds = len(folds)
-        logger.info(f"Created {n_folds} new folds with seed {reshuffle_seed}")
+        all_train_pids = []
+        all_val_pids = []
+
+        for fold in folds:
+            all_train_pids.extend(fold[TRAIN_KEY])
+            all_val_pids.extend(fold[VAL_KEY])
+
+        # Combine and shuffle all PIDs
+        all_pids = all_train_pids + all_val_pids
+        random.shuffle(all_pids)
+
+        # Redistribute PIDs back into folds with same structure
+        pid_idx = 0
+        for fold in folds:
+            n_train = len(fold[TRAIN_KEY])
+            n_val = len(fold[VAL_KEY])
+
+            fold[TRAIN_KEY] = all_pids[pid_idx : pid_idx + n_train]
+            pid_idx += n_train
+
+            fold[VAL_KEY] = all_pids[pid_idx : pid_idx + n_val]
+            pid_idx += n_val
+
+        logger.info(f"Reshuffled {len(all_pids)} PIDs across {n_folds} folds")
     else:
-        # Load existing folds from prepared data
-        folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
-        folds = torch.load(folds_path)
-        n_folds = len(folds)
-        logger.info(f"Using {n_folds} predefined folds from prepared data")
+        logger.info("Using folds as loaded (no reshuffling)")
 
     check_for_overlap(folds, test_pids, logger)
     torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
