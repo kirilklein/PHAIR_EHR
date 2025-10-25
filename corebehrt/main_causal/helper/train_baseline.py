@@ -58,6 +58,18 @@ def _get_catboost_device_params() -> Dict[str, Any]:
     return _CATBOOST_DEVICE_PARAMS_CACHE
 
 
+def _prepare_catboost_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Prepare CatBoost parameters by adding bootstrap_type if subsample is used.
+    CatBoost's default 'Bayesian' bootstrap doesn't support subsample.
+    When subsample is present, we use 'Bernoulli' bootstrap which is compatible.
+    """
+    params_copy = params.copy()
+    if "subsample" in params_copy and "bootstrap_type" not in params_copy:
+        params_copy["bootstrap_type"] = "Bernoulli"
+    return params_copy
+
+
 @dataclass
 class FoldPredictionData:
     """Container for storing predictions from each fold."""
@@ -283,13 +295,16 @@ def run_hyperparameter_tuning(
         # Get GPU/CPU parameters
         device_params = _get_catboost_device_params()
 
+        # Prepare trial params with proper bootstrap type if subsample is used
+        prepared_trial_params = _prepare_catboost_params(trial_params)
+
         model = CatBoostClassifier(
             n_estimators=base_params["n_estimators"],
             scale_pos_weight=scale_pos_weight,
             random_state=42,
             verbose=0,
             **device_params,
-            **trial_params,
+            **prepared_trial_params,
         )
 
         model.fit(
@@ -489,11 +504,14 @@ def _train_and_evaluate_fold(
     # Get GPU/CPU parameters
     device_params = _get_catboost_device_params()
 
+    # Prepare best params with proper bootstrap type if subsample is used
+    prepared_best_params = _prepare_catboost_params(best_params)
+
     final_model = CatBoostClassifier(
         scale_pos_weight=scale_pos_weight,
         random_state=42,
         **device_params,
-        **best_params,
+        **prepared_best_params,
     )
 
     logger.info("  Fitting final model...")
