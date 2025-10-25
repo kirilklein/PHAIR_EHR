@@ -35,6 +35,29 @@ from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.config import Config
 
 
+# Cache for GPU detection to avoid repeated logging
+_CATBOOST_DEVICE_PARAMS_CACHE = None
+
+
+def _get_catboost_device_params() -> Dict[str, Any]:
+    """
+    Detect GPU availability and return appropriate CatBoost parameters.
+    Returns task_type and devices parameters for CatBoost.
+    Logs only on first call (cached).
+    """
+    global _CATBOOST_DEVICE_PARAMS_CACHE
+
+    if _CATBOOST_DEVICE_PARAMS_CACHE is None:
+        if torch.cuda.is_available():
+            logging.info("GPU detected. CatBoost will use GPU for training.")
+            _CATBOOST_DEVICE_PARAMS_CACHE = {"task_type": "GPU", "devices": "0"}
+        else:
+            logging.info("No GPU detected. CatBoost will use CPU for training.")
+            _CATBOOST_DEVICE_PARAMS_CACHE = {"task_type": "CPU"}
+
+    return _CATBOOST_DEVICE_PARAMS_CACHE
+
+
 @dataclass
 class FoldPredictionData:
     """Container for storing predictions from each fold."""
@@ -257,11 +280,15 @@ def run_hyperparameter_tuning(
                     param_name, range_info[1], range_info[2]
                 )
 
+        # Get GPU/CPU parameters
+        device_params = _get_catboost_device_params()
+
         model = CatBoostClassifier(
             n_estimators=base_params["n_estimators"],
             scale_pos_weight=scale_pos_weight,
             random_state=42,
             verbose=0,
+            **device_params,
             **trial_params,
         )
 
@@ -459,8 +486,14 @@ def _train_and_evaluate_fold(
     scale_pos_weight = (y_train == 0).sum() / max((y_train == 1).sum(), 1)
     logger.info(f"  Scale pos weight for final model: {scale_pos_weight:.4f}")
 
+    # Get GPU/CPU parameters
+    device_params = _get_catboost_device_params()
+
     final_model = CatBoostClassifier(
-        scale_pos_weight=scale_pos_weight, random_state=42, **best_params
+        scale_pos_weight=scale_pos_weight,
+        random_state=42,
+        **device_params,
+        **best_params,
     )
 
     logger.info("  Fitting final model...")
