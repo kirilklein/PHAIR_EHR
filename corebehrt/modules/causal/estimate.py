@@ -146,7 +146,7 @@ class EffectEstimator:
             # 2. Estimate effects using the new logic
             effect_df = self._estimate_effects(df_for_outcome)
 
-            if self.counterfactual_df is not None:
+            if self.ite_df is not None:
                 effect_df = append_true_effect(
                     effect_df,
                     self.ite_df,
