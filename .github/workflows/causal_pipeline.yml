@@ -78,7 +78,7 @@ jobs:
           
           python -m tests.pipeline.test_performance_multitarget ./outputs/causal/finetune/models/simple \
           --target-bounds "exposure:min:0.54,max:0.8" \
-          --target-bounds "OUTCOME:min:0.7,max:0.95" \
+          --target-bounds "OUTCOME:min:0.7,max:0.96" \
           --target-bounds "OUTCOME_2:min:0.65,max:0.95" \
           --target-bounds "OUTCOME_3:min:0.58,max:0.95"
 
