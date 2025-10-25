@@ -58,15 +58,35 @@ def _get_catboost_device_params() -> Dict[str, Any]:
     return _CATBOOST_DEVICE_PARAMS_CACHE
 
 
-def _prepare_catboost_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def _prepare_catboost_params(
+    params: Dict[str, Any], device_params: Dict[str, Any]
+) -> Dict[str, Any]:
     """
-    Prepare CatBoost parameters by adding bootstrap_type if subsample is used.
-    CatBoost's default 'Bayesian' bootstrap doesn't support subsample.
-    When subsample is present, we use 'Bernoulli' bootstrap which is compatible.
+    Prepare CatBoost parameters by:
+    1. Adding bootstrap_type if subsample is used (Bayesian bootstrap doesn't support subsample)
+    2. Removing GPU-incompatible parameters when using GPU mode
+
+    GPU limitations:
+    - colsample_bylevel (RSM) is only supported in pairwise ranking modes, not classification
     """
     params_copy = params.copy()
+
+    # Handle bootstrap type for subsample
     if "subsample" in params_copy and "bootstrap_type" not in params_copy:
         params_copy["bootstrap_type"] = "Bernoulli"
+
+    # Remove GPU-incompatible parameters
+    if device_params.get("task_type") == "GPU":
+        gpu_incompatible_params = [
+            "colsample_bylevel",
+            "colsample_bynode",
+            "colsample_bytree",
+        ]
+        for param in gpu_incompatible_params:
+            if param in params_copy:
+                logging.debug(f"Removing GPU-incompatible parameter: {param}")
+                params_copy.pop(param)
+
     return params_copy
 
 
@@ -240,15 +260,26 @@ def run_hyperparameter_tuning(
     logging.info(f"  Val class distribution: {np.bincount(y_val)}")
     logging.info(f"  Scale pos weight: {scale_pos_weight:.4f}")
 
+    # Detect device type for GPU compatibility
+    device_params = _get_catboost_device_params()
+    is_gpu = device_params.get("task_type") == "GPU"
+
     # Define default tuning ranges for each parameter
     TUNING_RANGES = {
         "learning_rate": ("float", 0.01, 0.3, True),  # (type, min, max, log_scale)
         "max_depth": ("int", 4, 10),  # (type, min, max)
         "subsample": ("float", 0.6, 1.0, False),
-        "colsample_bylevel": ("float", 0.6, 1.0, False),
         "l2_leaf_reg": ("float", 1e-8, 10.0, True),
         "min_data_in_leaf": ("int", 1, 100),
     }
+
+    # Add colsample_bylevel only if NOT using GPU (GPU doesn't support it for classification)
+    if not is_gpu:
+        TUNING_RANGES["colsample_bylevel"] = ("float", 0.6, 1.0, False)
+    else:
+        logging.info(
+            "  GPU mode detected: skipping colsample_bylevel from tuning (GPU incompatible)"
+        )
 
     # Determine which parameters to tune vs. fix
     # RULE: If parameter is explicitly in CONFIG → FIXED
@@ -295,8 +326,8 @@ def run_hyperparameter_tuning(
         # Get GPU/CPU parameters
         device_params = _get_catboost_device_params()
 
-        # Prepare trial params with proper bootstrap type if subsample is used
-        prepared_trial_params = _prepare_catboost_params(trial_params)
+        # Prepare trial params with proper bootstrap type and GPU compatibility
+        prepared_trial_params = _prepare_catboost_params(trial_params, device_params)
 
         model = CatBoostClassifier(
             n_estimators=base_params["n_estimators"],
@@ -504,8 +535,8 @@ def _train_and_evaluate_fold(
     # Get GPU/CPU parameters
     device_params = _get_catboost_device_params()
 
-    # Prepare best params with proper bootstrap type if subsample is used
-    prepared_best_params = _prepare_catboost_params(best_params)
+    # Prepare best params with proper bootstrap type and GPU compatibility
+    prepared_best_params = _prepare_catboost_params(best_params, device_params)
 
     final_model = CatBoostClassifier(
         scale_pos_weight=scale_pos_weight,
