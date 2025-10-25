@@ -761,10 +761,10 @@ class RealisticCausalSimulator:
         logger.info(f"Theoretical maximum ROC AUC: {theoretical_aucs}")
         # --- Plotting integrated here ---
         logger.info("Plotting ground truth probability distributions...")
-        plot_hist(p_exposure, join(self.config.paths.outcomes, "figs"), is_exposed)
-        plot_probability_distributions(
-            all_probas_for_plotting, join(self.config.paths.outcomes, "figs")
-        )
+        figs_dir = join(self.config.paths.outcomes, "figs")
+        os.makedirs(figs_dir, exist_ok=True)
+        plot_hist(p_exposure, figs_dir, is_exposed)
+        plot_probability_distributions(all_probas_for_plotting, figs_dir)
 
         # Create dataframes for effect comparison plotting
         ite_df = pd.DataFrame(ite_records)
@@ -784,7 +784,7 @@ class RealisticCausalSimulator:
             ite_df=ite_df,
             cf_df=cf_df,
             true_effects_config=true_effects_config,
-            output_dir=join(self.config.paths.outcomes, "figs"),
+            output_dir=figs_dir,
         )
 
         output_dfs = {}
