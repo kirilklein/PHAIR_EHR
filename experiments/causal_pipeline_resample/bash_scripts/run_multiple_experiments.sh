@@ -272,7 +272,9 @@ echo "========================================"
 export BATCH_MODE=true
 
 FAILED_EXPERIMENTS=""
+TIMEOUT_EXPERIMENTS=""
 SUCCESS_COUNT=0
+TIMEOUT_COUNT=0
 TOTAL_COUNT=0
 
 # Count experiments first
@@ -374,7 +376,7 @@ for run_number in $(seq 1 $N_RUNS); do
         EXPERIMENT_LOG_FILE="../logs/experiment_${RUN_ID}_${EXPERIMENT_NAME}_${LOG_TIMESTAMP}.log"
         eval "./run_experiment.sh $EXPERIMENT_ARGS" 2>&1 | tee "$EXPERIMENT_LOG_FILE" | while IFS= read -r line; do
             # Log key steps to main log file
-            if [[ "$line" =~ "==== Running" ]] || [[ "$line" =~ "==== Skipping" ]] || [[ "$line" =~ "ERROR" ]] || [[ "$line" =~ "FAILED" ]]; then
+            if [[ "$line" =~ "==== Running" ]] || [[ "$line" =~ "==== Skipping" ]] || [[ "$line" =~ "ERROR" ]] || [[ "$line" =~ "FAILED" ]] || [[ "$line" =~ "timed out" ]] || [[ "$line" =~ "TIMEOUT" ]]; then
                 echo "[$(date +"%H:%M:%S")] $line" >> "$LOG_FILE"
             fi
         done
@@ -384,16 +386,46 @@ for run_number in $(seq 1 $N_RUNS); do
         end_time=$(date +"%H:%M:%S")
 
         if [ $experiment_result -ne 0 ]; then
-            echo "[$end_time] ✗ FAILED: $RUN_ID/$EXPERIMENT_NAME (exit code: $experiment_result)" >> "$LOG_FILE"
-            echo "[$end_time] Full log: $EXPERIMENT_LOG_FILE" >> "$LOG_FILE"
-            echo ""
-            echo "ERROR: Experiment $RUN_ID/$EXPERIMENT_NAME failed with error code $experiment_result"
-            echo "Full log available at: $EXPERIMENT_LOG_FILE"
-            echo ""
-            if [ -z "$FAILED_EXPERIMENTS" ]; then
-                FAILED_EXPERIMENTS="$RUN_ID/$EXPERIMENT_NAME"
+            # Check if this was a timeout (exit code 124)
+            if [ $experiment_result -eq 124 ]; then
+                echo "[$end_time] ⏱ TIMEOUT: $RUN_ID/$EXPERIMENT_NAME (exceeded time limit)" >> "$LOG_FILE"
+                echo "[$end_time] Full log: $EXPERIMENT_LOG_FILE" >> "$LOG_FILE"
+                echo ""
+                echo "========================================"
+                echo "⏱ TIMEOUT: Experiment $RUN_ID/$EXPERIMENT_NAME exceeded time limit"
+                echo "========================================"
+                echo "Exit code: 124 (timeout)"
+                echo "Full log available at: $EXPERIMENT_LOG_FILE"
+                echo ""
+                
+                # Track timeouts separately
+                ((TIMEOUT_COUNT++))
+                if [ -z "$TIMEOUT_EXPERIMENTS" ]; then
+                    TIMEOUT_EXPERIMENTS="$RUN_ID/$EXPERIMENT_NAME"
+                else
+                    TIMEOUT_EXPERIMENTS="$TIMEOUT_EXPERIMENTS, $RUN_ID/$EXPERIMENT_NAME"
+                fi
+                
+                # Also add to failed experiments list for failfast handling
+                if [ -z "$FAILED_EXPERIMENTS" ]; then
+                    FAILED_EXPERIMENTS="$RUN_ID/$EXPERIMENT_NAME (timeout)"
+                else
+                    FAILED_EXPERIMENTS="$FAILED_EXPERIMENTS, $RUN_ID/$EXPERIMENT_NAME (timeout)"
+                fi
             else
-                FAILED_EXPERIMENTS="$FAILED_EXPERIMENTS, $RUN_ID/$EXPERIMENT_NAME"
+                # Regular failure (non-timeout)
+                echo "[$end_time] ✗ FAILED: $RUN_ID/$EXPERIMENT_NAME (exit code: $experiment_result)" >> "$LOG_FILE"
+                echo "[$end_time] Full log: $EXPERIMENT_LOG_FILE" >> "$LOG_FILE"
+                echo ""
+                echo "ERROR: Experiment $RUN_ID/$EXPERIMENT_NAME failed with error code $experiment_result"
+                echo "Full log available at: $EXPERIMENT_LOG_FILE"
+                echo ""
+                
+                if [ -z "$FAILED_EXPERIMENTS" ]; then
+                    FAILED_EXPERIMENTS="$RUN_ID/$EXPERIMENT_NAME"
+                else
+                    FAILED_EXPERIMENTS="$FAILED_EXPERIMENTS, $RUN_ID/$EXPERIMENT_NAME"
+                fi
             fi
 
             # Check if failfast is enabled
@@ -404,6 +436,9 @@ for run_number in $(seq 1 $N_RUNS); do
                 echo "========================================"
                 echo "Failed experiment: $RUN_ID/$EXPERIMENT_NAME"
                 echo "Error code: $experiment_result"
+                if [ $experiment_result -eq 124 ]; then
+                    echo "Failure type: TIMEOUT"
+                fi
                 echo ""
                 echo "To resume, run without --failfast or use --overwrite"
                 echo ""
@@ -417,8 +452,14 @@ for run_number in $(seq 1 $N_RUNS); do
                 echo "Completed: $CURRENT_COUNT"
                 echo "Successful: $SUCCESS_COUNT"
                 echo "Failed: $FAILED_COUNT"
+                if [ $TIMEOUT_COUNT -gt 0 ]; then
+                    echo "Timeouts: $TIMEOUT_COUNT"
+                fi
                 echo ""
                 echo "Failed experiments: $FAILED_EXPERIMENTS"
+                if [ -n "$TIMEOUT_EXPERIMENTS" ]; then
+                    echo "Timed out experiments: $TIMEOUT_EXPERIMENTS"
+                fi
                 echo ""
                 echo "========================================"
                 echo "Logging completed at $(date)"
@@ -449,10 +490,19 @@ echo "Total experiments: $TOTAL_COUNT"
 echo "Successful: $SUCCESS_COUNT"
 FAILED_COUNT=$((TOTAL_COUNT - SUCCESS_COUNT))
 echo "Failed: $FAILED_COUNT"
+if [ $TIMEOUT_COUNT -gt 0 ]; then
+    echo "  - Timeouts: $TIMEOUT_COUNT"
+    echo "  - Other failures: $((FAILED_COUNT - TIMEOUT_COUNT))"
+fi
 
 if [ -n "$FAILED_EXPERIMENTS" ]; then
     echo ""
     echo "Failed experiments: $FAILED_EXPERIMENTS"
+    if [ -n "$TIMEOUT_EXPERIMENTS" ]; then
+        echo ""
+        echo "Timed out experiments specifically:"
+        echo "  $TIMEOUT_EXPERIMENTS"
+    fi
     echo ""
     echo "Some experiments failed. Check the output above for details."
     echo ""
