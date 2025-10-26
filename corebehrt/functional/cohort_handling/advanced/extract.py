@@ -145,6 +145,7 @@ def extract_numeric_values(
     flag_df: pd.DataFrame,
     min_value: float = None,
     max_value: float = None,
+    extract_value: bool = False,
 ) -> pd.DataFrame:
     """
     Extract the most recent numeric value for each patient where FINAL_MASK is True
@@ -155,10 +156,13 @@ def extract_numeric_values(
         flag_df: DataFrame containing the patient IDs and criterion flags (based solely on code matching).
         min_value: Optional minimum threshold for numeric_value.
         max_value: Optional maximum threshold for numeric_value.
+        extract_value: If True, extract raw numeric values without threshold filtering for statistics.
+                      The CRITERION_FLAG will still respect thresholds if specified.
 
     Returns:
         DataFrame with PID_COL, CRITERION_FLAG, and NUMERIC_VALUE columns.
         The CRITERION_FLAG is updated to True only if a numeric value in the required range is found.
+        If extract_value=True, NUMERIC_VALUE contains the raw value regardless of thresholds.
     """
     # Start with events that are marked True by the final mask and have a numeric value.
     mask = (df[FINAL_MASK]) & (df[NUMERIC_VALUE].notna())
@@ -171,7 +175,15 @@ def extract_numeric_values(
         result[CRITERION_FLAG] = False
         return result
 
-    # Apply numeric range filtering, if thresholds are specified.
+    # Extract most recent values BEFORE filtering by thresholds
+    if extract_value:
+        # Get most recent value for each patient without threshold filtering
+        num_df_all = (
+            num_df.sort_values(TIMESTAMP_COL).groupby(PID_COL).tail(1).reset_index()
+        )
+        all_values_df = num_df_all[[PID_COL, NUMERIC_VALUE]]
+
+    # Apply numeric range filtering for the criterion flag, if thresholds are specified.
     if min_value is not None:
         num_df = num_df[num_df[NUMERIC_VALUE] >= min_value]
     if max_value is not None:
@@ -190,6 +202,13 @@ def extract_numeric_values(
 
     # For numeric criteria, update the criterion flag: it is True only if a numeric value in the desired range exists.
     result[CRITERION_FLAG] = result[NUMERIC_VALUE].notna()
+
+    # If extract_value is True, replace NUMERIC_VALUE with raw values (ignoring thresholds)
+    if extract_value:
+        # Merge in the raw values, overwriting the threshold-filtered ones
+        result = result.drop(columns=[NUMERIC_VALUE])
+        result = result.merge(all_values_df, on=PID_COL, how="left")
+
     return result
 
 

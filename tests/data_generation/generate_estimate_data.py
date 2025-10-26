@@ -206,6 +206,28 @@ def generate_counterfactual_outcomes_legacy(df, counterfactual_df, seed=42):
         )
 
 
+def generate_ite_file(counterfactual_df: pd.DataFrame) -> None:
+    """
+    Generate ITE (Individual Treatment Effect) file from counterfactual probabilities.
+    ITE for each outcome is computed as: p1 - p0 (difference in probabilities).
+    """
+    ite_data = {PID_COL: counterfactual_df["subject_id"]}
+
+    for outcome_name in OUTCOME_NAMES:
+        p0_col = f"{SIMULATED_PROBAS_CONTROL}_{outcome_name}"
+        p1_col = f"{SIMULATED_PROBAS_EXPOSED}_{outcome_name}"
+
+        # ITE = probability under treatment - probability under control
+        ite_data[f"ite_{outcome_name}"] = (
+            counterfactual_df[p1_col] - counterfactual_df[p0_col]
+        )
+
+    ite_df = pd.DataFrame(ite_data)
+    ite_path = os.path.join(COUNTERFACTUAL_DIR, "ite.csv")
+    ite_df.to_csv(ite_path, index=False)
+    print(f"ITE file saved to {ite_path}")
+
+
 def main(
     generate_figures=False,
     exposure_noise=EXPOSURE_NOISE,
@@ -230,6 +252,9 @@ def main(
 
     # Generate legacy files for backwards compatibility
     generate_counterfactual_outcomes_legacy(combined_df, counterfactual_df)
+
+    # Generate ITE file
+    generate_ite_file(counterfactual_df)
 
     if not generate_figures:
         return combined_df, counterfactual_df

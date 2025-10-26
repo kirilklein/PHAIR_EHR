@@ -1,6 +1,6 @@
+import logging
 import os
 from os.path import join
-from typing import Any, Dict
 
 import pandas as pd
 import torch
@@ -11,14 +11,12 @@ from CausalEstimate.filter.propensity import filter_common_support
 from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     OUTCOME,
-    PROB_C_KEY,
-    PROB_KEY,
-    PROB_T_KEY,
     PROBAS,
     PROBAS_CONTROL,
     PROBAS_EXPOSED,
     PS_COL,
     EffectColumns,
+    EFFECT_ROUND_DIGIT,
 )
 from corebehrt.constants.causal.paths import (
     COMBINED_CALIBRATED_PREDICTIONS_FILE,
@@ -44,14 +42,18 @@ from corebehrt.functional.io_operations.estimate import (
     save_all_results,
     save_tmle_analysis,
 )
-from corebehrt.functional.visualize.estimate import (
+from corebehrt.modules.plot.estimate import (
     AdjustmentPlotConfig,
     ContingencyPlotConfig,
     EffectSizePlotConfig,
+)
+from corebehrt.functional.visualize.estimate import (
+    create_ipw_plot,
     create_adjustment_plot,
     create_annotated_heatmap_matplotlib,
     create_contingency_table_plot,
     create_effect_size_plot,
+    create_ps_comparison_plot,
 )
 from corebehrt.modules.causal.bias import BiasConfig, BiasIntroducer
 from corebehrt.modules.setup.config import Config
@@ -65,25 +67,34 @@ class EffectEstimator:
 
     RELEVANT_COLUMNS = EffectColumns.get_columns()
 
-    def __init__(self, cfg: Config, logger: Any):
+    def __init__(self, cfg: Config, logger: logging.Logger):
         self.cfg = cfg
         self.logger = logger
-        self.exp_dir = self.cfg.paths.estimate
+        self.exp_dir: str = self.cfg.paths.estimate
 
-        self.predictions_file = join(
+        self.predictions_file: str = join(
             self.cfg.paths.calibrated_predictions,
             COMBINED_CALIBRATED_PREDICTIONS_FILE,
         )
-        self.estimator_cfg = self.cfg.estimator
+        self.estimator_cfg: dict = self.cfg.estimator
+        self.init_estimator_args(self.estimator_cfg)
         self._init_plot_configs()
-        self.effect_type = self.cfg.estimator.effect_type
+        self.effect_type: str = self.cfg.estimator.effect_type
         self.df = pd.read_csv(self.predictions_file)
+        self.analysis_df = self._get_analysis_cohort(self.df)
+        self._save_analysis_pids(self.analysis_df)
         self.outcome_names = get_outcome_names(self.df)
         validate_columns(self.df, self.outcome_names)
-        self.counterfactual_outcomes_dir = self.cfg.paths.get("counterfactual_outcomes")
+        self.counterfactual_outcomes_dir: str = self.cfg.paths.get(
+            "counterfactual_outcomes"
+        )
         self.counterfactual_df = self._load_counterfactual_outcomes()
-        self.estimation_args = self._get_estimation_args()
+        self.ite_df = self._load_ite_data()
         self._init_bias_introducer()
+
+    def _save_analysis_pids(self, df: pd.DataFrame) -> None:
+        """Save analysis pids to disk."""
+        torch.save(df[PID_COL].values, join(self.exp_dir, "common_support_pids.pt"))
 
     def _init_plot_configs(self) -> None:
         if self.cfg.get("plot", False):
@@ -130,31 +141,23 @@ class EffectEstimator:
             self.logger.info(f"--- Processing outcome: {outcome_name} ---")
 
             # 1. Prepare data with potential outcomes for the current outcome
-            df_for_outcome = prepare_data_for_outcome(self.df, outcome_name)
+            df_for_outcome = prepare_data_for_outcome(self.analysis_df, outcome_name)
 
-            # 2. Build estimators with the correct outcome column
-            estimator = self._build_multi_estimator()
+            # 2. Estimate effects using the new logic
+            effect_df = self._estimate_effects(df_for_outcome)
 
-            # 3. Estimate effects
-            effect_df = self._estimate_effects(df_for_outcome, estimator)
-
-            # 4. Get the analysis cohort and add benchmarks
-            analysis_df = self._get_analysis_cohort(df_for_outcome)
-
-            if self.counterfactual_df is not None:
+            if self.ite_df is not None:
                 effect_df = append_true_effect(
-                    analysis_df,
                     effect_df,
-                    self.counterfactual_df,
+                    self.ite_df,
                     outcome_name,
-                    self.effect_type,
-                    self.estimation_args["common_support_threshold"],
+                    self.analysis_df[PID_COL].values,
                 )
 
-            effect_df = append_unadjusted_effect(analysis_df, effect_df)
+            effect_df = append_unadjusted_effect(df_for_outcome, effect_df)
 
             # 5. Compute and collect stats for this outcome
-            outcome_stats = compute_outcome_stats(analysis_df, outcome_name)
+            outcome_stats = compute_outcome_stats(df_for_outcome, outcome_name)
             all_stats.append(outcome_stats)
 
             # 6. Tag results with the outcome name and collect
@@ -166,7 +169,7 @@ class EffectEstimator:
             ]
 
             effect_df_clean = effect_df[filter_columns]
-            effect_df_clean = effect_df_clean.round(5)
+            effect_df_clean = effect_df_clean.round(EFFECT_ROUND_DIGIT)
             initial_estimates.append(effect_df)
             all_effects.append(effect_df_clean)
 
@@ -176,6 +179,66 @@ class EffectEstimator:
         self._visualize_effects(final_results_df, combined_stats_df, tmle_analysis_df)
         self.logger.info("Effect estimation complete for all outcomes.")
 
+    def _estimate_effects(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Estimate effects, separating bootstrap methods from theoretical (single-shot) methods.
+        """
+        all_methods = self.estimator_cfg.methods
+
+        # Separate methods into bootstrap and theoretical groups
+        bootstrap_methods = [m for m in all_methods if m.lower() != "tmle_th"]
+        theoretical_methods = [m for m in all_methods if m.lower() == "tmle_th"]
+
+        all_effect_dicts = {}
+
+        # --- 1. Run Theoretical Estimators (if any) ---
+        if theoretical_methods:
+            self.logger.info(f"Running theoretical estimator: {theoretical_methods[0]}")
+            # Build only the TMLE estimator for a single run
+            tmle_th_estimator = TMLE(
+                effect_type=self.effect_type,
+                treatment_col=EXPOSURE_COL,
+                outcome_col=OUTCOME,
+                ps_col=PS_COL,
+                probas_col=PROBAS,
+                probas_t1_col=PROBAS_EXPOSED,
+                probas_t0_col=PROBAS_CONTROL,
+                clip_percentile=self.clip_percentile,
+            )
+            # Compute effect once, directly getting theoretical CI
+            effect_dict_th = tmle_th_estimator.compute_effect(df)
+            all_effect_dicts["TMLE_TH"] = effect_dict_th
+
+        # --- 2. Run Bootstrap Estimators (if any) ---
+        if bootstrap_methods:
+            self.logger.info(f"Running bootstrap estimators: {bootstrap_methods}")
+            # Build a MultiEstimator for the remaining methods
+            bootstrap_estimator_list = self._build_estimators_for_methods(
+                bootstrap_methods
+            )
+
+            if bootstrap_estimator_list:
+                multi_estimator = MultiEstimator(
+                    estimators=bootstrap_estimator_list, verbose=False
+                )
+                # Run with bootstrapping only if n_bootstrap is greater than 0
+                n_boot = self.n_bootstrap if self.n_bootstrap > 0 else 0
+                if n_boot == 0:
+                    self.logger.warning(
+                        "n_bootstrap is 0, running bootstrap methods without CI."
+                    )
+
+                effect_dict_bs = multi_estimator.compute_effects(
+                    df,
+                    n_bootstraps=n_boot,
+                    apply_common_support=False,
+                    common_support_threshold=None,
+                    return_bootstrap_samples=False,
+                )
+                all_effect_dicts.update(effect_dict_bs)
+
+        return convert_effect_to_dataframe(all_effect_dicts)
+
     def _visualize_effects(
         self,
         final_results_df: pd.DataFrame,
@@ -184,6 +247,16 @@ class EffectEstimator:
     ):
         fig_dir = join(self.exp_dir, "figures")
         os.makedirs(fig_dir, exist_ok=True)
+
+        create_ps_comparison_plot(
+            self.df, self.analysis_df, PS_COL, EXPOSURE_COL, fig_dir
+        )
+        create_ipw_plot(
+            self.analysis_df[EXPOSURE_COL],
+            self.analysis_df[PS_COL],
+            fig_dir,
+            self.clip_percentile,
+        )
         methods = self.estimator_cfg.methods
         create_annotated_heatmap_matplotlib(
             final_results_df,
@@ -243,19 +316,27 @@ class EffectEstimator:
         combined_stats_df = pd.concat(all_stats, ignore_index=True)
         initial_estimates_df = pd.concat(initial_estimates, ignore_index=True)
 
-        save_all_results(self.exp_dir, self.df, final_results_df, combined_stats_df)
+        save_all_results(
+            self.exp_dir, self.analysis_df, final_results_df, combined_stats_df
+        )
 
-        tmle_analysis_df = prepare_tmle_analysis_df(initial_estimates_df)
-        save_tmle_analysis(tmle_analysis_df, self.exp_dir)
+        # UPDATED: Check for both TMLE and TMLE_TH for adjustment plots
+        tmle_analysis_df = (
+            prepare_tmle_analysis_df(initial_estimates_df)
+            if any(m.upper() in ["TMLE", "TMLE_TH"] for m in self.estimator_cfg.methods)
+            else None
+        )
+        save_tmle_analysis(
+            tmle_analysis_df, self.exp_dir
+        ) if tmle_analysis_df is not None else None
         return final_results_df, combined_stats_df, tmle_analysis_df
 
-    def _build_multi_estimator(self) -> MultiEstimator:
-        """Builds a MultiEstimator for a specific outcome."""
+    def _build_estimators_for_methods(self, methods: list) -> list:
+        """
+        Builds a list of estimator objects for the given method names.
+        """
         estimators = []
-        method_args = self.estimation_args["method_args"]
-        # Define the specific observed outcome column for this run
-
-        for method in self.estimator_cfg.methods:
+        for method in methods:
             method_upper = method.upper()
             if method_upper == "TMLE":
                 estimators.append(
@@ -264,13 +345,10 @@ class EffectEstimator:
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
-                        probas_col=method_args.get("TMLE", {}).get(PROB_KEY, PROBAS),
-                        probas_t1_col=method_args.get("TMLE", {}).get(
-                            PROB_T_KEY, PROBAS_EXPOSED
-                        ),
-                        probas_t0_col=method_args.get("TMLE", {}).get(
-                            PROB_C_KEY, PROBAS_CONTROL
-                        ),
+                        probas_col=PROBAS,
+                        probas_t1_col=PROBAS_EXPOSED,
+                        probas_t0_col=PROBAS_CONTROL,
+                        clip_percentile=self.clip_percentile,
                     )
                 )
             elif method_upper == "IPW":
@@ -280,6 +358,7 @@ class EffectEstimator:
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
+                        clip_percentile=self.clip_percentile,
                     )
                 )
             elif method_upper == "AIPW":
@@ -289,46 +368,21 @@ class EffectEstimator:
                         treatment_col=EXPOSURE_COL,
                         outcome_col=OUTCOME,
                         ps_col=PS_COL,
-                        probas_t1_col=method_args.get("AIPW", {}).get(
-                            PROB_T_KEY, PROBAS_EXPOSED
-                        ),
-                        probas_t0_col=method_args.get("AIPW", {}).get(
-                            PROB_C_KEY, PROBAS_CONTROL
-                        ),
+                        probas_t1_col=PROBAS_EXPOSED,
+                        probas_t0_col=PROBAS_CONTROL,
                     )
                 )
-        return MultiEstimator(estimators=estimators, verbose=False)
+        return estimators
 
-    def _get_estimation_args(self) -> Dict:
+    def init_estimator_args(self, cfg) -> None:
         """
         Initialize estimation arguments.
         Uses shorter keys for predicted outcomes.
         """
-        default_method_args = {
-            "AIPW": {
-                PROB_T_KEY: PROBAS_EXPOSED,
-                PROB_C_KEY: PROBAS_CONTROL,
-            },
-            "TMLE": {
-                PROB_KEY: PROBAS,
-                PROB_T_KEY: PROBAS_EXPOSED,
-                PROB_C_KEY: PROBAS_CONTROL,
-            },
-        }
-        # Merge user-provided overrides, if any.
-        user_args = self.estimator_cfg.get("method_args", {})
-        default_method_args.update(user_args)
-
-        return {
-            "method_args": default_method_args,
-            "common_support": bool(
-                self.estimator_cfg.get("common_support_threshold", False)
-            ),
-            "common_support_threshold": self.estimator_cfg.get(
-                "common_support_threshold"
-            ),
-            "n_bootstrap": self.estimator_cfg.get("n_bootstrap", 0),
-        }
+        self.common_support_threshold: float = cfg.get("common_support_threshold", None)
+        self.common_support: bool = True if self.common_support_threshold else False
+        self.n_bootstrap: int = cfg.get("n_bootstrap", 0)
+        self.clip_percentile: float = cfg.get("clip_percentile", 1)
 
     def _get_analysis_cohort(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -338,12 +392,12 @@ class EffectEstimator:
         same cohort as the other estimators for fair comparison.
         """
         initial_len = len(df)
-        if self.estimation_args["common_support"]:
+        if self.common_support:
             df = filter_common_support(
                 df,
                 ps_col=PS_COL,
                 treatment_col=EXPOSURE_COL,
-                threshold=self.estimation_args["common_support_threshold"],
+                threshold=self.common_support_threshold,
             )
             self.logger.info(
                 f"Analysis cohort after common support filtering: {initial_len} → {len(df)} observations"
@@ -351,20 +405,6 @@ class EffectEstimator:
 
         torch.save(df[PID_COL].values, join(self.exp_dir, PATIENTS_FILE))
         return df
-
-    def _estimate_effects(
-        self, df: pd.DataFrame, estimator: MultiEstimator
-    ) -> pd.DataFrame:
-        """Estimate effects using the provided estimator instance."""
-        # This method is now simpler as it just runs the given estimator.
-        effect_dict = estimator.compute_effects(
-            df,
-            n_bootstraps=self.estimation_args["n_bootstrap"],
-            apply_common_support=self.estimation_args["common_support"],
-            common_support_threshold=self.estimation_args["common_support_threshold"],
-            return_bootstrap_samples=False,
-        )
-        return convert_effect_to_dataframe(effect_dict)
 
     def _load_counterfactual_outcomes(self) -> pd.DataFrame:
         """Load combined counterfactual outcomes if available."""
@@ -384,10 +424,23 @@ class EffectEstimator:
         )
         return None
 
+    def _load_ite_data(self) -> pd.DataFrame:
+        """Load Individual Treatment Effects data if available."""
+        if not self.counterfactual_outcomes_dir:
+            return None
+
+        ite_file = join(self.counterfactual_outcomes_dir, "ite.csv")
+        if os.path.exists(ite_file):
+            self.logger.info(f"Loading ITE data from {ite_file}")
+            return pd.read_csv(ite_file)
+
+        self.logger.info("No ITE file found")
+        return None
+
     def _run_bias_simulation(self) -> None:
         """Runs the effect estimation across a grid of biases for each outcome."""
         self.logger.info("Starting bias simulation.")
-        if self.counterfactual_df is None:
+        if self.ite_df is None:
             self.logger.error(
                 "Bias simulation requires counterfactual outcomes to calculate true effects. Aborting."
             )
@@ -401,19 +454,15 @@ class EffectEstimator:
                 f"--- Processing outcome: {outcome_name} for bias simulation ---"
             )
 
-            df_for_outcome = prepare_data_for_outcome(self.df, outcome_name)
-            estimator = self._build_multi_estimator()
+            df_for_outcome = prepare_data_for_outcome(self.analysis_df, outcome_name)
 
             # Get unbiased cohort and calculate true effect once as a reference
-            analysis_df_unbiased = self._get_analysis_cohort(df_for_outcome.copy())
             dummy_effect_df = pd.DataFrame([{"estimator": "placeholder"}])
             true_effect_df = append_true_effect(
-                analysis_df_unbiased,
                 dummy_effect_df,
-                self.counterfactual_df,
+                self.ite_df,
                 outcome_name,
-                self.effect_type,
-                self.estimation_args["common_support_threshold"],
+                self.analysis_df[PID_COL].values,
             )
             true_effect_value = true_effect_df[EffectColumns.true_effect].iloc[0]
 
@@ -423,7 +472,8 @@ class EffectEstimator:
                     df_for_outcome.copy(), ps_bias, y_bias
                 )
 
-                effect_df = self._estimate_effects(df_biased, estimator)
+                # UPDATED: Call the refactored estimation method
+                effect_df = self._estimate_effects(df_biased)
 
                 effect_df[EffectColumns.ps_bias] = ps_bias
                 effect_df[EffectColumns.y_bias] = y_bias
@@ -443,7 +493,7 @@ class EffectEstimator:
     def _save_bias_results(self, results_df: pd.DataFrame) -> None:
         """Saves the results of the bias simulation."""
         results_path = join(self.exp_dir, "bias_simulation_results.csv")
-        results_df = results_df.round(5)
+        results_df = results_df.round(EFFECT_ROUND_DIGIT)
         results_df = results_df[
             [col for col in self.RELEVANT_COLUMNS if col in results_df.columns]
         ]

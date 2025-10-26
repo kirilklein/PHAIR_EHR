@@ -1,0 +1,43 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  ## INPUTS
+  features: "{{FEATURES_DATA}}"
+  tokenized: "{{TOKENIZED_DATA}}"
+  cohort: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/cohort"
+
+  outcomes: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
+  outcome_files:
+    - effect_0.csv
+    - effect_1p39.csv
+
+  exposures: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
+  exposure: exposure.csv
+
+  ## OUTPUTS
+  prepared_data: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/prepared_data"
+
+data:
+  type: finetune
+  truncation_len: 64
+  min_len: 2
+  cv_folds: 2
+  min_instances_per_class: 10
+  max_items_per_plot: 15
+  max_number_of_plots: 10
+  number_subjects_to_plot: 10
+  sample_num_patients: null
+  sample_seed: 42
+
+exposure:
+  n_hours_censoring: -10
+  n_hours_start_follow_up: -10
+  n_hours_end_follow_up: 1000
+
+outcome:
+  n_hours_start_follow_up: 0
+  n_hours_end_follow_up: null
+  n_hours_compliance: null
+  group_wise_follow_up: false

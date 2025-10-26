@@ -1,9 +1,12 @@
 import logging
+import os
+from os.path import join
 from typing import Dict, List, Set, Tuple
 
 import numpy as np
 import pandas as pd
 from scipy.special import expit, logit
+from sklearn.metrics import roc_auc_score
 
 from corebehrt.constants.causal.data import (
     CONTROL_PID_COL,
@@ -29,7 +32,19 @@ from corebehrt.constants.data import (
 )
 from corebehrt.functional.utils.filter import safe_control_pids
 from corebehrt.functional.utils.time import get_hours_since_epoch
-from corebehrt.modules.simulation.plot import plot_hist, plot_probability_distributions
+from corebehrt.modules.simulation.config_realistic import (
+    ExposureConfig,
+    InfluenceScalesConfig,
+    ModelWeightsConfig,
+    OutcomeConfig,
+    RealisticSimulationModelConfig,
+    SimulationConfig,
+)
+from corebehrt.modules.simulation.plot import (
+    plot_hist,
+    plot_probability_distributions,
+    plot_true_effects_vs_risk_differences,
+)
 
 logger = logging.getLogger("simulate")
 WEIGHT_COL = "weight"
@@ -37,15 +52,59 @@ WEIGHT_COL = "weight"
 
 class RealisticCausalSimulator:
     """
-    A standalone simulator for a realistic causal scenario using decomposed latent health factors.
+    A realistic causal data generator for EHR data using decomposed latent health factors.
 
-    The DGP is defined by:
-    1. Patient History (X) -> Decomposed Latent Factors (Z_sh, Z_exp, Z_out)
-    2. Latent Factors (Z) -> Exposure (A)
-    3. Latent Factors (Z) + Exposure (A) -> Outcomes (Y)
+    This simulator implements a sophisticated Data Generating Process (DGP) that transforms
+    patient longitudinal EHR data into realistic causal scenarios with known ground truth.
+
+    **Data Generating Process (4 Steps):**
+
+    **Step 1: Patient History Representation (x)**
+        Converts longitudinal EHR data up to an index date into feature vectors x ∈ R^V.
+        Features are weighted by exponential time decay: x_j = exp(-Δt_j / τ)
+        where Δt_j is time since last occurrence and τ is the decay half-life.
+
+    **Step 2: Latent Health Factors (z)**
+        Maps high-dimensional history x to low-dimensional latent factors z ∈ R^D:
+        z = tanh(x @ W_f), where W_f is a sparse weight matrix.
+
+        The latent space is partitioned into three disjoint sets:
+        - z_sh: Shared factors (confounders affecting both exposure and outcomes)
+        - z_exp: Exposure-only factors (instrumental variables)
+        - z_out: Outcome-only factors (independent outcome risks)
+
+    **Step 3: Exposure Assignment (A)**
+        Treatment probability (propensity score) depends on confounding and exposure factors:
+        logit(P(A=1|z)) = α₀ + λ_sh(z_sh·w_sh→A) + λ_exp(z_exp·w_exp→A) + u
+        where λ terms control factor influence and u is optional unobserved confounding.
+
+    **Step 4: Potential Outcome Generation (Y(a))**
+        Outcomes depend on confounders, outcome factors, and treatment:
+        logit(P(Y_k(a)=1|z)) = γ₀ + ω_sh(z_sh·w_sh→Y_k) + ω_out(z_out·w_out→Y_k) + a·δ_k + u_k
+        where δ_k is the true Average Treatment Effect for outcome k.
+
+    **Key Features:**
+    - Realistic confounding structure with identifiable components
+    - Multiple correlated outcomes through shared latent factors
+    - Ground truth causal effects for benchmarking
+    - Configurable factor decomposition and influence strengths
+    - Optional unobserved confounding simulation
+
+    Args:
+        config (SimulationConfig): Configuration object containing simulation parameters,
+            factor decomposition settings, and outcome definitions.
+
+    Example:
+        ```python
+        config = SimulationConfig(...)
+        simulator = RealisticCausalSimulator(config)
+        results = simulator.simulate_dataset(patient_df)
+        ```
     """
 
-    def __init__(self, config):  # config should be an instance of SimulationConfig
+    def __init__(
+        self, config: SimulationConfig
+    ):  # config should be an instance of SimulationConfig
         self.config = config
         self.index_date = config.index_date
         self.rng = np.random.default_rng(config.seed)
@@ -58,7 +117,7 @@ class RealisticCausalSimulator:
         self.code_to_idx: Dict[str, int] = {}
         self.vocabulary: List[str] = []
 
-        model_cfg = self.config.simulation_model
+        model_cfg: RealisticSimulationModelConfig = self.config.simulation_model
         self.num_shared_factors = model_cfg.num_shared_factors
         self.num_exposure_only_factors = model_cfg.num_exposure_only_factors
         self.num_outcome_only_factors = model_cfg.num_outcome_only_factors
@@ -68,12 +127,15 @@ class RealisticCausalSimulator:
             + self.num_outcome_only_factors
         )
 
-        self.influence = model_cfg.influence_scales
+        self.influence: InfluenceScalesConfig = model_cfg.influence_scales
 
+        factor_config: ModelWeightsConfig = model_cfg.factor_mapping
         self.weights = {
             "factor_weights": np.zeros((0, self.total_latent_factors)),
             "exposure_factor_weights": self.rng.normal(
-                0, 0.5, self.num_shared_factors + self.num_exposure_only_factors
+                factor_config.exposure_factor_mean,
+                factor_config.exposure_factor_scale,
+                self.num_shared_factors + self.num_exposure_only_factors,
             ),
             "outcomes_factor_weights": self._create_correlated_outcome_weights(),
         }
@@ -84,10 +146,15 @@ class RealisticCausalSimulator:
         num_relevant_factors = self.num_shared_factors + self.num_outcome_only_factors
         weights = np.zeros((num_relevant_factors, num_outcomes))
 
+        factor_config = self.config.simulation_model.factor_mapping
         for i in range(num_relevant_factors):
-            prob_influence = 0.4
+            prob_influence = factor_config.outcome_influence_probability
             influenced_outcomes = self.rng.random(num_outcomes) < prob_influence
-            factor_weights = self.rng.normal(0, 0.75, np.sum(influenced_outcomes))
+            factor_weights = self.rng.normal(
+                factor_config.outcome_factor_mean,
+                factor_config.outcome_factor_scale,
+                np.sum(influenced_outcomes),
+            )
             weights[i, influenced_outcomes] = factor_weights
         return weights
 
@@ -116,17 +183,29 @@ class RealisticCausalSimulator:
             [self.weights["factor_weights"], new_factor_weights]
         )
 
-    def _calculate_latent_factors(self, history_matrix: np.ndarray) -> np.ndarray:
+    def _calculate_latent_factors(
+        self, history_matrix: np.ndarray, ages: np.ndarray
+    ) -> np.ndarray:
         """Calculates the latent factor values for each patient."""
         latent_factors = history_matrix @ self.weights["factor_weights"]
+        if self.config.simulation_model.treat_age_as_latent_factor:
+            # Normalize age (e.g., standard scaling) to match the scale of other factors
+            mean_age, std_age = np.mean(ages), np.std(ages)
+            if std_age > 0:
+                normalized_ages = (ages - mean_age) / std_age
+            else:
+                # If all ages are the same, their normalized value is 0 (since they are at the mean)
+                normalized_ages = np.zeros_like(ages)
+            # Inject age as the first latent factor (assuming it's a shared factor)
+            latent_factors[:, 0] = normalized_ages
+
         return np.tanh(latent_factors)
 
     def _calculate_probabilities_decomposed(
         self,
         event_name: str,
-        event_cfg,
+        event_cfg: ExposureConfig | OutcomeConfig,
         latent_factors: np.ndarray,
-        ages: np.ndarray,
         is_exposed: bool = False,
         additional_logit_effect: np.ndarray = 0.0,
     ) -> np.ndarray:
@@ -162,10 +241,11 @@ class RealisticCausalSimulator:
 
         if is_exposed and hasattr(event_cfg, "exposure_effect"):
             logit_p_array += event_cfg.exposure_effect
-        if hasattr(event_cfg, "age_effect") and event_cfg.age_effect is not None:
-            logit_p_array += event_cfg.age_effect * ages
+
         logit_p_array += additional_logit_effect
-        logit_p_array += self.rng.normal(0, 0.01, n_patients)
+
+        noise_scale = self.config.simulation_model.noise.logit_noise_scale
+        logit_p_array += self.rng.normal(0, noise_scale, n_patients)
         return expit(logit_p_array)
 
     def simulate_dataset(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
@@ -173,24 +253,33 @@ class RealisticCausalSimulator:
         history_df, initial_pids = self._filter_initial_history(df)
         if history_df.empty:
             return {}
+        logger.info(
+            f"[Filter 1] Patients with history before index date: {len(initial_pids)}"
+        )
 
         ages = self._calculate_ages(history_df, initial_pids)
         history_df = self._filter_by_codes(history_df)
         if history_df.empty:
             return {}
+        logger.info(
+            f"[Filter 2] After code filtering: {history_df[PID_COL].nunique()} patients"
+        )
 
         patient_history_matrix, pids, final_ages = self._prepare_simulation_inputs(
             history_df, ages
         )
         if len(pids) == 0:
             return {}
+        logger.info(
+            f"[Filter 3] After history matrix preparation: {len(pids)} patients"
+        )
 
         confounder_exposure_effect, confounder_outcome_effects = (
             self._simulate_unobserved_confounder_effects(len(pids))
         )
 
         is_exposed, p_exposure = self._simulate_exposure(
-            patient_history_matrix, final_ages, pids, confounder_exposure_effect
+            patient_history_matrix, final_ages, confounder_exposure_effect
         )
 
         ite_records, cf_records, all_factual_events, all_probas_for_plotting = (
@@ -213,17 +302,23 @@ class RealisticCausalSimulator:
             all_factual_events,
             all_probas_for_plotting,
             p_exposure,
+            is_exposed,
         )
 
     def _simulate_exposure(
-        self, patient_history_matrix, final_ages, pids, confounder_exposure_effect
+        self,
+        patient_history_matrix: np.ndarray,
+        final_ages: np.ndarray,
+        confounder_exposure_effect: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        latent_factors = self._calculate_latent_factors(patient_history_matrix)
+        """Simulates exposure probabilities based on patient history and confounder effects."""
+        latent_factors = self._calculate_latent_factors(
+            patient_history_matrix, final_ages
+        )
         p_exposure = self._calculate_probabilities_decomposed(
             "exposure",
             self.config.exposure,
             latent_factors,
-            ages=final_ages,
             additional_logit_effect=confounder_exposure_effect,
         )
         is_exposed = self.rng.binomial(1, p_exposure).astype(bool)
@@ -231,13 +326,15 @@ class RealisticCausalSimulator:
 
     def _simulate_outcomes(
         self,
-        patient_history_matrix,
-        final_ages,
-        pids,
-        is_exposed,
-        confounder_outcome_effects,
+        patient_history_matrix: np.ndarray,
+        final_ages: np.ndarray,
+        pids: np.ndarray,
+        is_exposed: np.ndarray,
+        confounder_outcome_effects: Dict[str, np.ndarray],
     ) -> Tuple[Dict, Dict, list, Dict]:
-        latent_factors = self._calculate_latent_factors(patient_history_matrix)
+        latent_factors = self._calculate_latent_factors(
+            patient_history_matrix, final_ages
+        )
         n_patients = len(pids)
         ite_records = {PID_COL: pids}
         cf_records = {PID_COL: pids, EXPOSURE_COL: is_exposed.astype(int)}
@@ -251,7 +348,6 @@ class RealisticCausalSimulator:
                 outcome_name,
                 outcome_cfg,
                 latent_factors,
-                ages=final_ages,
                 is_exposed=True,
                 additional_logit_effect=confounder_effect,
             )
@@ -259,7 +355,6 @@ class RealisticCausalSimulator:
                 outcome_name,
                 outcome_cfg,
                 latent_factors,
-                ages=final_ages,
                 is_exposed=False,
                 additional_logit_effect=confounder_effect,
             )
@@ -296,14 +391,22 @@ class RealisticCausalSimulator:
     def _filter_initial_history(
         self, df: pd.DataFrame
     ) -> Tuple[pd.DataFrame, np.ndarray]:
+        """
+        Filters the dataframe to only include patients with history before the index date.
+        """
         history_df = df[df[TIMESTAMP_COL] <= self.index_date].copy()
         pids_with_history = history_df[PID_COL].unique()
+        logger.info(
+            f"  Patients with any events before {self.index_date}: {len(pids_with_history)}"
+        )
         if len(pids_with_history) == 0:
             return pd.DataFrame(), np.array([])
         dead_pids = history_df[history_df[CONCEPT_COL] == DEATH_CODE][PID_COL].unique()
         if len(dead_pids) > 0:
+            logger.info(f"  Excluding {len(dead_pids)} deceased patients")
             history_df = history_df[~history_df[PID_COL].isin(dead_pids)]
         all_pids = history_df[PID_COL].unique()
+        logger.info(f"  Patients after history filter: {len(all_pids)}")
         if len(all_pids) == 0:
             return pd.DataFrame(), np.array([])
         return history_df, all_pids
@@ -311,27 +414,56 @@ class RealisticCausalSimulator:
     def _calculate_ages(
         self, history_df: pd.DataFrame, all_pids: np.ndarray
     ) -> pd.Series:
+        """
+        Calculates the ages of patients on index date based on their birth dates.
+        """
         dob_events = history_df[history_df[CONCEPT_COL] == BIRTH_CODE]
         patient_dobs = dob_events.groupby(PID_COL)[TIMESTAMP_COL].first()
         ages = pd.Series(np.nan, index=all_pids, dtype=float)
         if not patient_dobs.empty:
-            ages.update((self.index_date - patient_dobs).dt.days / 365.25)
+            days_per_year = self.config.simulation_model.age.days_per_year
+            ages.update((self.index_date - patient_dobs).dt.days / days_per_year)
         mean_age = ages.mean()
         if np.isnan(mean_age):
-            mean_age = 40
+            mean_age = self.config.simulation_model.age.default_age
         return ages.fillna(mean_age)
 
     def _filter_by_codes(self, history_df: pd.DataFrame) -> pd.DataFrame:
+        """Only use certain codes for simulation."""
         if self.config.include_code_prefixes:
+            before_count = history_df[PID_COL].nunique()
             history_df = history_df[
                 history_df[CONCEPT_COL].str.startswith(
                     tuple(self.config.include_code_prefixes)
                 )
             ].copy()
+            after_count = history_df[PID_COL].nunique()
+            if before_count > 0:
+                retention_pct = (after_count / before_count) * 100
+                logger.info(
+                    f"  After code prefix filter {self.config.include_code_prefixes}: {after_count} patients ({retention_pct:.1f}% retained)"
+                )
+
         if self.config.min_num_codes > 1:
+            before_count = history_df[PID_COL].nunique()
             code_counts = history_df.groupby(PID_COL)[CONCEPT_COL].nunique()
+
+            # Log distribution of code counts
+            patients_by_code_count = code_counts.value_counts().sort_index()
+            top_counts = dict(patients_by_code_count.head(10))
+            logger.info(f"  Code count distribution (top 10): {top_counts}")
+
             pids_to_keep = code_counts[code_counts >= self.config.min_num_codes].index
             history_df = history_df[history_df[PID_COL].isin(pids_to_keep)].copy()
+            after_count = history_df[PID_COL].nunique()
+            excluded = before_count - after_count
+            logger.info(
+                f"  After min_codes filter (>={self.config.min_num_codes}): {after_count} patients"
+            )
+            if excluded > 0:
+                logger.info(
+                    f"  Excluded {excluded} patients with <{self.config.min_num_codes} codes"
+                )
         return history_df
 
     def _prepare_simulation_inputs(
@@ -355,7 +487,7 @@ class RealisticCausalSimulator:
             return np.zeros(
                 (len(all_pids), len(self.vocabulary)), dtype=np.float32
             ), all_pids
-        latest_events_df = history_df.loc[
+        latest_events_df: pd.DataFrame = history_df.loc[
             history_df.groupby([PID_COL, CONCEPT_COL])[TIMESTAMP_COL].idxmax()
         ].copy()
         latest_events_df["diff_days"] = (
@@ -413,6 +545,198 @@ class RealisticCausalSimulator:
             }
         )
 
+    def _calculate_and_save_simulation_stats(
+        self,
+        pids: np.ndarray,
+        is_exposed: np.ndarray,
+        cf_records: Dict[str, np.ndarray],
+        output_dir: str,
+    ):
+        """Calculate and save simple simulation statistics."""
+        total_patients = len(pids)
+        num_exposed = np.sum(is_exposed)
+        num_control = total_patients - num_exposed
+
+        # Calculate outcome statistics
+        outcome_stats = {}
+        for outcome_name in self.config.outcomes.keys():
+            outcome_col = f"{OUTCOME_COL}_{outcome_name}"
+            if outcome_col in cf_records:
+                num_with_outcome = np.sum(cf_records[outcome_col])
+                outcome_stats[outcome_name] = {
+                    "total_with_outcome": int(num_with_outcome),
+                    "percentage_with_outcome": float(
+                        num_with_outcome / total_patients * 100
+                    ),
+                }
+
+        # Save as CSV for easy reading
+        stats_rows = [
+            ["Statistic", "Value"],
+            ["Total Patients", total_patients],
+            ["Number Exposed", num_exposed],
+            ["Number Control", num_control],
+            ["Exposure Rate (%)", f"{num_exposed / total_patients * 100:.2f}"],
+        ]
+
+        # Add outcome statistics
+        for outcome_name, outcome_data in outcome_stats.items():
+            stats_rows.append(
+                [
+                    f"{outcome_name} - Total with Outcome",
+                    outcome_data["total_with_outcome"],
+                ]
+            )
+            stats_rows.append(
+                [
+                    f"{outcome_name} - Percentage with Outcome (%)",
+                    f"{outcome_data['percentage_with_outcome']:.2f}",
+                ]
+            )
+
+        stats_df = pd.DataFrame(stats_rows[1:], columns=stats_rows[0])
+
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        stats_path = join(output_dir, "simulation_stats.csv")
+        stats_df.to_csv(stats_path, index=False)
+
+        logger.info(f"Simulation statistics saved to {stats_path}")
+        logger.info(
+            f"Total patients: {total_patients}, Exposed: {num_exposed}, Control: {num_control}"
+        )
+        for outcome_name, outcome_data in outcome_stats.items():
+            logger.info(
+                f"{outcome_name}: {outcome_data['total_with_outcome']} patients ({outcome_data['percentage_with_outcome']:.2f}%)"
+            )
+
+    def _calculate_theoretical_roc_auc(
+        self,
+        cf_records: Dict[str, np.ndarray],
+        is_exposed: np.ndarray,
+        p_exposure: np.ndarray,
+        output_dir: str,
+    ) -> Dict[str, float]:
+        """
+        Calculate the theoretical maximum ROC AUC for exposure and outcomes.
+
+        This represents the best possible ROC AUC that any model could achieve
+        if it had perfect knowledge of the data generating process.
+
+        Args:
+            cf_records: Dictionary containing counterfactual records with true probabilities.
+            is_exposed: Binary array indicating exposure status.
+            p_exposure: Array of true probabilities for being exposed.
+            output_dir: Directory to save results.
+
+        Returns:
+            Dictionary mapping exposure/outcome names to their theoretical max ROC AUC values.
+        """
+
+        theoretical_aucs = {}
+        results_data = []
+
+        logger.info(
+            "Calculating theoretical maximum ROC AUC from true probabilities..."
+        )
+
+        # --- 1. Calculate for Exposure ---
+        logger.info("Calculating theoretical max ROC AUC for Exposure prediction...")
+        if len(np.unique(is_exposed)) > 1:
+            auc_exposure = roc_auc_score(is_exposed, p_exposure)
+            theoretical_aucs["exposure"] = auc_exposure
+
+            results_data.append(
+                {
+                    "outcome": "exposure",  # Use 'outcome' column for consistency in the output table
+                    "auc_factual_dgp": auc_exposure,
+                    "auc_if_all_treated": np.nan,
+                    "auc_if_all_control": np.nan,
+                    "n_positive": int(np.sum(is_exposed)),
+                    "n_total": len(is_exposed),
+                    "prevalence": np.mean(is_exposed),
+                }
+            )
+            logger.info(f"Exposure: Theoretical max ROC AUC = {auc_exposure:.4f}")
+        else:
+            logger.warning(
+                "Cannot calculate ROC AUC for exposure: only one class present."
+            )
+            theoretical_aucs["exposure"] = np.nan
+
+        # --- 2. Calculate for Outcomes ---
+        logger.info("Calculating theoretical max ROC AUC for Outcome prediction...")
+        for outcome_name in self.config.outcomes.keys():
+            # Get the factual outcomes (ground truth labels)
+            outcome_col = f"{OUTCOME_COL}_{outcome_name}"
+            if outcome_col not in cf_records:
+                logger.warning(f"Outcome {outcome_name} not found in cf_records.")
+                continue
+
+            y_true = cf_records[outcome_col]
+
+            # Get the true probabilities for this outcome
+            p_exposed_col = f"{SIMULATED_PROBAS_EXPOSED}_{outcome_name}"
+            p_control_col = f"{SIMULATED_PROBAS_CONTROL}_{outcome_name}"
+
+            if p_exposed_col not in cf_records or p_control_col not in cf_records:
+                logger.warning(f"Simulated probabilities not found for {outcome_name}.")
+                continue
+
+            p_if_treated = cf_records[p_exposed_col]
+            p_if_control = cf_records[p_control_col]
+
+            # The true probability of the factual outcome, given the patient's history and actual exposure
+            y_prob_factual = np.where(is_exposed, p_if_treated, p_if_control)
+
+            # Calculate ROC AUC using true DGP probabilities
+            if len(np.unique(y_true)) > 1:  # Need both classes for ROC AUC
+                auc_factual = roc_auc_score(y_true, y_prob_factual)
+                theoretical_aucs[outcome_name] = auc_factual
+
+                # Also calculate AUC using counterfactual probabilities for comparison
+                auc_treated = roc_auc_score(y_true, p_if_treated)
+                auc_control = roc_auc_score(y_true, p_if_control)
+
+                results_data.append(
+                    {
+                        "outcome": outcome_name,
+                        "auc_factual_dgp": auc_factual,
+                        "auc_if_all_treated": auc_treated,
+                        "auc_if_all_control": auc_control,
+                        "n_positive": int(np.sum(y_true)),
+                        "n_total": len(y_true),
+                        "prevalence": np.mean(y_true),
+                    }
+                )
+
+                logger.info(
+                    f"{outcome_name}: Theoretical max ROC AUC = {auc_factual:.4f}"
+                )
+            else:
+                logger.warning(
+                    f"Cannot calculate ROC AUC for {outcome_name}: only one class present."
+                )
+                theoretical_aucs[outcome_name] = np.nan
+
+        # --- 3. Save all results to CSV ---
+        if results_data:
+            results_df = pd.DataFrame(results_data)
+            os.makedirs(output_dir, exist_ok=True)
+            results_path = join(output_dir, "theoretical_max_roc_auc.csv")
+            results_df.to_csv(results_path, index=False)
+            logger.info(f"Theoretical ROC AUC results saved to {results_path}")
+
+            # Print summary
+            logger.info("=== THEORETICAL MAXIMUM ROC AUC SUMMARY ===")
+            for _, row in results_df.iterrows():
+                logger.info(
+                    f"{row['outcome'].title()}: {row['auc_factual_dgp']:.4f} "
+                    f"(prevalence: {row['prevalence']:.3f}, n={row['n_total']})"
+                )
+
+        return theoretical_aucs
+
     def _package_results(
         self,
         pids,
@@ -421,29 +745,64 @@ class RealisticCausalSimulator:
         all_factual_events,
         all_probas_for_plotting,
         p_exposure,
+        is_exposed,
     ) -> Dict[str, pd.DataFrame]:
+        # --- Calculate and save simulation statistics ---
+        logger.info("Calculating and saving simulation statistics...")
+        self._calculate_and_save_simulation_stats(
+            pids, is_exposed, cf_records, self.config.paths.outcomes
+        )
+
+        # --- Calculate theoretical maximum ROC AUC ---
+        logger.info("Calculating theoretical maximum ROC AUC...")
+        theoretical_aucs = self._calculate_theoretical_roc_auc(
+            cf_records, is_exposed, p_exposure, self.config.paths.outcomes
+        )
+        logger.info(f"Theoretical maximum ROC AUC: {theoretical_aucs}")
         # --- Plotting integrated here ---
         logger.info("Plotting ground truth probability distributions...")
-        plot_hist(p_exposure, self.config.paths.outcomes)
-        plot_probability_distributions(
-            all_probas_for_plotting, self.config.paths.outcomes
+        figs_dir = join(self.config.paths.outcomes, "figs")
+        os.makedirs(figs_dir, exist_ok=True)
+        plot_hist(p_exposure, figs_dir, is_exposed)
+        plot_probability_distributions(all_probas_for_plotting, figs_dir)
+
+        # Create dataframes for effect comparison plotting
+        ite_df = pd.DataFrame(ite_records)
+        cf_df = pd.DataFrame(cf_records)
+
+        # Extract true effects configuration from the config
+        true_effects_config = {}
+        for outcome_name, outcome_cfg in self.config.outcomes.items():
+            true_effects_config[outcome_name] = {
+                "exposure_effect": outcome_cfg.exposure_effect,
+                "p_base": outcome_cfg.p_base,
+            }
+
+        # Plot true effects vs observed effects
+        logger.info("Plotting true effects vs observed risk differences...")
+        plot_true_effects_vs_risk_differences(
+            ite_df=ite_df,
+            cf_df=cf_df,
+            true_effects_config=true_effects_config,
+            output_dir=figs_dir,
         )
 
         output_dfs = {}
         if all_factual_events:
-            events_df = pd.concat(all_factual_events, ignore_index=True)
+            events_df: pd.DataFrame = pd.concat(all_factual_events, ignore_index=True)
             events_df[ABSPOS_COL] = get_hours_since_epoch(events_df[TIMESTAMP_COL])
             for code, group in events_df.groupby(CONCEPT_COL):
                 output_dfs[str(code)] = group[
                     [PID_COL, TIMESTAMP_COL, ABSPOS_COL]
                 ].copy()
 
-        output_dfs["ite"] = pd.DataFrame(ite_records)
-        output_dfs[COUNTERFACTUALS_FILE.split(".")[0]] = pd.DataFrame(cf_records)
+        output_dfs["ite"] = ite_df
+        output_dfs[COUNTERFACTUALS_FILE.split(".")[0]] = cf_df
         if EXPOSURE_COL in output_dfs:
             output_dfs[INDEX_DATE_MATCHING_FILE.split(".")[0]] = (
                 self._create_index_date_matching_df(output_dfs[EXPOSURE_COL], pids)
             )
+
         return output_dfs
 
     def _create_index_date_matching_df(

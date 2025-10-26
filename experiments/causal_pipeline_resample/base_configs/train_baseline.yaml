@@ -1,0 +1,42 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  # --- INPUTS ---
+  prepared_data: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/prepared_data"
+
+  # --- OUTPUTS ---
+  model: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/models/baseline"
+
+# ==============================================================================
+# Feature Engineering Settings
+# ==============================================================================
+multihot: false
+include_age: true
+
+# ==============================================================================
+# Model Parameters (CatBoost)
+# Note: Parameters specified here will be FIXED (not tuned by Optuna)
+# Parameters not specified will be tuned within predefined ranges
+# ==============================================================================
+catboost:
+  n_estimators: 100
+  # task_type: CPU # Default is CPU. Set to GPU if you have CUDA available
+  # devices: "0" # Only needed for GPU mode
+  # learning_rate: 0.03
+  # max_depth: 6
+  # subsample: 0.8
+  # colsample_bylevel: 0.8
+  l2_leaf_reg: 0.00 # FIXED: No L2 regularization
+  early_stopping_rounds: 10
+  # min_data_in_leaf: not specified, so will be TUNED in range [1, 100]
+
+# ==============================================================================
+# Hyperparameter Tuning Settings (Optuna)
+# ==============================================================================
+tuning:
+  tune_hyperparameters: True
+  n_trials: 10
+  inner_val_size: 0.2
+  reuse_hyperparameters: true

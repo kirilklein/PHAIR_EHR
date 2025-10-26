@@ -2,6 +2,8 @@
 outputs/
 corebehrt.egg-info/
 .venv
+venv/
+.vscode/
 .azure
 azure_job_config.yaml
 .azure_job_configs
@@ -17,3 +19,13 @@ linux_install/
 corebehrt/main_causal/helper_data/sks_trees/
 mlruns/
 results/
+catboost_info/
+debug/
+
+experiments/causal_pipeline/generated_configs/
+experiments/causal_pipeline/logs/
+
+experiments/causal_pipeline_resample/generated_configs/
+experiments/causal_pipeline_resample/logs/
+**.claude
+**.log

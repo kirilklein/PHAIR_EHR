@@ -1,0 +1,104 @@
+logging:
+  level: INFO
+  path: ./logs
+
+paths:
+  ### inputs ###
+  data: researcher_data:AKK/shared/MEDS/SEMAGLUTIDE/training/data #azureml:AKK-OZEMPIC-MEDS:2
+  features: researcher-data:AKK/shared/features/semaglutide/training/v03/features
+  splits: [tuning]
+  ### output path ###
+  outcomes: "researcher-data:AKK/shared/outcomes/semaglutide/all/v02"
+plot:
+  max_outcomes_to_plot: 100
+  max_subplots_per_figure: 10
+  wide_dist_threshold: 30
+
+outcomes:
+  all_cause_death:
+    type: [code]
+    match: [[DOD]]
+    match_how: exact
+    case_sensitive: false
+  death_mi_stroke:
+    type: [code]
+    match: [
+        [
+          DOD,
+          RD/DI21,
+          RD/DI22,
+          RD/DI23,
+          D/DI21,
+          D/DI22,
+          D/DI23,
+          RD/DI63,
+          RD/DI64,
+          RD/DI65,
+          RD/DI66
+          D/DI63,
+          D/DI64,
+          D/DI65,
+          D/DI66,
+        ],
+      ]
+    match_how: startswith
+    case_sensitive: false
+  nonfatal_MI:
+    combinations:
+      primary:
+        type: [code]
+        match: [[D/DI21, D/DI22, D/DI23, RD/DI21, RD/DI22, RD/DI23]]
+        match_how: startswith
+      secondary:
+        type: [code]
+        match: [["DOD"]]
+        match_how: exact
+      timestamp_source: primary
+      window_hours_min: -168
+      window_hours_max: 24
+      exclude: true
+  nonfatal_stroke:
+    combinations:
+      primary:
+        type: [code]
+        match:
+          [[D/DI63, D/DI64, D/DI65, D/DI66, RD/DI63, RD/DI64, RD/DI65, RD/DI66]]
+        match_how: startswith
+      secondary:
+        type: [code]
+        match: [["DOD"]]
+        match_how: exact
+      timestamp_source: primary
+      window_hours_min: -168
+      window_hours_max: 24
+      exclude: true
+  hospitalization_with_heart_failure:
+    combinations:
+      secondary:
+        type: [code]
+        match:
+          [
+            [
+              D/DI59,
+              D/DI110,
+              D/DI130,
+              D/DI132,
+              D/DI971,
+              D/DI761,
+              RD/DI59,
+              RD/DI110,
+              RD/DI130,
+              RD/DI132,
+              RD/DI971,
+              RD/DI761,
+            ],
+          ]
+        match_how: startswith
+      primary:
+        type: [code]
+        match: [["ADMISSION"]]
+        match_how: contains
+      window_hours_min: -168
+      window_hours_max: 168
+      timestamp_source: primary
+      exclude: false

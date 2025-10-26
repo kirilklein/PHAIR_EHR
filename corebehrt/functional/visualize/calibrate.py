@@ -1,11 +1,10 @@
 from typing import Tuple
 
-import matplotlib as mpl
 import numpy as np
 import pandas as pd
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import brier_score_loss, roc_auc_score
-
+from matplotlib.axes import Axes
 from corebehrt.constants.causal.data import (
     EXPOSURE_COL,
     PROBAS,
@@ -21,7 +20,7 @@ def plot_weights_hist(
     group_labels: Tuple[str, str],
     title: str,
     xlabel: str,
-    ax: mpl.axes.Axes,
+    ax: Axes,
     min_quantile: float = 0.001,
     max_quantile: float = 0.999,
     num_bins: int = 51,
@@ -81,7 +80,7 @@ def plot_probas_hist(
     group_labels: Tuple[str, str],
     title: str,
     xlabel: str,
-    ax: mpl.axes.Axes,
+    ax: Axes,
     min_quantile: float = 0.001,
     max_quantile: float = 0.999,
     num_bins: int = 51,
@@ -123,7 +122,7 @@ def plot_probas_hist(
 
 
 def plot_cf_probas_diff_vs_certainty_in_exposure(
-    df: pd.DataFrame, y_col: str, ax: mpl.axes.Axes
+    df: pd.DataFrame, y_col: str, ax: Axes
 ) -> None:
     """
     Plot the difference between counterfactual and factual probabilities vs certainty in actual exposure.
@@ -168,7 +167,7 @@ def plot_cf_diff_vs_probas_by_group(
     proba_col: str,
     group_labels: Tuple[str, str],
     y_col: str,
-    ax: mpl.axes.Axes,
+    ax: Axes,
 ) -> None:
     """
     Plot the difference between counterfactual and factual probabilities vs outcome probability.
@@ -208,7 +207,7 @@ def plot_cf_diff_vs_probas_by_group(
 
 
 def produce_calibration_plots(
-    df_calibrated: pd.DataFrame, df: pd.DataFrame, name: str, ax: mpl.axes.Axes
+    df_calibrated: pd.DataFrame, df: pd.DataFrame, name: str, ax: Axes
 ) -> None:
     """
     Produce calibration plots for the original and calibrated probabilities.

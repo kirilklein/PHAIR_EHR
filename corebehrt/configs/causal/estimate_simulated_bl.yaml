@@ -1,0 +1,30 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  calibrated_predictions: ./outputs/causal/finetune/models/baseline/simulated/calibrated/
+  counterfactual_outcomes: ./outputs/causal/simulated_outcomes # optional
+
+  ## OUTPUTS
+  estimate: ./outputs/causal/estimate/baseline/simulated_bl
+
+estimator:
+  methods: ["IPW", "TMLE"]
+  effect_type: "ATE"
+  n_bootstrap: 30
+  # common_support_threshold: 0.001  # Disable common support filtering
+  clip_percentile: 0.99 # Use weight clipping instead
+
+plot:
+  contingency_table:
+    max_outcomes_per_figure: 10
+    max_number_of_figures: 10
+  effect_size:
+    max_outcomes_per_figure: 10
+    max_number_of_figures: 10
+    plot_individual_effects: true
+  adjustment:
+    max_outcomes_per_figure: 8
+    max_number_of_figures: 10

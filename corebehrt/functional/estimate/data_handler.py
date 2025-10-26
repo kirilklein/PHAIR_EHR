@@ -11,6 +11,7 @@ from corebehrt.constants.causal.data import (
     PROBAS_EXPOSED,
     PS_COL,
     TMLEAnalysisColumns,
+    EFFECT_ROUND_DIGIT,
 )
 from corebehrt.constants.data import PID_COL
 from corebehrt.functional.causal.counterfactuals import expand_counterfactuals
@@ -141,7 +142,9 @@ def prepare_tmle_analysis_df(initial_estimates_df: pd.DataFrame) -> pd.DataFrame
 
     # Filter TMLE rows
     tmle_df = initial_estimates_df.loc[
-        initial_estimates_df[TMLEAnalysisColumns.method].eq("TMLE")
+        initial_estimates_df[TMLEAnalysisColumns.method]
+        .str.upper()
+        .isin(["TMLE", "TMLE_TH"])
     ].copy()
     if tmle_df.empty:
         print("Skipping TMLE analysis: no TMLE results found.")
@@ -156,5 +159,5 @@ def prepare_tmle_analysis_df(initial_estimates_df: pd.DataFrame) -> pd.DataFrame
         tmle_df[TMLEAnalysisColumns.adjustment_1]
         - tmle_df[TMLEAnalysisColumns.adjustment_0]
     )
-    tmle_df = tmle_df.round(5)
+    tmle_df = tmle_df.round(EFFECT_ROUND_DIGIT)
     return tmle_df[RELEVANT_COLUMNS]

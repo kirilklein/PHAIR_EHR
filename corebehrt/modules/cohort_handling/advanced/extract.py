@@ -57,6 +57,7 @@ from corebehrt.constants.cohort import (
     CRITERION_FLAG,
     EXCLUDE_CODES,
     EXPRESSION,
+    EXTRACT_VALUE,
     FINAL_MASK,
     INDEX_DATE,
     MAX_AGE,
@@ -469,11 +470,14 @@ class CriteriaExtraction:
             .rename(columns={FINAL_MASK: CRITERION_FLAG})
         )
 
-        has_numeric = NUMERIC_VALUE in crit_cfg
+        has_numeric = NUMERIC_VALUE in crit_cfg or EXTRACT_VALUE in crit_cfg
         if has_numeric:
             min_val = crit_cfg.get(MIN_VALUE)
             max_val = crit_cfg.get(MAX_VALUE)
-            res = extract_numeric_values(df, flag_df, min_val, max_val)
+            extract_val = crit_cfg.get(EXTRACT_VALUE, False)
+            res = extract_numeric_values(
+                df, flag_df, min_val, max_val, extract_value=extract_val
+            )
         else:
             res = flag_df.copy()
             res[NUMERIC_VALUE] = None

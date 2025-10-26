@@ -1,0 +1,18 @@
+logging:
+  level: INFO
+  path: ./logs
+
+paths:
+  data: researcher-data:AKK/shared/MEDS/TRACE/v01/data #azureml:AKK-OZEMPIC-MEDS:2
+  features: researcher-data:AKK/shared/features/trace/v01/features
+  splits: [tuning]
+  outcomes: researcher-data:AKK/shared/outcomes/trace/lung_cancer
+
+outcomes:
+  lung_cancer:
+    type: [code]
+    match:
+      - - D/DC34
+        - RPO/DC34
+    match_how: contains
+    case_sensitive: false

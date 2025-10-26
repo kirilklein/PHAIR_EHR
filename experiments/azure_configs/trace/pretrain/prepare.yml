@@ -1,0 +1,27 @@
+logging:
+  level: INFO
+  path: ./logs
+
+paths:
+  ## INPUTS
+  features: researcher_data:AKK/shared/features/trace/v01/features
+  tokenized: researcher_data:AKK/shared/features/trace/v01/tokenized
+  #cohort: "researcher_data:"
+  # predefined_splits: outputs/pretraining/behrt_base
+
+  # restart_model: ... # Use for restarting from checkpoint
+
+  ## OUTPUTS
+  prepared_data: "researcher_data:AKK/shared/prepared_pretrain/trace/len_512/v01" # Save model/outputs to this folder
+  # runs: v04 # Use for generating a new model folder
+
+data:
+  type: "pretrain"
+  predefined_splits: false # set to true if you want to use predefined splits for reproducibility. Expects a list (of length 1) of dicts with train, val created by select_cohort
+  val_ratio: 0.2 # only used if predefined_splits is false
+  truncation_len: 512
+  min_len: 1
+  # cutoff_date:
+  # year: 2022
+  # month: 1
+  # day: 1

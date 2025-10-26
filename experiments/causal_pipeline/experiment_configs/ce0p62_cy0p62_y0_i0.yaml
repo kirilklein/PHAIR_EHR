@@ -1,0 +1,23 @@
+# Positive Moderate Confounding Experiment (0.62)
+# Tests scenario with positive moderate confounding - instruments kept low
+
+experiment_name: ce0p62_cy0p62_y0_i0
+description: "Simulation with positive moderate confounding (0.62), low instruments (0.0)"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 0.62   # Positive moderate confounding
+    shared_to_outcome: 0.62    # Positive moderate confounding
+    exposure_only_to_exposure: 0.0  # Low instruments
+    outcome_only_to_outcome: 0.0    # Low independent risks
+
+# outcomes:

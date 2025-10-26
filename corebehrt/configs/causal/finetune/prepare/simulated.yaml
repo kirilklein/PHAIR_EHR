@@ -13,7 +13,6 @@ paths:
     - OUTCOME.csv
     - OUTCOME_2.csv
     - OUTCOME_3.csv
-    - OUTCOME_4.csv
 
   exposures: ./outputs/causal/simulated_outcomes
   exposure: exposure.csv
@@ -27,6 +26,14 @@ data:
   truncation_len: 64
   min_len: 2 # 0 by default
   cv_folds: 2
+
+  min_instances_per_class: 10
+  max_items_per_plot: 15
+  max_number_of_plots: 10
+  number_subjects_to_plot: 10
+
+  sample_num_patients: null # omit or null to use all patients
+  sample_seed: 42 # optional
 
 exposure:
   # we will convert outcomes to binary based on whether at least one outcome is in the follow up window

@@ -1,0 +1,7 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+plotting:
+  plot_all_outcomes: false
+  num_outcomes_to_plot: 20

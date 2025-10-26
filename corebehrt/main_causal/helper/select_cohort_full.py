@@ -129,14 +129,29 @@ def select_cohort(
     List[str]
         Final patient IDs after all filtering steps
     """
+    logger.info("=" * 80)
+    logger.info("STARTING COHORT SELECTION")
+    logger.info("=" * 80)
+
     check_time_windows(time_windows)
     patients_info, exposures, index_dates, index_date_matching = _load_data(
         features_path, exposures_path, exposure, logger
     )
+
+    # Initial counts - these are important for understanding the cohort
     exposed_pids = index_dates[PID_COL].unique()
+    logger.info(f"Initial exposed patients from index dates: {len(exposed_pids)}")
+    logger.info(
+        f"Total patients available in features: {patients_info[PID_COL].nunique()}"
+    )
+    logger.info(f"Total exposure events: {len(exposures)}")
+
     criteria_config = load_config(criteria_definitions_path)
     shutil.copy(criteria_definitions_path, join(save_path, CRITERIA_DEFINITIONS_FILE))
-    logger.info("Preparing exposed patients")
+
+    logger.info("=" * 50)
+    logger.info("PREPARING EXPOSED PATIENTS")
+    logger.info("=" * 50)
     criteria_exposed, index_dates_filtered_exposed, exposed_stats = _prepare_exposed(
         index_dates,
         time_windows,
@@ -146,7 +161,19 @@ def select_cohort(
         splits,
         save_path,
     )
-    logger.info("Preparing control patients")
+
+    # Key outcome metrics - important to track
+    exposed_final_count = len(index_dates_filtered_exposed[PID_COL].unique())
+    logger.info(f"Final exposed patients after all filtering: {exposed_final_count}")
+    exposed_loss = len(exposed_pids) - exposed_final_count
+    exposed_loss_pct = (
+        (exposed_loss / len(exposed_pids) * 100) if len(exposed_pids) else 0.0
+    )
+    logger.info(f"Exposed patient exclusions: {exposed_loss} ({exposed_loss_pct:.1f}%)")
+
+    logger.info("=" * 50)
+    logger.info("PREPARING CONTROL PATIENTS")
+    logger.info("=" * 50)
     criteria_control, index_dates_filtered_control, control_stats = _prepare_control(
         patients_info,
         index_dates_filtered_exposed,
@@ -159,6 +186,11 @@ def select_cohort(
         index_date_matching=index_date_matching,
         index_date_matching_cfg=index_date_matching_cfg,
     )
+
+    # Key outcome metrics
+    control_final_count = len(index_dates_filtered_control[PID_COL].unique())
+    logger.info(f"Final control patients after all filtering: {control_final_count}")
+
     logger.info("Creating combined visualization")
     # Create combined visualization
     combined_stats = {"exposed": exposed_stats, "control": control_stats}
@@ -199,6 +231,14 @@ def select_cohort(
         logger=logger,
     )
 
+    logger.info("=" * 80)
+    logger.info("COHORT SELECTION SUMMARY")
+    logger.info("=" * 80)
+    logger.info(f"Final exposed patients: {exposed_final_count}")
+    logger.info(f"Final control patients: {control_final_count}")
+    logger.info(f"Total final cohort: {exposed_final_count + control_final_count}")
+    logger.info("=" * 80)
+
     return pids
 
 
@@ -216,20 +256,34 @@ def _prepare_control(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare control patients for cohort selection.
-    Return criteria and index dates.
-    Save stats.
-    Return control criteria and index dates and index dates for controls.
     """
+    logger.info("Starting control patient preparation")
+
     # Now we need to draw index dates for unexposed patients from exposed index dates, taking death date into account
     if index_date_matching is None:
+        logger.info("Creating new index date matching for controls")
+
         pid_series = patients_info[PID_COL]
+        total_patients_available = len(pid_series.unique())
+        logger.info(f"Total patients available in features: {total_patients_available}")
+
         control_pids = safe_control_pids(pid_series, exposed_pids)
+        logger.info(
+            f"Potential control patients (excluding exposed): {len(control_pids)}"
+        )
+        logger.info(
+            f"Control pool reduction: {total_patients_available - len(control_pids)} patients excluded (exposed)"
+        )
+
         default_cfg = {
             "birth_year_tolerance": 3,
             "redraw_attempts": 3,
             "age_adjusted": True,
         }
         index_date_matching_cfg = {**default_cfg, **(index_date_matching_cfg or {})}
+        logger.info(f"Index date matching config: {index_date_matching_cfg}")
+
+        logger.info("Assigning index dates to control patients...")
         control_index_dates, index_date_matching = (
             draw_index_dates_for_control_with_redraw(
                 control_pids,
@@ -240,13 +294,23 @@ def _prepare_control(
                 age_adjusted=index_date_matching_cfg["age_adjusted"],
             )
         )
+
+        controls_with_index_dates = index_date_matching[CONTROL_PID_COL].nunique()
         logger.info(
-            f"Controls after index date matching: {index_date_matching[CONTROL_PID_COL].nunique()} / {len(control_pids)}"
+            f"Controls successfully assigned index dates: {controls_with_index_dates} / {len(control_pids)}"
         )
+        excluded_during_matching = len(control_pids) - controls_with_index_dates
+        if excluded_during_matching > 0:
+            matching_loss_pct = excluded_during_matching / len(control_pids) * 100
+            logger.warning(
+                f"Controls excluded during index date matching: {excluded_during_matching} ({matching_loss_pct:.1f}%)"
+            )
+
         index_date_matching[ABSPOS_COL] = get_hours_since_epoch(
             index_date_matching[TIMESTAMP_COL]
         )
     else:
+        logger.info("Using pre-existing index date matching")
         # Validate required columns exist
         required_cols = [CONTROL_PID_COL, TIMESTAMP_COL]
         missing_cols = [
@@ -257,6 +321,11 @@ def _prepare_control(
                 f"Index date matching file missing required columns: {missing_cols}"
             )
 
+        controls_with_index_dates = index_date_matching[CONTROL_PID_COL].nunique()
+        logger.info(
+            f"Pre-existing controls with index dates: {controls_with_index_dates}"
+        )
+
         control_index_dates = index_date_matching.rename(
             columns={CONTROL_PID_COL: PID_COL}
         )
@@ -265,17 +334,37 @@ def _prepare_control(
         control_index_dates[ABSPOS_COL] = get_hours_since_epoch(
             control_index_dates[TIMESTAMP_COL]
         )
+
     index_date_matching.to_csv(join(save_path, INDEX_DATE_MATCHING_FILE), index=False)
     log_patient_num(logger, control_index_dates, "control_index_dates")
+
+    logger.info("Applying criteria filtering to control patients...")
+    pre_criteria_count = control_index_dates[PID_COL].nunique()
+    logger.info(f"Control patients before criteria filtering: {pre_criteria_count}")
+
     criteria_control, included_pids_control, control_stats = filter_by_criteria(
         criteria_config,
         meds_path,
         control_index_dates,
         splits,
-        control_index_dates.index.tolist(),
+        control_index_dates[PID_COL].unique().tolist(),
         logger,
         "control",
     )
+
+    post_criteria_count = len(included_pids_control)
+    logger.info(f"Control patients after criteria filtering: {post_criteria_count}")
+    excluded_by_criteria = pre_criteria_count - post_criteria_count
+    if excluded_by_criteria > 0:
+        criteria_loss_pct = (
+            (excluded_by_criteria / pre_criteria_count * 100)
+            if pre_criteria_count
+            else 0.0
+        )
+        logger.info(
+            f"Controls excluded by criteria: {excluded_by_criteria} ({criteria_loss_pct:.1f}%)"
+        )
+
     _save_stats(control_stats, save_path, "control", logger)
     plot_cohort_stats(
         stats=control_stats,
@@ -286,6 +375,14 @@ def _prepare_control(
     control_index_date_filtered = filter_df_by_pids(
         control_index_dates, included_pids_control
     )
+
+    logger.info(
+        f"Final control index dates after filtering: {len(control_index_date_filtered)}"
+    )
+    logger.info(
+        f"Final unique control patients: {control_index_date_filtered[PID_COL].nunique()}"
+    )
+
     return criteria_control, control_index_date_filtered, control_stats
 
 
@@ -300,14 +397,26 @@ def _prepare_exposed(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Prepare exposed patients for cohort selection.
-    Return criteria and index dates.
-    Save stats.
-    Return exposed criteria and index dates.
     """
+    logger.info("Starting exposed patient preparation")
+    initial_exposed_count = index_dates[PID_COL].nunique()
+    logger.info(f"Initial exposed patients: {initial_exposed_count}")
+
+    logger.info("Applying time window eligibility criteria...")
+    logger.info(f"Time windows: {time_windows}")
+
     time_eligible_exposed = select_time_eligible_exposed(index_dates, time_windows)
     logger.info(
-        f"Time eligible exposed pids: {len(time_eligible_exposed)} / {index_dates[PID_COL].nunique()}"
+        f"Time eligible exposed patients: {len(time_eligible_exposed)} / {initial_exposed_count}"
     )
+    excluded_by_time = initial_exposed_count - len(time_eligible_exposed)
+    if excluded_by_time > 0:
+        time_loss_pct = excluded_by_time / initial_exposed_count * 100
+        logger.info(
+            f"Exposed excluded by time windows: {excluded_by_time} ({time_loss_pct:.1f}%)"
+        )
+
+    logger.info("Applying criteria filtering to exposed patients...")
     criteria_exposed, included_pids_exposed, exposed_stats = filter_by_criteria(
         criteria_config,
         meds_path,
@@ -317,6 +426,23 @@ def _prepare_exposed(
         logger,
         "exposed",
     )
+
+    post_criteria_count = len(included_pids_exposed)
+    logger.info(f"Exposed patients after criteria filtering: {post_criteria_count}")
+    excluded_by_criteria = len(time_eligible_exposed) - post_criteria_count
+    if excluded_by_criteria > 0:
+        criteria_loss_pct = excluded_by_criteria / len(time_eligible_exposed) * 100
+        logger.info(
+            f"Time-eligible exposed excluded by criteria: {excluded_by_criteria} ({criteria_loss_pct:.1f}%)"
+        )
+
+    total_excluded = initial_exposed_count - post_criteria_count
+    if total_excluded > 0:
+        total_loss_pct = total_excluded / initial_exposed_count * 100
+        logger.info(
+            f"Total exposed excluded (time + criteria): {total_excluded} ({total_loss_pct:.1f}%)"
+        )
+
     _save_stats(exposed_stats, save_path, "exposed", logger)
     plot_cohort_stats(
         stats=exposed_stats,
@@ -325,6 +451,14 @@ def _prepare_exposed(
         show_plot=False,
     )
     index_dates_filtered_exposed = filter_df_by_pids(index_dates, included_pids_exposed)
+
+    logger.info(
+        f"Final exposed index dates after filtering: {len(index_dates_filtered_exposed)}"
+    )
+    logger.info(
+        f"Final unique exposed patients: {index_dates_filtered_exposed[PID_COL].nunique()}"
+    )
+
     return criteria_exposed, index_dates_filtered_exposed, exposed_stats
 
 
@@ -339,37 +473,16 @@ def filter_by_criteria(
 ) -> Tuple[pd.DataFrame, List[str], dict]:
     """
     Filter patients based on inclusion/exclusion criteria and extract relevant data.
-
-    This function validates criteria configuration, extracts criteria data from medication
-    shards, applies inclusion/exclusion filters, and logs statistics throughout the process.
-
-    Args:
-        criteria_config: Dictionary containing criteria definitions, inclusion, and exclusion rules
-        meds_path: Path to medication data shards
-        index_dates: DataFrame with patient index dates
-        splits: List of data splits to process
-        pids: List of patient IDs to filter
-        logger: Logger instance for recording statistics and progress
-        description: Description string for logging purposes
-
-    Returns:
-        tuple: (criteria_data, included_pids, stats)
-            - criteria_data: pd.DataFrame with extracted criteria data for all patients
-            - included_pids: List of patient IDs that passed the inclusion/exclusion criteria
-            - stats: Dictionary containing filtering statistics and counts
-
-    Notes
-    -----
-    The function performs the following steps:
-    1. Validates criteria configuration and checks inclusion/exclusion logic
-    2. Extracts criteria data from shards for specified patients
-    3. Logs patient counts at various stages
-    4. Applies inclusion/exclusion criteria to filter patients
-    5. Returns (unfiltered) criteria flags, included patient IDs, and statistics
     """
+    logger.info(f"Starting criteria filtering for {description} patients")
+    logger.debug(f"Input patient count for {description}: {len(pids)}")
+    logger.debug(f"Index dates shape for {description}: {index_dates.shape}")
+
     validator = CriteriaValidator(criteria_config.get(CRITERIA_DEFINITIONS))
     validator.validate()
     check_inclusion_exclusion(validator, criteria_config)
+
+    logger.info(f"Extracting criteria from medical data for {description} patients...")
     criteria = extract_criteria_from_shards(
         meds_path,
         index_dates,
@@ -377,15 +490,27 @@ def filter_by_criteria(
         splits,
         pids=pids,
     )
-    log_patient_num(logger, index_dates, "index_dates")
-    logger.info(f"N pids {description}: {len(pids)}")
-    log_patient_num(logger, criteria, "criteria")
-    logger.info(f"Applying criteria to {description} and saving stats")
+
+    logger.debug(f"Criteria extraction completed for {description}")
+    log_patient_num(logger, index_dates, f"{description}_index_dates")
+    log_patient_num(logger, criteria, f"{description}_criteria")
+
+    logger.info(f"Applying inclusion/exclusion criteria to {description} patients...")
+    inclusion_config = criteria_config.get(INCLUSION)
+    exclusion_config = criteria_config.get(EXCLUSION)
+
     included_pids, stats = apply_criteria_with_stats(
         criteria,
-        criteria_config.get(INCLUSION),
-        criteria_config.get(EXCLUSION),
+        inclusion_config,
+        exclusion_config,
     )
+
+    logger.info(f"Criteria filtering completed for {description}")
+    logger.info(
+        f"Patients passing all criteria for {description}: {len(included_pids)}"
+    )
+    logger.debug(f"Detailed filtering statistics for {description}: {stats}")
+
     return criteria, included_pids, stats
 
 
@@ -478,59 +603,84 @@ def extract_criteria_from_shards(
     splits: list[str],
     pids: List[int] = None,
 ) -> pd.DataFrame:
-    """Extract criteria from medical event data across multiple shards.
+    """Extract criteria from medical event data across multiple shards."""
+    logger.info("Starting criteria extraction from medical data shards")
+    logger.info(
+        f"Target patient count for extraction: {len(pids) if pids is not None else 'All'}"
+    )
+    logger.info(f"Processing splits: {splits}")
+    logger.debug(
+        f"Criteria definitions: {list(criteria_definitions_cfg.keys()) if criteria_definitions_cfg else 'None'}"
+    )
 
-    Args:
-        meds_path (str): Path to the medical events data
-        index_dates (pd.DataFrame): DataFrame containing index dates for patients
-        criteria_definitions_cfg (dict): Configuration for criteria definitions
-        splits (list[str]): List of splits to process
-        pids (List[int], optional): List of patient IDs to filter. Defaults to None.
-
-    Returns:
-        pd.DataFrame: Combined DataFrame containing extracted criteria for all patients
-
-    Raises:
-        ValueError: If no criteria data is found for any patients
-    """
     cohort_extractor = CohortExtractor(
         criteria_definitions_cfg,
     )
 
     criteria_dfs = []
     total_patients_processed = 0
+    total_shards_processed = 0
+    empty_shards = 0
 
     for shard_path in iterate_splits_and_shards(meds_path, splits):
+        total_shards_processed += 1
         logger.info(
-            f"========== Processing shard: {os.path.basename(shard_path)} =========="
+            f"Processing shard {total_shards_processed}: {os.path.basename(shard_path)}"
         )
+
         shard = pd.read_parquet(shard_path)
+        logger.info(
+            f"Shard loaded with {len(shard)} events and {shard[PID_COL].nunique()} unique patients"
+        )
+
         shard[CONCEPT_COL] = shard[CONCEPT_COL].astype("category")
 
         if pids is not None:
-            logger.info(f"Filtering shard for {len(pids)} patients")
+            logger.info(f"Filtering shard for {len(pids)} target patients")
+            patients_in_shard_before = shard[PID_COL].nunique()
             shard = shard[shard[PID_COL].isin(pids)]
+            patients_in_shard_after = shard[PID_COL].nunique() if not shard.empty else 0
+            logger.info(
+                f"Patients in shard after filtering: {patients_in_shard_after} / {patients_in_shard_before}"
+            )
+
             if shard.empty:
-                logger.warning(f"No matching patients found in shard {shard_path}")
+                logger.info(f"No matching patients found in shard {shard_path}")
+                empty_shards += 1
                 continue
 
         if shard.empty:
             logger.warning(f"Empty shard found: {shard_path}")
+            empty_shards += 1
             continue
 
-        logger.info(f"Extracting criteria for {shard[PID_COL].nunique()} patients")
+        patients_for_extraction = shard[PID_COL].nunique()
+        logger.info(f"Extracting criteria for {patients_for_extraction} patients")
+
         criteria_df = cohort_extractor.extract(
             shard,
             index_dates,
         )
 
         if not criteria_df.empty:
+            patients_with_criteria = criteria_df[PID_COL].nunique()
+            logger.info(
+                f"Successfully extracted criteria for {patients_with_criteria} patients"
+            )
             criteria_dfs.append(criteria_df)
-            total_patients_processed += len(criteria_df)
+            total_patients_processed += patients_with_criteria
         else:
             logger.warning(
                 f"No criteria matched for any patients in shard {shard_path}"
             )
+
+    logger.info(f"Criteria extraction summary:")
+    logger.info(f"  - Total shards processed: {total_shards_processed}")
+    logger.info(f"  - Shards with criteria data: {len(criteria_dfs)}")
+    logger.info(f"  - Total patients with criteria: {total_patients_processed}")
+
+    if empty_shards > 0:
+        logger.info(f"  - Empty shards: {empty_shards}")
 
     if not criteria_dfs:
         error_msg = "No criteria data found for any patients"
@@ -538,10 +688,13 @@ def extract_criteria_from_shards(
             error_msg += f" in the provided list of {len(pids)} patient IDs"
         raise ValueError(error_msg)
 
+    combined_criteria = pd.concat(criteria_dfs)
     logger.info(
-        f"Successfully processed criteria for {total_patients_processed} patients"
+        f"Combined criteria extracted for {combined_criteria[PID_COL].nunique()} unique patients"
     )
-    return pd.concat(criteria_dfs)
+    logger.info(f"Combined criteria DataFrame shape: {combined_criteria.shape}")
+
+    return combined_criteria
 
 
 def _compute_age(

@@ -27,6 +27,11 @@ data:
   min_len: 2 # 0 by default
   cv_folds: 2
 
+  min_instances_per_class: 10
+  max_items_per_plot: 15
+  max_number_of_plots: 10
+  number_subjects_to_plot: 10
+
 exposure:
   # we will convert outcomes to binary based on whether at least one outcome is in the follow up window
   n_hours_censoring: 1_000_000 # censor time after index date (negative means before)

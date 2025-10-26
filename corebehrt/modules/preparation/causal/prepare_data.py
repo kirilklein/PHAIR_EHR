@@ -1,6 +1,7 @@
 import logging
 import os
 from dataclasses import dataclass
+import random
 from os.path import join
 from typing import Dict, List, Tuple
 
@@ -47,7 +48,7 @@ from corebehrt.functional.visualize.follow_ups import (
     plot_followup_start_end_distribution,
 )
 from corebehrt.functional.visualize.outcomes import (
-    plot_outcome_distribution,
+    plot_target_distribution,
     plot_filtering_stats,
 )
 from corebehrt.modules.cohort_handling.patient_filter import filter_df_by_pids
@@ -91,6 +92,9 @@ class CausalDatasetPreparer:
         self.end_date = self.get_end_date(cohort_cfg)
         self.vocabulary = self.ds_preparer.vocab
         self.min_instances_per_class = self.data_cfg.get("min_instances_per_class", 10)
+        self.max_items_per_plot = self.data_cfg.get("max_items_per_plot", 15)
+        self.max_number_of_plots = self.data_cfg.get("max_number_of_plots", 10)
+        self.number_subjects_to_plot = self.data_cfg.get("number_subjects_to_plot", 10)
         self.logger = logger
 
     def prepare_finetune_data(self, mode: str = "tuning") -> CausalPatientDataset:
@@ -108,9 +112,46 @@ class CausalDatasetPreparer:
         """
         # 1. Load and filter initial data
         self.logger.info("Loading and filtering initial data")
+        # Optional sampling controls from config
+        sample_num_patients = self.data_cfg.get("sample_num_patients")
+        sample_seed = int(self.data_cfg.get("sample_seed", 42))
+
+        # Load cohort PIDs if present
         pids = self.ds_preparer.load_cohort(self.paths_cfg)
-        data = self.load_shards_into_patient_data(pids, mode)
-        pids = data.get_pids()  # Use PIDs actually present in the data
+
+        # If we have cohort PIDs and sampling is requested, sample before loading shards
+        selected_pids = None
+        if sample_num_patients is not None and pids is not None:
+            rng = random.Random(sample_seed)
+            selected_pids = rng.sample(
+                list(pids), k=min(int(sample_num_patients), len(pids))
+            )
+
+        # Load shards using sampled PIDs (if available)
+        data = self.load_shards_into_patient_data(selected_pids or pids, mode)
+
+        # Determine final PIDs present in loaded data
+        pids_in_data = data.get_pids()
+
+        # If cohort PIDs weren't available earlier and sampling is requested, sample now
+        if sample_num_patients is not None and selected_pids is None:
+            rng = random.Random(sample_seed)
+            selected_pids = rng.sample(
+                list(pids_in_data), k=min(int(sample_num_patients), len(pids_in_data))
+            )
+
+        # If sampling was requested, subset the dataset to the selected PIDs
+        if selected_pids is not None:
+            selected_set = set(selected_pids)
+            data.patients = [
+                patient for patient in data.patients if patient.pid in selected_set
+            ]
+            self.logger.info(
+                f"Subselected {len(data.patients)} patients for sampling test run"
+            )
+
+        # Use final PID list from data
+        pids = data.get_pids()
 
         exposures, index_date_matching, index_dates = self.load_cohort_data(
             self.paths_cfg.cohort
@@ -171,8 +212,19 @@ class CausalDatasetPreparer:
             plot_followup_start_end_distribution(
                 follow_ups, binary_exposure, fig_dir, mode="absolute"
             )
-            plot_outcome_distribution(binary_outcomes, fig_dir)
-            plot_filtering_stats(filtering_stats, fig_dir)
+
+            all_targets = pd.merge(
+                binary_outcomes, binary_exposure, left_index=True, right_index=True
+            )
+            all_targets.rename(columns={binary_exposure.name: "exposure"}, inplace=True)
+            plot_target_distribution(all_targets, fig_dir)
+
+            plot_filtering_stats(
+                filtering_stats,
+                fig_dir,
+                self.max_items_per_plot,
+                self.max_number_of_plots,
+            )
             plot_followups_timeline(
                 exposures=exposures,
                 outcomes=outcomes,
@@ -180,7 +232,7 @@ class CausalDatasetPreparer:
                 index_date_matching=index_date_matching,
                 censor_dates=censor_dates,
                 save_dir=fig_dir,
-                n_random_subjects=30,
+                n_random_subjects=self.number_subjects_to_plot,
             )
         return data
 

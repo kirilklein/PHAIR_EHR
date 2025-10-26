@@ -1,0 +1,46 @@
+# Base simulation config template
+# Variables like {{EXPERIMENT_NAME}}, {{RUN_ID}}, {{EXPERIMENTS_DIR}} will be replaced by the script
+
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  data: "{{MEDS_DATA}}"
+  splits: ["tuning"]
+  outcomes: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes"
+
+# Sampling configuration for resampling experiments
+# NOTE: Specify EITHER 'size' OR 'fraction', not both
+sampling:
+  enabled: true
+  size: "{{SAMPLE_SIZE}}" # Absolute number of patients to sample (takes precedence)
+  fraction: "{{SAMPLE_FRACTION}}" # OR: Fraction of patients to sample (0 < fraction <= 1)
+
+seed: "{{SEED}}"
+debug: false
+min_num_codes: 3
+include_code_prefixes: ["D/"]
+index_date_str: "2020-01-01"
+
+# Simulation model parameters will be merged from experiment config
+simulation_model:
+  time_decay_halflife_days: 6000
+  noise:
+    logit_noise_scale: 0
+
+# Exposure and outcome settings will be merged from experiment config
+exposure:
+  p_base: 0.3
+
+# Default outcomes - can be overridden in experiment config
+outcomes:
+  effect_0:
+    run_in_days: 1
+    p_base: 0.3
+    exposure_effect: 0.0
+
+  effect_1p39:
+    run_in_days: 1
+    p_base: 0.3
+    exposure_effect: 1.39 # Strong positive effect

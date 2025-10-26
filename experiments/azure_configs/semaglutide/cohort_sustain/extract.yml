@@ -1,0 +1,37 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ### Inputs
+  features: researcher_data:AKK/shared/features/semaglutide/training/v03/features
+  meds: researcher_data:AKK/shared/MEDS/SEMAGLUTIDE/cohort_selection/data
+  criteria_config: experiments/azure_configs/semaglutide/cohort_sustain/def.yaml
+  splits: [train, tuning]
+  exposures: "researcher-data:AKK/shared/outcomes/semaglutide/semaglutide/v01"
+  exposure: semaglutide.csv
+  ### Outputs
+  cohort: "researcher_data:AKK/experiments/semaglutide/cohorts/tte_all_ft/fu_2y/v02" # Data directory
+
+time_windows:
+  data_end:
+    year: 2024
+    month: 9
+    day: 10
+  data_start: # we include patients if they have only bg information
+    year: 1900
+    month: 1
+    day: 1
+  min_follow_up: # minimum interval between index date and end of data
+    days: 731
+  min_lookback: # minimum interval between start of data and index date
+    days: 0
+
+cv_folds: 5 # can be set to 1 if only a simple train/val split is needed
+val_ratio: 0.1 # only used if cv_folds is set to 1
+test_ratio: 0 # can be set to 1 for test set creation only
+
+index_date_matching:
+  birth_year_tolerance: 3
+  redraw_attempts: 3
+  age_adjusted: true # Set to false for non-age-adjusted sampling/ true by default

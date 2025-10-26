@@ -15,3 +15,4 @@ estimator:
   effect_type: "ATE"
   n_bootstrap: 30
   common_support_threshold: 0.01
+  clip_percentile: 1.0

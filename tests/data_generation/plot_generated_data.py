@@ -218,7 +218,6 @@ def save_comparison_figures(subject_ids, cf_data, outcome_df):
     plt.xlabel("Predicted - True Probability")
     plt.ylabel("Count")
 
-    plt.tight_layout()
     save_figure_with_azure_copy(
         plt.gcf(),
         os.path.join(figures_dir, "control_probas_comparison.png"),
@@ -261,7 +260,6 @@ def save_comparison_figures(subject_ids, cf_data, outcome_df):
     plt.xlabel("Predicted - True Probability")
     plt.ylabel("Count")
 
-    plt.tight_layout()
     save_figure_with_azure_copy(
         plt.gcf(),
         os.path.join(figures_dir, "treatment_probas_comparison.png"),
@@ -304,7 +302,6 @@ def save_comparison_figures(subject_ids, cf_data, outcome_df):
     plt.xlabel("Predicted - True Probability")
     plt.ylabel("Count")
 
-    plt.tight_layout()
     save_figure_with_azure_copy(
         plt.gcf(),
         os.path.join(figures_dir, "observed_probas_comparison.png"),

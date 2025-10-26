@@ -1,0 +1,16 @@
+logging:
+  level: INFO
+  path: ./outputs/logs
+
+paths:
+  ## INPUTS
+  code_counts: researcher-data:AKK/shared/MEDS/SEMAGLUTIDE/training/ # Folder containing the code counts
+
+  ## OUTPUTS
+  mapping: researcher-data:AKK/shared/MEDS/SEMAGLUTIDE/training/mapping_rare_10/
+
+file: code_counts.json # File containing the code counts (optional, default is code_counts.json)
+
+threshold: 10
+hierarchical_pattern: ^(?:M/|D/|P/|L/|RD/|RC/|RC_REG/|RC_SPEC/|RC_REASON/|RM/|RPS/|RPO/)
+separator: "/"

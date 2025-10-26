@@ -1,0 +1,33 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  ### Inputs
+  features: "{{FEATURES_DATA}}/"
+  meds: "{{MEDS_DATA}}"
+  splits: [tuning]
+  exposures: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/simulated_outcomes/"
+  exposure: exposure.csv
+  criteria_config: ./corebehrt/configs/causal/select_cohort_full/definitions.yaml
+
+  ### Outputs
+  cohort: "{{EXPERIMENTS_DIR}}/{{RUN_ID}}/{{EXPERIMENT_NAME}}/cohort/"
+
+time_windows:
+  data_end:
+    year: 2025
+    month: 01
+    day: 01
+  data_start:
+    year: 1920
+    month: 1
+    day: 1
+  min_follow_up:
+    days: 1
+  min_lookback:
+    days: 365
+
+cv_folds: 2
+val_ratio: 0.1
+test_ratio: 0

@@ -7,6 +7,7 @@ EXCLUDE_CODES = "exclude_codes"
 OPERATOR = "operator"
 EXPRESSION = "expression"
 UNIQUE_CRITERIA_LIST = "unique_criteria_list"
+EXTRACT_VALUE = "extract_value"
 
 INCLUSION = "inclusion"
 EXCLUSION = "exclusion"

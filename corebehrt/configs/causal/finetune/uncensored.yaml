@@ -29,13 +29,13 @@ trainer_args:
   batch_size: 128
   val_batch_size: 256
   effective_batch_size: 128
-  epochs: 7
+  epochs: 10
   info: true
   # gradient_clip:
   # clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
-  early_stopping: 3
+  early_stopping: 2
   stopping_criterion: roc_auc
   n_layers_to_freeze: 0
   freeze_encoder_on_plateau: false

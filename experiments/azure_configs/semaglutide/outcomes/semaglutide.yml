@@ -1,0 +1,28 @@
+logging:
+  level: INFO
+  path: ./logs
+
+paths:
+  ### inputs ###
+  data: researcher_data:AKK/shared/MEDS/SEMAGLUTIDE/training/data #azureml:AKK-OZEMPIC-MEDS:2
+  features: researcher-data:AKK/shared/features/semaglutide/training/v03/features
+  splits: [tuning]
+  ### output path ###
+  # outcomes: "researcher-data:AKK/shared/outcomes/semaglutide/semaglutide/v01"
+  outcomes: "researcher-data:AKK/tests/outcomes/semaglutide/v01"
+plot:
+  max_outcomes_to_plot: 100
+  max_subplots_per_figure: 10
+  wide_dist_threshold: 30
+
+outcomes:
+  semaglutide:
+    type: [code]
+    match: [
+        [
+          M/A10BJ06,
+          # RM/A10BJ06
+        ],
+      ]
+    match_how: contains
+    case_sensitive: true

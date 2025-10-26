@@ -61,6 +61,7 @@ def add_parser(subparsers) -> None:
             "xgboost_cv",
             "evaluate_xgboost",
             "get_pat_counts_by_code",
+            "run_batch_experiments",
         },
         help="Job to run.",
     )
@@ -97,6 +98,12 @@ def add_parser(subparsers) -> None:
         default=False,
         help="If set, system metrics such as CPU, GPU and memory usage are logged in Azure.",
     )
+    parser.add_argument(
+        "--bash-args",
+        type=str,
+        default="",
+        help="Arguments to pass to the bash script (for run_batch_experiments). Provide as a quoted string.",
+    )
     parser.set_defaults(func=create_and_run_job)
 
 
@@ -108,6 +115,11 @@ def create_and_run_job(args) -> None:
     cfg = load_config(path=args.config, job_name=args.JOB)
 
     register_output = parse_pair_args(args.register_output)
+
+    # Add bash_args to config if present (for run_batch_experiments)
+    bash_args = getattr(args, "bash_args", "")
+    if bash_args:
+        cfg["bash_args"] = bash_args
 
     job = util.job.create(
         args.JOB,

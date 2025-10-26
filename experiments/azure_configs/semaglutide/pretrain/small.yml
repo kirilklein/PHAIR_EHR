@@ -1,0 +1,63 @@
+paths:
+  ## INPUTS
+  prepared_data: "researcher_data:AKK/shared/prepared_pretrain/semaglutide/len_512/no_sep_no_cls/v01"
+  # restart_model: "researcher_data:AKK/shared/pretrain/models/ozempic/small_mid/v01"
+
+  ## OUTPUTS
+  model: "researcher_data:AKK/shared/pretrain/models/semaglutide/small/len_512/no_sep_no_cls/v01" # Save model/outputs to this folder
+  #runs: ./outputs/pretraining # Use for generating a new model folder
+
+data:
+  dataset:
+    ignore_special_tokens: true
+    masking_ratio: 0.8
+    replace_ratio: 0.1
+    select_ratio: 0.2
+  val_ratio: 0.2
+logging:
+  level: INFO
+  path: ./logs
+metrics:
+  mlm_loss:
+    _target_: corebehrt.modules.monitoring.metrics.LossAccessor
+    loss_name: loss
+  top1:
+    _target_: corebehrt.modules.monitoring.metrics.PrecisionAtK
+    topk: 1
+  top10:
+    _target_: corebehrt.modules.monitoring.metrics.PrecisionAtK
+    topk: 10
+model:
+  embedding_dropout: 0.1
+  hidden_size: 256
+  intermediate_size: 1024
+  max_position_embeddings: 1024
+  num_attention_heads: 4
+  num_hidden_layers: 4
+  type_vocab_size: 1000
+
+  age_scale: 1e-2
+  abspos_scale: 1e-4
+  age_shift: 0
+  abspos_shift: 0
+
+optimizer:
+  eps: 1.0e-06
+  lr: 0.002 # Reduced slightly from 0.0005
+
+scheduler:
+  # _target_: transformers.get_cosine_schedule_with_warmup
+  _target_: transformers.get_constant_schedule_with_warmup
+  num_warmup_epochs: 4 # ~10% warmup
+trainer_args:
+  batch_size: 512
+  compile: false
+  early_stopping: 3
+  effective_batch_size: 512
+  epochs: 50
+  gradient_clip:
+    clip_value: 1.0
+  info: true
+  num_workers: 1
+  sampler: null
+  shuffle: true

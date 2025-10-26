@@ -1,0 +1,23 @@
+# Very Strong Instrument Experiment (2.2)
+# Tests scenario with very strong instruments - confounding and outcome effects kept low
+
+experiment_name: ce0_cy0_y0_i2p2
+description: "Simulation with very strong instruments (2.2), no confounding, no outcome effect"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 0.0 # No confounding
+    shared_to_outcome: 0.0 # No confounding
+    exposure_only_to_exposure: 2.2 # Very strong instruments
+    outcome_only_to_outcome: 0.0 # No independent risks
+
+# outcomes:

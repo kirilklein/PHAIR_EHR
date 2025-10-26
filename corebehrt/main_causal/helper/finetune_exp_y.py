@@ -9,7 +9,7 @@ import logging
 import os
 from os.path import join
 from typing import Dict, List
-
+from pathlib import Path
 import torch
 
 from corebehrt.azure import setup_metrics_dir
@@ -124,7 +124,10 @@ def finetune_fold(
     )
 
     if cfg.get("visualize_weight_distributions", False):
-        visualize_weight_distributions(model, save_dir=join(fold_folder, "figs"))
+        fold_folder = Path(fold_folder)
+        visualize_weight_distributions(
+            model, save_dir=fold_folder.parent / "figs" / fold_folder.name
+        )
 
     trainer.model = model
     trainer.val_dataset = val_dataset
@@ -147,10 +150,13 @@ def finetune_fold(
             )
 
     if cfg.get("save_encodings", False):
-        encoding_dir = join(fold_folder, "encodings")
+        fold_folder = Path(fold_folder)
+        encoding_dir = fold_folder / "encodings"
         EncodingSaver(model, val_dataset, train_data.vocab, encoding_dir).save()
         if cfg.get("visualize_encodings", False):
             try:
-                EncodingAnalyzer(encoding_dir, join(encoding_dir, "figs")).analyze()
+                EncodingAnalyzer(
+                    encoding_dir, fold_folder.parent / "figs" / encoding_dir.name
+                ).analyze()
             except Exception as e:
                 logger.exception(f"Failed to visualize encodings: {e}")

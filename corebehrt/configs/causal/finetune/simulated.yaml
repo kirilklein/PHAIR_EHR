@@ -25,45 +25,49 @@ model:
     temperature: 1
     pooling_strategy: gru # cls or gru
   loss:
-    name: focal # bce by default
-    params:
-      gamma: 2.0
+    name: bce # bce by default
+    # params:
+    # gamma: 4.0
   initialize_sigmoid_bias: false
+
+data:
+  reshuffle: true # Enable reshuffling
+  # reshuffle_seed: 42  # Optional: specify seed for reproducibility
 
 trainer_args:
   loss_weight_function:
     _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt # function to calculate positive weights. Possible options: sqrt and effective_n_samples
-  batch_size: 128
+  batch_size: 256
   val_batch_size: 256
-  effective_batch_size: 128
-  epochs: 10
+  effective_batch_size: 256
+  epochs: 6
   info: true
   # gradient_clip:
   # clip_value: 1.0
   shuffle: true
   checkpoint_frequency: 1
-  early_stopping: 3
+  early_stopping: 2
   stopping_criterion: val_loss
   n_layers_to_freeze: 0
   freeze_encoder_on_plateau: true
   freeze_encoder_on_plateau_threshold: 0.01
-  freeze_encoder_on_plateau_patience: 5
+  freeze_encoder_on_plateau_patience: 2
 
   use_pcgrad: false
   plot_histograms: true
   save_curves: false
   plot_gradients: false
-  plot_gradients_frequency: 20
+  plot_gradients_frequency: 3
 
 optimizer:
-  lr: 5e-4
+  lr: 7e-5
   eps: 1e-6
   weight_decay: 0
 
 scheduler:
   _target_: transformers.get_cosine_schedule_with_warmup
-  num_training_epochs: 15
-  num_warmup_epochs: 2
+  num_training_epochs: 5
+  num_warmup_epochs: 1
 
 metrics:
   roc_auc:

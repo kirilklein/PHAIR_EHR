@@ -11,10 +11,11 @@ paths:
   estimate: ./outputs/causal/estimate/simple
 
 estimator:
-  methods: ["IPW", "TMLE"]
+  methods: ["IPW", "TMLE", "TMLE_TH"]
   effect_type: "ATE"
   n_bootstrap: 30
   common_support_threshold: 0.001
+  clip_percentile: 1.0
 
 plot:
   contingency_table:
