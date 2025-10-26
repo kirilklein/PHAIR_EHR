@@ -94,12 +94,12 @@ while [[ $# -gt 0 ]]; do
         --bert-only) RUN_BASELINE=false; shift ;;
         --run_id) RUN_ID="$2"; shift 2 ;;
         --overwrite) OVERWRITE=true; shift ;;
-        --experiment-dir|-e) EXPERIMENTS_DIR="$2"; shift 2 ;;
-        --base-configs-dir) BASE_CONFIGS_DIR="$2"; shift 2 ;;
-        --timeout-factor) TIMEOUT_FACTOR="$2"; shift 2 ;;
-        --base-seed) BASE_SEED="$2"; shift 2 ;;
-        --sample-fraction) SAMPLE_FRACTION="$2"; shift 2 ;;
-        --sample-size) SAMPLE_SIZE="$2"; shift 2 ;;
+        --experiment-dir|-e|--experiment_dir) EXPERIMENTS_DIR="$2"; shift 2 ;;
+        --base-configs-dir|--base_configs_dir) BASE_CONFIGS_DIR="$2"; shift 2 ;;
+        --timeout-factor|--timeout_factor) TIMEOUT_FACTOR="$2"; shift 2 ;;
+        --base-seed|--base_seed) BASE_SEED="$2"; shift 2 ;;
+        --sample-fraction|--sample_fraction) SAMPLE_FRACTION="$2"; shift 2 ;;
+        --sample-size|--sample_size) SAMPLE_SIZE="$2"; shift 2 ;;
         --meds)
             MEDS_DATA="$2"
             shift 2
@@ -112,7 +112,7 @@ while [[ $# -gt 0 ]]; do
             TOKENIZED_DATA="$2"
             shift 2
             ;;
-        --pretrain-model)
+        --pretrain-model|--pretrain_model)
             PRETRAIN_MODEL="$2"
             shift 2
             ;;

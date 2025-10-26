@@ -63,6 +63,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --failfast                Stop immediately if any experiment fails (default: continue to next)"
             echo "  (no options)              Run both baseline and BERT pipelines for all experiments"
             echo ""
+            echo "NOTE: Multi-word options support both hyphen and underscore (e.g., --timeout-factor or --timeout_factor)"
+            echo ""
             echo "AVAILABLE EXPERIMENTS:"
             if ls ../experiment_configs/*.yaml 1> /dev/null 2>&1; then
                 for file in ../experiment_configs/*.yaml; do
@@ -144,28 +146,29 @@ while [[ $# -gt 0 ]]; do
             FAILFAST=true
             shift
             ;;
-        -e|--experiment-dir)
+        -e|--experiment-dir|--experiment_dir)
             EXPERIMENTS_DIR="$2"
             shift 2
             ;;
-        --base-configs-dir)
+        --base-configs-dir|--base_configs_dir)
             BASE_CONFIGS_DIR="$2"
             shift 2
             ;;
-        --base-seed)
+        --base-seed|--base_seed)
             BASE_SEED="$2"
             shift 2
             ;;
-        --sample-fraction)
+        --sample-fraction|--sample_fraction)
             SAMPLE_FRACTION="$2"
             shift 2
             ;;
-        --sample-size)
+        --sample-size|--sample_size)
             SAMPLE_SIZE="$2"
             shift 2
             ;;
-        --timeout-factor)
+        --timeout-factor|--timeout_factor)
             TIMEOUT_FACTOR="$2"
+            echo "DEBUG: TIMEOUT_FACTOR set to $TIMEOUT_FACTOR"
             shift 2
             ;;
         --meds)
@@ -180,7 +183,7 @@ while [[ $# -gt 0 ]]; do
             TOKENIZED_DATA="$2"
             shift 2
             ;;
-        --pretrain-model)
+        --pretrain-model|--pretrain_model)
             PRETRAIN_MODEL="$2"
             shift 2
             ;;
@@ -364,6 +367,7 @@ for run_number in $(seq 1 $N_RUNS); do
         # Add timeout factor if specified
         if [ -n "$TIMEOUT_FACTOR" ]; then
             EXPERIMENT_ARGS="$EXPERIMENT_ARGS --timeout-factor $TIMEOUT_FACTOR"
+            echo "DEBUG: Adding timeout-factor to args: $TIMEOUT_FACTOR"
         fi
 
         # Add data path arguments
