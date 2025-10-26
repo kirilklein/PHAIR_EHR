@@ -21,15 +21,15 @@ model:
     shared_representation: false # whether to share the bigru representation for exposure and outcome
     bidirectional: true
     bottleneck_dim: 16
-    pooling_strategy: cls # cls or gru
+    pooling_strategy: gru # cls or gru
 
 trainer_args:
   loss_weight_function:
     _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt # function to calculate positive weights. Possible options: sqrt and effective_n_samples
-  batch_size: 256
+  batch_size: 128
   val_batch_size: 256
-  effective_batch_size: 256
-  epochs: 5
+  effective_batch_size: 128
+  epochs: 10
   info: true
   # gradient_clip:
   # clip_value: 1.0
