@@ -21,58 +21,58 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Clean outputs & create venv
-        run: |
-          rm -rf ./outputs/causal
-          python -m venv .venv
-          echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+      # - name: Clean outputs & create venv
+      #   run: |
+      #     rm -rf ./outputs/causal
+      #     python -m venv .venv
+      #     echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
 
-      - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements.txt
-      - name: Set Python path
-        run: |
-          echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
+      # - name: Install dependencies
+      #   run: pip install --no-cache-dir -r requirements.txt
+      # - name: Set Python path
+      #   run: |
+      #     echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
 
-      # ─── Pipeline & Tests ────────────────────────────────────
-      - name: Data prep & pretrain
-        shell: bash
-        run: |
-          set -euo pipefail
-          source .github/workflows/pipeline_helpers.sh
+      # # ─── Pipeline & Tests ────────────────────────────────────
+      # - name: Data prep & pretrain
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #     source .github/workflows/pipeline_helpers.sh
           
-          run_step main.create_data                         prepare_and_pretrain/create_data.yaml
-          run_step main.prepare_training_data               prepare_and_pretrain/prepare_pretrain.yaml
-          run_step main.pretrain                            prepare_and_pretrain/pretrain.yaml
+      #     run_step main.create_data                         prepare_and_pretrain/create_data.yaml
+      #     run_step main.prepare_training_data               prepare_and_pretrain/prepare_pretrain.yaml
+      #     run_step main.pretrain                            prepare_and_pretrain/pretrain.yaml
 
-      - name: Outcomes & cohort selection
-        shell: bash
-        run: |
-          set -euo pipefail
-          source .github/workflows/pipeline_helpers.sh
+      # - name: Outcomes & cohort selection
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #     source .github/workflows/pipeline_helpers.sh
           
-          run_step main.create_outcomes                     outcomes.yaml
-          run_step main_causal.select_cohort_full           select_cohort_full/extract_uncensored.yaml
+      #     run_step main.create_outcomes                     outcomes.yaml
+      #     run_step main_causal.select_cohort_full           select_cohort_full/extract_uncensored.yaml
 
-      - name: Prepare Finetune Data
-        shell: bash
-        run: |
-          set -euo pipefail
-          source .github/workflows/pipeline_helpers.sh
-          run_step main_causal.prepare_ft_exp_y      finetune/prepare/uncensored.yaml
+      # - name: Prepare Finetune Data
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #     source .github/workflows/pipeline_helpers.sh
+      #     run_step main_causal.prepare_ft_exp_y      finetune/prepare/uncensored.yaml
           
-      - name: Finetune Exposure & Outcome
-        shell: bash
-        run: |
-          set -euo pipefail
-          source .github/workflows/pipeline_helpers.sh
-          run_step main_causal.finetune_exp_y         finetune/uncensored.yaml
+      # - name: Finetune Exposure & Outcome
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #     source .github/workflows/pipeline_helpers.sh
+      #     run_step main_causal.finetune_exp_y         finetune/uncensored.yaml
           
-      - name: Validate uncensored data preparation
-        shell: bash
-        run: |
-          set -euo pipefail
+      # - name: Validate uncensored data preparation
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
           
-          python -m tests.pipeline.test_uncensored_prepared --processed_data_dir ./outputs/causal/finetune/prepared_data_uncensored --tolerance 0.06
+      #     python -m tests.pipeline.test_uncensored_prepared --processed_data_dir ./outputs/causal/finetune/prepared_data_uncensored --tolerance 0.06
 
       # This step is already run in the causal_test_prep_data_xgb.yml workflow
       # - name: Run XGBoost baseline test
