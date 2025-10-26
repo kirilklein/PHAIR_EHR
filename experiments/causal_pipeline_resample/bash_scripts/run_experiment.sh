@@ -8,6 +8,9 @@
 # --- Script Configuration ---
 set -e # Exit immediately if a command exits with a non-zero status.
 
+# Change to project root for consistent path handling
+cd "$(dirname "$0")/../../.."
+
 # Default timeouts in seconds
 TIMEOUT_SIMULATE=1800   # 30 mins
 TIMEOUT_COHORT=900      # 15 mins
@@ -169,7 +172,7 @@ run_step() {
 
 # 1. Generate Configs
 echo "Step 1: Generating experiment configs..."
-CONFIG_GEN_CMD="python ../python_scripts/generate_configs.py \"$EXPERIMENT_NAME\" --run_id \"$RUN_ID\" --experiments_dir \"$EXPERIMENTS_DIR\" --meds \"$MEDS_DATA\" --features \"$FEATURES_DATA\" --tokenized \"$TOKENIZED_DATA\" --pretrain-model \"$PRETRAIN_MODEL\" --base-seed \"$BASE_SEED\""
+CONFIG_GEN_CMD="python experiments/causal_pipeline_resample/python_scripts/generate_configs.py \"$EXPERIMENT_NAME\" --run_id \"$RUN_ID\" --experiments_dir \"$EXPERIMENTS_DIR\" --meds \"$MEDS_DATA\" --features \"$FEATURES_DATA\" --tokenized \"$TOKENIZED_DATA\" --pretrain-model \"$PRETRAIN_MODEL\" --base-seed \"$BASE_SEED\""
 if [ -n "$SAMPLE_SIZE" ]; then
     CONFIG_GEN_CMD="$CONFIG_GEN_CMD --sample-size \"$SAMPLE_SIZE\""
 elif [ -n "$SAMPLE_FRACTION" ]; then
@@ -183,11 +186,7 @@ if [ $? -ne 0 ]; then echo "ERROR: Config generation failed."; exit 1; fi
 echo "All configs generated successfully."
 echo ""
 
-# 2. Change to Project Root
-cd ../../..
-export PYTHONPATH="$PWD:$PYTHONPATH"
-
-# 3. Run Data Preparation Steps (ALWAYS run for resampling experiments)
+# 2. Run Data Preparation Steps (ALWAYS run for resampling experiments)
 echo "Step 2: Running Data Preparation Pipeline with Resampling..."
 echo "NOTE: Each run samples from MEDS data, then simulates and selects cohort"
 TARGET_DIR="$EXPERIMENTS_DIR/$RUN_ID/$EXPERIMENT_NAME"
@@ -195,7 +194,7 @@ run_step "simulate_outcomes_with_sampling" "corebehrt.main_causal.simulate_with_
 run_step "select_cohort" "corebehrt.main_causal.select_cohort_full" "select_cohort" "$TARGET_DIR/cohort/pids.pt" $TIMEOUT_COHORT
 run_step "prepare_finetune_data" "corebehrt.main_causal.prepare_ft_exp_y" "prepare_finetune" "$TARGET_DIR/prepared_data/patients.pt" $TIMEOUT_PREPARE
 
-# 4. Run Baseline Pipeline (if enabled)
+# 3. Run Baseline Pipeline (if enabled)
 if [ "$RUN_BASELINE" = "true" ]; then
     echo ""
     echo "========================================"
@@ -207,7 +206,7 @@ if [ "$RUN_BASELINE" = "true" ]; then
     run_step "estimate (Baseline)" "corebehrt.main_causal.estimate" "estimate" "$TARGET_DIR/estimate/baseline/estimate_results.csv" $TIMEOUT_EST_BL
 fi
 
-# 5. Run BERT Pipeline (if enabled)
+# 4. Run BERT Pipeline (if enabled)
 if [ "$RUN_BERT" = "true" ]; then
     echo ""
     echo "========================================"

@@ -5,6 +5,9 @@
 # Each run samples a different subset of the base cohort
 # ========================================
 
+# Change to project root for consistent path handling
+cd "$(dirname "$0")/../../.."
+
 # Note: Removed 'set -e' to prevent silent failures during debugging
 
 RUN_MODE="both"
@@ -66,8 +69,8 @@ while [[ $# -gt 0 ]]; do
             echo "NOTE: Multi-word options support both hyphen and underscore (e.g., --timeout-factor or --timeout_factor)"
             echo ""
             echo "AVAILABLE EXPERIMENTS:"
-            if ls ../experiment_configs/*.yaml 1> /dev/null 2>&1; then
-                for file in ../experiment_configs/*.yaml; do
+            if ls experiments/causal_pipeline_resample/experiment_configs/*.yaml 1> /dev/null 2>&1; then
+                for file in experiments/causal_pipeline_resample/experiment_configs/*.yaml; do
                     if [ -f "$file" ]; then
                         filename=$(basename "$file" .yaml)
                         echo "  - $filename"
@@ -213,9 +216,9 @@ echo "Running Multiple Causal Pipeline Experiments"
 
 # Set up logging
 mkdir -p "$EXPERIMENTS_DIR"
-mkdir -p "../logs"  # Create logs directory for per-experiment logs
+mkdir -p "$EXPERIMENTS_DIR/logs"  # Create logs directory for batch and per-experiment logs
 LOG_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="$EXPERIMENTS_DIR/batch_run_${LOG_TIMESTAMP}.log"
+LOG_FILE="$EXPERIMENTS_DIR/logs/batch_run_${LOG_TIMESTAMP}.log"
 echo "Log file: $LOG_FILE"
 echo "========================================"
 
@@ -389,8 +392,10 @@ for run_number in $(seq 1 $N_RUNS); do
         heartbeat_pid=$!
 
         # Run the experiment and capture output
-        EXPERIMENT_LOG_FILE="../logs/experiment_${RUN_ID}_${EXPERIMENT_NAME}_${LOG_TIMESTAMP}.log"
-        "./run_experiment.sh" "${EXPERIMENT_ARGS[@]}" 2>&1 | tee "$EXPERIMENT_LOG_FILE" | while IFS= read -r line; do
+        EXPERIMENT_LOG_DIR="$EXPERIMENTS_DIR/logs/experiments/${RUN_ID}/${EXPERIMENT_NAME}/"
+        mkdir -p "$EXPERIMENT_LOG_DIR"
+        EXPERIMENT_LOG_FILE="$EXPERIMENT_LOG_DIR/${LOG_TIMESTAMP}.log"
+        "experiments/causal_pipeline_resample/bash_scripts/run_experiment.sh" "${EXPERIMENT_ARGS[@]}" 2>&1 | tee "$EXPERIMENT_LOG_FILE" | while IFS= read -r line; do
             # Log key steps to main log file
             if [[ "$line" =~ "==== Running" ]] || [[ "$line" =~ "==== Skipping" ]] || [[ "$line" =~ "ERROR" ]] || [[ "$line" =~ "FAILED" ]] || [[ "$line" =~ "timed out" ]] || [[ "$line" =~ "TIMEOUT" ]]; then
                 echo "[$(date +"%H:%M:%S")] $line" >> "$LOG_FILE"
