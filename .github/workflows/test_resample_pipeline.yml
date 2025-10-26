@@ -1,0 +1,220 @@
+name: 'Test Resample Pipeline (Multiple Experiments)'
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeout_factor:
+        description: 'Timeout scaling factor (e.g., 0.1 for 10x faster)'
+        required: false
+        default: '0.1'
+      sample_size:
+        description: 'Number of patients to sample (small for testing)'
+        required: false
+        default: '100'
+      n_runs:
+        description: 'Number of runs to execute'
+        required: false
+        default: '2'
+      run_mode:
+        description: 'Pipeline mode'
+        required: false
+        default: 'baseline'
+        type: choice
+        options:
+          - baseline
+          - bert
+          - both
+
+permissions:
+  contents: read
+
+jobs:
+  test-resample-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+      # ─── Setup ───────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Clean outputs & create venv
+        run: |
+          rm -rf ./outputs/causal
+          python -m venv .venv
+          echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements.txt
+        
+      - name: Set Python path
+        run: |
+          echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
+
+      # ─── Data Preparation (Required for Pipeline) ────────────────────────────────────
+      - name: Data prep & pretrain
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .github/workflows/pipeline_helpers.sh
+          
+          echo "Creating MEDS data..."
+          run_step main.create_data prepare_and_pretrain/create_data.yaml
+          
+          echo "Preparing training data..."
+          run_step main.prepare_training_data prepare_and_pretrain/prepare_pretrain.yaml
+          
+          echo "Pretraining BERT model..."
+          run_step main.pretrain prepare_and_pretrain/pretrain.yaml
+
+      # ─── Run Multiple Experiments Test ────────────────────────────────────
+      - name: Test run_multiple_experiments.sh (baseline-only, quick)
+        shell: bash
+        working-directory: experiments/causal_pipeline_resample/bash_scripts
+        run: |
+          set -euo pipefail
+          
+          echo "========================================="
+          echo "Testing run_multiple_experiments.sh"
+          echo "========================================="
+          echo "Timeout factor: ${{ inputs.timeout_factor }}"
+          echo "Sample size: ${{ inputs.sample_size }}"
+          echo "Number of runs: ${{ inputs.n_runs }}"
+          echo "Run mode: ${{ inputs.run_mode }}"
+          echo "========================================="
+          
+          # Build arguments
+          ARGS=(
+            "--n_runs" "${{ inputs.n_runs }}"
+            "--timeout-factor" "${{ inputs.timeout_factor }}"
+            "--sample-size" "${{ inputs.sample_size }}"
+            "--experiment-dir" "../../../outputs/causal/sim_study_sampling/runs"
+            "--meds" "../../../example_data/synthea_meds_causal"
+            "--features" "../../../outputs/causal/data/features"
+            "--tokenized" "../../../outputs/causal/data/tokenized"
+            "--pretrain-model" "../../../outputs/causal/pretrain/model"
+          )
+          
+          # Add run mode flag
+          case "${{ inputs.run_mode }}" in
+            baseline)
+              ARGS+=("--baseline-only")
+              ;;
+            bert)
+              ARGS+=("--bert-only")
+              ;;
+            both)
+              # No flag needed
+              ;;
+          esac
+          
+          # Add experiment name
+          ARGS+=("ce0p62_cy0p62_y0p2_i0p2")
+          
+          # Run the script
+          chmod +x run_multiple_experiments.sh
+          ./run_multiple_experiments.sh "${ARGS[@]}"
+
+      # ─── Verify Results ────────────────────────────────────
+      - name: Verify experiment outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          echo "Checking experiment outputs..."
+          
+          # Check that runs were created
+          for run_num in $(seq 1 ${{ inputs.n_runs }}); do
+            RUN_ID=$(printf "run_%02d" $run_num)
+            EXPERIMENT_DIR="./outputs/causal/sim_study_sampling/runs/${RUN_ID}/ce0p62_cy0p62_y0p2_i0p2"
+            
+            echo "Checking ${RUN_ID}..."
+            
+            # Check simulated outcomes
+            if [ ! -f "${EXPERIMENT_DIR}/simulated_outcomes/counterfactuals.csv" ]; then
+              echo "ERROR: Missing counterfactuals.csv in ${RUN_ID}"
+              exit 1
+            fi
+            
+            # Check cohort
+            if [ ! -f "${EXPERIMENT_DIR}/cohort/pids.pt" ]; then
+              echo "ERROR: Missing cohort pids.pt in ${RUN_ID}"
+              exit 1
+            fi
+            
+            # Check prepared data
+            if [ ! -f "${EXPERIMENT_DIR}/prepared_data/patients.pt" ]; then
+              echo "ERROR: Missing prepared_data patients.pt in ${RUN_ID}"
+              exit 1
+            fi
+            
+            # Check baseline model outputs (if baseline mode)
+            if [ "${{ inputs.run_mode }}" == "baseline" ] || [ "${{ inputs.run_mode }}" == "both" ]; then
+              if [ ! -f "${EXPERIMENT_DIR}/models/baseline/combined_predictions.csv" ]; then
+                echo "ERROR: Missing baseline predictions in ${RUN_ID}"
+                exit 1
+              fi
+              
+              if [ ! -f "${EXPERIMENT_DIR}/estimate/baseline/estimate_results.csv" ]; then
+                echo "ERROR: Missing baseline estimates in ${RUN_ID}"
+                exit 1
+              fi
+            fi
+            
+            echo "✓ ${RUN_ID} outputs verified"
+          done
+          
+          echo "All experiment outputs verified successfully!"
+
+      # ─── Display Summary ────────────────────────────────────
+      - name: Display results summary
+        if: always()
+        shell: bash
+        run: |
+          echo "========================================="
+          echo "Pipeline Test Summary"
+          echo "========================================="
+          echo "Timeout factor: ${{ inputs.timeout_factor }}"
+          echo "Sample size: ${{ inputs.sample_size }}"
+          echo "Number of runs: ${{ inputs.n_runs }}"
+          echo "Run mode: ${{ inputs.run_mode }}"
+          echo ""
+          
+          # Check log files
+          if [ -d "./outputs/causal/sim_study_sampling/runs" ]; then
+            echo "Log files created:"
+            find ./outputs/causal/sim_study_sampling/runs -name "*.log" -type f 2>/dev/null || echo "No log files found"
+            echo ""
+            
+            echo "Run directories:"
+            ls -la ./outputs/causal/sim_study_sampling/runs/ 2>/dev/null || echo "No run directories found"
+          fi
+          
+          echo "========================================="
+
+      # ─── Upload Artifacts ────────────────────────────────────
+      - name: Upload experiment logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: experiment-logs
+          path: |
+            outputs/causal/sim_study_sampling/runs/**/*.log
+            experiments/causal_pipeline_resample/logs/**/*.log
+          if-no-files-found: ignore
+
+      - name: Upload experiment results
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: experiment-results
+          path: |
+            outputs/causal/sim_study_sampling/runs/**/estimate_results.csv
+            outputs/causal/sim_study_sampling/runs/**/counterfactuals.csv
+          if-no-files-found: warn
+
