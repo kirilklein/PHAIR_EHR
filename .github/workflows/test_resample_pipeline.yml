@@ -75,7 +75,6 @@ jobs:
       # ─── Run Multiple Experiments Test ────────────────────────────────────
       - name: Test run_multiple_experiments.sh (baseline-only, quick)
         shell: bash
-        working-directory: experiments/causal_pipeline_resample/bash_scripts
         run: |
           set -euo pipefail
           
@@ -88,16 +87,16 @@ jobs:
           echo "Run mode: ${{ inputs.run_mode }}"
           echo "========================================="
           
-          # Build arguments
+          # Build arguments (all paths are root-relative since script changes to root)
           ARGS=(
             "--n_runs" "${{ inputs.n_runs }}"
             "--timeout-factor" "${{ inputs.timeout_factor }}"
             "--sample-size" "${{ inputs.sample_size }}"
-            "--experiment-dir" "../../../outputs/causal/sim_study_sampling/runs"
-            "--meds" "../../../example_data/synthea_meds_causal"
-            "--features" "../../../outputs/causal/data/features"
-            "--tokenized" "../../../outputs/causal/data/tokenized"
-            "--pretrain-model" "../../../outputs/causal/pretrain/model"
+            "--experiment-dir" "./outputs/causal/sim_study_sampling/runs"
+            "--meds" "./example_data/synthea_meds_causal"
+            "--features" "./outputs/causal/data/features"
+            "--tokenized" "./outputs/causal/data/tokenized"
+            "--pretrain-model" "./outputs/causal/pretrain/model"
           )
           
           # Add run mode flag
@@ -116,9 +115,9 @@ jobs:
           # Add experiment name
           ARGS+=("ce0p62_cy0p62_y0p2_i0p2")
           
-          # Run the script
-          chmod +x run_multiple_experiments.sh
-          ./run_multiple_experiments.sh "${ARGS[@]}"
+          # Run the script (script will cd to root internally)
+          chmod +x experiments/causal_pipeline_resample/bash_scripts/run_multiple_experiments.sh
+          experiments/causal_pipeline_resample/bash_scripts/run_multiple_experiments.sh "${ARGS[@]}"
 
       # ─── Verify Results ────────────────────────────────────
       - name: Verify experiment outputs
@@ -186,11 +185,13 @@ jobs:
           echo ""
           
           # Check log files
-          if [ -d "./outputs/causal/sim_study_sampling/runs" ]; then
+          if [ -d "./outputs/causal/sim_study_sampling/runs/logs" ]; then
             echo "Log files created:"
-            find ./outputs/causal/sim_study_sampling/runs -name "*.log" -type f 2>/dev/null || echo "No log files found"
+            find ./outputs/causal/sim_study_sampling/runs/logs -name "*.log" -type f 2>/dev/null || echo "No log files found"
             echo ""
-            
+          fi
+          
+          if [ -d "./outputs/causal/sim_study_sampling/runs" ]; then
             echo "Run directories:"
             ls -la ./outputs/causal/sim_study_sampling/runs/ 2>/dev/null || echo "No run directories found"
           fi
@@ -204,8 +205,7 @@ jobs:
         with:
           name: experiment-logs
           path: |
-            outputs/causal/sim_study_sampling/runs/**/*.log
-            experiments/causal_pipeline_resample/logs/**/*.log
+            outputs/causal/sim_study_sampling/runs/logs/**/*.log
           if-no-files-found: ignore
 
       - name: Upload experiment results
