@@ -382,7 +382,7 @@ for run_number in $(seq 1 $N_RUNS); do
         # Start heartbeat process to keep terminal active during experiment
         (
             elapsed=0
-            heartbeat_interval=120  # Print every 2 minutes
+            heartbeat_interval=1200  # Print every 20 minutes
             while true; do
                 sleep $heartbeat_interval
                 elapsed=$((elapsed + heartbeat_interval))
