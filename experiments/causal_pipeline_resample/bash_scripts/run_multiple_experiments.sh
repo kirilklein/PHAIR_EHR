@@ -376,6 +376,18 @@ for run_number in $(seq 1 $N_RUNS); do
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --tokenized \"$TOKENIZED_DATA\""
         EXPERIMENT_ARGS="$EXPERIMENT_ARGS --pretrain-model \"$PRETRAIN_MODEL\""
 
+        # Start heartbeat process to keep terminal active during experiment
+        (
+            local elapsed=0
+            local heartbeat_interval=120  # Print every 2 minutes
+            while true; do
+                sleep $heartbeat_interval
+                elapsed=$((elapsed + heartbeat_interval))
+                echo "[HEARTBEAT] Experiment $RUN_ID/$EXPERIMENT_NAME still running... (${elapsed}s elapsed)"
+            done
+        ) &
+        local heartbeat_pid=$!
+
         # Run the experiment and capture output
         EXPERIMENT_LOG_FILE="../logs/experiment_${RUN_ID}_${EXPERIMENT_NAME}_${LOG_TIMESTAMP}.log"
         eval "./run_experiment.sh $EXPERIMENT_ARGS" 2>&1 | tee "$EXPERIMENT_LOG_FILE" | while IFS= read -r line; do
@@ -385,6 +397,10 @@ for run_number in $(seq 1 $N_RUNS); do
             fi
         done
         experiment_result=${PIPESTATUS[0]}
+
+        # Stop heartbeat process
+        kill $heartbeat_pid 2>/dev/null
+        wait $heartbeat_pid 2>/dev/null
 
         # Log end time and result
         end_time=$(date +"%H:%M:%S")
