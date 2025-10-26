@@ -133,7 +133,8 @@ run_step() {
     local timeout_secs=$5
 
     # Scale timeout by the factor (using awk for floating point arithmetic)
-    local effective_timeout=$(echo "$timeout_secs $TIMEOUT_FACTOR" | awk '{result = $1 * $2; printf "%d", (result < 1) ? 1 : result}')
+    local effective_timeout
+    effective_timeout=$(echo "$timeout_secs $TIMEOUT_FACTOR" | awk '{result = $1 * $2; printf "%d", (result < 1) ? 1 : result}')
     
     echo "DEBUG: Timeout calculation: $timeout_secs * $TIMEOUT_FACTOR = $effective_timeout seconds"
 

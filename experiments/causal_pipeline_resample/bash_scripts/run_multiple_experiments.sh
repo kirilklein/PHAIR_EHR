@@ -331,66 +331,66 @@ for run_number in $(seq 1 $N_RUNS); do
         # Call experiment with proper argument passing
         echo "DEBUG: Calling run_experiment.sh with experiment: $EXPERIMENT_NAME, run_id: $RUN_ID, mode: $RUN_MODE"
 
-        # Build command arguments
-        EXPERIMENT_ARGS="$EXPERIMENT_NAME --run_id $RUN_ID"
+        # Build command arguments using bash array
+        EXPERIMENT_ARGS=("$EXPERIMENT_NAME" "--run_id" "$RUN_ID")
 
         case $RUN_MODE in
             "baseline")
-                EXPERIMENT_ARGS="$EXPERIMENT_ARGS --baseline-only"
+                EXPERIMENT_ARGS+=("--baseline-only")
                 ;;
             "bert")
-                EXPERIMENT_ARGS="$EXPERIMENT_ARGS --bert-only"
+                EXPERIMENT_ARGS+=("--bert-only")
                 ;;
         esac
 
         # Add experiment directory
-        EXPERIMENT_ARGS="$EXPERIMENT_ARGS --experiment-dir \"$EXPERIMENTS_DIR\""
+        EXPERIMENT_ARGS+=("--experiment-dir" "$EXPERIMENTS_DIR")
 
         # Add base configs directory if specified
         if [ -n "$BASE_CONFIGS_DIR" ]; then
-            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-configs-dir \"$BASE_CONFIGS_DIR\""
+            EXPERIMENT_ARGS+=("--base-configs-dir" "$BASE_CONFIGS_DIR")
         fi
 
         # Add overwrite flag
         if [ "$OVERWRITE" = "true" ]; then
-            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --overwrite"
+            EXPERIMENT_ARGS+=("--overwrite")
         fi
 
         # Add resampling-specific arguments
-        EXPERIMENT_ARGS="$EXPERIMENT_ARGS --base-seed $BASE_SEED"
+        EXPERIMENT_ARGS+=("--base-seed" "$BASE_SEED")
         if [ -n "$SAMPLE_SIZE" ]; then
-            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-size $SAMPLE_SIZE"
+            EXPERIMENT_ARGS+=("--sample-size" "$SAMPLE_SIZE")
         elif [ -n "$SAMPLE_FRACTION" ]; then
-            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --sample-fraction $SAMPLE_FRACTION"
+            EXPERIMENT_ARGS+=("--sample-fraction" "$SAMPLE_FRACTION")
         fi
         
         # Add timeout factor if specified
         if [ -n "$TIMEOUT_FACTOR" ]; then
-            EXPERIMENT_ARGS="$EXPERIMENT_ARGS --timeout-factor $TIMEOUT_FACTOR"
+            EXPERIMENT_ARGS+=("--timeout-factor" "$TIMEOUT_FACTOR")
             echo "DEBUG: Adding timeout-factor to args: $TIMEOUT_FACTOR"
         fi
 
         # Add data path arguments
-        EXPERIMENT_ARGS="$EXPERIMENT_ARGS --meds \"$MEDS_DATA\""
-        EXPERIMENT_ARGS="$EXPERIMENT_ARGS --features \"$FEATURES_DATA\""
-        EXPERIMENT_ARGS="$EXPERIMENT_ARGS --tokenized \"$TOKENIZED_DATA\""
-        EXPERIMENT_ARGS="$EXPERIMENT_ARGS --pretrain-model \"$PRETRAIN_MODEL\""
+        EXPERIMENT_ARGS+=("--meds" "$MEDS_DATA")
+        EXPERIMENT_ARGS+=("--features" "$FEATURES_DATA")
+        EXPERIMENT_ARGS+=("--tokenized" "$TOKENIZED_DATA")
+        EXPERIMENT_ARGS+=("--pretrain-model" "$PRETRAIN_MODEL")
 
         # Start heartbeat process to keep terminal active during experiment
         (
-            local elapsed=0
-            local heartbeat_interval=120  # Print every 2 minutes
+            elapsed=0
+            heartbeat_interval=120  # Print every 2 minutes
             while true; do
                 sleep $heartbeat_interval
                 elapsed=$((elapsed + heartbeat_interval))
                 echo "[HEARTBEAT] Experiment $RUN_ID/$EXPERIMENT_NAME still running... (${elapsed}s elapsed)"
             done
         ) &
-        local heartbeat_pid=$!
+        heartbeat_pid=$!
 
         # Run the experiment and capture output
         EXPERIMENT_LOG_FILE="../logs/experiment_${RUN_ID}_${EXPERIMENT_NAME}_${LOG_TIMESTAMP}.log"
-        eval "./run_experiment.sh $EXPERIMENT_ARGS" 2>&1 | tee "$EXPERIMENT_LOG_FILE" | while IFS= read -r line; do
+        "./run_experiment.sh" "${EXPERIMENT_ARGS[@]}" 2>&1 | tee "$EXPERIMENT_LOG_FILE" | while IFS= read -r line; do
             # Log key steps to main log file
             if [[ "$line" =~ "==== Running" ]] || [[ "$line" =~ "==== Skipping" ]] || [[ "$line" =~ "ERROR" ]] || [[ "$line" =~ "FAILED" ]] || [[ "$line" =~ "timed out" ]] || [[ "$line" =~ "TIMEOUT" ]]; then
                 echo "[$(date +"%H:%M:%S")] $line" >> "$LOG_FILE"
