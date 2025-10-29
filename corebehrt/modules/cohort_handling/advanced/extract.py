@@ -192,7 +192,8 @@ class CohortExtractor:
             desc="Processing simple criteria",
         ):
             res = CriteriaExtraction.extract_codes(combined_df, crit_cfg)
-            res = rename_result(res, criterion, NUMERIC_VALUE in crit_cfg)
+            has_numeric = NUMERIC_VALUE in crit_cfg or EXTRACT_VALUE in crit_cfg
+            res = rename_result(res, criterion, has_numeric)
             results.append(res)
 
         if results:

@@ -175,39 +175,54 @@ def extract_numeric_values(
         result[CRITERION_FLAG] = False
         return result
 
-    # Extract most recent values BEFORE filtering by thresholds
     if extract_value:
-        # Get most recent value for each patient without threshold filtering
-        num_df_all = (
+        # When extract_value=True: get most recent value WITHOUT threshold filtering
+        # But flag should be based on whether THAT most recent value passes thresholds
+        num_df_recent = (
             num_df.sort_values(TIMESTAMP_COL).groupby(PID_COL).tail(1).reset_index()
         )
-        all_values_df = num_df_all[[PID_COL, NUMERIC_VALUE]]
+        num_df_recent = num_df_recent[[PID_COL, NUMERIC_VALUE]]
 
-    # Apply numeric range filtering for the criterion flag, if thresholds are specified.
-    if min_value is not None:
-        num_df = num_df[num_df[NUMERIC_VALUE] >= min_value]
-    if max_value is not None:
-        num_df = num_df[num_df[NUMERIC_VALUE] <= max_value]
+        # Merge with flag_df
+        result = flag_df.merge(num_df_recent, on=PID_COL, how="left")
 
-    # Group by patient and select the most recent event (by TIMESTAMP_COL)
-    if not num_df.empty:
-        num_df = (
-            num_df.sort_values(TIMESTAMP_COL).groupby(PID_COL).tail(1).reset_index()
-        )
-        num_df = num_df[[PID_COL, NUMERIC_VALUE]]
-        result = flag_df.merge(num_df, on=PID_COL, how="left")
+        # Set flag based on whether the most recent value passes thresholds
+        if min_value is not None or max_value is not None:
+            # Check if most recent value is in range
+            value_col = result[NUMERIC_VALUE]
+            in_range = pd.Series(True, index=result.index)
+
+            if min_value is not None:
+                in_range &= value_col >= min_value
+            if max_value is not None:
+                in_range &= value_col <= max_value
+
+            # Flag is True only if value exists AND is in range
+            result[CRITERION_FLAG] = value_col.notna() & in_range
+        else:
+            # No thresholds, flag is True if value exists
+            result[CRITERION_FLAG] = result[NUMERIC_VALUE].notna()
     else:
-        result = flag_df.copy()
-        result[NUMERIC_VALUE] = None
+        # Original behavior: find ANY value in range, take most recent of those
+        # Apply numeric range filtering for the criterion flag, if thresholds are specified.
+        if min_value is not None:
+            num_df = num_df[num_df[NUMERIC_VALUE] >= min_value]
+        if max_value is not None:
+            num_df = num_df[num_df[NUMERIC_VALUE] <= max_value]
 
-    # For numeric criteria, update the criterion flag: it is True only if a numeric value in the desired range exists.
-    result[CRITERION_FLAG] = result[NUMERIC_VALUE].notna()
+        # Group by patient and select the most recent event (by TIMESTAMP_COL)
+        if not num_df.empty:
+            num_df = (
+                num_df.sort_values(TIMESTAMP_COL).groupby(PID_COL).tail(1).reset_index()
+            )
+            num_df = num_df[[PID_COL, NUMERIC_VALUE]]
+            result = flag_df.merge(num_df, on=PID_COL, how="left")
+        else:
+            result = flag_df.copy()
+            result[NUMERIC_VALUE] = None
 
-    # If extract_value is True, replace NUMERIC_VALUE with raw values (ignoring thresholds)
-    if extract_value:
-        # Merge in the raw values, overwriting the threshold-filtered ones
-        result = result.drop(columns=[NUMERIC_VALUE])
-        result = result.merge(all_values_df, on=PID_COL, how="left")
+        # For numeric criteria, update the criterion flag: it is True only if a numeric value in the desired range exists.
+        result[CRITERION_FLAG] = result[NUMERIC_VALUE].notna()
 
     return result
 
