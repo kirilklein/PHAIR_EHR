@@ -14,10 +14,10 @@ from corebehrt.functional.cohort_handling.stats import StatConfig, get_stratifie
 
 def test_extract_value_basic():
     """Test basic extract_value functionality."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 1: Basic extract_value=True functionality")
-    print("="*70)
-    
+    print("=" * 70)
+
     # Create sample MEDS data with lab tests
     events = pd.DataFrame(
         {
@@ -52,9 +52,7 @@ def test_extract_value_basic():
     index_dates = pd.DataFrame(
         {
             PID_COL: [1, 2, 3],
-            TIMESTAMP_COL: to_datetime(
-                ["2023-02-10", "2023-02-15", "2023-02-01"]
-            ),
+            TIMESTAMP_COL: to_datetime(["2023-02-10", "2023-02-15", "2023-02-01"]),
         }
     )
 
@@ -70,10 +68,10 @@ def test_extract_value_basic():
 
     print(f"\nInput events (n={len(events)}):")
     print(events.to_string())
-    
+
     print(f"\nIndex dates:")
     print(index_dates.to_string())
-    
+
     print(f"\nCriteria config:")
     print(criteria_config)
 
@@ -82,7 +80,7 @@ def test_extract_value_basic():
 
     print(f"\n\nExtracted criteria (n={len(result)}):")
     print(result.to_string())
-    
+
     # Verify columns
     expected_cols = ["hba1c_value", "hba1c_value" + NUMERIC_VALUE_SUFFIX]
     print(f"\n\nColumn check:")
@@ -93,7 +91,7 @@ def test_extract_value_basic():
             print(f"    ERROR: Expected column {col} not found!")
             print(f"    Available columns: {list(result.columns)}")
             return False
-    
+
     # Verify values
     print(f"\n\nValue verification:")
     for pid in [1, 2, 3]:
@@ -103,27 +101,25 @@ def test_extract_value_basic():
         print(f"  Patient {pid}:")
         print(f"    Flag: {flag}")
         print(f"    Value: {value}")
-        
+
         if pd.isna(value):
             print(f"    ERROR: Expected numeric value, got NaN!")
             return False
-    
+
     print("\n✓ TEST 1 PASSED")
     return True
 
 
 def test_extract_value_with_threshold():
     """Test extract_value with thresholds."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 2: extract_value=True with thresholds")
-    print("="*70)
-    
+    print("=" * 70)
+
     events = pd.DataFrame(
         {
             PID_COL: [1, 1, 2],
-            TIMESTAMP_COL: to_datetime(
-                ["2023-01-01", "2023-01-15", "2023-01-05"]
-            ),
+            TIMESTAMP_COL: to_datetime(["2023-01-01", "2023-01-15", "2023-01-05"]),
             CONCEPT_COL: ["L/HBA1C", "L/HBA1C", "L/HBA1C"],
             VALUE_COL: [6.5, 7.2, 9.5],
         }
@@ -154,50 +150,54 @@ def test_extract_value_with_threshold():
     result = extractor.extract(events, index_dates)
 
     print(f"\n\nExtracted criteria:")
-    print(result[[PID_COL, "hba1c_high", "hba1c_high" + NUMERIC_VALUE_SUFFIX]].to_string())
-    
+    print(
+        result[[PID_COL, "hba1c_high", "hba1c_high" + NUMERIC_VALUE_SUFFIX]].to_string()
+    )
+
     # Verify Patient 1: value below threshold
     p1 = result[result[PID_COL] == 1].iloc[0]
     print(f"\n\nPatient 1 verification:")
     print(f"  Flag should be FALSE (value < 8.0): {p1['hba1c_high']}")
-    print(f"  Value should be 7.2 (raw value): {p1['hba1c_high' + NUMERIC_VALUE_SUFFIX]}")
-    
-    if p1['hba1c_high'] != False:
+    print(
+        f"  Value should be 7.2 (raw value): {p1['hba1c_high' + NUMERIC_VALUE_SUFFIX]}"
+    )
+
+    if p1["hba1c_high"] != False:
         print(f"  ERROR: Flag should be False!")
         return False
-    if abs(p1['hba1c_high' + NUMERIC_VALUE_SUFFIX] - 7.2) > 0.01:
+    if abs(p1["hba1c_high" + NUMERIC_VALUE_SUFFIX] - 7.2) > 0.01:
         print(f"  ERROR: Value should be 7.2!")
         return False
-    
+
     # Verify Patient 2: value above threshold
     p2 = result[result[PID_COL] == 2].iloc[0]
     print(f"\nPatient 2 verification:")
     print(f"  Flag should be TRUE (value >= 8.0): {p2['hba1c_high']}")
-    print(f"  Value should be 9.5 (raw value): {p2['hba1c_high' + NUMERIC_VALUE_SUFFIX]}")
-    
-    if p2['hba1c_high'] != True:
+    print(
+        f"  Value should be 9.5 (raw value): {p2['hba1c_high' + NUMERIC_VALUE_SUFFIX]}"
+    )
+
+    if p2["hba1c_high"] != True:
         print(f"  ERROR: Flag should be True!")
         return False
-    if abs(p2['hba1c_high' + NUMERIC_VALUE_SUFFIX] - 9.5) > 0.01:
+    if abs(p2["hba1c_high" + NUMERIC_VALUE_SUFFIX] - 9.5) > 0.01:
         print(f"  ERROR: Value should be 9.5!")
         return False
-    
+
     print("\n✓ TEST 2 PASSED")
     return True
 
 
 def test_stats_integration():
     """Test that stats calculation works with extracted numeric values."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 3: Stats calculation with numeric values")
-    print("="*70)
-    
+    print("=" * 70)
+
     events = pd.DataFrame(
         {
             PID_COL: [1, 2, 3],
-            TIMESTAMP_COL: to_datetime(
-                ["2023-01-01", "2023-01-05", "2023-01-10"]
-            ),
+            TIMESTAMP_COL: to_datetime(["2023-01-01", "2023-01-05", "2023-01-10"]),
             CONCEPT_COL: ["L/HBA1C", "L/HBA1C", "L/HBA1C"],
             VALUE_COL: [7.0, 8.0, 9.0],
         }
@@ -206,9 +206,7 @@ def test_stats_integration():
     index_dates = pd.DataFrame(
         {
             PID_COL: [1, 2, 3],
-            TIMESTAMP_COL: to_datetime(
-                ["2023-02-01", "2023-02-01", "2023-02-01"]
-            ),
+            TIMESTAMP_COL: to_datetime(["2023-02-01", "2023-02-01", "2023-02-01"]),
         }
     )
 
@@ -241,7 +239,7 @@ def test_stats_integration():
 
     print(f"\n\nBinary stats:")
     print(binary_stats.to_string())
-    
+
     print(f"\n\nNumeric stats:")
     print(numeric_stats.to_string())
 
@@ -269,23 +267,23 @@ def test_stats_integration():
         if abs(mean_val - 8.0) > 0.01:
             print("  ERROR: Mean should be 8.0!")
             return False
-    
+
     print("\n✓ TEST 3 PASSED")
     return True
 
 
 def main():
     """Run all tests."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("EXTRACT_VALUE FUNCTIONALITY TESTS")
-    print("="*70)
-    
+    print("=" * 70)
+
     tests = [
         test_extract_value_basic,
         test_extract_value_with_threshold,
         test_stats_integration,
     ]
-    
+
     results = []
     for test_func in tests:
         try:
@@ -295,16 +293,17 @@ def main():
             print(f"\n✗ TEST FAILED WITH EXCEPTION:")
             print(f"  {type(e).__name__}: {e}")
             import traceback
+
             traceback.print_exc()
             results.append(False)
-    
-    print("\n" + "="*70)
+
+    print("\n" + "=" * 70)
     print("SUMMARY")
-    print("="*70)
+    print("=" * 70)
     total = len(results)
     passed = sum(results)
     print(f"Tests passed: {passed}/{total}")
-    
+
     if passed == total:
         print("\n✓ ALL TESTS PASSED")
         return 0
@@ -315,4 +314,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-

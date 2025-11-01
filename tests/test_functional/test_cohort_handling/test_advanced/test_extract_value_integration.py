@@ -48,9 +48,7 @@ class TestExtractValueIntegration(unittest.TestCase):
         self.index_dates = pd.DataFrame(
             {
                 PID_COL: [1, 2, 3],
-                TIMESTAMP_COL: to_datetime(
-                    ["2023-02-10", "2023-02-15", "2023-02-01"]
-                ),
+                TIMESTAMP_COL: to_datetime(["2023-02-10", "2023-02-15", "2023-02-01"]),
             }
         )
 
@@ -289,12 +287,12 @@ class TestExtractValueIntegration(unittest.TestCase):
         extractor = CohortExtractor(criteria_config)
         result = extractor.extract(self.events, self.index_dates)
 
-        # Patient 1 (index: 2023-02-10): 
+        # Patient 1 (index: 2023-02-10):
         # Events:
         # - 2023-01-01 L/HBA1C 6.5 (40 days before) - outside window
         # - 2023-01-15 L/HBA1C 7.2 (26 days before) - outside window
         # - 2023-02-01 D/E11.9 (diagnosis, not HbA1c!)
-        # 
+        #
         # Window with start_days=-10, end_days=0: [2023-01-31, 2023-02-10]
         # Patient 1 has NO HbA1c within this window
         p1_row = result[result[PID_COL] == 1].iloc[0]
@@ -306,7 +304,7 @@ class TestExtractValueIntegration(unittest.TestCase):
         # - 2023-01-05 L/HBA1C 8.1 (41 days) - outside window
         # - 2023-01-20 L/HBA1C 7.8 (26 days) - outside window
         # - 2023-02-05 L/EGFR 55.0 (10 days) - inside window but it's EGFR, not HbA1c
-        # 
+        #
         # Window with start_days=-10, end_days=0: [2023-02-05, 2023-02-15]
         # Patient 2 has NO HbA1c within this window
         p2_row = result[result[PID_COL] == 2].iloc[0]
@@ -316,4 +314,3 @@ class TestExtractValueIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
