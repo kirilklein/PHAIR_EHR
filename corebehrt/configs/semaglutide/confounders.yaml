@@ -7,7 +7,6 @@
 ## - Kept original "diabetes" block but added "type2_diabetes" (recommended)
 
 criteria_definitions:
-
   ########################################
   # Exposure class (SGLT2 inhibitors)
   ########################################
@@ -189,3 +188,423 @@ criteria_definitions:
       - ^(?:D|RD)/DI259.*
     start_days: -1826
   arterial_claudication:
+    codes:
+      - ^(?:D|RD)/DI739A.*
+    start_days: -1826
+  atrial_fibrillation_flutter:
+    codes:
+      - ^(?:D|RD)/DI48.*
+    start_days: -1826
+  bradycardia:
+    codes:
+      - ^(?:D|RD)/DI440.*
+      - ^(?:D|RD)/DI441.*
+      - ^(?:D|RD)/DI442.*
+      - ^(?:D|RD)/DI443.*
+      - ^(?:D|RD)/DI455A.*
+      - ^(?:D|RD)/DI455B.*
+      - ^(?:D|RD)/DI455C.*
+      - ^(?:D|RD)/DI455G.*
+    start_days: -1826
+  aortic_aneurysm_dilation:
+    codes:
+      - ^(?:D|RD)/DI711.*
+      - ^(?:D|RD)/DI712.*
+      - ^(?:D|RD)/DI713.*
+      - ^(?:D|RD)/DI714.*
+      - ^(?:D|RD)/DI715.*
+      - ^(?:D|RD)/DI716.*
+      - ^(?:D|RD)/DI718.*
+      - ^(?:D|RD)/DI719.*
+    start_days: -1826
+  aortic_dissection:
+    codes:
+      - ^(?:D|RD)/DI710.*
+    start_days: -1826
+  aortic_regurgitation_stenosis:
+    codes:
+      - ^(?:D|RD)/DI06.*
+      - ^(?:D|RD)/DI35.*
+      - ^(?:D|RD)/DI391.*
+    start_days: -1826
+  mitral_regurgitation_stenosis:
+    codes:
+      - ^(?:D|RD)/DI05.*
+      - ^(?:D|RD)/DI34.*
+      - ^(?:D|RD)/DI390.*
+      - ^(?:D|RD)/DI511A.*
+    start_days: -1826
+  unstable_angina_pectoris:
+    codes:
+      - ^(?:D|RD)/DI200.*
+    start_days: -1826
+  pulmonary_embolism:
+    codes:
+      - ^(?:D|RD)/DI26.*
+    start_days: -1826
+  deep_vein_thrombosis:
+    codes:
+      - ^(?:D|RD)/DI801.*
+      - ^(?:D|RD)/DI802.*
+      - ^(?:D|RD)/DI803.*
+    start_days: -1826
+  hypercholesterolemia:
+    codes:
+      - ^(?:D|RD)/DE780.*
+    start_days: -1826
+  obesity:
+    codes:
+      - ^(?:D|RD)/DE65.*
+      - ^(?:D|RD)/DE66.*
+      - ^(?:D|RD)/DE67.*
+      - ^(?:D|RD)/DE68.*
+    start_days: -1826
+
+  ########################################
+  # Hypertension (split recency by source)
+  ########################################
+  hypertension_icd10:
+    codes:
+      - ^(?:D|RD)/DI10.*
+      - ^(?:D|RD)/DI11.*
+      - ^(?:D|RD)/DI12.*
+      - ^(?:D|RD)/DI13.*
+      - ^(?:D|RD)/DI14.*
+      - ^(?:D|RD)/DI15.*
+    start_days: -1826
+  hypertension_atc:
+    codes:
+      - ^(?:M|RM)/C09A.*   # ACE inhibitors
+      - ^(?:M|RM)/C09B.*   # ACEi combinations
+      - ^(?:M|RM)/C09C.*   # ARBs
+      - ^(?:M|RM)/C09D.*   # ARB combinations
+      - ^(?:M|RM)/C07.*    # Beta-blockers
+      - ^(?:M|RM)/C07FB.*  # BB combinations
+      - ^(?:M|RM)/C08.*    # CCB
+      - ^(?:M|RM)/C09BB.*  # ACEi + CCB
+      - ^(?:M|RM)/C09DB.*  # ARB + CCB
+      - ^(?:M|RM)/C03A.*   # Thiazides, plain
+      - ^(?:M|RM)/C03EA.*  # Sulfonamides, plain
+      - ^(?:M|RM)/C07B.*   # BB + thiazides
+      - ^(?:M|RM)/C07D.*   # BB + other diuretics
+      # Exclusions (kept from your list)
+      - ^(?:M|RM)/C09AA10.*  # Trandolapril
+      - ^(?:M|RM)/C09BB10.*  # Trandolapril
+      - ^(?:M|RM)/C09DX04.*  # Sacubitril/valsartan
+      - ^(?:M|RM)/C07AB12.*  # Nebivolol
+      - ^(?:M|RM)/C07BB12.*  # Nebivolol
+      - ^(?:M|RM)/C07FB12.*  # Nebivolol
+      - ^(?:M|RM)/C09DX05.*  # Nebivolol
+    start_days: -60
+  hypertension:
+    expression: hypertension_icd10 | hypertension_atc
+
+  ########################################
+  # Kidney & liver disease (history)
+  ########################################
+  chronic_kidney_disease:
+    codes:
+      - ^(?:D|RD)/DE102.*
+      - ^(?:D|RD)/DE112.*
+      - ^(?:D|RD)/DE142.*
+      - ^(?:D|RD)/DN03.*
+      - ^(?:D|RD)/DN05.*
+      - ^(?:D|RD)/DN110.*
+      - ^(?:D|RD)/DN14.*
+      - ^(?:D|RD)/DN16.*
+      - ^(?:D|RD)/DN18.*
+      - ^(?:D|RD)/DN19.*
+      - ^(?:D|RD)/DN269.*
+      - ^(?:D|RD)/DQ611.*
+      - ^(?:D|RD)/DQ612.*
+      - ^(?:D|RD)/DQ613.*
+      - ^(?:D|RD)/DQ614.*
+    start_days: -1826
+
+  liver_disease_mild:
+    codes:
+      - ^(?:D|RD)/DB18.*
+      - ^(?:D|RD)/DK700.*
+      - ^(?:D|RD)/DK701.*
+      - ^(?:D|RD)/DK702.*
+      - ^(?:D|RD)/DK703.*
+      - ^(?:D|RD)/DK709.*
+      - ^(?:D|RD)/DK713.*
+      - ^(?:D|RD)/DK714.*
+      - ^(?:D|RD)/DK715.*
+      - ^(?:D|RD)/DK717.*
+      - ^(?:D|RD)/DK73.*
+      - ^(?:D|RD)/DK74.*
+      - ^(?:D|RD)/DK760.*
+      - ^(?:D|RD)/DK762.*
+      - ^(?:D|RD)/DK763.*
+      - ^(?:D|RD)/DK764.*
+      - ^(?:D|RD)/DK768.*
+      - ^(?:D|RD)/DK769.*
+      - ^(?:D|RD)/DZ944.*
+    start_days: -1826
+  liver_disease_moderate_severe:
+    codes:
+      - ^(?:D|RD)/DI850.*
+      - ^(?:D|RD)/DI859.*
+      - ^(?:D|RD)/DI864.*
+      - ^(?:D|RD)/DI982.*
+      - ^(?:D|RD)/DK704.*
+      - ^(?:D|RD)/DK711.*
+      - ^(?:D|RD)/DK721.*
+      - ^(?:D|RD)/DK729.*
+      - ^(?:D|RD)/DK765.*
+      - ^(?:D|RD)/DK766.*
+      - ^(?:D|RD)/DK767.*
+    start_days: -1826
+  liver_disease:
+    expression: liver_disease_mild | liver_disease_moderate_severe
+
+  ########################################
+  # Antihyperglycemic medication use (confounders)
+  ########################################
+  metformin:
+    codes:
+      - ^(?:M|RM)/A10BA02.*
+      - ^(?:M|RM)/A10BD02.*
+      - ^(?:M|RM)/A10BD03.*
+      - ^(?:M|RM)/A10BD05.*
+      - ^(?:M|RM)/A10BD07.*
+      - ^(?:M|RM)/A10BD08.*
+      - ^(?:M|RM)/A10BD10.*
+      - ^(?:M|RM)/A10BD11.*
+      - ^(?:M|RM)/A10BD13.*
+      - ^(?:M|RM)/A10BD14.*
+      - ^(?:M|RM)/A10BD15.*
+      - ^(?:M|RM)/A10BD16.*
+      - ^(?:M|RM)/A10BD17.*
+      - ^(?:M|RM)/A10BD18.*
+      - ^(?:M|RM)/A10BD20.*
+      - ^(?:M|RM)/A10BD22.*
+      - ^(?:M|RM)/A10BD23.*
+      - ^(?:M|RM)/A10BD25.*
+      - ^(?:M|RM)/A10BD26.*
+      - ^(?:M|RM)/A10BD27.*
+    start_days: -60
+  insulin:
+    codes:
+      - ^(?:M|RM)/A10A.*
+    start_days: -60
+  sulfonylureas:
+    codes:
+      - ^(?:M|RM)/A10BB.*
+      - ^(?:M|RM)/A10BD01.*
+      - ^(?:M|RM)/A10BD02.*
+      - ^(?:M|RM)/A10BD04.*
+      - ^(?:M|RM)/A10BD06.*
+    start_days: -60
+  dipeptidyl_peptidase_4_inhibitors:
+    codes:
+      - ^(?:M|RM)/A10BH.*
+      - ^(?:M|RM)/A10BD0[7-9].*
+      - ^(?:M|RM)/A10BD1[012389].*
+      - ^(?:M|RM)/A10BD2[012457].*
+    start_days: -60
+  glucagon_like_peptide_1_agonists:
+    codes:
+      - ^(?:M|RM)/A10BJ.*
+      - ^(?:M|RM)/A10BX04.*
+      - ^(?:M|RM)/A10BX07.*
+      - ^(?:M|RM)/A10BX10.*
+      - ^(?:M|RM)/A10BX13.*
+      - ^(?:M|RM)/A10BX14.*
+    start_days: -60
+  thiazolidinediones:
+    codes:
+      - ^(?:M|RM)/A10BG.*
+    start_days: -60
+
+  ########################################
+  # Other medication use (confounders)
+  ########################################
+  ace_inhibitors:
+    codes:
+      - ^(?:M|RM)/C09AA.*
+      - ^(?:M|RM)/C02EA.*
+    start_days: -60
+  angiotensin_ii_receptor_blockers:
+    codes:
+      - ^(?:M|RM)/C09CA.*
+      - ^(?:M|RM)/C02EX01.*
+    start_days: -60
+  anticoagulants:
+    codes:
+      - ^(?:M|RM)/B01AA.*
+      - ^(?:M|RM)/B01AB.*
+      - ^(?:M|RM)/B01AE.*
+      - ^(?:M|RM)/B01AF.*
+    start_days: -60
+  antiplatelets:
+    codes:
+      - ^(?:M|RM)/B01AC.*
+      - ^(?:M|RM)/N02BA01.*
+    start_days: -60
+  beta_blockers:
+    codes:
+      - ^(?:M|RM)/C07.*
+    start_days: -60
+  calcium_channel_blockers:
+    codes:
+      - ^(?:M|RM)/C08.*
+    start_days: -60
+  diuretics:
+    codes:
+      - ^(?:M|RM)/C02DF01.*
+      - ^(?:M|RM)/C03.*
+    start_days: -60
+  glucocorticoids:
+    codes:
+      - ^(?:M|RM)/H02AB.*
+    start_days: -60
+  opioids:
+    codes:
+      - ^(?:M|RM)/N02A.*
+    start_days: -60
+  statins:
+    codes:
+      - ^(?:M|RM)/C10AA.*
+      - ^(?:M|RM)/C10B.*
+      - ^(?:M|RM)/B04AB.*
+    start_days: -60
+  nsaids:
+    codes:
+      - ^(?:M|RM)/M01A.*
+    start_days: -60
+  respiratory_medications:
+    codes:
+      - ^(?:M|RM)/R03.*
+    start_days: -60
+
+  ########################################
+  # Outcomes (no start_days; evaluate post-index)
+  ########################################
+  myocardial_infarction_outcome:
+    codes:
+      - ^(?:D|RD)/DI21.*
+  ischemic_stroke_outcome:
+    codes:
+      - ^(?:D|RD)/DI63.*
+      - ^(?:D|RD)/DI64.*
+  heart_failure:
+    codes:
+      - ^(?:D|RD)/DI110.*
+      - ^(?:D|RD)/DI130.*
+      - ^(?:D|RD)/DI132.*
+      - ^(?:D|RD)/DI420.*
+      - ^(?:D|RD)/DI426.*
+      - ^(?:D|RD)/DI427.*
+      - ^(?:D|RD)/DI428.*
+      - ^(?:D|RD)/DI429.*
+      - ^(?:D|RD)/DI500.*
+      - ^(?:D|RD)/DI501.*
+      - ^(?:D|RD)/DI502.*
+      - ^(?:D|RD)/DI503.*
+      - ^(?:D|RD)/DI508.*
+      - ^(?:D|RD)/DI509.*
+  cardiovascular_mortality:
+    codes:
+      - ^(?:D|RD)/DI00.*
+      - ^(?:D|RD)/DI01.*
+      - ^(?:D|RD)/DI02.*
+      - ^(?:D|RD)/DI03.*
+      - ^(?:D|RD)/DI04.*
+      - ^(?:D|RD)/DI05.*
+      - ^(?:D|RD)/DI06.*
+      - ^(?:D|RD)/DI07.*
+      - ^(?:D|RD)/DI08.*
+      - ^(?:D|RD)/DI09.*
+      - ^(?:D|RD)/DI10.*
+      - ^(?:D|RD)/DI11.*
+      - ^(?:D|RD)/DI12.*
+      - ^(?:D|RD)/DI13.*
+      - ^(?:D|RD)/DI14.*
+      - ^(?:D|RD)/DI15.*
+      - ^(?:D|RD)/DI16.*
+      - ^(?:D|RD)/DI17.*
+      - ^(?:D|RD)/DI18.*
+      - ^(?:D|RD)/DI19.*
+      - ^(?:D|RD)/DI20.*
+      - ^(?:D|RD)/DI21.*
+      - ^(?:D|RD)/DI22.*
+      - ^(?:D|RD)/DI23.*
+      - ^(?:D|RD)/DI24.*
+      - ^(?:D|RD)/DI25.*
+      - ^(?:D|RD)/DI26.*
+      - ^(?:D|RD)/DI27.*
+      - ^(?:D|RD)/DI28.*
+      - ^(?:D|RD)/DI29.*
+      - ^(?:D|RD)/DI30.*
+      - ^(?:D|RD)/DI31.*
+      - ^(?:D|RD)/DI32.*
+      - ^(?:D|RD)/DI33.*
+      - ^(?:D|RD)/DI34.*
+      - ^(?:D|RD)/DI35.*
+      - ^(?:D|RD)/DI36.*
+      - ^(?:D|RD)/DI37.*
+      - ^(?:D|RD)/DI38.*
+      - ^(?:D|RD)/DI39.*
+      - ^(?:D|RD)/DI40.*
+      - ^(?:D|RD)/DI41.*
+      - ^(?:D|RD)/DI42.*
+      - ^(?:D|RD)/DI43.*
+      - ^(?:D|RD)/DI44.*
+      - ^(?:D|RD)/DI45.*
+      - ^(?:D|RD)/DI46.*
+      - ^(?:D|RD)/DI47.*
+      - ^(?:D|RD)/DI48.*
+      - ^(?:D|RD)/DI49.*
+      - ^(?:D|RD)/DI50.*
+      - ^(?:D|RD)/DI51.*
+      - ^(?:D|RD)/DI52.*
+      - ^(?:D|RD)/DI53.*
+      - ^(?:D|RD)/DI54.*
+      - ^(?:D|RD)/DI55.*
+      - ^(?:D|RD)/DI56.*
+      - ^(?:D|RD)/DI57.*
+      - ^(?:D|RD)/DI58.*
+      - ^(?:D|RD)/DI59.*
+      - ^(?:D|RD)/DI60.*
+      - ^(?:D|RD)/DI61.*
+      - ^(?:D|RD)/DI62.*
+      - ^(?:D|RD)/DI63.*
+      - ^(?:D|RD)/DI64.*
+      - ^(?:D|RD)/DI65.*
+      - ^(?:D|RD)/DI66.*
+      - ^(?:D|RD)/DI67.*
+      - ^(?:D|RD)/DI68.*
+      - ^(?:D|RD)/DI69.*
+      - ^(?:D|RD)/DI70.*
+      - ^(?:D|RD)/DI71.*
+      - ^(?:D|RD)/DI72.*
+      - ^(?:D|RD)/DI73.*
+      - ^(?:D|RD)/DI74.*
+      - ^(?:D|RD)/DI75.*
+      - ^(?:D|RD)/DI76.*
+      - ^(?:D|RD)/DI77.*
+      - ^(?:D|RD)/DI78.*
+      - ^(?:D|RD)/DI79.*
+      - ^(?:D|RD)/DI80.*
+      - ^(?:D|RD)/DI81.*
+      - ^(?:D|RD)/DI82.*
+      - ^(?:D|RD)/DI83.*
+      - ^(?:D|RD)/DI84.*
+      - ^(?:D|RD)/DI85.*
+      - ^(?:D|RD)/DI86.*
+      - ^(?:D|RD)/DI87.*
+      - ^(?:D|RD)/DI88.*
+      - ^(?:D|RD)/DI89.*
+      - ^(?:D|RD)/DI90.*
+      - ^(?:D|RD)/DI91.*
+      - ^(?:D|RD)/DI92.*
+      - ^(?:D|RD)/DI93.*
+      - ^(?:D|RD)/DI94.*
+      - ^(?:D|RD)/DI95.*
+      - ^(?:D|RD)/DI96.*
+      - ^(?:D|RD)/DI97.*
+      - ^(?:D|RD)/DI98.*
+      - ^(?:D|RD)/DI99.*
