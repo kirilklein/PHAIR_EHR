@@ -1,25 +1,30 @@
 # Configuration for running batch resampling experiments on Azure
-# This config provides data paths for the batch experiments runner
+# This config provides data paths and experiment names for the batch experiments runner
+
+# List of experiments to run (required)
+experiments:
+  - ce0p62_cy0p62_y0p2_i0p2
+  - ce0p62_cy0p62_y0p62_i0p62
 
 paths:
   # Input data directories
-  meds: "researcher-data:TRACE/meds"
-  features: "researcher-data:PHAIR_EHR/features"
-  tokenized: "researcher-data:PHAIR_EHR/tokenized"
-  pretrain_model: "researcher-data:PHAIR_EHR/pretrain/model"
+  meds: "researcher_data:AKK/shared/MEDS/TRACE/v01/data"
+  features: "researcher_data:AKK/shared/features/trace/v01/features"
+  tokenized: "researcher_data:AKK/shared/features/trace/v01/tokenized"
+  pretrain_model: "researcher_data:AKK/shared/pretrain/models/trace/small/len_512/v01"
   
   # Output directory for batch experiment results
-  results: "researcher-data:PHAIR_EHR/experiments/batch_results"
+  results: "researcher_data:AKK/shared/experiments/batch_results"
 
-# Note: Additional arguments (experiment names, flags, etc.) are passed
-# via command line and forwarded to run_multiple_experiments.sh
-# 
 # Example usage:
 #   python -m corebehrt.azure job run_batch_experiments CPU-20-LP \
 #       -e "batch_run_resampling" \
-#       -c azure_configs/run_batch_experiments.yaml \
-#       -- ce0p62_cy0p62_y0p62_i0p62 ce0p62_cy0p62_y0p2_i0p2 \
-#       --n_runs 100 \
-#       --sample-fraction 0.1 \
-#       --baseline-only
+#       -c custom_config.yaml \
+#       --bash-args "--n_runs 20 --baseline-only --sample-fraction 0.1 --timeout-factor 10 --failfast --base-configs-dir ./experiments/causal_pipeline_resample/base_configs_azure"
+#
+# Notes:
+#   - Experiment names are specified in the config file under 'experiments' field
+#   - Additional flags (n_runs, timeout-factor, etc.) are passed via --bash-args
+#   - The --experiment-dir flag in --bash-args will override paths.results if specified
+#   - No timeout is enforced; jobs can run as long as needed
 

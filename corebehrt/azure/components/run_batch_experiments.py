@@ -33,6 +33,11 @@ def main_run_batch(config_path):
 
     cfg = load_config(config_path)
 
+    # Get experiment names from config
+    experiments = cfg.get("experiments", [])
+    if not experiments:
+        raise ValueError("No experiments specified in config. Please add 'experiments' field with list of experiment names.")
+
     # Build bash command with data paths from config
     cmd = ["bash", bash_script]
 
@@ -48,25 +53,24 @@ def main_run_batch(config_path):
         # Parse the bash_args string and add to command
         cmd.extend(shlex.split(cfg.bash_args))
 
+    # Add experiment names at the end
+    cmd.extend(experiments)
+
     print(f"Running command: {' '.join(cmd)}")
 
-    # Run the bash script
+    # Run the bash script (no timeout - let it run as long as needed)
     try:
         result = subprocess.run(
             cmd,
             check=True,
             capture_output=True,
             text=True,
-            timeout=3600,  # 1 hour timeout, adjust as needed
         )
         print(f"Script output:\n{result.stdout}")
         return result.returncode
     except subprocess.CalledProcessError as e:
         print(f"Script failed with exit code {e.returncode}")
         print(f"stderr:\n{e.stderr}")
-        raise
-    except subprocess.TimeoutExpired:
-        print(f"Script timed out after 3600 seconds")
         raise
 
 
