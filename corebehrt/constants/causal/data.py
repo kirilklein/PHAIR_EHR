@@ -80,6 +80,12 @@ class EffectColumns:
     CI95_upper = "CI95_upper"
     effect_1 = "effect_1"
     effect_0 = "effect_0"
+    effect_1_CI95_upper = "effect_1_CI95_upper"
+    effect_1_CI95_lower = "effect_1_CI95_lower"
+    effect_0_CI95_upper = "effect_0_CI95_upper"
+    effect_0_CI95_lower = "effect_0_CI95_lower"
+    effect_1_std_err = "effect_1_std_err"
+    effect_0_std_err = "effect_0_std_err"
     outcome = OUTCOME
 
     @classmethod
