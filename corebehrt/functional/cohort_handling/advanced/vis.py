@@ -1,4 +1,5 @@
 from typing import Dict, Tuple, List
+import os
 
 import matplotlib
 
@@ -415,7 +416,13 @@ def plot_age_distribution(
     save_path: str,
     logger: logging.Logger,
 ):
-    """Plots the age distribution for exposed vs. control from a pre-calculated age column."""
+    """Plots the age distribution for exposed vs. control from a pre-calculated age column.
+
+    Creates three plots:
+    - Combined plot with both exposed and control groups
+    - Separate plot for exposed patients only
+    - Separate plot for control patients only
+    """
     logger.info("Plotting age at index date distribution.")
     plot_df = final_index_dates_with_age.copy()
 
@@ -424,7 +431,7 @@ def plot_age_distribution(
         plot_df[PID_COL].isin(control_pids), "Control", "Exposed"
     )
 
-    # 2. Create and save the histogram plot
+    # 2. Create and save the combined histogram plot
     plt.figure(figsize=(12, 7))
     sns.histplot(
         data=plot_df, x=AGE_COL, hue="group", kde=True, bins=40, element="step"
@@ -436,8 +443,47 @@ def plot_age_distribution(
     plt.tight_layout()
 
     save_figure_with_azure_copy(plt.gcf(), save_path, dpi=300)
+    logger.info(f"Saved combined age distribution plot to {save_path}")
 
-    logger.info(f"Saved age distribution plot to {save_path}")
+    # 3. Create and save exposed-only plot
+    base_path, ext = os.path.splitext(save_path)
+    exposed_save_path = f"{base_path}_exposed{ext}"
+
+    exposed_df = plot_df[plot_df["group"] == "Exposed"]
+    plt.figure(figsize=(12, 7))
+    sns.histplot(
+        data=exposed_df, x=AGE_COL, kde=True, bins=40, element="step", color="steelblue"
+    )
+    plt.title("Age Distribution at Index Date (Exposed)")
+    plt.xlabel("Age (years)")
+    plt.ylabel("Patient Count")
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+    plt.tight_layout()
+
+    save_figure_with_azure_copy(plt.gcf(), exposed_save_path, dpi=300)
+    logger.info(f"Saved exposed age distribution plot to {exposed_save_path}")
+
+    # 4. Create and save control-only plot
+    control_save_path = f"{base_path}_control{ext}"
+
+    control_df = plot_df[plot_df["group"] == "Control"]
+    plt.figure(figsize=(12, 7))
+    sns.histplot(
+        data=control_df,
+        x=AGE_COL,
+        kde=True,
+        bins=40,
+        element="step",
+        color="darkorange",
+    )
+    plt.title("Age Distribution at Index Date (Control)")
+    plt.xlabel("Age (years)")
+    plt.ylabel("Patient Count")
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+    plt.tight_layout()
+
+    save_figure_with_azure_copy(plt.gcf(), control_save_path, dpi=300)
+    logger.info(f"Saved control age distribution plot to {control_save_path}")
 
 
 def plot_index_date_distribution(
