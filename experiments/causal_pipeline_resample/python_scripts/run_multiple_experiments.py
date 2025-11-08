@@ -116,40 +116,68 @@ class ExperimentRunner:
         return 0 if not self.failed_experiments else 1
 
     def run_single_experiment(self, experiment_name: str, run_id: str) -> bool:
-        """Run a single experiment."""
+        """Run a single outer experiment with K inner reshuffles."""
         logger.info("")
         logger.info("-" * 80)
         logger.info(
             f"Running experiment {self.current_count} of {self.total_count}: {run_id}/{experiment_name}"
         )
+        logger.info(f"  Outer run: {run_id}")
+        logger.info(f"  Inner runs: {self.args.inner_runs}")
         logger.info("-" * 80)
 
         start_time = datetime.now()
 
         try:
-            # Generate configs
+            # STAGE 1: Data Preparation (ONCE per outer run)
+            logger.info("")
+            logger.info("=" * 80)
+            logger.info(f"STAGE 1: Data Preparation for {run_id}/{experiment_name}")
+            logger.info("=" * 80)
+
+            # Generate base configs
             self.generate_configs(experiment_name, run_id)
 
-            # Run pipeline steps
             target_dir = self.experiments_dir / run_id / experiment_name
 
-            # Data preparation (always run for resampling)
-            self.run_data_preparation(experiment_name, target_dir)
+            # Run data preparation steps (sample, simulate, prepare)
+            self.run_data_preparation(experiment_name, run_id, target_dir)
 
-            # Run baseline pipeline
-            if not self.args.bert_only:
-                self.run_baseline_pipeline(experiment_name, target_dir)
+            # STAGE 2: K Inner Runs (reshuffles for variance estimation)
+            logger.info("")
+            logger.info("=" * 80)
+            logger.info(f"STAGE 2: Running {self.args.inner_runs} Inner Reshuffles")
+            logger.info("=" * 80)
 
-            # Run BERT pipeline
-            if not self.args.baseline_only:
-                self.run_bert_pipeline(experiment_name, target_dir)
+            for k in range(1, self.args.inner_runs + 1):
+                inner_id = f"k_{k:02d}"
+                logger.info("")
+                logger.info("-" * 80)
+                logger.info(f"Inner run {k}/{self.args.inner_runs}: {inner_id}")
+                logger.info("-" * 80)
+
+                # Run baseline pipeline
+                if not self.args.bert_only:
+                    self.run_baseline_inner(
+                        experiment_name, run_id, target_dir, inner_id, k
+                    )
+
+                # Run BERT pipeline
+                if not self.args.baseline_only:
+                    self.run_bert_inner(
+                        experiment_name, run_id, target_dir, inner_id, k
+                    )
 
             # Success
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
+            logger.info("")
+            logger.info("=" * 80)
             logger.info(
                 f"✓ SUCCESS: {run_id}/{experiment_name} (duration: {duration:.1f}s)"
             )
+            logger.info(f"  Completed {self.args.inner_runs} inner runs")
+            logger.info("=" * 80)
             self.success_count += 1
             return True
 
@@ -188,12 +216,9 @@ class ExperimentRunner:
 
         logger.info("✓ Configs generated successfully")
 
-    def run_data_preparation(self, experiment_name: str, target_dir: Path):
-        """Run data preparation steps."""
-        logger.info("")
-        logger.info("=" * 80)
-        logger.info("Data Preparation Pipeline")
-        logger.info("=" * 80)
+    def run_data_preparation(self, experiment_name: str, run_id: str, target_dir: Path):
+        """Run data preparation steps (Stage 1 - once per outer run)."""
+        logger.info("Stage 1: Sampling, Simulation, and Data Preparation")
 
         # Simulate outcomes with sampling
         self.run_step(
@@ -213,37 +238,55 @@ class ExperimentRunner:
             experiment_name=experiment_name,
         )
 
-        # Prepare finetune data
+        # Prepare finetune data (creates base folds)
         self.run_step(
             step_name="prepare_finetune_data",
             main_func=main_prepare_finetune,
             config_name="prepare_finetune",
-            check_file=target_dir / "prepared_data" / "patients.pt",
+            check_file=target_dir
+            / "prepared_data"
+            / "folds.pt",  # Check for folds.pt not just patients.pt
             experiment_name=experiment_name,
         )
 
-    def run_baseline_pipeline(self, experiment_name: str, target_dir: Path):
-        """Run baseline (CatBoost) pipeline."""
-        logger.info("")
-        logger.info("=" * 80)
-        logger.info("Baseline Pipeline")
-        logger.info("=" * 80)
+        logger.info("✓ Stage 1 complete: Data ready for inner runs")
+
+    def run_baseline_inner(
+        self, experiment_name: str, run_id: str, target_dir: Path, inner_id: str, k: int
+    ):
+        """Run baseline (CatBoost) pipeline for one inner reshuffle."""
+        logger.info("Baseline Pipeline (with reshuffle)")
+
+        # Inner directory for this reshuffle
+        inner_dir = target_dir / "reshuffles" / inner_id
+
+        # Generate config with reshuffle enabled
+        config_name_suffix = f"_{inner_id}"
+        self.generate_inner_config(
+            experiment_name, run_id, "train_baseline", inner_dir, k, config_name_suffix
+        )
+        self.generate_inner_config(
+            experiment_name, run_id, "calibrate", inner_dir, k, config_name_suffix
+        )
+        self.generate_inner_config(
+            experiment_name, run_id, "estimate", inner_dir, k, config_name_suffix
+        )
 
         # Train baseline
         self.run_step(
-            step_name="train_baseline",
+            step_name=f"train_baseline ({inner_id})",
             main_func=main_baseline,
-            config_name="train_baseline",
-            check_file=target_dir / "models" / "baseline" / "combined_predictions.csv",
+            config_name=f"train_baseline{config_name_suffix}",
+            check_file=inner_dir / "models" / "baseline" / "combined_predictions.csv",
             experiment_name=experiment_name,
         )
 
         # Calibrate (baseline)
         self.run_step(
-            step_name="calibrate (Baseline)",
+            step_name=f"calibrate_baseline ({inner_id})",
             main_func=main_calibrate,
-            config_name="calibrate",
-            check_file=target_dir
+            config_name=f"calibrate{config_name_suffix}",
+            check_file=inner_dir
             / "models"
             / "baseline"
             / "calibrated"
@@ -253,35 +296,49 @@ class ExperimentRunner:
 
         # Estimate (baseline)
         self.run_step(
-            step_name="estimate (Baseline)",
+            step_name=f"estimate_baseline ({inner_id})",
             main_func=main_estimate,
-            config_name="estimate",
-            check_file=target_dir / "estimate" / "baseline" / "estimate_results.csv",
+            config_name=f"estimate{config_name_suffix}",
+            check_file=inner_dir / "estimate" / "baseline" / "estimate_results.csv",
             experiment_name=experiment_name,
         )
 
-    def run_bert_pipeline(self, experiment_name: str, target_dir: Path):
-        """Run BERT pipeline."""
-        logger.info("")
-        logger.info("=" * 80)
-        logger.info("BERT Pipeline")
-        logger.info("=" * 80)
+    def run_bert_inner(
+        self, experiment_name: str, run_id: str, target_dir: Path, inner_id: str, k: int
+    ):
+        """Run BERT pipeline for one inner reshuffle."""
+        logger.info("BERT Pipeline (with reshuffle)")
+
+        # Inner directory for this reshuffle
+        inner_dir = target_dir / "reshuffles" / inner_id
+
+        # Generate config with reshuffle enabled
+        config_name_suffix = f"_{inner_id}"
+        self.generate_inner_config(
+            experiment_name, run_id, "finetune_bert", inner_dir, k, config_name_suffix
+        )
+        self.generate_inner_config(
+            experiment_name, run_id, "calibrate_bert", inner_dir, k, config_name_suffix
+        )
+        self.generate_inner_config(
+            experiment_name, run_id, "estimate_bert", inner_dir, k, config_name_suffix
+        )
 
         # Finetune BERT
         self.run_step(
-            step_name="finetune (BERT)",
+            step_name=f"finetune_bert ({inner_id})",
             main_func=main_finetune,
-            config_name="finetune_bert",
-            check_file=target_dir / "models" / "bert" / "combined_predictions.csv",
+            config_name=f"finetune_bert{config_name_suffix}",
+            check_file=inner_dir / "models" / "bert" / "combined_predictions.csv",
             experiment_name=experiment_name,
         )
 
         # Calibrate (BERT)
         self.run_step(
-            step_name="calibrate (BERT)",
+            step_name=f"calibrate_bert ({inner_id})",
             main_func=main_calibrate,
-            config_name="calibrate_bert",
-            check_file=target_dir
+            config_name=f"calibrate_bert{config_name_suffix}",
+            check_file=inner_dir
             / "models"
             / "bert"
             / "calibrated"
@@ -291,12 +348,94 @@ class ExperimentRunner:
 
         # Estimate (BERT)
         self.run_step(
-            step_name="estimate (BERT)",
+            step_name=f"estimate_bert ({inner_id})",
             main_func=main_estimate,
-            config_name="estimate_bert",
-            check_file=target_dir / "estimate" / "bert" / "estimate_results.csv",
+            config_name=f"estimate_bert{config_name_suffix}",
+            check_file=inner_dir / "estimate" / "bert" / "estimate_results.csv",
             experiment_name=experiment_name,
         )
+
+    def generate_inner_config(
+        self,
+        experiment_name: str,
+        run_id: str,
+        base_config_name: str,
+        inner_dir: Path,
+        k: int,
+        config_name_suffix: str,
+    ):
+        """Generate config for an inner run with updated paths and reshuffle settings."""
+        import yaml
+
+        # Load the base config
+        base_config_path = (
+            Path("experiments/causal_pipeline_resample/generated_configs")
+            / experiment_name
+            / f"{base_config_name}.yaml"
+        )
+
+        with open(base_config_path, "r") as f:
+            config = yaml.safe_load(f)
+
+        # Update paths to point to inner directory
+        if "paths" in config:
+            # For finetune/train: update model output path
+            if "model" in config["paths"]:
+                # Replace the main output directory with reshuffles/k_XX
+                orig_model_path = Path(config["paths"]["model"])
+                # Get relative path after experiment directory
+                parts = list(orig_model_path.parts)
+                # Find "models" index and replace everything before it with inner_dir
+                if "models" in parts:
+                    models_idx = parts.index("models")
+                    new_path = inner_dir / Path(*parts[models_idx:])
+                    config["paths"]["model"] = str(new_path)
+
+            # For calibrate: update input (finetune_model) and output paths
+            if "finetune_model" in config["paths"]:
+                orig_path = Path(config["paths"]["finetune_model"])
+                parts = list(orig_path.parts)
+                if "models" in parts:
+                    models_idx = parts.index("models")
+                    new_path = inner_dir / Path(*parts[models_idx:])
+                    config["paths"]["finetune_model"] = str(new_path)
+
+            if "calibrated_predictions" in config["paths"]:
+                orig_path = Path(config["paths"]["calibrated_predictions"])
+                parts = list(orig_path.parts)
+                if "models" in parts:
+                    models_idx = parts.index("models")
+                    new_path = inner_dir / Path(*parts[models_idx:])
+                    config["paths"]["calibrated_predictions"] = str(new_path)
+
+            # For estimate: update input (calibrated) and output paths
+            if "estimate" in config["paths"]:
+                orig_path = Path(config["paths"]["estimate"])
+                parts = list(orig_path.parts)
+                if "estimate" in parts:
+                    est_idx = parts.index("estimate")
+                    new_path = inner_dir / Path(*parts[est_idx:])
+                    config["paths"]["estimate"] = str(new_path)
+
+        # Enable reshuffling for finetune/train configs
+        if "train_baseline" in base_config_name or "finetune" in base_config_name:
+            if "data" not in config:
+                config["data"] = {}
+            config["data"]["reshuffle"] = True
+            # Don't set reshuffle_seed - let it auto-generate from time for randomness
+
+        # Save the modified config
+        output_config_path = (
+            Path("experiments/causal_pipeline_resample/generated_configs")
+            / experiment_name
+            / f"{base_config_name}{config_name_suffix}.yaml"
+        )
+        output_config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_config_path, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+        logger.debug(f"Generated inner config: {output_config_path}")
 
     def run_step(
         self,
@@ -368,13 +507,21 @@ def parse_arguments() -> argparse.Namespace:
         "-n",
         type=int,
         default=1,
-        help="Number of runs to execute (default: 1)",
+        help="Number of outer runs to execute (default: 1)",
     )
     parser.add_argument(
         "--run_id",
         type=str,
         default=None,
         help="Specific run ID to use (overrides --n_runs)",
+    )
+    parser.add_argument(
+        "--inner_runs",
+        "-k",
+        dest="inner_runs",
+        type=int,
+        default=1,
+        help="Number of inner reshuffles per outer run for variance estimation (default: 1)",
     )
 
     # Pipeline mode
