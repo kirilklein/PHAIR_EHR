@@ -424,6 +424,16 @@ class ExperimentRunner:
             config["data"]["reshuffle"] = True
             # Don't set reshuffle_seed - let it auto-generate from time for randomness
 
+        # Update logging paths to include inner_id (prevents overwriting outputs)
+        if "logging" in config and isinstance(config["logging"], dict):
+            if "path" in config["logging"]:
+                orig_log_path = config["logging"]["path"]
+                # Append inner_id to create separate log directories per inner run
+                # Extract inner_id from config_name_suffix (e.g., "_k_01" -> "k_01")
+                inner_id_str = config_name_suffix.lstrip("_")
+                # e.g., "./outputs/logs" -> "./outputs/logs/k_01"
+                config["logging"]["path"] = f"{orig_log_path}/{inner_id_str}"
+
         # Save the modified config
         output_config_path = (
             Path("experiments/causal_pipeline_resample/generated_configs")
