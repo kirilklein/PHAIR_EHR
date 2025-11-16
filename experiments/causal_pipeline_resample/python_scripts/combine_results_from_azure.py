@@ -25,7 +25,9 @@ except ImportError:
     sys.exit(1)
 
 # Import the combination function from combine_results.py
-from combine_results import combine_estimate_results
+from experiments.causal_pipeline_resample.python_scripts.combine_results import (
+    combine_estimate_results,
+)
 
 
 def mount_and_combine(
