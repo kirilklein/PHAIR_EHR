@@ -59,6 +59,7 @@ from corebehrt.constants.cohort import (
     EXPRESSION,
     EXTRACT_VALUE,
     FINAL_MASK,
+    GET_DAYS_FROM_INDEX_DATE,
     INDEX_DATE,
     MAX_AGE,
     MAX_VALUE,
@@ -67,6 +68,8 @@ from corebehrt.constants.cohort import (
     MAX_TIME,
     MIN_VALUE,
     NUMERIC_VALUE,
+    GET_MAX_NUMERIC_VAL,
+    NUMERIC_VALUE_SUFFIX,
     START_DAYS,
     END_DAYS,
     TIME_MASK,
@@ -192,7 +195,7 @@ class CohortExtractor:
             desc="Processing simple criteria",
         ):
             res = CriteriaExtraction.extract_codes(combined_df, crit_cfg)
-            has_numeric = NUMERIC_VALUE in crit_cfg or EXTRACT_VALUE in crit_cfg
+            has_numeric = NUMERIC_VALUE in crit_cfg or EXTRACT_VALUE in crit_cfg or GET_DAYS_FROM_INDEX_DATE in crit_cfg
             res = rename_result(res, criterion, has_numeric)
             results.append(res)
 
@@ -319,7 +322,7 @@ class CohortExtractor:
 
     @staticmethod
     def _construct_local_dict(
-        initial_results: pd.DataFrame, expression_criteria: list
+        initial_results: pd.DataFrame, expression_criteria: list, get_numeric_values: bool
     ) -> dict:
         """Construct a local dictionary for the expression evaluation."""
         local_dict = {}
@@ -335,7 +338,25 @@ class CohortExtractor:
                 )
             # Convert to boolean.
             local_dict[criterion] = series.astype(bool)
-        return local_dict
+
+        if get_numeric_values:  
+            numeric_dict = {}
+            numeric_criteria = [c + NUMERIC_VALUE_SUFFIX for c in expression_criteria]
+            for n_criterion, criterion in zip(numeric_criteria, expression_criteria):
+                if n_criterion in initial_results.columns:
+                    series = initial_results[n_criterion]
+                    numeric_dict[criterion] = series.astype(float)
+                else:
+                    # Create a Series of NaN values with float dtype, aligned with initial_results index
+                    numeric_dict[criterion] = pd.Series(
+                        [float('nan')] * len(initial_results),
+                        index=initial_results.index,
+                        dtype=float
+                    )
+        else:
+            numeric_dict = {}
+
+        return local_dict, numeric_dict
 
 
 class ExpressionCriteriaResolver:
@@ -354,13 +375,21 @@ class ExpressionCriteriaResolver:
 
         for criterion, crit_cfg in criteria_to_resolve:
             if ExpressionCriteriaResolver.can_resolve(crit_cfg, resolved_criteria):
+                get_numeric_values = crit_cfg.get(GET_MAX_NUMERIC_VAL, False)
                 res = CriteriaExtraction.extract_expression(
-                    crit_cfg[EXPRESSION], all_results
+                    crit_cfg[EXPRESSION], all_results, get_numeric_values
                 )
-                res = res.rename(columns={CRITERION_FLAG: criterion})[
-                    [PID_COL, criterion]
-                ]
-                all_results[criterion] = res[criterion]
+                if get_numeric_values:
+                    res = res.rename(columns={CRITERION_FLAG: criterion, NUMERIC_VALUE: criterion + NUMERIC_VALUE_SUFFIX})[
+                        [PID_COL, criterion, criterion + NUMERIC_VALUE_SUFFIX]
+                    ]
+                    all_results[criterion] = res[criterion]
+                    all_results[criterion + NUMERIC_VALUE_SUFFIX] = res[criterion + NUMERIC_VALUE_SUFFIX]
+                else:
+                    res = res.rename(columns={CRITERION_FLAG: criterion})[
+                        [PID_COL, criterion]
+                    ]
+                    all_results[criterion] = res[criterion]
                 newly_resolved.add(criterion)
             else:
                 still_unresolved.append((criterion, crit_cfg))
@@ -393,7 +422,7 @@ class ExpressionCriteriaResolver:
 class CriteriaExtraction:
     @staticmethod
     def extract_expression(
-        expression: str, initial_results: pd.DataFrame
+        expression: str, initial_results: pd.DataFrame, get_numeric_values: bool
     ) -> pd.DataFrame:
         """
         Evaluate a composite criterion defined by an expression.
@@ -412,15 +441,29 @@ class CriteriaExtraction:
         expression_criteria = extract_criteria_names_from_expression(expression)
 
         # Construct the local dict for evaluation
-        local_dict = CohortExtractor._construct_local_dict(
-            initial_results, expression_criteria
+        local_dict, numeric_dict = CohortExtractor._construct_local_dict(
+            initial_results, expression_criteria, get_numeric_values
         )
 
         # Evaluate the expression
         composite_flag = pd.eval(expression, local_dict=local_dict)
 
         result = initial_results[[PID_COL]].copy()
+        
+        # Always set CRITERION_FLAG to the boolean result
         result[CRITERION_FLAG] = composite_flag
+        
+        if get_numeric_values:
+            # Compute maximum numeric value across criteria for each row
+            if numeric_dict:
+                numeric_df = pd.DataFrame(numeric_dict)
+                # Compute max across columns (axis=1) for each row
+                max_numeric_val = numeric_df.max(axis=1, skipna=True)
+                # Only set values where expression is True and we have valid numeric values
+                result[NUMERIC_VALUE] = pd.NA
+                mask = composite_flag & max_numeric_val.notna()
+                result.loc[mask, NUMERIC_VALUE] = max_numeric_val[mask]
+        
         return result
 
     @staticmethod
@@ -445,12 +488,68 @@ class CriteriaExtraction:
         return result
 
     @staticmethod
+    def _extract_days_from_index_date(
+        df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """
+        Extract days from index date for first event within FINAL_MASK.
+        
+        Filters to events within FINAL_MASK, takes the earliest event per patient,
+        and calculates the number of days from INDEX_DATE to that event's timestamp.
+        
+        Args:
+            df: DataFrame with FINAL_MASK, TIMESTAMP_COL, and INDEX_DATE columns
+            
+        Returns:
+            DataFrame with PID_COL and CRITERION_FLAG columns.
+            CRITERION_FLAG contains the number of days from index date if event matches,
+            otherwise None/NaN for patients without matching events.
+        """
+        # Filter to rows where FINAL_MASK is True (events within time window AND code matches)
+        matching_df = df[df[FINAL_MASK]].copy()
+        
+        if matching_df.empty:
+            # No matching events, return None for all patients
+            flag_df = pd.DataFrame({PID_COL: df[PID_COL].unique()})
+            flag_df[CRITERION_FLAG] = None
+            return flag_df
+        
+        # Sort by timestamp ascending to get earliest matching event
+        matching_df = matching_df.sort_values(
+            by=[PID_COL, TIMESTAMP_COL], 
+            ascending=[True, True]
+        )
+        
+        # Calculate days from index date for each matching event
+        matching_df["days_from_index"] = (
+            matching_df[INDEX_DATE] - matching_df[TIMESTAMP_COL]
+        ).dt.total_seconds() / (24 * 3600)  # Convert to days
+        
+        # Take first event per patient (earliest matching event)
+        first_events = matching_df.groupby(PID_COL).first().reset_index()
+        
+        # Use the days from index date for the earliest matching event
+        first_events[CRITERION_FLAG] = first_events["days_from_index"]
+        flag_df = first_events[[PID_COL, CRITERION_FLAG]]
+        
+        # Ensure all patients from original df are included (those without matching events get None)
+        all_pids_df = pd.DataFrame({PID_COL: df[PID_COL].unique()})
+        flag_df = all_pids_df.merge(
+            flag_df, on=PID_COL, how="left"
+        )
+        return flag_df
+
+    @staticmethod
     def extract_codes(
         combined_df: pd.DataFrame,
         crit_cfg: dict,
     ) -> pd.DataFrame:
         """
         Fully vectorized extraction for a code/numeric criterion.
+        
+        By default, uses .any() to create a binary flag (True if any matching event exists).
+        If days_from_index_date=True is specified, returns the number of days from INDEX_DATE
+        to the earliest matching event within FINAL_MASK (None if no matching event).
         """
         df = combined_df.copy()
         df = CriteriaExtraction._compute_time_window_for_criterion(
@@ -464,21 +563,52 @@ class CriteriaExtraction:
             df, crit_cfg[CODE_ENTRY], crit_cfg.get(EXCLUDE_CODES, [])
         )
         df[FINAL_MASK] = df[TIME_MASK] & df[CODE_MASK]
-        flag_df = (
-            df.groupby(PID_COL)[FINAL_MASK]
-            .any()
-            .reset_index()
-            .rename(columns={FINAL_MASK: CRITERION_FLAG})
-        )
-
-        has_numeric = NUMERIC_VALUE in crit_cfg or EXTRACT_VALUE in crit_cfg
-        if has_numeric:
-            min_val = crit_cfg.get(MIN_VALUE)
-            max_val = crit_cfg.get(MAX_VALUE)
-            extract_val = crit_cfg.get(EXTRACT_VALUE, False)
-            res = extract_numeric_values(
-                df, flag_df, min_val, max_val, extract_value=extract_val
+        
+        # Check if we should return days from index date
+        get_days = crit_cfg.get(GET_DAYS_FROM_INDEX_DATE, False)
+        
+        if get_days:
+            # Get days from index date - this returns numeric values in CRITERION_FLAG
+            days_df = CriteriaExtraction._extract_days_from_index_date(df)
+            # Create boolean flag based on whether days value exists
+            flag_df = days_df.copy()
+            boolean_flag = days_df[CRITERION_FLAG].notna()
+            # Move numeric days value to NUMERIC_VALUE column for proper renaming
+            flag_df[NUMERIC_VALUE] = days_df[CRITERION_FLAG]
+            # Set boolean flag
+            flag_df[CRITERION_FLAG] = boolean_flag
+        else:
+            # Default behavior: use .any() to create binary flag
+            flag_df = (
+                df.groupby(PID_COL)[FINAL_MASK]
+                .any()
+                .reset_index()
+                .rename(columns={FINAL_MASK: CRITERION_FLAG})
             )
+
+        has_numeric = NUMERIC_VALUE in crit_cfg or EXTRACT_VALUE in crit_cfg or get_days
+        if has_numeric:
+            # If get_days is True, we already have NUMERIC_VALUE set, so only process if we also have other numeric extraction
+            if get_days and not (NUMERIC_VALUE in crit_cfg or EXTRACT_VALUE in crit_cfg):
+                # Only days_from_index_date, no other numeric extraction needed
+                res = flag_df.copy()
+            else:
+                # Process numeric values (either from extract_value or in addition to get_days)
+                # Save the boolean flag before extract_numeric_values might modify it
+                saved_boolean_flag = flag_df[CRITERION_FLAG].copy()
+                min_val = crit_cfg.get(MIN_VALUE)
+                max_val = crit_cfg.get(MAX_VALUE)
+                extract_val = crit_cfg.get(EXTRACT_VALUE, False)
+                res = extract_numeric_values(
+                    df, flag_df, min_val, max_val, extract_value=extract_val
+                )
+                # If get_days was set, preserve the original boolean flag (based on days existence)
+                # and keep the days value in NUMERIC_VALUE
+                if get_days:
+                    res[CRITERION_FLAG] = saved_boolean_flag
+                    # Restore the days value if it was overwritten
+                    if NUMERIC_VALUE not in res.columns or res[NUMERIC_VALUE].isna().all():
+                        res[NUMERIC_VALUE] = flag_df[NUMERIC_VALUE]
         else:
             res = flag_df.copy()
             res[NUMERIC_VALUE] = None
