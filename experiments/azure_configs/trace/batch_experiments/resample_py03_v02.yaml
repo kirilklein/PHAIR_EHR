@@ -1,0 +1,34 @@
+# Batch resampling experiments configuration for TRACE data
+# Run multiple experiments with resampling from MEDS data
+# Based on the command:
+# ./run_multiple_experiments.sh \
+#     --n_runs 20 \
+#     --baseline-only \
+#     --sample-fraction 0.1 \
+#     --timeout-factor 10 \
+#     --failfast \
+#     --base-configs-dir "./experiments/causal_pipeline_resample/base_configs_azure" \
+#     ce0p62_cy0p62_y0p2_i0p2 ce0p62_cy0p62_y0p62_i0p62
+
+# List of experiments to run (required)
+experiments:
+  - ce0p62_cy0p62_y0p2_i0p2
+  - ce0p62_cy0p62_y0p62_i0p62
+
+paths:
+  # Input data directories (Azure datastore paths)
+  meds: "researcher_data:AKK/shared/MEDS/TRACE/v01/data"
+  features: "researcher_data:AKK/shared/features/trace/v01/features"
+  tokenized: "researcher_data:AKK/shared/features/trace/v01/tokenized"
+  pretrain_model: "researcher_data:AKK/shared/pretrain/models/trace/small/len_512/v01"
+  
+  # Output directory for batch experiment results
+  results: "researcher_data:AKK/shared/experiments/simulation/resample/py03/v02"
+
+# Submit the job with:
+#   python -m corebehrt.azure job run_batch_experiments CPU-20-LP \
+#       -e "trace_batch_resample_py03_v02" \
+#       -c experiments/azure_configs/trace/batch_experiments/resample_py03_v02.yaml \
+#       --bash-args "--n_runs 20 --baseline-only --sample-fraction 0.1 --timeout-factor 10 --failfast --base-configs-dir ./experiments/causal_pipeline_resample/base_configs_azure"
+
+

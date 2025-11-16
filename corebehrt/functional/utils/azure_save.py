@@ -49,8 +49,20 @@ def save_figure_with_azure_copy(
             out_dir = Path(azure_outputs) / "figs"
 
             # ✅ Extract subpath starting from "figs"/"figures" if present.
+            # If "reshuffles" exists before figures, preserve k_XX identifier
             # If absent, place just the filename in outputs/figs/.
             parts_lower = [p.lower() for p in save_path.parts]
+
+            # Check for reshuffles/k_XX pattern to preserve inner run identity
+            reshuffle_prefix = None
+            if "reshuffles" in parts_lower:
+                reshuffle_idx = parts_lower.index("reshuffles")
+                # Next part should be k_01, k_02, etc.
+                if reshuffle_idx + 1 < len(save_path.parts):
+                    reshuffle_prefix = save_path.parts[
+                        reshuffle_idx + 1
+                    ]  # e.g., "k_01"
+
             if "figs" in parts_lower:
                 idx = parts_lower.index("figs")
                 rel_path = Path(*save_path.parts[idx + 1 :])  # after figs/
@@ -60,6 +72,10 @@ def save_figure_with_azure_copy(
             else:
                 # No figs/figures in path → save at outputs/figs/<filename>
                 rel_path = Path(save_path.name)
+
+            # Prepend reshuffle identifier if present
+            if reshuffle_prefix:
+                rel_path = Path(reshuffle_prefix) / rel_path
 
             dest_path = out_dir / rel_path
             dest_path.parent.mkdir(parents=True, exist_ok=True)

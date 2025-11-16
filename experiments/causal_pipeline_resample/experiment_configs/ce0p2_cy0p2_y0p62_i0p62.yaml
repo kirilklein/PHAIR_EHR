@@ -1,0 +1,22 @@
+# Weak Confounding + Moderate Instruments Experiment
+# Tests scenario with weak confounding (0.2) but moderate instruments (0.62)
+
+experiment_name: ce0p2_cy0p2_y0p62_i0p62
+description: "Simulation with weak confounding (0.2) and moderate instruments (0.62) and moderate independent risks (0.62)"
+
+simulation_model:
+  num_shared_factors: 10
+  num_exposure_only_factors: 10
+  num_outcome_only_factors: 10
+
+  factor_mapping:
+    mean: 0.0
+    scale: 1.4
+    sparsity_factor: 0.8
+
+  influence_scales:
+    shared_to_exposure: 0.2 # Weak confounding
+    shared_to_outcome: 0.2 # Weak confounding
+    exposure_only_to_exposure: 0.62 # Moderate instruments
+    outcome_only_to_outcome: 0.62 # Moderate independent risks
+
