@@ -1,0 +1,234 @@
+## Confounders: harmonized with cohort logic and time windows
+## Notes:
+## - Medication windows: 60 days
+## - Labs (values): HbA1c 90d, eGFR 180d, lipids 365d
+## - Chronic diagnoses (history): 5 years (1826d)
+## - Outcomes: no start_days (to be evaluated post-index)
+## - Kept original "diabetes" block but added "type2_diabetes" (recommended)
+
+criteria_definitions:
+  female:
+    codes:
+      - GENDER//Kvinde
+
+  ########################################
+  # Diagnosis
+  ########################################
+
+  ischemic_heart_disease:
+    codes:
+      - ^(?:D|RD)/DI2[0-5].*
+    start_days: -1826
+
+  heart_failure:
+    codes:
+      - ^(?:D|RD)/DI50.*
+    start_days: -1826
+
+  hemorrhagic_stroke:
+    codes:
+      - ^(?:D|RD)/DI60[0-2].*
+    start_days: -1826
+
+  chronic_kidney_disease:
+    codes:
+      - ^(?:D|RD)/DN18[3-5].*
+      - ^(?:D|RD)/DN189.*
+    start_days: -1826
+
+  ischemic_stroke:
+    codes:
+      - ^(?:D|RD)/DI63.*
+    start_days: -1826
+
+  myocardial_infarction:
+    codes:
+      - ^(?:D|RD)/DI61.*
+      - ^(?:D|RD)/DI62.*
+    start_days: -1826
+
+  diabetic_retinopathy:
+    codes:
+      - ^(?:D|RD)/DE113.*
+      - ^(?:D|RD)/DH360
+    start_days: -1826
+
+  diabetic_nephropathy:
+    codes:
+      - ^(?:D|RD)/DE112.*
+      - ^(?:D|RD)/DH083
+    start_days: -1826
+
+  diabetic_neuropathy:
+    codes:
+      - ^(?:D|RD)/DE114.*
+      - ^(?:D|RD)/DG632
+    start_days: -1826
+
+  depression:
+    codes:
+      - ^(?:D|RD)/DF32.*
+      - ^(?:D|RD)/DF33.*
+    start_days: -1826
+
+  ########################################
+  # Medications
+  ########################################
+  statins:
+    codes:
+      - ^(?:M|RM)/C10AA.*
+    start_days: -180
+
+  ace_inhibitors:
+    codes:
+      - ^(?:M|RM)/C09AA.*
+      - ^(?:M|RM)/C02BA.*
+    start_days: -180
+
+  ARB:
+    codes:
+      - ^(?:M|RM)/C09CA.*
+      - ^(?:M|RM)/C02DA.*
+    start_days: -180
+
+  beta_blocks:
+    codes:
+      - ^(?:M|RM)/C07A.*
+      - ^(?:M|RM)/C07B.*
+    start_days: -180
+
+  thiazides:
+    codes:
+      - ^(?:M|RM)/C03AA.*
+      - ^(?:M|RM)/C03AB.*
+    start_days: -180
+
+  antiplatelet_therapy:
+    codes:
+      - ^(?:M|RM)/B01AC.*
+    start_days: -180
+
+  oral_anticoagulants:
+    codes:
+      - ^(?:M|RM)/B01AA.*
+      - ^(?:M|RM)/B01AE.*
+      - ^(?:M|RM)/B01AF.*
+    start_days: -180
+
+  ########################################
+  # Labs
+  ########################################
+  low_density_lipoprotein:
+    codes:
+      - '^L/KOLESTEROL LDL(?: \(BEREGNET\))?;P(?:\(FPT\))?$'
+    extract_value: true
+    start_days: -365
+
+  hemoglobin_a1c:
+    codes:
+      - .*GLOBIN A1C.*
+    extract_value: true
+    start_days: -365
+
+  ALT:
+    codes:
+      - .*ALANINTRANSAMINASE.* ### Alanin transferese?
+    extract_value: true
+    start_days: -365
+
+  estimated_glomerular_filtration_rate:
+    codes:
+      - ^L/.*EGFR.*1[.,]73.*
+    extract_value: true
+    start_days: -365
+
+  ########################################
+  # Diabetes (aligned with cohort)
+  ########################################
+  # Original broad definitions (kept for compatibility)
+  diabetes_icd10:
+    codes:
+      - ^(?:D|RD)/DE10.*
+      - ^(?:D|RD)/DE11.*
+      - ^(?:D|RD)/DE12.*
+      - ^(?:D|RD)/DE13.*
+      - ^(?:D|RD)/DE14.*
+      - ^(?:D|RD)/DH360.*
+    start_days: -9125
+    days_from_index_date: true
+    
+  icd10_do24:
+    codes:
+      - ^(?:D|RD)/DO24.*
+    start_days: -9125
+    days_from_index_date: true
+
+  icd10_do244:
+    codes:
+      - ^(?:D|RD)/DO244.*
+    start_days: -9125
+    days_from_index_date: true
+
+  icd10_do24_excluding_do244:
+    expression: icd10_do24 & ~icd10_do244
+  diabetes_atc_antihyperglycemic:
+    codes:
+      - ^(?:M|RM)/A10BA02.*  # Metformin
+      - ^(?:M|RM)/A10BD02.*
+      - ^(?:M|RM)/A10BD03.*
+      - ^(?:M|RM)/A10BD05.*
+      - ^(?:M|RM)/A10BD07.*
+      - ^(?:M|RM)/A10BD08.*
+      - ^(?:M|RM)/A10BD10.*
+      - ^(?:M|RM)/A10BD11.*
+      - ^(?:M|RM)/A10BD13.*
+      - ^(?:M|RM)/A10BD18.*
+      - ^(?:M|RM)/A10BD20.*
+      - ^(?:M|RM)/A10BD22.*
+      - ^(?:M|RM)/A10BD23.*
+      - ^(?:M|RM)/A10BD25.*
+      - ^(?:M|RM)/A10BD26.*
+      - ^(?:M|RM)/A10BD27.*
+      - ^(?:M|RM)/A10A.*     # Insulin
+      - ^(?:M|RM)/A10BB.*    # Sulfonylureas
+      - ^(?:M|RM)/A10BD01.*
+      - ^(?:M|RM)/A10BD02.*
+      - ^(?:M|RM)/A10BD04.*
+      - ^(?:M|RM)/A10BD06.*
+      - ^(?:M|RM)/A10BH.*    # DPP-4 inhibitors
+      - ^(?:M|RM)/A10BD07.*
+      - ^(?:M|RM)/A10BD13.*
+      - ^(?:M|RM)/A10BD18.*
+      - ^(?:M|RM)/A10BD19.*
+      - ^(?:M|RM)/A10BD21.*
+      - ^(?:M|RM)/A10BD22.*
+      - ^(?:M|RM)/A10BD24.*
+      - ^(?:M|RM)/A10BD25.*
+      - ^(?:M|RM)/A10BD27.*
+      - ^(?:M|RM)/A10BJ.*    # GLP-1 agonists
+      - ^(?:M|RM)/A10BX04.*
+      - ^(?:M|RM)/A10BX07.*
+      - ^(?:M|RM)/A10BX10.*
+      - ^(?:M|RM)/A10BX13.*
+      - ^(?:M|RM)/A10BX14.*
+      - ^(?:M|RM)/A10BD03.*  # TZDs
+      - ^(?:M|RM)/A10BD06.*
+      - ^(?:M|RM)/A10BD09.*
+      - ^(?:M|RM)/A10BD12.*
+      - ^(?:M|RM)/A10BD26.*
+      - ^(?:M|RM)/A10BG.*
+    start_days: -9125
+    days_from_index_date: true
+
+
+  # Broad "diabetes" (original): includes T1D + gestational via ICD10; prefer using type2_diabetes below
+  diabetes:
+    expression: diabetes_icd10 | diabetes_atc_antihyperglycemic | icd10_do24_excluding_do244
+    get_max_numeric_val: true
+
+  # Recommended T2D-aligned covariate (mirrors cohort)
+  type2_diabetes:
+    codes:
+      - ^(?:D|RD)/DC11.*     # ICD10 T2D
+      - ^(?:M|RM)/A10B.*     # non-insulin antidiabetics (optional support)
+    start_days: -9125
