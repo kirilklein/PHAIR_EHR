@@ -27,7 +27,7 @@ criteria_definitions:
 
   hemorrhagic_stroke:
     codes:
-      - ^(?:D|RD)/DI60[0-2].*
+      - ^(?:D|RD)/DI6[0-2].*
     start_days: -1826
 
   chronic_kidney_disease:
@@ -43,8 +43,8 @@ criteria_definitions:
 
   myocardial_infarction:
     codes:
-      - ^(?:D|RD)/DI61.*
-      - ^(?:D|RD)/DI62.*
+      - ^(?:D|RD)/DI21.*
+      - ^(?:D|RD)/DI22.*
     start_days: -1826
 
   diabetic_retinopathy:
@@ -56,7 +56,7 @@ criteria_definitions:
   diabetic_nephropathy:
     codes:
       - ^(?:D|RD)/DE112.*
-      - ^(?:D|RD)/DH083
+      - ^(?:D|RD)/DN083
     start_days: -1826
 
   diabetic_neuropathy:
@@ -69,6 +69,7 @@ criteria_definitions:
     codes:
       - ^(?:D|RD)/DF32.*
       - ^(?:D|RD)/DF33.*
+      - ^(?:M|RM)/N06A.* # included ATC
     start_days: -1826
 
   ########################################
@@ -154,20 +155,23 @@ criteria_definitions:
       - ^(?:D|RD)/DE13.*
       - ^(?:D|RD)/DE14.*
       - ^(?:D|RD)/DH360.*
-    start_days: -9125
+    #start_days: -9125
     days_from_index_date: true
+    start_days: -3650
     
   icd10_do24:
     codes:
       - ^(?:D|RD)/DO24.*
-    start_days: -9125
+    #start_days: -9125
     days_from_index_date: true
+    start_days: -3650
 
   icd10_do244:
     codes:
       - ^(?:D|RD)/DO244.*
-    start_days: -9125
+    #start_days: -9125
     days_from_index_date: true
+    start_days: -3650
 
   icd10_do24_excluding_do244:
     expression: icd10_do24 & ~icd10_do244
@@ -217,8 +221,9 @@ criteria_definitions:
       - ^(?:M|RM)/A10BD12.*
       - ^(?:M|RM)/A10BD26.*
       - ^(?:M|RM)/A10BG.*
-    start_days: -9125
+    #start_days: -9125
     days_from_index_date: true
+    start_days: -3650
 
 
   # Broad "diabetes" (original): includes T1D + gestational via ICD10; prefer using type2_diabetes below
@@ -231,4 +236,4 @@ criteria_definitions:
     codes:
       - ^(?:D|RD)/DC11.*     # ICD10 T2D
       - ^(?:M|RM)/A10B.*     # non-insulin antidiabetics (optional support)
-    start_days: -9125
+    start_days: -3650
