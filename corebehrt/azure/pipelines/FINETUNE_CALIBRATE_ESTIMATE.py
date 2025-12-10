@@ -6,10 +6,10 @@ Starts from prepared data and runs finetuning, calibration, and estimation.
 from typing import Any, Dict
 
 from corebehrt.azure.pipelines.base import PipelineArg, PipelineMeta
-
+from os.path import join
 FINETUNE_CALIBRATE_ESTIMATE = PipelineMeta(
     name="FINETUNE_CALIBRATE_ESTIMATE",
-    help="Run finetune, calibrate, and estimate starting from prepared data.",
+    help="Run finetune, calibrate, and estimate, and get stats starting from prepared data.",
     inputs=[
         PipelineArg(
             name="prepared_data",
@@ -63,6 +63,12 @@ def create(component: callable):
         estimate_kwargs = {
             "calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
         }
+
+        get_stats = component(
+            "get_stats",
+        )(
+            ps_calibrated_predictions=calibrate_exp_y.outputs.calibrated_predictions,
+        )
 
         # Add counterfactual outcomes if provided (for simulated data)
         if counterfactual_outcomes is not None:
