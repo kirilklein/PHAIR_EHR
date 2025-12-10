@@ -5,6 +5,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import torch
+import matplotlib.pyplot as plt
 
 from corebehrt.constants.causal.data import EXPOSURE_COL, PROBAS, PS_COL, TARGETS
 from corebehrt.constants.causal.paths import (
@@ -157,6 +158,43 @@ def save_stats(stats: Dict[str, pd.DataFrame], save_path: str, weighted: bool = 
         join(save_path, prefix + STATS_RAW_FILE_NUMERIC), index=False
     )
 
+def compute_smd(df):
+    # df is pivoted like your pivot or pivot_weighted
+    p1 = df['Exposed']
+    p0 = df['Control']
+    pooled_sd = ((p1*(1-p1) + p0*(1-p0)) / 2) ** 0.5
+    df['smd'] = (p1 - p0) / pooled_sd
+    return df
+
+def make_love_plot(stats: Dict[str, pd.DataFrame], weighted_stats: Dict[str, pd.DataFrame], save_path: str, filename: str):
+    """Make a love plot of the statistics."""
+    binary_stats = stats[FORMATTED][BINARY]
+    weighted_binary_stats = weighted_stats[FORMATTED][BINARY]
+
+    pivot = binary_stats.pivot(index='criterion', columns='group', values='percentage')
+
+    pivot['diff_exposed_control'] = pivot['Exposed'] - pivot['Control']
+    pivot = pivot.sort_values('diff_exposed_control')
+
+    pivot_weighted = weighted_binary_stats.pivot(index='criterion', columns='group', values='percentage')
+    pivot_weighted['diff_exposed_control'] = pivot_weighted['Exposed'] - pivot_weighted['Control']
+
+
+    pivot[['Exposed', 'Control']] = pivot[['Exposed', 'Control']] / 100
+    pivot_weighted[['Exposed', 'Control']] = pivot_weighted[['Exposed', 'Control']] / 100
+
+    pivot_smd = compute_smd(pivot).sort_values('smd')
+    pivot_weighted_smd = compute_smd(pivot_weighted).sort_values('smd')
+
+    fig = plt.figure(figsize=(8,10))
+    plt.scatter(pivot_smd['smd'], pivot_smd.index, label='Unweighted', alpha=0.7)
+    plt.scatter(pivot_weighted_smd['smd'], pivot_weighted_smd.index, label='Weighted', alpha=0.7)
+    plt.axvline(0, linestyle='--', linewidth=1)
+    plt.xlabel("Standardized Mean Difference")
+    plt.ylabel("Medication Criterion")
+    plt.title("Love Plot (SMD): Exposure vs Control")
+    plt.legend()
+    save_figure_with_azure_copy(fig, join(save_path, filename), dpi=200)
 
 def load_data(
     criteria_path: str,
