@@ -8,7 +8,8 @@ OPERATOR = "operator"
 EXPRESSION = "expression"
 UNIQUE_CRITERIA_LIST = "unique_criteria_list"
 EXTRACT_VALUE = "extract_value"
-
+GET_DAYS_FROM_INDEX_DATE = "days_from_index_date"
+GET_MAX_NUMERIC_VAL = "get_max_numeric_val"
 INCLUSION = "inclusion"
 EXCLUSION = "exclusion"
 
