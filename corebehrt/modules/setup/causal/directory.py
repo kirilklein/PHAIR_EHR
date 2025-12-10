@@ -195,7 +195,6 @@ class CausalDirectoryPreparer(DirectoryPreparer):
             self.check_directory("outcome_model")
 
         self.write_config("stats", name=GET_STATS_CFG)
-        self.create_run_directory(self.cfg.paths.plots, base="runs")
 
     def setup_prepare_finetune_exposure_multitarget(self, name=None) -> None:
         """

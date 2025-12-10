@@ -42,6 +42,7 @@ from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     log_stats,
     positivity_summary,
     ps_plot,
+    make_love_plot,
     save_stats,
 )
 from corebehrt.modules.setup.config import load_config
@@ -61,7 +62,6 @@ def main(config_path: str):
     logger.info("Starting get stats")
     path_cfg = cfg.paths
     criteria_path = path_cfg.criteria
-    plots_path = path_cfg.plots
 
     # optional
     cohort_path = path_cfg.get("cohort", None)
@@ -145,7 +145,7 @@ def main(config_path: str):
             logger.warning(f"Error plotting PS: {e}")
 
     if cfg.get("make_love_plot", False):
-        make_love_plot(stats, weighted_stats, plots_path, LOVE_PLOT_FILE)
+        make_love_plot(stats, weighted_stats, save_path, LOVE_PLOT_FILE)
 
     logger.info("Done")
 
