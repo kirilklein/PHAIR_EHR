@@ -5,6 +5,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import torch
+import matplotlib.pyplot as plt
 
 from corebehrt.constants.causal.data import EXPOSURE_COL, PROBAS, PS_COL, TARGETS
 from corebehrt.constants.causal.paths import (
@@ -156,6 +157,56 @@ def save_stats(stats: Dict[str, pd.DataFrame], save_path: str, weighted: bool = 
     stats[RAW][NUMERIC].to_csv(
         join(save_path, prefix + STATS_RAW_FILE_NUMERIC), index=False
     )
+
+
+def compute_smd(df):
+    """Compute the standardized mean difference for a dataframe between Exposed and Control."""
+    p1 = df[EXPOSED]
+    p0 = df[CONTROL]
+    pooled_sd = ((p1*(1-p1) + p0*(1-p0)) / 2) ** 0.5
+    # Handle division by zero when pooled_sd is 0
+    df['smd'] = np.where(pooled_sd > 0, (p1 - p0) / pooled_sd, 0)
+    return df
+
+
+def make_love_plot(
+    stats: Dict[str, pd.DataFrame],
+    weighted_stats: Dict[str, pd.DataFrame],
+    save_path: str,
+    filename: str,
+):
+    """Make a love plot of the statistics."""
+    binary_stats = stats[RAW][BINARY]
+    weighted_binary_stats = weighted_stats[RAW][BINARY]
+
+    # Pivot and convert percentages to proportions
+    pivot = binary_stats.pivot(index="criterion", columns="group", values="percentage")
+    pivot[[EXPOSED, CONTROL]] = pivot[[EXPOSED, CONTROL]] / 100
+
+    pivot_weighted = weighted_binary_stats.pivot(
+        index="criterion", columns="group", values="percentage"
+    )
+    pivot_weighted[[EXPOSED, CONTROL]] = (
+        pivot_weighted[[EXPOSED, CONTROL]] / 100
+    )
+
+    # Compute SMD and sort
+    pivot_smd = compute_smd(pivot).sort_values("smd")
+    pivot_weighted_smd = compute_smd(pivot_weighted).sort_values("smd")
+
+    # Create plot
+    fig, ax = plt.subplots(figsize=(12, 10))
+    ax.scatter(pivot_smd["smd"], pivot_smd.index, label="Unweighted", alpha=0.7)
+    ax.scatter(
+        pivot_weighted_smd["smd"], pivot_weighted_smd.index, label="Weighted", alpha=0.7
+    )
+    ax.axvline(0, linestyle="--", linewidth=1)
+    ax.set_xlabel("Standardized Mean Difference")
+    ax.set_ylabel("Confounder")
+    ax.set_title("Love Plot (SMD): Exposure vs Control")
+    ax.legend()
+    plt.subplots_adjust(left=0.25)  # Increase left margin for y-axis labels
+    save_figure_with_azure_copy(fig, join(save_path, filename), dpi=200)
 
 
 def load_data(

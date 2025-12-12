@@ -9,7 +9,7 @@ from corebehrt.azure.pipelines.base import PipelineArg, PipelineMeta
 
 FINETUNE_CALIBRATE_ESTIMATE = PipelineMeta(
     name="FINETUNE_CALIBRATE_ESTIMATE",
-    help="Run finetune, calibrate, and estimate starting from prepared data.",
+    help="Run finetune, calibrate, and estimate, and get stats starting from prepared data.",
     inputs=[
         PipelineArg(
             name="prepared_data",
@@ -64,6 +64,12 @@ def create(component: callable):
             "calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
         }
 
+        get_stats = component(
+            "get_stats",
+        )(
+            ps_calibrated_predictions=calibrate_exp_y.outputs.calibrated_predictions,
+        )
+
         # Add counterfactual outcomes if provided (for simulated data)
         if counterfactual_outcomes is not None:
             estimate_kwargs["counterfactual_outcomes"] = counterfactual_outcomes
@@ -75,6 +81,7 @@ def create(component: callable):
         return {
             "estimate": estimate.outputs.estimate,
             "calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
+            "stats": get_stats.outputs.stats,
         }
 
     # Define the two pipeline variants (with and without counterfactual outcomes)

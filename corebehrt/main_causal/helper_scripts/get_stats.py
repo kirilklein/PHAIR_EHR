@@ -27,6 +27,7 @@ from corebehrt.constants.causal.paths import (
     PS_PLOT_FILE_FILTERED,
     PS_SUMMARY_FILE,
     PS_SUMMARY_FILE_FILTERED,
+    LOVE_PLOT_FILE,
 )
 from corebehrt.constants.causal.stats import WEIGHTS_COL
 from corebehrt.functional.cohort_handling.stats import compute_weights
@@ -41,6 +42,7 @@ from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     log_stats,
     positivity_summary,
     ps_plot,
+    make_love_plot,
     save_stats,
 )
 from corebehrt.modules.setup.config import load_config
@@ -64,6 +66,10 @@ def main(config_path: str):
     # optional
     cohort_path = path_cfg.get("cohort", None)
     ps_calibrated_predictions_path = path_cfg.get("ps_calibrated_predictions", None)
+    if ps_calibrated_predictions_path is not None:
+        ps_calibrated_predictions_path = join(
+            ps_calibrated_predictions_path, "predictions_exposure"
+        )
     outcome_model_path = path_cfg.get("outcome_model", None)
 
     # output
@@ -125,11 +131,11 @@ def main(config_path: str):
     if cfg.get("weights", None) is not None:
         check_ps_columns(criteria)
         criteria[WEIGHTS_COL] = compute_weights(criteria, cfg.weights)
-        stats = analyze_cohort_with_weights(criteria, WEIGHTS_COL)
+        weighted_stats = analyze_cohort_with_weights(criteria, WEIGHTS_COL)
         logger.info("--------------------------------")
         logger.info(f"Weighted stats ({cfg.weights}):")
-        log_stats(stats)
-        save_stats(stats, save_path, weighted=True)
+        log_stats(weighted_stats)
+        save_stats(weighted_stats, save_path, weighted=True)
         ess_df = get_effective_sample_size_df(criteria, WEIGHTS_COL)
         logger.info(f"True sample size: {len(criteria)}")
         log_table(ess_df, logger)
@@ -141,6 +147,9 @@ def main(config_path: str):
             ps_plot(criteria, save_path, PS_PLOT_FILE_FILTERED)
         except Exception as e:
             logger.warning(f"Error plotting PS: {e}")
+
+    if cfg.get("make_love_plot", False) and cfg.get("weights", None) is not None:
+        make_love_plot(stats, weighted_stats, save_path, LOVE_PLOT_FILE)
 
     logger.info("Done")
 
