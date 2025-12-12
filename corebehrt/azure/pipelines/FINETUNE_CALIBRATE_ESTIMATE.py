@@ -6,7 +6,6 @@ Starts from prepared data and runs finetuning, calibration, and estimation.
 from typing import Any, Dict
 
 from corebehrt.azure.pipelines.base import PipelineArg, PipelineMeta
-from os.path import join
 
 FINETUNE_CALIBRATE_ESTIMATE = PipelineMeta(
     name="FINETUNE_CALIBRATE_ESTIMATE",

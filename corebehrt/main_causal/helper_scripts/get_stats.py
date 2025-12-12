@@ -148,7 +148,7 @@ def main(config_path: str):
         except Exception as e:
             logger.warning(f"Error plotting PS: {e}")
 
-    if cfg.get("make_love_plot", False):
+    if cfg.get("make_love_plot", False) and cfg.get("weights", None) is not None:
         make_love_plot(stats, weighted_stats, save_path, LOVE_PLOT_FILE)
 
     logger.info("Done")
