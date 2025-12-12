@@ -67,7 +67,9 @@ def main(config_path: str):
     cohort_path = path_cfg.get("cohort", None)
     ps_calibrated_predictions_path = path_cfg.get("ps_calibrated_predictions", None)
     if ps_calibrated_predictions_path is not None:
-        ps_calibrated_predictions_path = join(ps_calibrated_predictions_path, "predictions_exposure")
+        ps_calibrated_predictions_path = join(
+            ps_calibrated_predictions_path, "predictions_exposure"
+        )
     outcome_model_path = path_cfg.get("outcome_model", None)
 
     # output

@@ -7,6 +7,7 @@ from typing import Any, Dict
 
 from corebehrt.azure.pipelines.base import PipelineArg, PipelineMeta
 from os.path import join
+
 FINETUNE_CALIBRATE_ESTIMATE = PipelineMeta(
     name="FINETUNE_CALIBRATE_ESTIMATE",
     help="Run finetune, calibrate, and estimate, and get stats starting from prepared data.",
@@ -81,6 +82,7 @@ def create(component: callable):
         return {
             "estimate": estimate.outputs.estimate,
             "calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
+            "stats": get_stats.outputs.stats,
         }
 
     # Define the two pipeline variants (with and without counterfactual outcomes)
