@@ -24,6 +24,11 @@ FINETUNE_CALIBRATE_ESTIMATE = PipelineMeta(
             help="Path to counterfactual outcomes (optional, for simulated data).",
             required=False,
         ),
+        PipelineArg(
+            name="secondary_cohort",
+            help="Path to secondary cohort (optional, for simulated data).",
+            required=False,
+        ),
     ],
 )
 
