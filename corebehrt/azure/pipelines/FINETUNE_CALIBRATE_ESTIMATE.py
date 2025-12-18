@@ -108,7 +108,7 @@ def create(component: callable):
             prepared_data, pretrain_model, counterfactual_outcomes
         )
 
-    pipeline_configs[True] = _pipeline_with_counterfactual
+    pipeline_configs['has_counterfactual'] = _pipeline_with_counterfactual
 
     # 2. Without counterfactual outcomes (real data)
     @dsl.pipeline(
@@ -121,8 +121,16 @@ def create(component: callable):
     ) -> dict:
         return _common_pipeline_steps(prepared_data, pretrain_model)
 
-    pipeline_configs[False] = _pipeline_without_counterfactual
+    pipeline_configs['does_not_have_counterfactual'] = _pipeline_without_counterfactual
 
+    def _pipeline_with_secondary_cohort(
+        prepared_data: Input,
+        pretrain_model: Input,
+        secondary_cohort: Input,
+    ) -> dict:
+        return _common_pipeline_steps(prepared_data, pretrain_model, secondary_cohort)
+
+    pipeline_configs['has_secondary_cohort'] = _pipeline_with_secondary_cohort
     # Factory function to select the appropriate pipeline
     def pipeline_factory(**kwargs: Dict[str, Any]):
         """
@@ -137,6 +145,19 @@ def create(component: callable):
             "counterfactual_outcomes" in kwargs
             and kwargs["counterfactual_outcomes"] is not None
         )
+
+        if "secondary_cohort" in kwargs and kwargs["secondary_cohort"] is not None:
+            has_secondary_cohort = True
+        else:
+            has_secondary_cohort = False
+
+        if has_secondary_cohort:
+            selected_pipeline = pipeline_configs['has_secondary_cohort']
+        else:
+            if has_counterfactual:
+                selected_pipeline = pipeline_configs['has_counterfactual']
+            else:
+                selected_pipeline = pipeline_configs['does_not_have_counterfactual']
 
         # Select the appropriate pipeline based on what's provided
         selected_pipeline = pipeline_configs[has_counterfactual]
