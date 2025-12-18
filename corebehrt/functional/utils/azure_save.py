@@ -70,6 +70,16 @@ def save_figure_with_azure_copy(
                 )
                 return
 
+            # Remove existing file if it exists to avoid "already exists" errors
+            if dest_path.exists():
+                if dest_path.is_file():
+                    dest_path.unlink()
+                else:
+                    logger.warning(
+                        f"Skip copying to Azure: Destination path exists but is not a file: {dest_path.absolute()}"
+                    )
+                    return
+
             shutil.copy2(save_path, dest_path)
 
             if dest_path.exists():

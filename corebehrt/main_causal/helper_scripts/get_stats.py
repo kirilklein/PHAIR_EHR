@@ -20,6 +20,8 @@ Outputs:
 import logging
 from os.path import join
 
+import pandas as pd
+
 from corebehrt.constants.causal.data import EXPOSURE_COL, PS_COL
 from corebehrt.constants.causal.paths import (
     EFFECTIVE_SAMPLE_SIZE_FILE,
@@ -28,6 +30,7 @@ from corebehrt.constants.causal.paths import (
     PS_SUMMARY_FILE,
     PS_SUMMARY_FILE_FILTERED,
     LOVE_PLOT_FILE,
+    LOVE_PLOT_FILE_SECONDARY,
 )
 from corebehrt.constants.causal.stats import WEIGHTS_COL
 from corebehrt.functional.cohort_handling.stats import compute_weights
@@ -52,6 +55,87 @@ CONFIG_PATH = "./corebehrt/configs/causal/helper/get_stats.yaml"
 EPS = 1e-6
 
 
+def process_cohort(
+    criteria: pd.DataFrame,
+    cfg: dict,
+    logger: logging.Logger,
+    save_path: str,
+    cohort_name: str = "",
+    save_stats_files: bool = True,
+) -> tuple:
+    """
+    Process a cohort: clip PS, filter, compute stats and weighted stats.
+    
+    Args:
+        criteria: DataFrame with criteria data
+        cfg: Configuration dictionary
+        logger: Logger instance
+        save_path: Path to save output files
+        cohort_name: Name of the cohort for logging
+        save_stats_files: Whether to save stats CSV files (default: True)
+    
+    Returns:
+        tuple: (stats, weighted_stats, criteria_processed, filtered)
+    """
+    criteria_processed = criteria.copy()
+    
+    # Clip PS if needed
+    if (PS_COL in criteria_processed.columns) and cfg.get("clip_ps", True):
+        outside_count = (criteria_processed[PS_COL] < EPS).sum() + (
+            criteria_processed[PS_COL] > 1 - EPS
+        ).sum()
+        if outside_count > 0:
+            logger.info(f"{outside_count} ps outside clipping range - clipping")
+            logger.info("Clipping PS")
+            criteria_processed[PS_COL] = criteria_processed[PS_COL].clip(
+                lower=EPS, upper=1 - EPS
+            )
+    
+    # Track if filtering was done
+    filtered = False
+    if cfg.get("common_support_threshold", None) is not None:
+        from CausalEstimate.filter.propensity import filter_common_support
+
+        criteria_processed = filter_common_support(
+            criteria_processed,
+            ps_col=PS_COL,
+            treatment_col=EXPOSURE_COL,
+            threshold=cfg.common_support_threshold,
+        )
+        filtered = True
+    
+    # Compute stats
+    stats = analyze_cohort(criteria_processed)
+    if cohort_name:
+        logger.info(f"--------------------------------")
+        logger.info(f"Stats for {cohort_name}:")
+    log_stats(stats)
+    if save_stats_files:
+        save_stats(stats, save_path, weighted=False)
+    
+    # Compute weighted stats if weights are provided
+    weighted_stats = None
+    if cfg.get("weights", None) is not None:
+        check_ps_columns(criteria_processed)
+        criteria_processed[WEIGHTS_COL] = compute_weights(criteria_processed, cfg.weights)
+        weighted_stats = analyze_cohort_with_weights(criteria_processed, WEIGHTS_COL)
+        if cohort_name:
+            logger.info(f"--------------------------------")
+            logger.info(f"Weighted stats ({cfg.weights}) for {cohort_name}:")
+        else:
+            logger.info("--------------------------------")
+            logger.info(f"Weighted stats ({cfg.weights}):")
+        log_stats(weighted_stats)
+        if save_stats_files:
+            save_stats(weighted_stats, save_path, weighted=True)
+            ess_df = get_effective_sample_size_df(criteria_processed, WEIGHTS_COL)
+            logger.info(f"True sample size: {len(criteria_processed)}")
+            log_table(ess_df, logger)
+            ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
+    
+    return stats, weighted_stats, criteria_processed, filtered
+
+
 def main(config_path: str):
     """Execute cohort selection and save results."""
     cfg = load_config(config_path)
@@ -72,22 +156,19 @@ def main(config_path: str):
         )
     outcome_model_path = path_cfg.get("outcome_model", None)
 
+    # Secondary cohort (optional)
+    secondary_cohort_path = path_cfg.get("secondary_cohort", None)
+
     # output
     save_path = path_cfg.stats
 
+    # Process primary cohort
     criteria = load_data(
         criteria_path,
         cohort_path,
         ps_calibrated_predictions_path,
         outcome_model_path,
     )
-    if (PS_COL in criteria.columns) and cfg.get("clip_ps", True):
-        outside_count = (criteria[PS_COL] < EPS).sum() + (
-            criteria[PS_COL] > 1 - EPS
-        ).sum()
-        logger.info(f"{outside_count} ps outside clipping range - clipping")
-        logger.info("Clipping PS")
-        criteria[PS_COL] = criteria[PS_COL].clip(lower=EPS, upper=1 - EPS)
 
     if PS_COL in criteria.columns:
         ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
@@ -103,53 +184,63 @@ def main(config_path: str):
         except Exception as e:
             logger.warning(f"Error plotting PS: {e}")
 
-    # Track if filtering was done
-    filtered = False
-    if cfg.get("common_support_threshold", None) is not None:
-        from CausalEstimate.filter.propensity import filter_common_support
-
-        criteria = filter_common_support(
-            criteria,
-            ps_col=PS_COL,
-            treatment_col=EXPOSURE_COL,
-            threshold=cfg.common_support_threshold,
-        )
-        filtered = True
-
-    stats = analyze_cohort(criteria)
-    log_stats(stats)
-    save_stats(stats, save_path)
+    # Process primary cohort
+    stats, weighted_stats, criteria_processed, filtered = process_cohort(
+        criteria, cfg, logger, save_path
+    )
 
     if filtered:
-        if PS_COL in criteria.columns:
-            ps_summary = positivity_summary(criteria[PS_COL], criteria[EXPOSURE_COL])
+        if PS_COL in criteria_processed.columns:
+            ps_summary = positivity_summary(
+                criteria_processed[PS_COL], criteria_processed[EXPOSURE_COL]
+            )
             logger.info("--------------------------------")
             logger.info("Positivity summary after filtering:")
             log_table(ps_summary, logger)
             ps_summary.to_csv(join(save_path, PS_SUMMARY_FILE_FILTERED), index=False)
 
-    if cfg.get("weights", None) is not None:
-        check_ps_columns(criteria)
-        criteria[WEIGHTS_COL] = compute_weights(criteria, cfg.weights)
-        weighted_stats = analyze_cohort_with_weights(criteria, WEIGHTS_COL)
-        logger.info("--------------------------------")
-        logger.info(f"Weighted stats ({cfg.weights}):")
-        log_stats(weighted_stats)
-        save_stats(weighted_stats, save_path, weighted=True)
-        ess_df = get_effective_sample_size_df(criteria, WEIGHTS_COL)
-        logger.info(f"True sample size: {len(criteria)}")
-        log_table(ess_df, logger)
-        ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
-
     if cfg.get("plot_ps", False) and filtered:
         try:
-            check_ps_columns(criteria)
-            ps_plot(criteria, save_path, PS_PLOT_FILE_FILTERED)
+            check_ps_columns(criteria_processed)
+            ps_plot(criteria_processed, save_path, PS_PLOT_FILE_FILTERED)
         except Exception as e:
             logger.warning(f"Error plotting PS: {e}")
 
     if cfg.get("make_love_plot", False) and cfg.get("weights", None) is not None:
         make_love_plot(stats, weighted_stats, save_path, LOVE_PLOT_FILE)
+
+    # Process secondary cohort if provided
+    if secondary_cohort_path is not None:
+        logger.info("--------------------------------")
+        logger.info("Processing secondary cohort")
+        criteria_secondary = load_data(
+            criteria_path,
+            secondary_cohort_path,
+            ps_calibrated_predictions_path,
+            outcome_model_path,
+        )
+
+        stats_secondary, weighted_stats_secondary, criteria_secondary_processed, _ = (
+            process_cohort(
+                criteria_secondary,
+                cfg,
+                logger,
+                save_path,
+                "secondary cohort",
+                save_stats_files=False,
+            )
+        )
+
+        if (
+            cfg.get("make_love_plot", False)
+            and cfg.get("weights", None) is not None
+        ):
+            make_love_plot(
+                stats_secondary,
+                weighted_stats_secondary,
+                save_path,
+                LOVE_PLOT_FILE_SECONDARY,
+            )
 
     logger.info("Done")
 
