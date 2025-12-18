@@ -164,9 +164,6 @@ def create(component: callable):
             else:
                 selected_pipeline = pipeline_configs['does_not_have_counterfactual']
 
-        # Select the appropriate pipeline based on what's provided
-        selected_pipeline = pipeline_configs[has_counterfactual]
-
         # Filter kwargs to only include parameters the selected pipeline accepts
         from inspect import signature
 
