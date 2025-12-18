@@ -43,6 +43,7 @@ def create(component: callable):
         prepared_data: Input,
         pretrain_model: Input,
         counterfactual_outcomes: Input = None,
+        secondary_cohort: Input = None,
     ) -> dict:
         """Helper function containing common pipeline implementation steps"""
 
@@ -64,11 +65,6 @@ def create(component: callable):
             "calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
         }
 
-        get_stats = component(
-            "get_stats",
-        )(
-            ps_calibrated_predictions=calibrate_exp_y.outputs.calibrated_predictions,
-        )
 
         # Add counterfactual outcomes if provided (for simulated data)
         if counterfactual_outcomes is not None:
@@ -77,6 +73,17 @@ def create(component: callable):
         estimate = component(
             "estimate",
         )(**estimate_kwargs)
+
+
+        get_stats_kwargs = {
+            "ps_calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
+        }
+        if secondary_cohort is not None:
+            get_stats_kwargs["secondary_cohort"] = secondary_cohort
+
+        get_stats = component(
+            "get_stats",
+        )(**get_stats_kwargs)
 
         return {
             "estimate": estimate.outputs.estimate,
