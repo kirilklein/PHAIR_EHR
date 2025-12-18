@@ -5,6 +5,7 @@ INPUTS = {
     "cohort": {"type": "uri_folder", "optional": True},
     "ps_calibrated_predictions": {"type": "uri_folder", "optional": True},
     "outcome_model": {"type": "uri_folder", "optional": True},
+    "secondary_cohort": {"type": "uri_folder", "optional": True},
 }
 OUTPUTS = {"stats": {"type": "uri_folder"}}
 
