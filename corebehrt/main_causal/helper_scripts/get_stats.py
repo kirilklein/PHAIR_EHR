@@ -23,6 +23,7 @@ from os.path import join
 import pandas as pd
 
 from corebehrt.constants.causal.data import EXPOSURE_COL, PS_COL
+from corebehrt.constants.data import PID_COL
 from corebehrt.constants.causal.paths import (
     EFFECTIVE_SAMPLE_SIZE_FILE,
     PS_PLOT_FILE,
@@ -48,6 +49,7 @@ from corebehrt.main_causal.helper_scripts.helper.get_stat import (
     make_love_plot,
     save_stats,
 )
+from corebehrt.modules.cohort_handling.advanced.apply import apply_criteria_with_stats
 from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 
@@ -156,8 +158,10 @@ def main(config_path: str):
         )
     outcome_model_path = path_cfg.get("outcome_model", None)
 
-    # Secondary cohort (optional)
-    secondary_cohort_path = path_cfg.get("secondary_cohort", None)
+    # Secondary cohort config (optional)
+    # If provided, should point to a YAML file with inclusion/exclusion expressions
+    # to filter the primary cohort
+    secondary_cohort_config_path = path_cfg.get("secondary_cohort_config", None)
 
     # output
     save_path = path_cfg.stats
@@ -210,15 +214,36 @@ def main(config_path: str):
         make_love_plot(stats, weighted_stats, save_path, LOVE_PLOT_FILE)
 
     # Process secondary cohort if provided
-    if secondary_cohort_path is not None:
+    if secondary_cohort_config_path is not None:
         logger.info("--------------------------------")
         logger.info("Processing secondary cohort")
-        criteria_secondary = load_data(
-            criteria_path,
-            secondary_cohort_path,
-            ps_calibrated_predictions_path,
-            outcome_model_path,
+        logger.info(f"Loading secondary cohort config from: {secondary_cohort_config_path}")
+        
+        # Load the secondary cohort config with inclusion/exclusion expressions
+        secondary_cfg = load_config(secondary_cohort_config_path)
+        inclusion_expression = secondary_cfg.get("inclusion", "True")  # Default to include all
+        exclusion_expression = secondary_cfg.get("exclusion", "False")  # Default to exclude none
+        
+        logger.info(f"Inclusion expression: {inclusion_expression}")
+        logger.info(f"Exclusion expression: {exclusion_expression}")
+        logger.info(f"Starting with {len(criteria_processed)} patients from primary cohort")
+        
+        # Filter the primary cohort using the inclusion/exclusion expressions
+        included_pids, filter_stats = apply_criteria_with_stats(
+            criteria_processed,
+            inclusion_expression,
+            exclusion_expression,
+            verbose=True,
         )
+        
+        logger.info(f"Filtered to {len(included_pids)} patients for secondary cohort")
+        
+        # Create secondary cohort dataframe from filtered patient IDs
+        criteria_secondary = criteria_processed[
+            criteria_processed[PID_COL].isin(included_pids)
+        ].copy()
+        
+        logger.info(f"Secondary cohort contains {len(criteria_secondary)} patients")
 
         stats_secondary, weighted_stats_secondary, criteria_secondary_processed, _ = (
             process_cohort(
