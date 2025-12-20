@@ -221,8 +221,26 @@ def main(config_path: str):
         
         # Load the secondary cohort config with inclusion/exclusion expressions
         secondary_cfg = load_config(secondary_cohort_config_path)
-        inclusion_expression = secondary_cfg.get("inclusion", "True")  # Default to include all
-        exclusion_expression = secondary_cfg.get("exclusion", "False")  # Default to exclude none
+        inclusion_raw = secondary_cfg.get("inclusion", True)  # Default to include all
+        exclusion_raw = secondary_cfg.get("exclusion", False)  # Default to exclude none
+        
+        # Convert boolean values to expressions that don't reference columns
+        # This prevents "False" or "True" from being treated as criterion names
+        def _convert_boolean_to_expression(value):
+            """Convert boolean or string boolean to a safe expression."""
+            if isinstance(value, bool):
+                return "1 == 1" if value else "0 == 1"
+            if isinstance(value, str):
+                # Handle string representations of booleans
+                if value.lower() == "true":
+                    return "1 == 1"
+                if value.lower() == "false":
+                    return "0 == 1"
+            # Otherwise, assume it's a valid expression string
+            return str(value)
+        
+        inclusion_expression = _convert_boolean_to_expression(inclusion_raw)
+        exclusion_expression = _convert_boolean_to_expression(exclusion_raw)
         
         logger.info(f"Inclusion expression: {inclusion_expression}")
         logger.info(f"Exclusion expression: {exclusion_expression}")
