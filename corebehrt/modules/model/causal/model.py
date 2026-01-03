@@ -52,6 +52,9 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         if self.l1_lambda > 0:
             logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
         self.temperature = self.head_config.get("temperature", 1.0)
+        self.outcome_loss_weight = self.head_config.get("outcome_loss_weight", 1.0)
+        if self.outcome_loss_weight != 1.0:
+            logger.info(f"Outcome loss weight: {self.outcome_loss_weight}")
         # Get outcome names from config
         self.outcome_names = config.outcome_names
         self._setup_pooling_layers(config)
@@ -269,7 +272,8 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             )
 
             outputs.outcome_losses[outcome_name] = outcome_loss
-            total_loss += outcome_loss
+            # Apply outcome loss weight to reduce its contribution to total loss
+            total_loss += self.outcome_loss_weight * outcome_loss
 
         # Add L1 regularization on the bottleneck representation
         if self.shared_representation and self.l1_lambda > 0:
