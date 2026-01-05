@@ -52,11 +52,13 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         if self.l1_lambda > 0:
             logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
         self.temperature = self.head_config.get("temperature", 1.0)
-        self.outcome_loss_weight = self.head_config.get("outcome_loss_weight", 1.0)
-        if self.outcome_loss_weight != 1.0:
-            logger.info(f"Outcome loss weight: {self.outcome_loss_weight}")
         # Get outcome names from config
         self.outcome_names = config.outcome_names
+        # Set outcome loss weight: default to 1/number_of_outcomes for balanced contribution
+        # This ensures total outcome loss contribution ≈ exposure loss contribution
+        default_outcome_weight = 1.0 / len(self.outcome_names) if len(self.outcome_names) > 0 else 1.0
+        self.outcome_loss_weight = self.head_config.get("outcome_loss_weight", default_outcome_weight)
+        logger.info(f"Outcome loss weight: {self.outcome_loss_weight} (number of outcomes: {len(self.outcome_names)})")
         self._setup_pooling_layers(config)
         self._setup_bottleneck(config)
         self._setup_mlp_heads(config)
