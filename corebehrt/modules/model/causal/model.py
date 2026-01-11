@@ -56,12 +56,18 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         self.outcome_names = config.outcome_names
         # Set outcome loss weight: default to 1/number_of_outcomes for balanced contribution
         # This ensures total outcome loss contribution ≈ exposure loss contribution
-        default_outcome_weight = 1.0 / len(self.outcome_names) if len(self.outcome_names) > 0 else 1.0
+
         if self.head_config.get("outcome_weight", None) is not None:
-            weighted_default_outcome_weight = self.head_config.get("default_outcome_weight", 1.0)
+            logger.info(f"Using outcome weight from config: {self.head_config.get('outcome_weight')}")
+            self.outcome_loss_weight = self.head_config.get("outcome_loss_weight")
         else:
-            weighted_default_outcome_weight = default_outcome_weight
-        self.outcome_loss_weight = self.head_config.get("outcome_loss_weight", default_outcome_weight*weighted_default_outcome_weight)
+            logger.info("Using default outcome weight: 1/number_of_outcomes")
+            default_outcome_weight = 1.0 / len(self.outcome_names) if len(self.outcome_names) > 0 else 1.0
+            if self.head_config.get("default_outcome_weight", None) is not None:
+                default_outcome_weight = default_outcome_weight*self.head_config.get("default_outcome_weight")
+                logger.info(f"Using weighted default outcome weight with factor {self.head_config.get('default_outcome_weight')}")
+            self.outcome_loss_weight = default_outcome_weight
+
         logger.info(f"Outcome loss weight: {self.outcome_loss_weight} (number of outcomes: {len(self.outcome_names)})")
         self._setup_pooling_layers(config)
         self._setup_bottleneck(config)
