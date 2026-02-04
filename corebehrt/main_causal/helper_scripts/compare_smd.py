@@ -8,47 +8,64 @@ for each, and creates a comparison plot.
 import argparse
 import logging
 from os.path import join
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from corebehrt.constants.causal.paths import (
-    STATS_RAW_FILE_BINARY,
-)
-from corebehrt.constants.causal.stats import CONTROL, EXPOSED, RAW
-from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
-from corebehrt.main_causal.helper_scripts.helper.get_stat import compute_smd
+# Constants for column names
+EXPOSED = "Exposed"
+CONTROL = "Control"
 
 logger = logging.getLogger(__name__)
 
 
-def load_stats_from_path(stats_path: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def compute_smd(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Load weighted and unweighted binary stats from a stats directory.
+    Compute the standardized mean difference for a dataframe between Exposed and Control.
     
     Args:
-        stats_path: Path to directory containing stats files
+        df: DataFrame with EXPOSED and CONTROL columns (proportions, not percentages)
+        
+    Returns:
+        DataFrame with added 'smd' column
+    """
+    p1 = df[EXPOSED]
+    p0 = df[CONTROL]
+    pooled_sd = ((p1 * (1 - p1) + p0 * (1 - p0)) / 2) ** 0.5
+    # Handle division by zero when pooled_sd is 0
+    df = df.copy()
+    df['smd'] = np.where(pooled_sd > 0, (p1 - p0) / pooled_sd, 0)
+    return df
+
+
+def load_stats_from_paths(
+    unweighted_path: str,
+    weighted_path: str,
+) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    """
+    Load weighted and unweighted binary stats from file paths/URIs.
+    
+    Args:
+        unweighted_path: Path/URI to unweighted stats CSV file
+        weighted_path: Path/URI to weighted stats CSV file
         
     Returns:
         Tuple of (unweighted_stats, weighted_stats) DataFrames
     """
-    unweighted_path = join(stats_path, STATS_RAW_FILE_BINARY)
-    weighted_path = join(stats_path, "weighted_" + STATS_RAW_FILE_BINARY)
-    
     try:
         unweighted_stats = pd.read_csv(unweighted_path)
         logger.info(f"Loaded unweighted stats from {unweighted_path}: {len(unweighted_stats)} criteria")
-    except FileNotFoundError:
-        logger.warning(f"Unweighted stats not found at {unweighted_path}")
+    except Exception as e:
+        logger.warning(f"Failed to load unweighted stats from {unweighted_path}: {e}")
         unweighted_stats = None
     
     try:
         weighted_stats = pd.read_csv(weighted_path)
         logger.info(f"Loaded weighted stats from {weighted_path}: {len(weighted_stats)} criteria")
-    except FileNotFoundError:
-        logger.warning(f"Weighted stats not found at {weighted_path}")
+    except Exception as e:
+        logger.warning(f"Failed to load weighted stats from {weighted_path}: {e}")
         weighted_stats = None
     
     return unweighted_stats, weighted_stats
@@ -86,131 +103,187 @@ def compute_mean_absolute_smd(stats_df: pd.DataFrame) -> float:
     return mean_abs_smd
 
 
-def compare_smd_across_paths(
-    paths: List[str],
-    labels: List[str],
-    output_path: str,
+def compare_smd_from_dataframes(
+    weighted_stats_list: List[pd.DataFrame],
+    labels: List[float],
+    colors: Optional[List[str]] = None,
+    output_path: Optional[str] = None,
     plot_filename: str = "smd_comparison.png",
+    save_plot: bool = True,
 ):
     """
-    Compare mean absolute SMD across multiple experiment paths.
+    Compare mean absolute SMD across multiple experiments from DataFrames.
     
     Args:
-        paths: List of paths to stats directories
-        labels: List of labels for each path (y-axis labels)
-        output_path: Directory to save the plot
+        weighted_stats_list: List of weighted stats DataFrames
+        labels: List of outcome loss weights (x-axis values)
+        colors: Optional list of colors for each point (default: all blue)
+        output_path: Directory to save the plot (required if save_plot=True)
         plot_filename: Name of the output plot file
+        save_plot: Whether to save the plot to file
+        
+    Returns:
+        Tuple of (results_df, fig, ax) - DataFrame with results and matplotlib figure/axes
     """
-    if len(paths) != len(labels):
-        raise ValueError(f"Number of paths ({len(paths)}) must match number of labels ({len(labels)})")
+    if len(weighted_stats_list) != len(labels):
+        raise ValueError(
+            f"Number of weighted stats ({len(weighted_stats_list)}) must match number of labels ({len(labels)})"
+        )
+    
+    if colors is not None and len(colors) != len(labels):
+        raise ValueError(
+            f"Number of colors ({len(colors)}) must match number of labels ({len(labels)})"
+        )
+    
+    # Default to blue if no colors provided
+    if colors is None:
+        colors = ['steelblue'] * len(labels)
     
     results = []
     
-    for path, label in zip(paths, labels):
-        logger.info(f"Processing {label} from {path}")
-        unweighted_stats, weighted_stats = load_stats_from_path(path)
-        
-        # Compute mean absolute SMD for unweighted
-        unweighted_smd = compute_mean_absolute_smd(unweighted_stats)
+    for weighted_stats, label in zip(weighted_stats_list, labels):
+        logger.info(f"Processing {label}")
         
         # Compute mean absolute SMD for weighted
         weighted_smd = compute_mean_absolute_smd(weighted_stats)
         
         results.append({
             "label": label,
-            "unweighted_smd": unweighted_smd,
             "weighted_smd": weighted_smd,
         })
         
-        logger.info(
-            f"{label}: Unweighted mean |SMD| = {unweighted_smd:.4f}, "
-            f"Weighted mean |SMD| = {weighted_smd:.4f}"
-        )
+        logger.info(f"{label}: Weighted mean |SMD| = {weighted_smd:.4f}")
     
     # Create DataFrame for easier handling
     results_df = pd.DataFrame(results)
     
+    # Sort by label value if labels are numeric for better visualization
+    if all(isinstance(l, (int, float)) for l in labels):
+        # Create a sorted version with corresponding colors
+        sorted_data = sorted(zip(labels, results_df["weighted_smd"], colors))
+        sorted_labels = [x[0] for x in sorted_data]
+        sorted_smd = [x[1] for x in sorted_data]
+        sorted_colors = [x[2] for x in sorted_data]
+    else:
+        sorted_labels = labels
+        sorted_smd = results_df["weighted_smd"].tolist()
+        sorted_colors = colors
+    
     # Create plot
-    fig, ax = plt.subplots(figsize=(10, max(6, len(labels) * 0.5)))
+    fig, ax = plt.subplots(figsize=(10, 6))
     
-    y_pos = np.arange(len(labels))
-    width = 0.35
-    
-    # Plot bars
-    bars1 = ax.barh(
-        y_pos - width/2,
-        results_df["unweighted_smd"],
-        width,
-        label="Unweighted",
-        alpha=0.7,
-    )
-    bars2 = ax.barh(
-        y_pos + width/2,
-        results_df["weighted_smd"],
-        width,
-        label="Weighted",
-        alpha=0.7,
-    )
-    
-    # Add value labels on bars
-    for i, (bar1, bar2) in enumerate(zip(bars1, bars2)):
-        if not np.isnan(results_df.iloc[i]["unweighted_smd"]):
-            ax.text(
-                bar1.get_width(),
-                bar1.get_y() + bar1.get_height() / 2,
-                f'{results_df.iloc[i]["unweighted_smd"]:.3f}',
-                ha="left",
-                va="center",
-                fontsize=9,
+    # Plot scatter
+    for label, smd, color in zip(sorted_labels, sorted_smd, sorted_colors):
+        if not np.isnan(smd):
+            ax.scatter(
+                label,
+                smd,
+                s=100,
+                alpha=0.7,
+                color=color,
+                edgecolors='black',
+                linewidths=1,
             )
-        if not np.isnan(results_df.iloc[i]["weighted_smd"]):
+            # Add value labels on points
             ax.text(
-                bar2.get_width(),
-                bar2.get_y() + bar2.get_height() / 2,
-                f'{results_df.iloc[i]["weighted_smd"]:.3f}',
+                label,
+                smd,
+                f' {smd:.3f}',
                 ha="left",
-                va="center",
+                va="bottom",
                 fontsize=9,
             )
     
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(labels)
-    ax.set_xlabel("Mean Absolute Standardized Mean Difference (|SMD|)")
-    ax.set_title("Comparison of Mean Absolute SMD Across Experiments")
-    ax.legend()
-    ax.grid(axis="x", alpha=0.3)
+    ax.set_xlabel("Outcome Loss Weight")
+    ax.set_ylabel("Mean Absolute Standardized Mean Difference (|SMD|)")
+    ax.set_title("Mean Absolute SMD vs Outcome Loss Weight")
+    ax.grid(alpha=0.3)
     
     plt.tight_layout()
     
-    # Save plot
-    output_file = join(output_path, plot_filename)
-    save_figure_with_azure_copy(fig, output_file, dpi=200)
-    logger.info(f"Plot saved to {output_file}")
+    # Save plot if requested
+    if save_plot:
+        if output_path is None:
+            raise ValueError("output_path is required when save_plot=True")
+        output_file = join(output_path, plot_filename)
+        fig.savefig(output_file, dpi=200, bbox_inches='tight')
+        logger.info(f"Plot saved to {output_file}")
+        
+        # Save results to CSV
+        csv_output = join(output_path, "smd_comparison_results.csv")
+        results_df.to_csv(csv_output, index=False)
+        logger.info(f"Results saved to {csv_output}")
     
-    # Save results to CSV
-    csv_output = join(output_path, "smd_comparison_results.csv")
-    results_df.to_csv(csv_output, index=False)
-    logger.info(f"Results saved to {csv_output}")
+    return results_df, fig, ax
+
+
+def compare_smd_from_paths(
+    weighted_paths: List[str],
+    labels: List[float],
+    colors: Optional[List[str]] = None,
+    output_path: Optional[str] = None,
+    plot_filename: str = "smd_comparison.png",
+    save_plot: bool = True,
+):
+    """
+    Compare mean absolute SMD across multiple experiments from file paths/URIs.
     
-    return results_df
+    Args:
+        weighted_paths: List of paths/URIs to weighted stats CSV files
+        labels: List of outcome loss weights (x-axis values)
+        colors: Optional list of colors for each point (default: all blue)
+        output_path: Directory to save the plot (required if save_plot=True)
+        plot_filename: Name of the output plot file
+        save_plot: Whether to save the plot to file
+        
+    Returns:
+        Tuple of (results_df, fig, ax) - DataFrame with results and matplotlib figure/axes
+    """
+    if len(weighted_paths) != len(labels):
+        raise ValueError(
+            f"Number of weighted paths ({len(weighted_paths)}) must match number of labels ({len(labels)})"
+        )
+    
+    weighted_stats_list = []
+    
+    for weighted_path, label in zip(weighted_paths, labels):
+        logger.info(f"Loading stats for {label}")
+        _, weighted_stats = load_stats_from_paths("", weighted_path)  # Unweighted path not needed
+        weighted_stats_list.append(weighted_stats)
+    
+    return compare_smd_from_dataframes(
+        weighted_stats_list,
+        labels,
+        colors,
+        output_path,
+        plot_filename,
+        save_plot,
+    )
 
 
 def main():
-    """Main function to run the comparison."""
+    """Main function to run the comparison from command line."""
     parser = argparse.ArgumentParser(
         description="Compare mean absolute SMD across multiple experiment paths"
     )
     parser.add_argument(
-        "--paths",
+        "--weighted-paths",
         nargs="+",
         required=True,
-        help="Paths to stats directories (space-separated)",
+        help="Paths/URIs to weighted stats CSV files (space-separated)",
     )
     parser.add_argument(
         "--labels",
         nargs="+",
+        type=float,
         required=True,
-        help="Labels for each path (space-separated, must match number of paths)",
+        help="Outcome loss weights for each experiment (space-separated, must match number of paths)",
+    )
+    parser.add_argument(
+        "--colors",
+        nargs="+",
+        default=None,
+        help="Colors for each point (space-separated, optional)",
     )
     parser.add_argument(
         "--output",
@@ -238,11 +311,13 @@ def main():
     )
     
     # Run comparison
-    results_df = compare_smd_across_paths(
-        paths=args.paths,
+    results_df, fig, ax = compare_smd_from_paths(
+        weighted_paths=args.weighted_paths,
         labels=args.labels,
+        colors=args.colors,
         output_path=args.output,
         plot_filename=args.plot_name,
+        save_plot=True,
     )
     
     print("\nResults Summary:")

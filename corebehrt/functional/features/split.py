@@ -153,18 +153,20 @@ def create_folds(
     rng = np.random.default_rng(seed)
     pids_array = np.array(pids)
     rng.shuffle(pids_array)  # Shuffle before splitting
+    total_n = len(pids_array)
+    boot_pids_array = rng.choice(pids_array, size=total_n, replace=True)
 
     if num_folds == 1:
-        split_idx = int(len(pids_array) * (1 - val_ratio))
-        train_pids = pids_array[:split_idx].tolist()
-        val_pids = pids_array[split_idx:].tolist()
+        split_idx = int(len(boot_pids_array) * (1 - val_ratio))
+        train_pids = boot_pids_array[:split_idx].tolist()
+        val_pids = boot_pids_array[split_idx:].tolist()
         folds = [{TRAIN_KEY: train_pids, VAL_KEY: val_pids}]
     else:
         kf = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
         folds = [{TRAIN_KEY: [], VAL_KEY: []} for _ in range(num_folds)]
 
-        for i, (train_idx, val_idx) in enumerate(kf.split(pids_array)):
-            folds[i][TRAIN_KEY] = [pids_array[idx] for idx in train_idx]
+        for i, (train_idx, val_idx) in enumerate(kf.split(boot_pids_array)):
+            folds[i][TRAIN_KEY] = [boot_pids_array[idx] for idx in train_idx]
             folds[i][VAL_KEY] = [pids_array[idx] for idx in val_idx]
 
     return folds
