@@ -5,6 +5,7 @@ from os.path import join
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 import torch
 import time
+import numpy as np
 
 from corebehrt.constants.paths import (
     FOLDS_FILE,
@@ -55,7 +56,7 @@ def main_finetune(config_path):
             test_data = data.filter_by_pids(test_pids)
 
     # Use folds from prepared data
-    folds = handle_folds(cfg, test_pids, logger)
+    folds = handle_folds(cfg, test_pids, train_val_pids, logger)
     train_val_data = data.filter_by_pids(train_val_pids)
     cv_loop(
         cfg,
@@ -133,7 +134,7 @@ def validate_folds(folds: list, expected_pids: set, logger: logging.Logger) -> N
     # )
 
 
-def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
+def handle_folds(cfg: Config, test_pids: list, train_val_pids: list, logger: logging.Logger) -> list:
     """
     Load folds and optionally reshuffle PIDs across them.
     Save folds to model directory.
@@ -150,9 +151,15 @@ def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
     n_folds = len(folds)
     logger.info(f"Loaded {n_folds} folds from prepared data")
 
-    # Extract unique PIDs from first fold (each fold contains all PIDs split into train/val)
-    all_pids = folds[0][TRAIN_KEY] + folds[0][VAL_KEY]
-    expected_pids = set(all_pids)
+    # Use train_val_pids as the expected PIDs (bootstrap sampling means not all PIDs appear in each fold)
+    # Convert folds to lists if they are numpy arrays
+    for fold in folds:
+        if isinstance(fold[TRAIN_KEY], np.ndarray):
+            fold[TRAIN_KEY] = fold[TRAIN_KEY].tolist()
+        if isinstance(fold[VAL_KEY], np.ndarray):
+            fold[VAL_KEY] = fold[VAL_KEY].tolist()
+    
+    expected_pids = set(train_val_pids)
 
     # Validate loaded folds
     logger.info("Validating loaded folds...")
@@ -173,9 +180,9 @@ def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
 
         # Recreate folds with new seed using existing create_folds function
         # This ensures proper handling of uneven fold sizes and correct KFold splitting
-        folds = create_folds(all_pids, n_folds, reshuffle_seed)
+        folds = create_folds(train_val_pids, n_folds, reshuffle_seed)
 
-        logger.info(f"Reshuffled {len(all_pids)} unique PIDs across {n_folds} folds")
+        logger.info(f"Reshuffled {len(train_val_pids)} unique PIDs across {n_folds} folds")
 
         # Validate reshuffled folds
         logger.info("Validating reshuffled folds...")
