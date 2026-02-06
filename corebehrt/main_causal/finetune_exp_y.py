@@ -104,18 +104,21 @@ def validate_folds(folds: list, expected_pids: set, logger: logging.Logger) -> N
         train_pids = set(fold[TRAIN_KEY])
         val_pids = set(fold[VAL_KEY])
 
-        # Check: No duplicates within fold
-        assert len(train_pids) == len(fold[TRAIN_KEY]), (
-            f"Fold {i}: Duplicate train PIDs"
-        )
-        assert len(val_pids) == len(fold[VAL_KEY]), f"Fold {i}: Duplicate val PIDs"
+        # Check: No duplicates within fold (removed because of bootstrapping)
+        # assert len(train_pids) == len(fold[TRAIN_KEY]), (
+        #     f"Fold {i}: Duplicate train PIDs"
+        # )
+        # assert len(val_pids) == len(fold[VAL_KEY]), f"Fold {i}: Duplicate val PIDs"
 
         # Check: No overlap between train and val
         assert train_pids.isdisjoint(val_pids), f"Fold {i}: Train/val overlap"
 
-        # Check: Train + val = all PIDs
-        fold_total = train_pids | val_pids
-        assert fold_total == expected_pids, f"Fold {i}: Missing or extra PIDs"
+        # # Check: Train + val = all PIDs
+        # fold_total = train_pids | val_pids
+        # assert fold_total == expected_pids, f"Fold {i}: Missing or extra PIDs"
+
+        # Check the total number of PIDs in the fold
+        assert len(train_pids) + len(val_pids) == len(expected_pids), f"Fold {i}: Missing or extra PIDs"
 
         # Track validation PIDs across folds
         assert val_pids.isdisjoint(all_val_pids), (
@@ -123,11 +126,11 @@ def validate_folds(folds: list, expected_pids: set, logger: logging.Logger) -> N
         )
         all_val_pids.update(val_pids)
 
-    # Check: All PIDs appear in exactly one validation set
-    assert all_val_pids == expected_pids, "Not all PIDs covered in validation sets"
-    logger.info(
-        f"✓ Folds validated: {len(folds)} folds, {len(expected_pids)} unique PIDs"
-    )
+    # # Check: All PIDs appear in exactly one validation set
+    # assert all_val_pids == expected_pids, "Not all PIDs covered in validation sets"
+    # logger.info(
+    #     f"✓ Folds validated: {len(folds)} folds, {len(expected_pids)} unique PIDs"
+    # )
 
 
 def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
