@@ -105,21 +105,23 @@ def validate_folds(folds: list, expected_pids: set, logger: logging.Logger) -> N
         train_pids = set(fold[TRAIN_KEY])
         val_pids = set(fold[VAL_KEY])
 
-        # Check: No duplicates within fold (removed because of bootstrapping)
-        # assert len(train_pids) == len(fold[TRAIN_KEY]), (
-        #     f"Fold {i}: Duplicate train PIDs"
-        # )
-        # assert len(val_pids) == len(fold[VAL_KEY]), f"Fold {i}: Duplicate val PIDs"
-
-        # Check: No overlap between train and val
+        # Check: No overlap between train and val (unique PIDs)
         assert train_pids.isdisjoint(val_pids), f"Fold {i}: Train/val overlap"
 
-        # # Check: Train + val = all PIDs
-        # fold_total = train_pids | val_pids
-        # assert fold_total == expected_pids, f"Fold {i}: Missing or extra PIDs"
+        # Check: Total count (including duplicates) should equal expected count
+        # Bootstrap sampling maintains the same total count, just with possible duplicates
+        total_count = len(fold[TRAIN_KEY]) + len(fold[VAL_KEY])
+        assert total_count == len(expected_pids), (
+            f"Fold {i}: Total PID count mismatch. "
+            f"Got {total_count}, expected {len(expected_pids)}"
+        )
 
-        # Check the total number of PIDs in the fold
-        assert len(train_pids) + len(val_pids) == len(expected_pids), f"Fold {i}: Missing or extra PIDs"
+        # Check: All PIDs in fold are from expected set
+        fold_total = train_pids | val_pids
+        assert fold_total.issubset(expected_pids), (
+            f"Fold {i}: Contains PIDs not in expected set. "
+            f"Extra PIDs: {fold_total - expected_pids}"
+        )
 
         # Track validation PIDs across folds
         assert val_pids.isdisjoint(all_val_pids), (
