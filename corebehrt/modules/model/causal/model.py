@@ -48,6 +48,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         self.shared_representation = self.head_config.get("shared_representation", True)
         self.bidirectional = self.head_config.get("bidirectional", True)
         self.bottleneck_dim = self.head_config.get("bottleneck_dim", 128)
+        self.exposure_loss_weight = self.head_config.get("exposure_loss_weight", 1.0)
         self.l1_lambda = self.head_config.get("l1_lambda", 0.0)
         if self.l1_lambda > 0:
             logger.info(f"Applying L1 regularization with lambda={self.l1_lambda}")
@@ -103,12 +104,23 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         else:
             head_input_size = config.hidden_size
 
-        self.exposure_head = MLPHead(input_size=head_input_size)
+        mlp_num_hidden_layers = self.head_config.get("mlp_num_hidden_layers", 1)
+        mlp_hidden_size_ratio = self.head_config.get("mlp_hidden_size_ratio", 2)
+
+        self.exposure_head = MLPHead(
+            input_size=head_input_size,
+            num_hidden_layers=mlp_num_hidden_layers,
+            hidden_size_ratio=mlp_hidden_size_ratio,
+        )
 
         # Create separate heads for each outcome
         self.outcome_heads = nn.ModuleDict()
         for outcome_name in self.outcome_names:
-            self.outcome_heads[outcome_name] = MLPHead(input_size=head_input_size + 1)
+            self.outcome_heads[outcome_name] = MLPHead(
+                input_size=head_input_size + 1,
+                num_hidden_layers=mlp_num_hidden_layers,
+                hidden_size_ratio=mlp_hidden_size_ratio,
+            )
 
     def _get_loss_fn(self, loss_name: str, loss_params: dict):
         """Returns the loss function instance based on the name."""
@@ -256,9 +268,11 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
                 batch[EXPOSURE_TARGET].view(-1),
             )
             outputs.exposure_loss = exposure_loss
-            total_loss += exposure_loss
+            total_loss += self.exposure_loss_weight * exposure_loss
 
         # Only compute outcome losses for available labels
+        outcome_loss_sum = 0
+        n_outcomes = 0
         for outcome_name in self.outcome_names:
             if outcome_name not in batch:
                 continue
@@ -269,7 +283,11 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             )
 
             outputs.outcome_losses[outcome_name] = outcome_loss
-            total_loss += outcome_loss
+            outcome_loss_sum += outcome_loss
+            n_outcomes += 1
+
+        if n_outcomes > 0:
+            total_loss += outcome_loss_sum / n_outcomes
 
         # Add L1 regularization on the bottleneck representation
         if self.shared_representation and self.l1_lambda > 0:
