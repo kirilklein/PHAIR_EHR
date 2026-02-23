@@ -140,15 +140,18 @@ class CausalEHRTrainer(EHRTrainer):
             # Collect individual task losses for PCGrad
             task_losses = []
 
-            # Add exposure loss if available
+            # Add exposure loss if available (weighted)
             if hasattr(outputs, "exposure_loss") and outputs.exposure_loss is not None:
-                task_losses.append(outputs.exposure_loss)
+                task_losses.append(
+                    self.model.exposure_loss_weight * outputs.exposure_loss
+                )
 
-            # Add outcome losses if available
+            # Add outcome losses if available (normalized by count)
             if hasattr(outputs, "outcome_losses") and outputs.outcome_losses:
+                n_outcomes = len(outputs.outcome_losses)
                 for outcome_loss in outputs.outcome_losses.values():
                     if outcome_loss is not None:
-                        task_losses.append(outcome_loss)
+                        task_losses.append(outcome_loss / n_outcomes)
 
             # If we don't have individual losses, fall back to total loss
             if not task_losses and hasattr(outputs, "loss"):
