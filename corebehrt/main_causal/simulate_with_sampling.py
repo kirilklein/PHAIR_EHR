@@ -57,17 +57,22 @@ def main_simulate(config_path):
     # Sample subset of PIDs (either by size or fraction)
     sample_size = sampling_cfg.get("size", None)
     sample_fraction = sampling_cfg.get("fraction", None)
+    method = sampling_cfg.get("method", "resample")
     seed = cfg.get("seed", 42)
 
     if sample_size is not None:
-        logger.info(f"Sampling {sample_size} patients with seed {seed}")
-        sampled_pids = sample_cohort(full_pids, sample_size=sample_size, seed=seed)
-    elif sample_fraction is not None:
         logger.info(
-            f"Sampling {sample_fraction * 100:.1f}% of patients with seed {seed}"
+            f"Sampling {sample_size} patients with seed {seed} (method={method})"
         )
         sampled_pids = sample_cohort(
-            full_pids, sample_fraction=sample_fraction, seed=seed
+            full_pids, sample_size=sample_size, seed=seed, method=method
+        )
+    elif sample_fraction is not None:
+        logger.info(
+            f"Sampling {sample_fraction * 100:.1f}% of patients with seed {seed} (method={method})"
+        )
+        sampled_pids = sample_cohort(
+            full_pids, sample_fraction=sample_fraction, seed=seed, method=method
         )
     else:
         raise ValueError(
