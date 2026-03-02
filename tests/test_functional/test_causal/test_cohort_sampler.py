@@ -8,7 +8,6 @@ from corebehrt.functional.causal.cohort_sampler import sample_cohort
 
 
 class TestSampleCohort(unittest.TestCase):
-
     def setUp(self):
         self.full_pids = torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
@@ -29,9 +28,7 @@ class TestSampleCohort(unittest.TestCase):
     def test_resample_rejects_oversize(self):
         """Resample method should reject sample_size > n_total."""
         with self.assertRaises(ValueError):
-            sample_cohort(
-                self.full_pids, sample_size=20, seed=42, method="resample"
-            )
+            sample_cohort(self.full_pids, sample_size=20, seed=42, method="resample")
 
     def test_bootstrap_allows_duplicates(self):
         """Bootstrap method should sample with replacement (duplicates possible)."""
@@ -53,9 +50,7 @@ class TestSampleCohort(unittest.TestCase):
     def test_invalid_method_raises(self):
         """Invalid method should raise ValueError."""
         with self.assertRaises(ValueError):
-            sample_cohort(
-                self.full_pids, sample_size=5, seed=42, method="invalid"
-            )
+            sample_cohort(self.full_pids, sample_size=5, seed=42, method="invalid")
 
     def test_bootstrap_with_fraction(self):
         """Bootstrap with fraction should work."""

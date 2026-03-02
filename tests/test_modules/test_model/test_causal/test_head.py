@@ -232,9 +232,7 @@ class TestMLPHead(unittest.TestCase):
         """Test forward pass with different depths."""
         for depth in [1, 2, 3]:
             with self.subTest(depth=depth):
-                head = MLPHead(
-                    self.input_size, num_hidden_layers=depth
-                ).to(self.device)
+                head = MLPHead(self.input_size, num_hidden_layers=depth).to(self.device)
                 x = torch.randn(self.batch_size, self.input_size, device=self.device)
                 output = head(x)
                 self.assertEqual(output.shape, (self.batch_size, 1))
