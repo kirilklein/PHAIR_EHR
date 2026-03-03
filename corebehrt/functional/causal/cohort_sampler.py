@@ -14,9 +14,10 @@ def sample_cohort(
     sample_fraction: float = None,
     sample_size: int = None,
     seed: int = 42,
+    method: str = "resample",
 ) -> torch.Tensor:
     """
-    Randomly sample patient IDs by fraction or absolute size without replacement.
+    Randomly sample patient IDs by fraction or absolute size.
 
     Args:
         full_pids: Tensor of all patient IDs in the full cohort
@@ -24,24 +25,17 @@ def sample_cohort(
                         Ignored if sample_size is provided.
         sample_size: Absolute number of patients to sample. Takes precedence over sample_fraction.
         seed: Random seed for reproducibility
+        method: Sampling method - "resample" (without replacement) or "bootstrap" (with replacement)
 
     Returns:
         Tensor of sampled patient IDs
 
     Raises:
         ValueError: If neither or both parameters are provided, or values are invalid
-
-    Examples:
-        >>> full_pids = torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> # Sample by fraction
-        >>> sampled = sample_cohort(full_pids, sample_fraction=0.5, seed=42)
-        >>> len(sampled) == 5
-        True
-        >>> # Sample by absolute size
-        >>> sampled = sample_cohort(full_pids, sample_size=3, seed=42)
-        >>> len(sampled) == 3
-        True
     """
+    if method not in ("resample", "bootstrap"):
+        raise ValueError(f"method must be 'resample' or 'bootstrap', got '{method}'")
+
     # Validate inputs
     if sample_size is None and sample_fraction is None:
         raise ValueError("Either 'sample_size' or 'sample_fraction' must be provided")
@@ -54,12 +48,13 @@ def sample_cohort(
 
     # Calculate number of patients to sample
     n_total = len(full_pids)
+    replace = method == "bootstrap"
 
     if sample_size is not None:
         # Use absolute size
         if sample_size <= 0:
             raise ValueError(f"sample_size must be positive, got {sample_size}")
-        if sample_size > n_total:
+        if not replace and sample_size > n_total:
             raise ValueError(
                 f"sample_size {sample_size} exceeds available patients {n_total}"
             )
@@ -76,8 +71,8 @@ def sample_cohort(
                 f"sample_fraction {sample_fraction} results in 0 samples from {n_total} patients"
             )
 
-    # Sample indices without replacement
-    sampled_indices = rng.choice(n_total, size=n_sample, replace=False)
+    # Sample indices
+    sampled_indices = rng.choice(n_total, size=n_sample, replace=replace)
 
     # Return sampled PIDs
     return full_pids[sampled_indices]

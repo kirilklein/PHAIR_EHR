@@ -218,6 +218,49 @@ class TestMLPHead(unittest.TestCase):
         # Check that outputs are not extremely large (arbitrary threshold)
         self.assertTrue(torch.abs(output).max() < 100)
 
+    def test_default_matches_original_architecture(self):
+        """Test that default (num_hidden_layers=1) produces 4 modules: LayerNorm, Linear, GELU, Linear."""
+        head = MLPHead(self.input_size)
+        modules = list(head.classifier)
+        self.assertEqual(len(modules), 4)
+        self.assertIsInstance(modules[0], torch.nn.LayerNorm)
+        self.assertIsInstance(modules[1], torch.nn.Linear)
+        self.assertIsInstance(modules[2], torch.nn.GELU)
+        self.assertIsInstance(modules[3], torch.nn.Linear)
+
+    def test_multi_layer_forward_pass(self):
+        """Test forward pass with different depths."""
+        for depth in [1, 2, 3]:
+            with self.subTest(depth=depth):
+                head = MLPHead(self.input_size, num_hidden_layers=depth).to(self.device)
+                x = torch.randn(self.batch_size, self.input_size, device=self.device)
+                output = head(x)
+                self.assertEqual(output.shape, (self.batch_size, 1))
+
+    def test_multi_layer_module_count(self):
+        """Test that deeper heads have more modules."""
+        for depth in [1, 2, 3]:
+            with self.subTest(depth=depth):
+                head = MLPHead(self.input_size, num_hidden_layers=depth)
+                modules = list(head.classifier)
+                # LayerNorm + (Linear + GELU) * depth + Linear
+                expected = 1 + 2 * depth + 1
+                self.assertEqual(len(modules), expected)
+
+    def test_gradient_flow_deep_head(self):
+        """Test that gradients flow through a deep MLPHead."""
+        head = MLPHead(self.input_size, num_hidden_layers=3).to(self.device)
+        x = torch.randn(
+            self.batch_size, self.input_size, device=self.device, requires_grad=True
+        )
+
+        output = head(x)
+        loss = output.sum()
+        loss.backward()
+
+        self.assertIsNotNone(x.grad)
+        self.assertFalse(torch.allclose(x.grad, torch.zeros_like(x.grad)))
+
 
 if __name__ == "__main__":
     unittest.main()

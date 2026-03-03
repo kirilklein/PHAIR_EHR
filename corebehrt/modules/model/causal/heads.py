@@ -73,17 +73,22 @@ class MLPHead(nn.Module):
     """
 
     def __init__(
-        self, input_size: int, hidden_size_ratio: int = 2, dropout_prob: float = 0.1
+        self,
+        input_size: int,
+        hidden_size_ratio: int = 2,
+        dropout_prob: float = 0.1,
+        num_hidden_layers: int = 1,
     ):
         super().__init__()
-        intermediate_size = input_size // hidden_size_ratio
-        self.classifier = nn.Sequential(
-            nn.LayerNorm(input_size),
-            nn.Linear(input_size, intermediate_size),
-            nn.GELU(),
-            # nn.Dropout(dropout_prob),
-            nn.Linear(intermediate_size, 1, bias=True),
-        )
+        layers = [nn.LayerNorm(input_size)]
+        current_size = input_size
+        for _ in range(num_hidden_layers):
+            next_size = current_size // hidden_size_ratio
+            layers.append(nn.Linear(current_size, next_size))
+            layers.append(nn.GELU())
+            current_size = next_size
+        layers.append(nn.Linear(current_size, 1, bias=True))
+        self.classifier = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
