@@ -34,9 +34,7 @@ def sample_cohort(
         ValueError: If neither or both parameters are provided, or values are invalid
     """
     if method not in ("resample", "bootstrap"):
-        raise ValueError(
-            f"method must be 'resample' or 'bootstrap', got '{method}'"
-        )
+        raise ValueError(f"method must be 'resample' or 'bootstrap', got '{method}'")
 
     # Validate inputs
     if sample_size is None and sample_fraction is None:
