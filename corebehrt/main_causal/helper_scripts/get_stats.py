@@ -60,14 +60,14 @@ EPS = 1e-6
 def _convert_boolean_to_expression(value, df: pd.DataFrame) -> str:
     """
     Convert boolean or string boolean to a safe expression that references a dummy column.
-    
+
     For boolean True/False, creates temporary dummy columns in the dataframe that are
     always True/False. These should only be used for filtering and not appear in final output.
-    
+
     Args:
         value: Boolean, string boolean ("true"/"false"), or expression string
         df: DataFrame to add dummy columns to if needed
-        
+
     Returns:
         Expression string referencing a dummy column or the original expression
     """
@@ -76,15 +76,17 @@ def _convert_boolean_to_expression(value, df: pd.DataFrame) -> str:
         df["_always_true_dummy"] = True
     if "_always_false_dummy" not in df.columns:
         df["_always_false_dummy"] = False
-    
+
     # Handle boolean values
     if isinstance(value, bool):
         return "_always_true_dummy" if value else "_always_false_dummy"
-    
+
     # Handle string representations of booleans
     if isinstance(value, str) and value.lower() in ("true", "false"):
-        return "_always_true_dummy" if value.lower() == "true" else "_always_false_dummy"
-    
+        return (
+            "_always_true_dummy" if value.lower() == "true" else "_always_false_dummy"
+        )
+
     # Otherwise, assume it's a valid expression string
     return str(value)
 
@@ -99,7 +101,7 @@ def process_cohort(
 ) -> tuple:
     """
     Process a cohort: clip PS, filter, compute stats and weighted stats.
-    
+
     Args:
         criteria: DataFrame with criteria data
         cfg: Configuration dictionary
@@ -107,12 +109,12 @@ def process_cohort(
         save_path: Path to save output files
         cohort_name: Name of the cohort for logging
         save_stats_files: Whether to save stats CSV files (default: True)
-    
+
     Returns:
         tuple: (stats, weighted_stats, criteria_processed, filtered)
     """
     criteria_processed = criteria.copy()
-    
+
     # Clip PS if needed
     if (PS_COL in criteria_processed.columns) and cfg.get("clip_ps", True):
         outside_count = (criteria_processed[PS_COL] < EPS).sum() + (
@@ -124,7 +126,7 @@ def process_cohort(
             criteria_processed[PS_COL] = criteria_processed[PS_COL].clip(
                 lower=EPS, upper=1 - EPS
             )
-    
+
     # Track if filtering was done
     filtered = False
     if cfg.get("common_support_threshold", None) is not None:
@@ -137,7 +139,7 @@ def process_cohort(
             threshold=cfg.common_support_threshold,
         )
         filtered = True
-    
+
     # Compute stats
     stats = analyze_cohort(criteria_processed)
     if cohort_name:
@@ -146,12 +148,14 @@ def process_cohort(
     log_stats(stats)
     if save_stats_files:
         save_stats(stats, save_path, weighted=False)
-    
+
     # Compute weighted stats if weights are provided
     weighted_stats = None
     if cfg.get("weights", None) is not None:
         check_ps_columns(criteria_processed)
-        criteria_processed[WEIGHTS_COL] = compute_weights(criteria_processed, cfg.weights)
+        criteria_processed[WEIGHTS_COL] = compute_weights(
+            criteria_processed, cfg.weights
+        )
         weighted_stats = analyze_cohort_with_weights(criteria_processed, WEIGHTS_COL)
         if cohort_name:
             logger.info(f"--------------------------------")
@@ -166,7 +170,7 @@ def process_cohort(
             logger.info(f"True sample size: {len(criteria_processed)}")
             log_table(ess_df, logger)
             ess_df.to_csv(join(save_path, EFFECTIVE_SAMPLE_SIZE_FILE), index=False)
-    
+
     return stats, weighted_stats, criteria_processed, filtered
 
 
@@ -249,24 +253,32 @@ def main(config_path: str):
     if secondary_cohort_config_path is not None:
         logger.info("--------------------------------")
         logger.info("Processing secondary cohort")
-        logger.info(f"Loading secondary cohort config from: {secondary_cohort_config_path}")
-        
+        logger.info(
+            f"Loading secondary cohort config from: {secondary_cohort_config_path}"
+        )
+
         # Load the secondary cohort config with inclusion/exclusion expressions
         secondary_cfg = load_config(secondary_cohort_config_path)
         inclusion_raw = secondary_cfg.get("inclusion", True)  # Default to include all
         exclusion_raw = secondary_cfg.get("exclusion", False)  # Default to exclude none
-        
+
         # Work on a copy to avoid modifying the original dataframe
         criteria_for_filtering = criteria_processed.copy()
-        
+
         # Convert boolean values to expressions that reference temporary dummy columns
-        inclusion_expression = _convert_boolean_to_expression(inclusion_raw, criteria_for_filtering)
-        exclusion_expression = _convert_boolean_to_expression(exclusion_raw, criteria_for_filtering)
-        
+        inclusion_expression = _convert_boolean_to_expression(
+            inclusion_raw, criteria_for_filtering
+        )
+        exclusion_expression = _convert_boolean_to_expression(
+            exclusion_raw, criteria_for_filtering
+        )
+
         logger.info(f"Inclusion expression: {inclusion_expression}")
         logger.info(f"Exclusion expression: {exclusion_expression}")
-        logger.info(f"Starting with {len(criteria_processed)} patients from primary cohort")
-        
+        logger.info(
+            f"Starting with {len(criteria_processed)} patients from primary cohort"
+        )
+
         # Filter the primary cohort using the inclusion/exclusion expressions
         included_pids, filter_stats = apply_criteria_with_stats(
             criteria_for_filtering,
@@ -274,15 +286,15 @@ def main(config_path: str):
             exclusion_expression,
             verbose=True,
         )
-        
+
         logger.info(f"Filtered to {len(included_pids)} patients for secondary cohort")
-        
+
         # Create secondary cohort dataframe from filtered patient IDs
         # Use the original criteria_processed (without dummy columns) to preserve all original criteria
         criteria_secondary = criteria_processed[
             criteria_processed[PID_COL].isin(included_pids)
         ].copy()
-        
+
         logger.info(f"Secondary cohort contains {len(criteria_secondary)} patients")
 
         stats_secondary, weighted_stats_secondary, criteria_secondary_processed, _ = (
@@ -296,10 +308,7 @@ def main(config_path: str):
             )
         )
 
-        if (
-            cfg.get("make_love_plot", False)
-            and cfg.get("weights", None) is not None
-        ):
+        if cfg.get("make_love_plot", False) and cfg.get("weights", None) is not None:
             make_love_plot(
                 stats_secondary,
                 weighted_stats_secondary,

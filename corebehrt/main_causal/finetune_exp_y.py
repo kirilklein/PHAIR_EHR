@@ -136,7 +136,9 @@ def validate_folds(folds: list, expected_pids: set, logger: logging.Logger) -> N
     # )
 
 
-def handle_folds(cfg: Config, test_pids: list, train_val_pids: list, logger: logging.Logger) -> list:
+def handle_folds(
+    cfg: Config, test_pids: list, train_val_pids: list, logger: logging.Logger
+) -> list:
     """
     Load folds and optionally reshuffle PIDs across them.
     Save folds to model directory.
@@ -160,7 +162,7 @@ def handle_folds(cfg: Config, test_pids: list, train_val_pids: list, logger: log
             fold[TRAIN_KEY] = fold[TRAIN_KEY].tolist()
         if isinstance(fold[VAL_KEY], np.ndarray):
             fold[VAL_KEY] = fold[VAL_KEY].tolist()
-    
+
     expected_pids = set(train_val_pids)
 
     # Validate loaded folds
@@ -184,7 +186,9 @@ def handle_folds(cfg: Config, test_pids: list, train_val_pids: list, logger: log
         # This ensures proper handling of uneven fold sizes and correct KFold splitting
         folds = create_folds(train_val_pids, n_folds, reshuffle_seed)
 
-        logger.info(f"Reshuffled {len(train_val_pids)} unique PIDs across {n_folds} folds")
+        logger.info(
+            f"Reshuffled {len(train_val_pids)} unique PIDs across {n_folds} folds"
+        )
 
         # Validate reshuffled folds
         logger.info("Validating reshuffled folds...")

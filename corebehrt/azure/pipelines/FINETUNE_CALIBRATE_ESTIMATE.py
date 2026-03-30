@@ -70,7 +70,6 @@ def create(component: callable):
             "calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
         }
 
-
         # Add counterfactual outcomes if provided (for simulated data)
         if counterfactual_outcomes is not None:
             estimate_kwargs["counterfactual_outcomes"] = counterfactual_outcomes
@@ -78,7 +77,6 @@ def create(component: callable):
         estimate = component(
             "estimate",
         )(**estimate_kwargs)
-
 
         get_stats_kwargs = {
             "ps_calibrated_predictions": calibrate_exp_y.outputs.calibrated_predictions,
@@ -115,7 +113,7 @@ def create(component: callable):
             counterfactual_outcomes=counterfactual_outcomes,
         )
 
-    pipeline_configs['has_counterfactual'] = _pipeline_with_counterfactual
+    pipeline_configs["has_counterfactual"] = _pipeline_with_counterfactual
 
     # 2. Without counterfactual outcomes (real data)
     @dsl.pipeline(
@@ -128,7 +126,7 @@ def create(component: callable):
     ) -> dict:
         return _common_pipeline_steps(prepared_data, pretrain_model)
 
-    pipeline_configs['does_not_have_counterfactual'] = _pipeline_without_counterfactual
+    pipeline_configs["does_not_have_counterfactual"] = _pipeline_without_counterfactual
 
     # 3. With secondary cohort config
     @dsl.pipeline(
@@ -141,10 +139,12 @@ def create(component: callable):
         secondary_cohort_config: Input,
     ) -> dict:
         return _common_pipeline_steps(
-            prepared_data, pretrain_model, secondary_cohort_config=secondary_cohort_config
+            prepared_data,
+            pretrain_model,
+            secondary_cohort_config=secondary_cohort_config,
         )
 
-    pipeline_configs['has_secondary_cohort'] = _pipeline_with_secondary_cohort
+    pipeline_configs["has_secondary_cohort"] = _pipeline_with_secondary_cohort
 
     # 4. With both counterfactual outcomes and secondary cohort config
     @dsl.pipeline(
@@ -164,7 +164,8 @@ def create(component: callable):
             secondary_cohort_config=secondary_cohort_config,
         )
 
-    pipeline_configs['has_both'] = _pipeline_with_both
+    pipeline_configs["has_both"] = _pipeline_with_both
+
     # Factory function to select the appropriate pipeline
     def pipeline_factory(**kwargs: Dict[str, Any]):
         """
@@ -186,13 +187,13 @@ def create(component: callable):
 
         # Select pipeline based on combination of optional inputs
         if has_counterfactual and has_secondary_cohort:
-            selected_pipeline = pipeline_configs['has_both']
+            selected_pipeline = pipeline_configs["has_both"]
         elif has_secondary_cohort:
-            selected_pipeline = pipeline_configs['has_secondary_cohort']
+            selected_pipeline = pipeline_configs["has_secondary_cohort"]
         elif has_counterfactual:
-            selected_pipeline = pipeline_configs['has_counterfactual']
+            selected_pipeline = pipeline_configs["has_counterfactual"]
         else:
-            selected_pipeline = pipeline_configs['does_not_have_counterfactual']
+            selected_pipeline = pipeline_configs["does_not_have_counterfactual"]
 
         # Filter kwargs to only include parameters the selected pipeline accepts
         from inspect import signature
