@@ -186,9 +186,10 @@ def handle_folds(
     expected_pids = set(train_val_pids)
     bootstrap = cfg.get("bootstrap", False)
 
-    # Validate loaded folds
+    # Validate loaded folds — pass bootstrap flag so that duplicate PIDs
+    # (expected with bootstrap sampling) don't cause validation to fail
     logger.info("Validating loaded folds...")
-    validate_folds(folds, expected_pids, logger)
+    validate_folds(folds, expected_pids, logger, bootstrap=bootstrap)
 
     data_cfg = cfg.get("data", {})
     # Check if we should reshuffle
