@@ -69,7 +69,7 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             )
             if self.head_config.get("default_outcome_weight", None) is not None:
                 default_outcome_weight = default_outcome_weight * self.head_config.get(
-                    "default_outcome_weight"
+                    "default_outcome_weight", 1.0
                 )
                 logger.info(
                     f"Using weighted default outcome weight with factor {self.head_config.get('default_outcome_weight')}"
