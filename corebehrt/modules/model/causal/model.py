@@ -54,6 +54,31 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
         self.temperature = self.head_config.get("temperature", 1.0)
         # Get outcome names from config
         self.outcome_names = config.outcome_names
+        # Set outcome loss weight: default to 1/number_of_outcomes for balanced contribution
+        # This ensures total outcome loss contribution ≈ exposure loss contribution
+
+        if self.head_config.get("outcome_loss_weight", None) is not None:
+            logger.info(
+                f"Using outcome weight from config: {self.head_config.get('outcome_loss_weight')}"
+            )
+            self.outcome_loss_weight = self.head_config.get("outcome_loss_weight")
+        else:
+            logger.info("Using default outcome weight: 1/number_of_outcomes")
+            default_outcome_weight = (
+                1.0 / len(self.outcome_names) if len(self.outcome_names) > 0 else 1.0
+            )
+            if self.head_config.get("default_outcome_weight", None) is not None:
+                default_outcome_weight = default_outcome_weight * self.head_config.get(
+                    "default_outcome_weight"
+                )
+                logger.info(
+                    f"Using weighted default outcome weight with factor {self.head_config.get('default_outcome_weight')}"
+                )
+            self.outcome_loss_weight = default_outcome_weight
+
+        logger.info(
+            f"Outcome loss weight: {self.outcome_loss_weight} (number of outcomes: {len(self.outcome_names)})"
+        )
         self._setup_pooling_layers(config)
         self._setup_bottleneck(config)
         self._setup_mlp_heads(config)
@@ -269,7 +294,8 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             )
 
             outputs.outcome_losses[outcome_name] = outcome_loss
-            total_loss += outcome_loss
+            # Apply outcome loss weight to reduce its contribution to total loss
+            total_loss += self.outcome_loss_weight * outcome_loss
 
         # Add L1 regularization on the bottleneck representation
         if self.shared_representation and self.l1_lambda > 0:
