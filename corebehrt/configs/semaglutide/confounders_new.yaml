@@ -1,6 +1,6 @@
 ## Confounders: harmonized with cohort logic and time windows
 ## Notes:
-## - Medication windows: 60 days
+## - Medication windows: 180 days
 ## - Labs (values): HbA1c 90d, eGFR 180d, lipids 365d
 ## - Chronic diagnoses (history): 5 years (1826d)
 ## - Outcomes: no start_days (to be evaluated post-index)
