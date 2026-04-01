@@ -64,17 +64,14 @@ class CorebehrtForCausalFineTuning(CorebehrtEncoder):
             self.outcome_loss_weight = self.head_config.get("outcome_loss_weight")
         else:
             logger.info("Using default outcome weight: 1/number_of_outcomes")
-            default_outcome_weight = (
+            base_outcome_weight = (
                 1.0 / len(self.outcome_names) if len(self.outcome_names) > 0 else 1.0
             )
-            if self.head_config.get("default_outcome_weight", None) is not None:
-                default_outcome_weight = default_outcome_weight * self.head_config.get(
-                    "default_outcome_weight", 1.0
-                )
-                logger.info(
-                    f"Using weighted default outcome weight with factor {self.head_config.get('default_outcome_weight')}"
-                )
-            self.outcome_loss_weight = default_outcome_weight
+            scaling_factor = self.head_config.get("default_outcome_weight", None)
+            if scaling_factor is not None:
+                base_outcome_weight = base_outcome_weight * scaling_factor
+                logger.info(f"Scaling base outcome weight by factor {scaling_factor}")
+            self.outcome_loss_weight = base_outcome_weight
 
         logger.info(
             f"Outcome loss weight: {self.outcome_loss_weight} (number of outcomes: {len(self.outcome_names)})"
