@@ -128,7 +128,11 @@ def split_into_test_and_train_val_pids(pids: list, test_split: float):
 
 
 def create_folds(
-    pids: list, num_folds: int, seed: int = 42, val_ratio: float = 0.8
+    pids: list,
+    num_folds: int,
+    seed: int = 42,
+    val_ratio: float = 0.8,
+    bootstrap: bool = False,
 ) -> List[Dict[str, list]]:
     """
     Create k folds from a list of PIDs.
@@ -146,6 +150,7 @@ def create_folds(
         num_folds (int): Number of folds.
         seed (int): Random seed for reproducibility.
         val_ratio (float): Fraction of patients to use for validation set if num_folds=1.
+        bootstrap (bool): If True, sample train/val PIDs with replacement.
 
     Returns:
         list: List of folds with train and val PIDs.
@@ -158,13 +163,27 @@ def create_folds(
         split_idx = int(len(pids_array) * (1 - val_ratio))
         train_pids = pids_array[:split_idx].tolist()
         val_pids = pids_array[split_idx:].tolist()
+        if bootstrap:
+            train_pids = rng.choice(
+                train_pids, size=len(train_pids), replace=True
+            ).tolist()
+            val_pids = rng.choice(val_pids, size=len(val_pids), replace=True).tolist()
         folds = [{TRAIN_KEY: train_pids, VAL_KEY: val_pids}]
     else:
         kf = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
         folds = [{TRAIN_KEY: [], VAL_KEY: []} for _ in range(num_folds)]
 
         for i, (train_idx, val_idx) in enumerate(kf.split(pids_array)):
-            folds[i][TRAIN_KEY] = [pids_array[idx] for idx in train_idx]
-            folds[i][VAL_KEY] = [pids_array[idx] for idx in val_idx]
+            train_pids = [pids_array[idx] for idx in train_idx]
+            val_pids = [pids_array[idx] for idx in val_idx]
+            if bootstrap:
+                train_pids = rng.choice(
+                    train_pids, size=len(train_pids), replace=True
+                ).tolist()
+                val_pids = rng.choice(
+                    val_pids, size=len(val_pids), replace=True
+                ).tolist()
+            folds[i][TRAIN_KEY] = train_pids
+            folds[i][VAL_KEY] = val_pids
 
     return folds

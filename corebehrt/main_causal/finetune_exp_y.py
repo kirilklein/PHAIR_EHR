@@ -5,6 +5,7 @@ from os.path import join
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 import torch
 import time
+import numpy as np
 
 from corebehrt.constants.paths import (
     FOLDS_FILE,
@@ -54,8 +55,12 @@ def main_finetune(config_path):
             test_pids = torch.load(join(cfg.paths.prepared_data, TEST_PIDS_FILE))
             test_data = data.filter_by_pids(test_pids)
 
+    # Exclude test pids from train_val_pids
+    test_pid_set = set(test_pids)
+    train_val_pids = [pid for pid in train_val_pids if pid not in test_pid_set]
+
     # Use folds from prepared data
-    folds = handle_folds(cfg, test_pids, logger)
+    folds = handle_folds(cfg, test_pids, train_val_pids, logger)
     train_val_data = data.filter_by_pids(train_val_pids)
     cv_loop(
         cfg,
@@ -88,13 +93,18 @@ def main_finetune(config_path):
     logger.info("Done")
 
 
-def validate_folds(folds: list, expected_pids: set, logger: logging.Logger) -> None:
+def validate_folds(
+    folds: list,
+    expected_pids: set,
+    logger: logging.Logger,
+    bootstrap: bool = False,
+) -> None:
     """
     Validate fold structure for correctness.
 
     Checks:
     - All PIDs are present (no loss)
-    - Each fold has unique PIDs (no duplicates within)
+    - Each fold has unique PIDs (no duplicates within) unless bootstrap=True
     - Validation sets don't overlap across folds
     - Train/val PIDs sum to total PIDs in each fold
     """
@@ -104,33 +114,52 @@ def validate_folds(folds: list, expected_pids: set, logger: logging.Logger) -> N
         train_pids = set(fold[TRAIN_KEY])
         val_pids = set(fold[VAL_KEY])
 
-        # Check: No duplicates within fold
-        assert len(train_pids) == len(fold[TRAIN_KEY]), (
-            f"Fold {i}: Duplicate train PIDs"
-        )
-        assert len(val_pids) == len(fold[VAL_KEY]), f"Fold {i}: Duplicate val PIDs"
+        if not bootstrap:
+            # Check: No duplicates within fold
+            assert len(train_pids) == len(fold[TRAIN_KEY]), (
+                f"Fold {i}: Duplicate train PIDs"
+            )
+            assert len(val_pids) == len(fold[VAL_KEY]), f"Fold {i}: Duplicate val PIDs"
 
-        # Check: No overlap between train and val
+        # Check: No overlap between train and val (unique PIDs)
         assert train_pids.isdisjoint(val_pids), f"Fold {i}: Train/val overlap"
 
-        # Check: Train + val = all PIDs
-        fold_total = train_pids | val_pids
-        assert fold_total == expected_pids, f"Fold {i}: Missing or extra PIDs"
+        if bootstrap:
+            # Check: Total count matches expected (duplicates allowed)
+            total_count = len(fold[TRAIN_KEY]) + len(fold[VAL_KEY])
+            assert total_count == len(expected_pids), (
+                f"Fold {i}: Total PID count mismatch. "
+                f"Got {total_count}, expected {len(expected_pids)}"
+            )
+            # Check: All PIDs in fold are from expected set
+            fold_total = train_pids | val_pids
+            assert fold_total.issubset(expected_pids), (
+                f"Fold {i}: Contains PIDs not in expected set. "
+                f"Extra PIDs: {fold_total - expected_pids}"
+            )
+        else:
+            # Check: Train + val = all PIDs
+            fold_total = train_pids | val_pids
+            assert fold_total == expected_pids, f"Fold {i}: Missing or extra PIDs"
 
         # Track validation PIDs across folds
-        assert val_pids.isdisjoint(all_val_pids), (
-            f"Fold {i}: Val PIDs overlap with other folds"
-        )
+        if not bootstrap:
+            assert val_pids.isdisjoint(all_val_pids), (
+                f"Fold {i}: Val PIDs overlap with other folds"
+            )
         all_val_pids.update(val_pids)
 
-    # Check: All PIDs appear in exactly one validation set
-    assert all_val_pids == expected_pids, "Not all PIDs covered in validation sets"
+    if not bootstrap:
+        # Check: All PIDs appear in exactly one validation set
+        assert all_val_pids == expected_pids, "Not all PIDs covered in validation sets"
     logger.info(
         f"✓ Folds validated: {len(folds)} folds, {len(expected_pids)} unique PIDs"
     )
 
 
-def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
+def handle_folds(
+    cfg: Config, test_pids: list, train_val_pids: list, logger: logging.Logger
+) -> list:
     """
     Load folds and optionally reshuffle PIDs across them.
     Save folds to model directory.
@@ -147,13 +176,20 @@ def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
     n_folds = len(folds)
     logger.info(f"Loaded {n_folds} folds from prepared data")
 
-    # Extract unique PIDs from first fold (each fold contains all PIDs split into train/val)
-    all_pids = folds[0][TRAIN_KEY] + folds[0][VAL_KEY]
-    expected_pids = set(all_pids)
+    # Convert numpy arrays to lists if needed
+    for fold in folds:
+        if isinstance(fold[TRAIN_KEY], np.ndarray):
+            fold[TRAIN_KEY] = fold[TRAIN_KEY].tolist()
+        if isinstance(fold[VAL_KEY], np.ndarray):
+            fold[VAL_KEY] = fold[VAL_KEY].tolist()
 
-    # Validate loaded folds
+    expected_pids = set(train_val_pids)
+    bootstrap = cfg.get("bootstrap", False)
+
+    # Validate loaded folds — pass bootstrap flag so that duplicate PIDs
+    # (expected with bootstrap sampling) don't cause validation to fail
     logger.info("Validating loaded folds...")
-    validate_folds(folds, expected_pids, logger)
+    validate_folds(folds, expected_pids, logger, bootstrap=bootstrap)
 
     data_cfg = cfg.get("data", {})
     # Check if we should reshuffle
@@ -170,13 +206,17 @@ def handle_folds(cfg: Config, test_pids: list, logger: logging.Logger) -> list:
 
         # Recreate folds with new seed using existing create_folds function
         # This ensures proper handling of uneven fold sizes and correct KFold splitting
-        folds = create_folds(all_pids, n_folds, reshuffle_seed)
+        folds = create_folds(
+            train_val_pids, n_folds, reshuffle_seed, bootstrap=bootstrap
+        )
 
-        logger.info(f"Reshuffled {len(all_pids)} unique PIDs across {n_folds} folds")
+        logger.info(
+            f"Reshuffled {len(train_val_pids)} unique PIDs across {n_folds} folds"
+        )
 
         # Validate reshuffled folds
         logger.info("Validating reshuffled folds...")
-        validate_folds(folds, expected_pids, logger)
+        validate_folds(folds, expected_pids, logger, bootstrap=bootstrap)
     else:
         logger.info("Using folds as loaded (no reshuffling)")
 
