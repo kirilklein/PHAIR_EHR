@@ -43,6 +43,8 @@ PS_PLOT_FILE = "ps_plot.png"
 PS_PLOT_FILE_FILTERED = "ps_plot_filtered.png"
 PS_SUMMARY_FILE = "ps_summary.csv"
 PS_SUMMARY_FILE_FILTERED = "ps_summary_filtered.csv"
+LOVE_PLOT_FILE = "love_plot.png"
+LOVE_PLOT_FILE_SECONDARY = "love_plot_secondary.png"
 
 EXPOSURES_FILE = "exposures.csv"
 INDEX_DATE_MATCHING_FILE = "index_date_matching.csv"

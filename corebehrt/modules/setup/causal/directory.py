@@ -189,6 +189,7 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         # Optional input directories
         if self.cfg.paths.get("cohort", None) is not None:
             self.check_directory("cohort")
+        # secondary_cohort_config is a file path, not a directory, so no check needed
         if self.cfg.paths.get("ps_calibrated_predictions", None) is not None:
             self.check_directory("ps_calibrated_predictions")
         if self.cfg.paths.get("outcome_model", None) is not None:

@@ -84,9 +84,9 @@ def format_stats_table(
     binary_df = stats_dict[BINARY].copy()
     if not binary_df.empty:
         binary_df[PERCENTAGE] = binary_df[PERCENTAGE].apply(
-            lambda x: f"{x:.{config.percentage_decimal_places}f}%"
-            if pd.notna(x)
-            else "N/A"
+            lambda x: (
+                f"{x:.{config.percentage_decimal_places}f}%" if pd.notna(x) else "N/A"
+            )
         )
         formatted[BINARY] = binary_df[[GROUP, CRIT, COUNT, PERCENTAGE]]
     else:
