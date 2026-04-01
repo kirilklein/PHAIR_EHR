@@ -11,4 +11,6 @@ OUTPUTS = {"model": {"type": "uri_folder"}}
 if __name__ == "__main__":
     from corebehrt.main_causal import finetune_subpop
 
-    job.run_main("finetune_subpop", finetune_subpop.main_finetune_subpop, INPUTS, OUTPUTS)
+    job.run_main(
+        "finetune_subpop", finetune_subpop.main_finetune_subpop, INPUTS, OUTPUTS
+    )

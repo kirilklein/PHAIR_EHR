@@ -3,23 +3,23 @@
 name: Format
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 permissions:
   contents: read
 jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip' # caching pip dependencies
-    - name: Install dependencies
-      run: |
-        pip install ruff==0.11.5
-    - name: Run ruff
-      run: |
-        ruff format --check corebehrt tests
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: "pip" # caching pip dependencies
+      - name: Install dependencies
+        run: |
+          pip install ruff==0.11.5
+      - name: Run ruff
+        run: |
+          ruff format --check corebehrt tests

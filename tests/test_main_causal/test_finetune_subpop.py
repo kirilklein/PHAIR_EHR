@@ -45,7 +45,10 @@ class TestSubpopFoldCreation(unittest.TestCase):
 
 class TestFreezeEncoderAtInit(unittest.TestCase):
     @patch("corebehrt.modules.trainer.causal.trainer.CausalEHRTrainer._freeze_encoder")
-    @patch("corebehrt.modules.trainer.causal.trainer.EHRTrainer.__init__", return_value=None)
+    @patch(
+        "corebehrt.modules.trainer.causal.trainer.EHRTrainer.__init__",
+        return_value=None,
+    )
     def test_freeze_called_when_flag_set(self, mock_init, mock_freeze):
         """Verify _freeze_encoder is called when freeze_encoder_at_init=True."""
         from corebehrt.modules.trainer.causal.trainer import CausalEHRTrainer
@@ -76,7 +79,10 @@ class TestFreezeEncoderAtInit(unittest.TestCase):
         mock_freeze.assert_called_once()
 
     @patch("corebehrt.modules.trainer.causal.trainer.CausalEHRTrainer._freeze_encoder")
-    @patch("corebehrt.modules.trainer.causal.trainer.EHRTrainer.__init__", return_value=None)
+    @patch(
+        "corebehrt.modules.trainer.causal.trainer.EHRTrainer.__init__",
+        return_value=None,
+    )
     def test_freeze_not_called_when_flag_not_set(self, mock_init, mock_freeze):
         """Verify _freeze_encoder is NOT called when freeze_encoder_at_init is absent."""
         from corebehrt.modules.trainer.causal.trainer import CausalEHRTrainer

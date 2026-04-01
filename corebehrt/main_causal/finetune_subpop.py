@@ -69,7 +69,9 @@ def main_finetune_subpop(config_path):
 
     # Post-processing
     outcome_names = data.get_outcome_names()
-    PredictionAccumulator(cfg.paths.model, outcome_names).accumulate_and_save_predictions()
+    PredictionAccumulator(
+        cfg.paths.model, outcome_names
+    ).accumulate_and_save_predictions()
     torch.save(outcome_names, join(cfg.paths.model, OUTCOME_NAMES_FILE))
     logger.info(f"Saved outcome names: {outcome_names}")
 
