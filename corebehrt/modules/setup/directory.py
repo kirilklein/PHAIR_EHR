@@ -390,10 +390,10 @@ class DirectoryPreparer:
         self.check_directory("prepared_data")
         if check_pretrain:
             self.check_directory("pretrain_model")
+            self.write_config("model", source="pretrain_model", name=PRETRAIN_CFG)
         self.create_run_directory("model", base="runs")
 
         # Write config in output directory.
-        self.write_config("model", source="pretrain_model", name=PRETRAIN_CFG)
         self.write_config("model", name=FINETUNE_CFG)
 
         # Add pretrain info to config
