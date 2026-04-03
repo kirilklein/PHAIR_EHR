@@ -85,8 +85,8 @@ class SemiSyntheticCausalSimulator:
             history_df, pids, index_dates, self.config.features
         )
 
-        ite_records, cf_records, all_factual_events, all_probas = (
-            self._simulate_outcomes(features_df, pids, is_exposed, index_dates)
+        ite_records, cf_records, all_factual_events = self._simulate_outcomes(
+            features_df, pids, is_exposed, index_dates
         )
 
         # Create exposure events for exposed patients
@@ -101,8 +101,6 @@ class SemiSyntheticCausalSimulator:
             ite_records,
             cf_records,
             all_factual_events,
-            all_probas,
-            is_exposed,
         )
 
     # ------------------------------------------------------------------
@@ -194,12 +192,11 @@ class SemiSyntheticCausalSimulator:
         pids: np.ndarray,
         is_exposed: np.ndarray,
         index_dates: pd.Series,
-    ) -> Tuple[Dict, Dict, list, Dict]:
+    ) -> Tuple[Dict, Dict, list]:
         n_patients = len(pids)
         ite_records = {PID_COL: pids}
         cf_records = {PID_COL: pids, EXPOSURE_COL: is_exposed.astype(int)}
         all_factual_events = []
-        all_probas = {}
 
         for outcome_name, outcome_cfg in self.config.outcomes.items():
             eta_0 = self._compute_eta_0(features_df, outcome_cfg.outcome_model)
@@ -215,7 +212,6 @@ class SemiSyntheticCausalSimulator:
             y0 = self.rng.binomial(1, p0)
             y_obs = np.where(is_exposed, y1, y0)
 
-            all_probas[outcome_name] = {"P1": p1, "P0": p0}
             ite_records[f"ite_{outcome_name}"] = p1 - p0
 
             cf_records[f"{OUTCOME_COL}_{outcome_name}"] = y_obs
@@ -240,7 +236,7 @@ class SemiSyntheticCausalSimulator:
                 )
                 all_factual_events.append(events)
 
-        return ite_records, cf_records, all_factual_events, all_probas
+        return ite_records, cf_records, all_factual_events
 
     def _compute_eta_0(
         self,
@@ -291,50 +287,10 @@ class SemiSyntheticCausalSimulator:
         ite_records,
         cf_records,
         all_factual_events,
-        all_probas,
-        is_exposed,
     ) -> Dict[str, pd.DataFrame]:
-        output_dir = self.config.paths.outcomes
-
-        logger.info("Calculating and saving simulation statistics...")
-        self._calculate_and_save_simulation_stats(
-            pids, is_exposed, cf_records, output_dir
-        )
-
-        logger.info("Calculating theoretical maximum ROC AUC...")
-        theoretical_aucs = self._calculate_theoretical_roc_auc(
-            cf_records, is_exposed, output_dir
-        )
-        logger.info(f"Theoretical maximum ROC AUC: {theoretical_aucs}")
-
-        # Plots
-        figs_dir = join(output_dir, "figs")
-        os.makedirs(figs_dir, exist_ok=True)
-        logger.info("Plotting ground truth probability distributions...")
-        plot_probability_distributions(all_probas, figs_dir)
-
         ite_df = pd.DataFrame(ite_records)
         cf_df = pd.DataFrame(cf_records)
 
-        # Build true_effects_config for the comparison plot
-        true_effects_config = {}
-        for outcome_name, outcome_cfg in self.config.outcomes.items():
-            te = outcome_cfg.treatment_effect
-            om = outcome_cfg.outcome_model
-            true_effects_config[outcome_name] = {
-                "exposure_effect": te.delta if te.mode == "constant" else te.delta_0,
-                "p_base": expit(om.beta_0),
-            }
-
-        logger.info("Plotting true effects vs observed risk differences...")
-        plot_true_effects_vs_risk_differences(
-            ite_df=ite_df,
-            cf_df=cf_df,
-            true_effects_config=true_effects_config,
-            output_dir=figs_dir,
-        )
-
-        # Build output DataFrames
         output_dfs = {}
         if all_factual_events:
             events_df = pd.concat(all_factual_events, ignore_index=True)
@@ -352,6 +308,56 @@ class SemiSyntheticCausalSimulator:
             )
 
         return output_dfs
+
+    def finalize(self, cf_df: pd.DataFrame, ite_df: pd.DataFrame):
+        """Compute stats and plots from aggregated results. Call after all shards."""
+        output_dir = self.config.paths.outcomes
+
+        is_exposed = cf_df[EXPOSURE_COL].values.astype(bool)
+        pids = cf_df[PID_COL].values
+        cf_records = {col: cf_df[col].values for col in cf_df.columns}
+
+        logger.info("Calculating and saving simulation statistics...")
+        self._calculate_and_save_simulation_stats(
+            pids, is_exposed, cf_records, output_dir
+        )
+
+        logger.info("Calculating theoretical maximum ROC AUC...")
+        self._calculate_theoretical_roc_auc(cf_records, is_exposed, output_dir)
+
+        figs_dir = join(output_dir, "figs")
+        os.makedirs(figs_dir, exist_ok=True)
+
+        # Rebuild probability dicts for plotting
+        all_probas = {}
+        for outcome_name in self.config.outcomes:
+            p1_col = f"{SIMULATED_PROBAS_EXPOSED}_{outcome_name}"
+            p0_col = f"{SIMULATED_PROBAS_CONTROL}_{outcome_name}"
+            if p1_col in cf_df.columns and p0_col in cf_df.columns:
+                all_probas[outcome_name] = {
+                    "P1": cf_df[p1_col].values,
+                    "P0": cf_df[p0_col].values,
+                }
+
+        logger.info("Plotting ground truth probability distributions...")
+        plot_probability_distributions(all_probas, figs_dir)
+
+        true_effects_config = {}
+        for outcome_name, outcome_cfg in self.config.outcomes.items():
+            te = outcome_cfg.treatment_effect
+            om = outcome_cfg.outcome_model
+            true_effects_config[outcome_name] = {
+                "exposure_effect": te.delta if te.mode == "constant" else te.delta_0,
+                "p_base": expit(om.beta_0),
+            }
+
+        logger.info("Plotting true effects vs observed risk differences...")
+        plot_true_effects_vs_risk_differences(
+            ite_df=ite_df,
+            cf_df=cf_df,
+            true_effects_config=true_effects_config,
+            output_dir=figs_dir,
+        )
 
     # ------------------------------------------------------------------
     # Helpers (same patterns as RealisticCausalSimulator)

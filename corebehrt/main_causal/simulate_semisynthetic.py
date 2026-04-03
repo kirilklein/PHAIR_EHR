@@ -38,6 +38,7 @@ def simulate(shard_loader: ShardLoader, simulator: CausalSimulator, outcomes_dir
 
     Iterates through each data shard, calls simulate_dataset,
     aggregates the results, and saves each outcome type to a separate CSV file.
+    Then computes stats and plots from the aggregated results.
     """
     logger.info("--- Starting semi-synthetic simulation ---")
     simulated_outcomes = defaultdict(list)
@@ -49,10 +50,16 @@ def simulate(shard_loader: ShardLoader, simulator: CausalSimulator, outcomes_dir
 
     logger.info("--- Simulation complete, saving results ---")
 
+    aggregated = {}
     for k, df_list in simulated_outcomes.items():
         if df_list:
             df = pd.concat(df_list, ignore_index=True)
             df.to_csv(join(outcomes_dir, f"{k}.csv"), index=False)
+            aggregated[k] = df
+
+    if "counterfactuals" in aggregated and "ite" in aggregated:
+        logger.info("--- Computing stats and plots from aggregated results ---")
+        simulator.finalize(aggregated["counterfactuals"], aggregated["ite"])
 
 
 if __name__ == "__main__":

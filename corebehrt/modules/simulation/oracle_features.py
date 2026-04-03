@@ -153,6 +153,9 @@ def _compute_age(history_df, pids, index_dates):
             idx_date = index_dates[pid]
             age_series[pid] = (idx_date - dob).days / 365.25
     mean_age = age_series.mean()
+    if np.isnan(mean_age):
+        mean_age = 65.0
+        logger.warning("No DOB events found, using default age %.0f", mean_age)
     age_series = age_series.fillna(mean_age)
     return age_series
 
@@ -234,6 +237,5 @@ def _compute_sequence_motif_count(
 
 def _standardize(features_df):
     means = features_df.mean()
-    stds = features_df.std()
-    stds = stds.replace(0, 1)
+    stds = features_df.std(ddof=0).replace(0, 1).fillna(1)
     return (features_df - means) / stds

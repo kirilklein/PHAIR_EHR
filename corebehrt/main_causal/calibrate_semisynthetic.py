@@ -70,6 +70,8 @@ def main_calibrate(config_path):
         for outcome_name, outcome_cfg in sim_config.outcomes.items():
             eta_0 = simulator._compute_eta_0(features_df, outcome_cfg.outcome_model)
             tau = simulator._compute_tau(features_df, outcome_cfg.treatment_effect)
+            # Noise omitted intentionally: calibration shows the deterministic
+            # risk surface, not the noisy realization used during sampling.
             p0 = expit(eta_0)
             p1 = expit(eta_0 + tau)
 
