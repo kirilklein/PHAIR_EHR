@@ -5,11 +5,7 @@ import pandas as pd
 
 from corebehrt.constants.data import CONCEPT_COL, PID_COL, TIMESTAMP_COL
 from corebehrt.modules.simulation.config_semisynthetic import FeatureConfig
-from corebehrt.modules.simulation.oracle_features import (
-    BASELINE_FEATURES,
-    LONGITUDINAL_FEATURES,
-    extract_oracle_features,
-)
+from corebehrt.modules.simulation.oracle_features import extract_oracle_features
 
 
 def _make_test_df(records):
@@ -48,15 +44,12 @@ class TestExtractOracleFeaturesBasic(unittest.TestCase):
         pids = np.array([1, 2, 3, 4, 5])
         index_dates = pd.Series({p: pd.Timestamp("2021-01-01") for p in pids})
         config = _default_feature_config()
-        features_df, baseline_names, longitudinal_names = extract_oracle_features(
+        features_df, feature_names = extract_oracle_features(
             history_df, pids, index_dates, config
         )
         self.assertEqual(features_df.shape[0], 5)
-        self.assertEqual(
-            features_df.shape[1], len(BASELINE_FEATURES) + len(LONGITUDINAL_FEATURES)
-        )
-        self.assertEqual(baseline_names, BASELINE_FEATURES)
-        self.assertEqual(longitudinal_names, LONGITUDINAL_FEATURES)
+        self.assertEqual(features_df.shape[1], 10)
+        self.assertEqual(feature_names, list(features_df.columns))
 
 
 class TestRecentEventCount(unittest.TestCase):
@@ -74,9 +67,7 @@ class TestRecentEventCount(unittest.TestCase):
         pids = np.array([1])
         index_dates = pd.Series({1: index})
         config = _default_feature_config(recent_window_days=90)
-        features_df, _, _ = extract_oracle_features(
-            history_df, pids, index_dates, config
-        )
+        features_df, _ = extract_oracle_features(history_df, pids, index_dates, config)
         self.assertEqual(features_df.loc[1, "recent_event_count"], 3)
 
 
@@ -95,9 +86,7 @@ class TestDiseaseBurden(unittest.TestCase):
         pids = np.array([1])
         index_dates = pd.Series({1: index})
         config = _default_feature_config()
-        features_df, _, _ = extract_oracle_features(
-            history_df, pids, index_dates, config
-        )
+        features_df, _ = extract_oracle_features(history_df, pids, index_dates, config)
         self.assertEqual(features_df.loc[1, "disease_burden"], 5)
 
 
@@ -114,9 +103,7 @@ class TestMedicationCount(unittest.TestCase):
         pids = np.array([1])
         index_dates = pd.Series({1: index})
         config = _default_feature_config()
-        features_df, _, _ = extract_oracle_features(
-            history_df, pids, index_dates, config
-        )
+        features_df, _ = extract_oracle_features(history_df, pids, index_dates, config)
         self.assertEqual(features_df.loc[1, "medication_count"], 3)
 
 
@@ -131,9 +118,7 @@ class TestAgeComputation(unittest.TestCase):
         pids = np.array([1])
         index_dates = pd.Series({1: index})
         config = _default_feature_config()
-        features_df, _, _ = extract_oracle_features(
-            history_df, pids, index_dates, config
-        )
+        features_df, _ = extract_oracle_features(history_df, pids, index_dates, config)
         expected_age = (index - pd.Timestamp("1990-01-01")).days / 365.25
         self.assertAlmostEqual(features_df.loc[1, "age"], expected_age, places=2)
 
@@ -149,9 +134,7 @@ class TestEventRecency(unittest.TestCase):
         pids = np.array([1])
         index_dates = pd.Series({1: index})
         config = _default_feature_config()
-        features_df, _, _ = extract_oracle_features(
-            history_df, pids, index_dates, config
-        )
+        features_df, _ = extract_oracle_features(history_df, pids, index_dates, config)
         self.assertEqual(features_df.loc[1, "event_recency"], 10)
 
 
@@ -170,9 +153,7 @@ class TestRecentBurstRatio(unittest.TestCase):
         pids = np.array([1])
         index_dates = pd.Series({1: index})
         config = _default_feature_config(burst_window_days=30, lookback_days=365)
-        features_df, _, _ = extract_oracle_features(
-            history_df, pids, index_dates, config
-        )
+        features_df, _ = extract_oracle_features(history_df, pids, index_dates, config)
         # burst=5, lookback=20, ratio = 5 / (20 + 1)
         expected = 5.0 / 21.0
         self.assertAlmostEqual(
@@ -191,9 +172,7 @@ class TestNoMedicationCodes(unittest.TestCase):
         pids = np.array([1, 2])
         index_dates = pd.Series({1: index, 2: index})
         config = _default_feature_config()
-        features_df, _, _ = extract_oracle_features(
-            history_df, pids, index_dates, config
-        )
+        features_df, _ = extract_oracle_features(history_df, pids, index_dates, config)
         self.assertEqual(features_df.loc[1, "medication_count"], 0)
         self.assertEqual(features_df.loc[2, "medication_count"], 0)
 
@@ -215,9 +194,7 @@ class TestStandardization(unittest.TestCase):
         pids = np.array([1, 2, 3])
         index_dates = pd.Series({p: pd.Timestamp("2021-01-01") for p in pids})
         config = FeatureConfig(standardize=True)
-        features_df, _, _ = extract_oracle_features(
-            history_df, pids, index_dates, config
-        )
+        features_df, _ = extract_oracle_features(history_df, pids, index_dates, config)
         for col in features_df.columns:
             col_std = features_df[col].std()
             # columns with zero variance stay at 0 after standardization
@@ -240,9 +217,7 @@ class TestSequenceMotifCount(unittest.TestCase):
         pids = np.array([1])
         index_dates = pd.Series({1: index})
         config = _default_feature_config(motif_window_days=30)
-        features_df, _, _ = extract_oracle_features(
-            history_df, pids, index_dates, config
-        )
+        features_df, _ = extract_oracle_features(history_df, pids, index_dates, config)
         self.assertEqual(features_df.loc[1, "sequence_motif_count"], 1)
 
 

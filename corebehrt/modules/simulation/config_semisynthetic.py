@@ -35,12 +35,11 @@ class FeatureConfig:
 
 @dataclass
 class OutcomeModelConfig:
-    """Outcome model: eta^(0) = beta_0 + f_B(r_B) + f_L(r_L)."""
+    """Outcome model: eta^(0) = beta_0 + f(r_i)."""
 
     run_in_days: int = 1
     beta_0: float = -2.0
-    baseline_coefficients: Dict[str, float] = field(default_factory=dict)
-    longitudinal_coefficients: Dict[str, float] = field(default_factory=dict)
+    coefficients: Dict[str, float] = field(default_factory=dict)
     interactions: List[Dict] = field(default_factory=list)
     noise_scale: float = 0.0
 

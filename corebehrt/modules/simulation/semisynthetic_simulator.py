@@ -81,7 +81,7 @@ class SemiSyntheticCausalSimulator:
         if len(pids) == 0:
             return {}
 
-        features_df, _, _ = extract_oracle_features(
+        features_df, _ = extract_oracle_features(
             history_df, pids, index_dates, self.config.features
         )
 
@@ -247,15 +247,11 @@ class SemiSyntheticCausalSimulator:
         features_df: pd.DataFrame,
         outcome_model: OutcomeModelConfig,
     ) -> np.ndarray:
-        """Compute the baseline log-odds: beta_0 + baseline terms + longitudinal terms + interactions."""
+        """Compute the baseline log-odds: beta_0 + f(r_i) + interactions."""
         n = len(features_df)
         eta = np.full(n, outcome_model.beta_0)
 
-        for name, coeff in outcome_model.baseline_coefficients.items():
-            if name in features_df.columns:
-                eta += coeff * features_df[name].values
-
-        for name, coeff in outcome_model.longitudinal_coefficients.items():
+        for name, coeff in outcome_model.coefficients.items():
             if name in features_df.columns:
                 eta += coeff * features_df[name].values
 

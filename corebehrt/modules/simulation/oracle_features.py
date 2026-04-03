@@ -11,28 +11,13 @@ from corebehrt.modules.simulation.config_semisynthetic import FeatureConfig
 
 logger = logging.getLogger("oracle_features")
 
-BASELINE_FEATURES = [
-    "recent_event_count",
-    "disease_burden",
-    "medication_count",
-    "utilization_intensity",
-    "age",
-    "chronic_disease_count",
-    "code_diversity",
-]
-LONGITUDINAL_FEATURES = [
-    "event_recency",
-    "recent_burst_ratio",
-    "sequence_motif_count",
-]
-
 
 def extract_oracle_features(
     history_df: pd.DataFrame,
     pids: np.ndarray,
     index_dates: pd.Series,
     feature_config: FeatureConfig,
-) -> Tuple[pd.DataFrame, List[str], List[str]]:
+) -> Tuple[pd.DataFrame, List[str]]:
     """Extract oracle features from pre-index patient histories.
 
     Args:
@@ -43,8 +28,7 @@ def extract_oracle_features(
 
     Returns:
         features_df: DataFrame with PID_COL as index, one column per feature
-        baseline_feature_names: list of r_B feature names present in the output
-        longitudinal_feature_names: list of r_L feature names present in the output
+        feature_names: list of feature names present in the output
     """
     prefixes = feature_config.code_prefixes
 
@@ -92,9 +76,7 @@ def extract_oracle_features(
     if feature_config.standardize:
         features_df = _standardize(features_df)
 
-    baseline_names = [n for n in BASELINE_FEATURES if n in features_df.columns]
-    longitudinal_names = [n for n in LONGITUDINAL_FEATURES if n in features_df.columns]
-    return features_df, baseline_names, longitudinal_names
+    return features_df, list(features_df.columns)
 
 
 # ---------------------------------------------------------------------------

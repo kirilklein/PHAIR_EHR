@@ -61,7 +61,7 @@ def main_calibrate(config_path):
         if len(pids) == 0:
             continue
 
-        features_df, _, _ = extract_oracle_features(
+        features_df, _ = extract_oracle_features(
             history_df, pids, index_dates, sim_config.features
         )
         all_features.append(features_df.assign(is_exposed=is_exposed))

@@ -41,8 +41,7 @@ outcomes:
     outcome_model:
       run_in_days: 1
       beta_0: -2.0
-      # Baseline risk features (r_B)
-      baseline_coefficients:
+      coefficients:
         recent_event_count: 0.3
         disease_burden: 0.2
         medication_count: 0.15
@@ -50,8 +49,6 @@ outcomes:
         age: 0.4
         chronic_disease_count: 0.25
         code_diversity: 0.1
-      # Longitudinal features (r_L)
-      longitudinal_coefficients:
         event_recency: -0.15
         recent_burst_ratio: 0.2
         sequence_motif_count: 0.1
@@ -67,10 +64,9 @@ outcomes:
     outcome_model:
       run_in_days: 1
       beta_0: -2.0
-      baseline_coefficients:
+      coefficients:
         disease_burden: 0.2
         age: 0.4
-      longitudinal_coefficients: {}
       noise_scale: 0.1
     treatment_effect:
       mode: constant

@@ -97,8 +97,7 @@ def _make_config(
     outcome = SemiSyntheticOutcomeConfig(
         outcome_model=OutcomeModelConfig(
             beta_0=-1.0,
-            baseline_coefficients={"disease_burden": 0.3},
-            longitudinal_coefficients={},
+            coefficients={"disease_burden": 0.3},
             noise_scale=noise_scale,
         ),
         treatment_effect=TreatmentEffectConfig(mode=mode, delta=delta),
