@@ -104,7 +104,7 @@ def _make_config(
     )
     return SemiSyntheticSimulationConfig(
         paths=paths,
-        features=FeatureConfig(standardize=True),
+        features=FeatureConfig(),
         outcomes={"OUTCOME_test": outcome},
         seed=seed,
         min_num_codes=min_num_codes,

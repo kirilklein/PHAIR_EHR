@@ -39,7 +39,11 @@ def main_calibrate(config_path):
     sim_config = create_semisynthetic_config(cfg)
     simulator = SemiSyntheticCausalSimulator(sim_config)
 
-    # Accumulate across shards
+    # Pass 1: compute global feature statistics for standardization
+    logger.info("Computing global feature statistics...")
+    simulator.compute_global_feature_stats(shard_loader)
+
+    # Pass 2: extract standardized features and probabilities
     all_features = []
     all_is_exposed = []
     all_probas = {}  # outcome_name -> {"P0": [], "P1": []}

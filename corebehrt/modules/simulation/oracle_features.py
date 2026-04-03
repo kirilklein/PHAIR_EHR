@@ -1,7 +1,6 @@
 """Extract hand-crafted oracle features from pre-index patient histories."""
 
 import logging
-from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -17,8 +16,11 @@ def extract_oracle_features(
     pids: np.ndarray,
     index_dates: pd.Series,
     feature_config: FeatureConfig,
-) -> Tuple[pd.DataFrame, List[str]]:
-    """Extract oracle features from pre-index patient histories.
+) -> pd.DataFrame:
+    """Extract raw oracle features from pre-index patient histories.
+
+    Returns unstandardized features. Use ``standardize_features`` with
+    global statistics to z-score across the full cohort.
 
     Args:
         history_df: MEDS DataFrame already filtered to pre-index events
@@ -28,12 +30,10 @@ def extract_oracle_features(
 
     Returns:
         features_df: DataFrame with PID_COL as index, one column per feature
-        feature_names: list of feature names present in the output
     """
     prefixes = feature_config.code_prefixes
 
     features = {}
-    # Baseline risk features
     features["recent_event_count"] = _compute_recent_event_count(
         history_df, pids, index_dates, feature_config.recent_window_days
     )
@@ -52,7 +52,6 @@ def extract_oracle_features(
     )
     features["code_diversity"] = _compute_code_diversity(history_df, pids)
 
-    # Longitudinal features
     features["event_recency"] = _compute_event_recency(history_df, pids, index_dates)
     features["recent_burst_ratio"] = _compute_recent_burst_ratio(
         history_df,
@@ -72,11 +71,25 @@ def extract_oracle_features(
 
     features_df = pd.DataFrame(features, index=pids)
     features_df.index.name = PID_COL
+    return features_df
 
-    if feature_config.standardize:
-        features_df = _standardize(features_df)
 
-    return features_df, list(features_df.columns)
+def standardize_features(features_df, means=None, stds=None):
+    """Z-score features using provided or computed statistics.
+
+    Args:
+        features_df: raw features DataFrame
+        means: per-feature means (computed from df if None)
+        stds: per-feature stds (computed from df if None)
+
+    Returns:
+        standardized DataFrame, means Series, stds Series
+    """
+    if means is None:
+        means = features_df.mean()
+    if stds is None:
+        stds = features_df.std(ddof=0).replace(0, 1).fillna(1)
+    return (features_df - means) / stds, means, stds
 
 
 # ---------------------------------------------------------------------------
@@ -232,14 +245,3 @@ def _compute_sequence_motif_count(
 
     counts = valid.groupby(PID_COL).size()
     return counts.reindex(pids, fill_value=0)
-
-
-# ---------------------------------------------------------------------------
-# Standardization
-# ---------------------------------------------------------------------------
-
-
-def _standardize(features_df):
-    means = features_df.mean()
-    stds = features_df.std(ddof=0).replace(0, 1).fillna(1)
-    return (features_df - means) / stds

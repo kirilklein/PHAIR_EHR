@@ -38,7 +38,10 @@ from corebehrt.modules.simulation.config_semisynthetic import (
     SemiSyntheticSimulationConfig,
     TreatmentEffectConfig,
 )
-from corebehrt.modules.simulation.oracle_features import extract_oracle_features
+from corebehrt.modules.simulation.oracle_features import (
+    extract_oracle_features,
+    standardize_features,
+)
 from corebehrt.modules.simulation.plot import (
     plot_probability_distributions,
     plot_true_effects_vs_risk_differences,
@@ -61,12 +64,44 @@ class SemiSyntheticCausalSimulator:
     def __init__(self, config: SemiSyntheticSimulationConfig):
         self.config = config
         self.rng = np.random.default_rng(config.seed)
+        self._global_means = None
+        self._global_stds = None
+
+    def compute_global_feature_stats(self, shard_loader):
+        """Pass 1: compute global mean/std across all shards for standardization."""
+        all_features = []
+        for shard, _ in shard_loader():
+            pids, is_exposed, index_dates = self._extract_treatment_and_index_dates(
+                shard
+            )
+            if len(pids) == 0:
+                continue
+            history_df = self._filter_to_pre_index(shard, index_dates)
+            history_df, pids, is_exposed, index_dates = self._apply_min_num_codes(
+                history_df, pids, is_exposed, index_dates
+            )
+            if len(pids) == 0:
+                continue
+            features_df = extract_oracle_features(
+                history_df, pids, index_dates, self.config.features
+            )
+            all_features.append(features_df)
+
+        if not all_features:
+            logger.warning("No patients found during global stats computation")
+            return
+
+        combined = pd.concat(all_features)
+        self._global_means = combined.mean()
+        self._global_stds = combined.std(ddof=0).replace(0, 1).fillna(1)
+        logger.info("Computed global feature stats from %d patients", len(combined))
 
     def simulate_dataset(self, shard_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         """Orchestrate the semi-synthetic simulation for a single data shard.
 
-        Returns a dict of DataFrames matching the format produced by
-        ``RealisticCausalSimulator.simulate_dataset``.
+        Call ``compute_global_feature_stats`` first to enable global
+        standardization. Returns a dict of DataFrames matching the format
+        produced by ``RealisticCausalSimulator.simulate_dataset``.
         """
         pids, is_exposed, index_dates = self._extract_treatment_and_index_dates(
             shard_df
@@ -81,9 +116,13 @@ class SemiSyntheticCausalSimulator:
         if len(pids) == 0:
             return {}
 
-        features_df, _ = extract_oracle_features(
+        features_df = extract_oracle_features(
             history_df, pids, index_dates, self.config.features
         )
+        if self._global_means is not None:
+            features_df, _, _ = standardize_features(
+                features_df, self._global_means, self._global_stds
+            )
 
         ite_records, cf_records, all_factual_events = self._simulate_outcomes(
             features_df, pids, is_exposed, index_dates
@@ -128,9 +167,13 @@ class SemiSyntheticCausalSimulator:
         if len(pids) == 0:
             return None
 
-        features_df, _ = extract_oracle_features(
+        features_df = extract_oracle_features(
             history_df, pids, index_dates, self.config.features
         )
+        if self._global_means is not None:
+            features_df, _, _ = standardize_features(
+                features_df, self._global_means, self._global_stds
+            )
 
         probas_dict = {}
         tau_dict = {}

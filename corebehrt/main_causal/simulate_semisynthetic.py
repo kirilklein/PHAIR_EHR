@@ -29,6 +29,12 @@ def main_simulate(config_path):
     shard_loader = ShardLoader(cfg.paths.data, cfg.paths.splits)
     simulation_config = create_semisynthetic_config(cfg)
     simulator = CausalSimulator(simulation_config)
+
+    # Pass 1: compute global feature means/stds for standardization
+    logger.info("--- Pass 1: computing global feature statistics ---")
+    simulator.compute_global_feature_stats(shard_loader)
+
+    # Pass 2: simulate outcomes using globally standardized features
     simulate(shard_loader, simulator, cfg.paths.outcomes)
 
 

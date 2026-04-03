@@ -30,7 +30,6 @@ class FeatureConfig:
     recent_window_days: int = 90
     burst_window_days: int = 30
     motif_window_days: int = 30
-    standardize: bool = True
 
 
 @dataclass

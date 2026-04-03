@@ -31,7 +31,6 @@ features:
   recent_window_days: 90
   burst_window_days: 30
   motif_window_days: 30
-  standardize: true
 
 # --------------------------------------------------------------------------
 # Outcomes
