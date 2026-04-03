@@ -12,7 +12,6 @@ from os.path import join
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.special import expit
 
 from corebehrt.functional.setup.args import get_args
 from corebehrt.functional.utils.azure_save import save_figure_with_azure_copy
@@ -22,7 +21,6 @@ from corebehrt.modules.setup.config import load_config
 from corebehrt.modules.simulation.config_semisynthetic import (
     create_semisynthetic_config,
 )
-from corebehrt.modules.simulation.oracle_features import extract_oracle_features
 from corebehrt.modules.simulation.plot import plot_probability_distributions
 from corebehrt.modules.simulation.semisynthetic_simulator import (
     SemiSyntheticCausalSimulator,
@@ -48,37 +46,17 @@ def main_calibrate(config_path):
     all_tau = {}  # outcome_name -> []
 
     for shard, _ in shard_loader():
-        pids, is_exposed, index_dates = simulator._extract_treatment_and_index_dates(
-            shard
-        )
-        if len(pids) == 0:
+        result = simulator.extract_features_and_probabilities(shard)
+        if result is None:
             continue
-
-        history_df = simulator._filter_to_pre_index(shard, index_dates)
-        history_df, pids, is_exposed, index_dates = simulator._apply_min_num_codes(
-            history_df, pids, is_exposed, index_dates
-        )
-        if len(pids) == 0:
-            continue
-
-        features_df, _ = extract_oracle_features(
-            history_df, pids, index_dates, sim_config.features
-        )
+        features_df, _, is_exposed, probas, tau = result
         all_features.append(features_df.assign(is_exposed=is_exposed))
         all_is_exposed.append(is_exposed)
-
-        for outcome_name, outcome_cfg in sim_config.outcomes.items():
-            eta_0 = simulator._compute_eta_0(features_df, outcome_cfg.outcome_model)
-            tau = simulator._compute_tau(features_df, outcome_cfg.treatment_effect)
-            # Noise omitted intentionally: calibration shows the deterministic
-            # risk surface, not the noisy realization used during sampling.
-            p0 = expit(eta_0)
-            p1 = expit(eta_0 + tau)
-
+        for outcome_name in sim_config.outcomes:
             all_probas.setdefault(outcome_name, {"P0": [], "P1": []})
-            all_probas[outcome_name]["P0"].append(p0)
-            all_probas[outcome_name]["P1"].append(p1)
-            all_tau.setdefault(outcome_name, []).append(tau)
+            all_probas[outcome_name]["P0"].append(probas[outcome_name]["P0"])
+            all_probas[outcome_name]["P1"].append(probas[outcome_name]["P1"])
+            all_tau.setdefault(outcome_name, []).append(tau[outcome_name])
 
     if not all_features:
         logger.error("No patients found across shards.")

@@ -86,11 +86,14 @@ def extract_oracle_features(
 
 def _filter_by_prefix_and_window(history_df, index_dates, prefix, window_days):
     """Filter events matching code prefix within lookback window per patient."""
-    mask = history_df[CONCEPT_COL].str.startswith(prefix)
-    filtered = history_df[mask].copy()
-    if filtered.empty:
-        logger.warning("No codes found with prefix '%s'", prefix)
-        return filtered
+    if prefix is not None:
+        mask = history_df[CONCEPT_COL].str.startswith(prefix)
+        filtered = history_df[mask].copy()
+        if filtered.empty:
+            logger.warning("No codes found with prefix '%s'", prefix)
+            return filtered
+    else:
+        filtered = history_df.copy()
     if window_days is not None:
         cutoff = index_dates.reindex(filtered[PID_COL]).values - pd.Timedelta(
             days=window_days
@@ -119,7 +122,7 @@ def _count_per_patient(filtered_df, pids, count_col=None, unique=False):
 
 def _compute_recent_event_count(history_df, pids, index_dates, recent_window_days):
     filtered = _filter_by_prefix_and_window(
-        history_df, index_dates, "", recent_window_days
+        history_df, index_dates, None, recent_window_days
     )
     return _count_per_patient(filtered, pids)
 
@@ -139,25 +142,24 @@ def _compute_medication_count(history_df, pids, index_dates, med_prefix, lookbac
 
 
 def _compute_utilization_intensity(history_df, pids, index_dates, lookback_days):
-    filtered = _filter_by_prefix_and_window(history_df, index_dates, "", lookback_days)
+    filtered = _filter_by_prefix_and_window(
+        history_df, index_dates, None, lookback_days
+    )
     return _count_per_patient(filtered, pids)
 
 
 def _compute_age(history_df, pids, index_dates):
     dob_events = history_df[history_df[CONCEPT_COL] == BIRTH_CODE]
     dob_per_patient = dob_events.groupby(PID_COL)[TIMESTAMP_COL].first()
-    age_series = pd.Series(index=pids, dtype=float)
-    for pid in pids:
-        if pid in dob_per_patient.index:
-            dob = dob_per_patient[pid]
-            idx_date = index_dates[pid]
-            age_series[pid] = (idx_date - dob).days / 365.25
+    pid_index = pd.Index(pids)
+    dob_aligned = dob_per_patient.reindex(pid_index)
+    idx_aligned = index_dates.reindex(pid_index)
+    age_series = (idx_aligned - dob_aligned).dt.days / 365.25
     mean_age = age_series.mean()
     if np.isnan(mean_age):
         mean_age = 65.0
         logger.warning("No DOB events found, using default age %.0f", mean_age)
-    age_series = age_series.fillna(mean_age)
-    return age_series
+    return age_series.fillna(mean_age)
 
 
 def _compute_chronic_disease_count(history_df, pids, diag_prefix):
@@ -182,25 +184,22 @@ def _compute_code_diversity(history_df, pids):
 
 def _compute_event_recency(history_df, pids, index_dates):
     last_event = history_df.groupby(PID_COL)[TIMESTAMP_COL].max()
-    recency = pd.Series(index=pids, dtype=float)
-    for pid in pids:
-        if pid in last_event.index:
-            recency[pid] = (index_dates[pid] - last_event[pid]).days
-        else:
-            recency[pid] = np.nan
+    pid_index = pd.Index(pids)
+    last_aligned = last_event.reindex(pid_index)
+    idx_aligned = index_dates.reindex(pid_index)
+    recency = (idx_aligned - last_aligned).dt.days.astype(float)
     mean_recency = recency.mean()
-    recency = recency.fillna(mean_recency)
-    return recency
+    return recency.fillna(mean_recency)
 
 
 def _compute_recent_burst_ratio(
     history_df, pids, index_dates, burst_window_days, lookback_days
 ):
     burst_filtered = _filter_by_prefix_and_window(
-        history_df, index_dates, "", burst_window_days
+        history_df, index_dates, None, burst_window_days
     )
     lookback_filtered = _filter_by_prefix_and_window(
-        history_df, index_dates, "", lookback_days
+        history_df, index_dates, None, lookback_days
     )
     burst_counts = _count_per_patient(burst_filtered, pids)
     lookback_counts = _count_per_patient(lookback_filtered, pids)
@@ -216,18 +215,23 @@ def _compute_sequence_motif_count(
         logger.warning("Missing diagnosis or medication codes for motif counting")
         return pd.Series(0, index=pids, dtype=int)
 
-    motif_counts = {}
-    window = pd.Timedelta(days=motif_window_days)
-    for pid in pids:
-        pid_diags = diag_events[diag_events[PID_COL] == pid][TIMESTAMP_COL].values
-        pid_meds = med_events[med_events[PID_COL] == pid][TIMESTAMP_COL].values
-        count = 0
-        for diag_time in pid_diags:
-            gaps = pid_meds - diag_time
-            count += int(np.sum((gaps >= np.timedelta64(0)) & (gaps <= window)))
-        motif_counts[pid] = count
+    # Inner-join per patient produces all (diag, med) timestamp pairs.
+    # NOTE: this can be large if a patient has many diagnoses AND many medications
+    # (cross product per patient), but for typical EHR data this is fine.
+    diag_slim = diag_events[[PID_COL, TIMESTAMP_COL]].rename(
+        columns={TIMESTAMP_COL: "_diag_time"}
+    )
+    med_slim = med_events[[PID_COL, TIMESTAMP_COL]].rename(
+        columns={TIMESTAMP_COL: "_med_time"}
+    )
+    pairs = diag_slim.merge(med_slim, on=PID_COL)
 
-    return pd.Series(motif_counts).reindex(pids, fill_value=0)
+    gap = pairs["_med_time"] - pairs["_diag_time"]
+    window = pd.Timedelta(days=motif_window_days)
+    valid = pairs[(gap >= pd.Timedelta(0)) & (gap <= window)]
+
+    counts = valid.groupby(PID_COL).size()
+    return counts.reindex(pids, fill_value=0)
 
 
 # ---------------------------------------------------------------------------

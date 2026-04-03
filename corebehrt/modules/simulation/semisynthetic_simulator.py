@@ -103,6 +103,47 @@ class SemiSyntheticCausalSimulator:
             all_factual_events,
         )
 
+    def extract_features_and_probabilities(
+        self, shard_df: pd.DataFrame
+    ) -> tuple | None:
+        """Extract features and compute noiseless probabilities for calibration.
+
+        Noise is omitted intentionally: calibration shows the deterministic
+        risk surface, not the noisy realization used during sampling.
+
+        Returns None if no patients remain after filtering, otherwise:
+            (features_df, pids, is_exposed, probas_dict, tau_dict)
+        where probas_dict and tau_dict map outcome_name -> arrays.
+        """
+        pids, is_exposed, index_dates = self._extract_treatment_and_index_dates(
+            shard_df
+        )
+        if len(pids) == 0:
+            return None
+
+        history_df = self._filter_to_pre_index(shard_df, index_dates)
+        history_df, pids, is_exposed, index_dates = self._apply_min_num_codes(
+            history_df, pids, is_exposed, index_dates
+        )
+        if len(pids) == 0:
+            return None
+
+        features_df, _ = extract_oracle_features(
+            history_df, pids, index_dates, self.config.features
+        )
+
+        probas_dict = {}
+        tau_dict = {}
+        for outcome_name, outcome_cfg in self.config.outcomes.items():
+            eta_0 = self._compute_eta_0(features_df, outcome_cfg.outcome_model)
+            tau = self._compute_tau(features_df, outcome_cfg.treatment_effect)
+            p0 = expit(eta_0)
+            p1 = expit(eta_0 + tau)
+            probas_dict[outcome_name] = {"P0": p0, "P1": p1}
+            tau_dict[outcome_name] = tau
+
+        return features_df, pids, is_exposed, probas_dict, tau_dict
+
     # ------------------------------------------------------------------
     # Data extraction
     # ------------------------------------------------------------------
