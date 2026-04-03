@@ -560,19 +560,14 @@ class SemiSyntheticCausalSimulator:
                 continue
 
             y_true = cf_records[outcome_col]
-            y1_col = f"{SIMULATED_OUTCOME_EXPOSED}_{outcome_name}"
-            y0_col = f"{SIMULATED_OUTCOME_CONTROL}_{outcome_name}"
             p_treated = cf_records[p_exposed_col]
             p_control = cf_records[p_control_col]
             y_prob_factual = np.where(is_exposed, p_treated, p_control)
 
             if len(np.unique(y_true)) > 1:
                 auc_factual = roc_auc_score(y_true, y_prob_factual)
-                # Score counterfactual probabilities against their matching labels
-                y1 = cf_records[y1_col]
-                y0 = cf_records[y0_col]
-                auc_treated = roc_auc_score(y1, p_treated) if len(np.unique(y1)) > 1 else np.nan
-                auc_control = roc_auc_score(y0, p_control) if len(np.unique(y0)) > 1 else np.nan
+                auc_treated = roc_auc_score(y_true, p_treated)
+                auc_control = roc_auc_score(y_true, p_control)
                 theoretical_aucs[outcome_name] = auc_factual
 
                 results_data.append(
