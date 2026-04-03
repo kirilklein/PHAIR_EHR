@@ -202,6 +202,9 @@ def _compute_event_recency(history_df, pids, index_dates):
     idx_aligned = index_dates.reindex(pid_index)
     recency = (idx_aligned - last_aligned).dt.days.astype(float)
     mean_recency = recency.mean()
+    if np.isnan(mean_recency):
+        mean_recency = 365.0
+        logger.warning("No events found for recency, using default %.0f days", mean_recency)
     return recency.fillna(mean_recency)
 
 
