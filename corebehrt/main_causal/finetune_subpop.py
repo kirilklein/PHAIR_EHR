@@ -35,7 +35,7 @@ CONFIG_PATH = "./corebehrt/configs/causal/finetune/ft_subpop.yaml"
 
 def main_finetune_subpop(config_path):
     cfg = load_config(config_path)
-    DirectoryPreparer(cfg).setup_finetune()
+    DirectoryPreparer(cfg).setup_finetune(check_pretrain=False)
 
     logger = logging.getLogger("finetune_subpop")
 
@@ -48,6 +48,13 @@ def main_finetune_subpop(config_path):
     logger.info(f"Loaded {len(subpop_pids)} subpopulation PIDs")
 
     data = data.filter_by_pids(subpop_pids)
+    dropped_outcomes = data.drop_constant_outcomes()
+    if dropped_outcomes:
+        logger.info(
+            "Dropped %d outcome(s) with no label variation in subpopulation: %s",
+            len(dropped_outcomes),
+            dropped_outcomes,
+        )
     train_val_pids = data.get_pids()
     logger.info(f"Filtered to {len(train_val_pids)} patients in prepared data")
 
