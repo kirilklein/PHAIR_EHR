@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -5,6 +6,8 @@ import pandas as pd
 from torch.utils.data import WeightedRandomSampler
 
 from corebehrt.modules.setup.config import instantiate_function
+
+logger = logging.getLogger(__name__)
 
 
 def get_sampler(cfg, outcomes: List[int]) -> Optional[WeightedRandomSampler]:
@@ -85,16 +88,31 @@ class Sampling:
         return [class_probs[outcome] / labels[outcome] for outcome in outcomes]
 
 
-def get_loss_weight(cfg, outcomes: List[int]) -> Optional[List[float]]:
-    """Get weights for weighted loss function.
-    If loss_weight_function is false or undefined, then no positive weight is used.
-    If loss_weight_function is defined then the function is used to calculate the weights.
+def get_loss_weight(cfg, outcomes: List[int]) -> Optional[float]:
+    """Get ``pos_weight`` for BCE (or related) from training labels.
+
+    If ``loss_weight_function`` is unset or ``outcomes`` is empty, returns ``None``
+    (standard unweighted BCE).
+
+    If the configured weight function cannot be computed (e.g. a CV / bootstrap train
+    fold with only one class, or no positives), catches :class:`ValueError`, logs a
+    warning, and returns ``None``. Unweighted loss in those cases is valid PyTorch
+    BCE; the head still trains, though it may only learn a trivial predictor for
+    that fold if labels never vary.
     """
     if cfg.trainer_args.get("loss_weight_function") is None or len(outcomes) == 0:
         return None
 
     weight_func = instantiate_function(cfg.trainer_args.get("loss_weight_function"))
-    return weight_func(outcomes)
+    try:
+        return weight_func(outcomes)
+    except ValueError as e:
+        logger.warning(
+            "Skipping class-balanced loss weight (%s); using unweighted BCE. %s",
+            getattr(weight_func, "__name__", weight_func),
+            e,
+        )
+        return None
 
 
 class PositiveWeight:
