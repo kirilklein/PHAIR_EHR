@@ -94,17 +94,10 @@ def get_loss_weight(
     *,
     log_name: str | None = None,
 ) -> Optional[float]:
-    """Get ``pos_weight`` for BCE (or related) from **one** label vector.
-
-    If ``loss_weight_function`` is unset or ``outcomes`` is empty, returns ``None``
-    (standard unweighted BCE).
-
-    If the configured weight function cannot be computed (e.g. a CV / bootstrap train
-    fold with only one class, or no positives), catches :class:`ValueError`, logs a
-    warning, and returns ``None``. Unweighted loss in those cases is valid PyTorch
-    BCE; the head still trains, though it may only learn a trivial predictor for
-    that fold if labels never vary.
-    """
+    """Get weights for weighted loss function.
+    If loss_weight_function is false or undefined, then no positive weight is used.
+    If loss_weight_function is defined then the function is used to calculate the weights.
+    If the function raises a ValueError, then the function is not used and no positive weight is used."""
     if cfg.trainer_args.get("loss_weight_function") is None or len(outcomes) == 0:
         return None
 
