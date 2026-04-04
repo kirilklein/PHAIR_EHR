@@ -29,10 +29,14 @@ class CausalInitializer(Initializer):
             logger.info("Loading model from checkpoint")
 
             loss_weight_outcomes = {
-                outcome_name: get_loss_weight(self.cfg, outcome_values)
+                outcome_name: get_loss_weight(
+                    self.cfg, outcome_values, log_name=f"outcome {outcome_name!r}"
+                )
                 for outcome_name, outcome_values in outcomes.items()
             }
-            loss_weight_exposures = get_loss_weight(self.cfg, exposures)
+            loss_weight_exposures = get_loss_weight(
+                self.cfg, exposures, log_name="exposure"
+            )
 
             add_config = {
                 **self.cfg.model,

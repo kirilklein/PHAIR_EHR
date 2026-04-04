@@ -84,32 +84,6 @@ class CausalPatientDataset(PatientDataset):
     def get_outcome_names(self) -> List[str]:
         return list(self.patients[0].outcomes.keys())
 
-    def drop_constant_outcomes(self) -> List[str]:
-        """Remove outcome columns that take only one value across all patients.
-
-        Returns:
-            Names of outcomes that were dropped (empty if none).
-
-        Raises:
-            ValueError: If every outcome would be dropped (no varying labels left).
-        """
-        if not self.patients:
-            return []
-        outcomes = self.get_outcomes()
-        varying = [
-            name for name, vals in outcomes.items() if len(set(vals)) > 1
-        ]
-        dropped = [name for name in outcomes if name not in varying]
-        if not varying:
-            raise ValueError(
-                "After filtering, no outcome has both classes (0 and 1). "
-                f"All outcomes are constant: dropped candidates {dropped}"
-            )
-        if dropped:
-            for p in self.patients:
-                p.outcomes = {k: p.outcomes[k] for k in varying}
-        return dropped
-
 
 class ExposureOutcomesDataset:
     """

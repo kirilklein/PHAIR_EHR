@@ -88,8 +88,13 @@ class Sampling:
         return [class_probs[outcome] / labels[outcome] for outcome in outcomes]
 
 
-def get_loss_weight(cfg, outcomes: List[int]) -> Optional[float]:
-    """Get ``pos_weight`` for BCE (or related) from training labels.
+def get_loss_weight(
+    cfg,
+    outcomes: List[int],
+    *,
+    log_name: str | None = None,
+) -> Optional[float]:
+    """Get ``pos_weight`` for BCE (or related) from **one** label vector.
 
     If ``loss_weight_function`` is unset or ``outcomes`` is empty, returns ``None``
     (standard unweighted BCE).
@@ -107,8 +112,10 @@ def get_loss_weight(cfg, outcomes: List[int]) -> Optional[float]:
     try:
         return weight_func(outcomes)
     except ValueError as e:
+        where = f" for {log_name}" if log_name else ""
         logger.warning(
-            "Skipping class-balanced loss weight (%s); using unweighted BCE. %s",
+            "Skipping class-balanced loss weight%s (%s); using unweighted BCE. %s",
+            where,
             getattr(weight_func, "__name__", weight_func),
             e,
         )
