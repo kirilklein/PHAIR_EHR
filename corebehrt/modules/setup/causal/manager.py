@@ -17,5 +17,14 @@ class CausalModelManager(ModelManager):
         self.initializer = CausalInitializer(
             self.cfg, checkpoint=checkpoint, model_path=self.checkpoint_model_path
         )
-        model = self.initializer.initialize_finetune_model(outcomes, exposures)
+        try:
+            model = self.initializer.initialize_finetune_model(outcomes, exposures)
+        except Exception as e:
+            print(
+                f"[CausalModelManager] initialize_finetune_model FAILED: "
+                f"{type(e).__name__}: {e}",
+                flush=True,
+            )
+            logger.exception("initialize_finetune_model failed")
+            raise
         return model

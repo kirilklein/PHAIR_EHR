@@ -52,7 +52,25 @@ def calibrate_folds(
         train_pids, val_pids = fold[TRAIN_KEY], fold[VAL_KEY]
         train_df, val_df = split_data(df, train_pids, val_pids)
 
-        calibrator = train_calibrator(train_df[PROBAS], train_df[TARGETS])
+        train_targets = train_df[TARGETS].values
+        if len(np.unique(train_targets)) < 2:
+            logger.warning(
+                "Fold %d/%d: training split has only one class for this target; "
+                "skipping Beta calibration (using raw validation probabilities).",
+                fold_num,
+                len(folds),
+            )
+            fold_results = {
+                PID_COL: val_df[PID_COL].values,
+                PROBAS: val_df[PROBAS].values,
+                TARGETS: val_df[TARGETS].values,
+            }
+            if CF_PROBAS in val_df.columns:
+                fold_results[CF_PROBAS] = val_df[CF_PROBAS].values
+            calibrated_dfs.append(pd.DataFrame(fold_results))
+            continue
+
+        calibrator = train_calibrator(train_df[PROBAS], train_targets)
 
         initial_calibrated_probas = calibrator.predict(val_df[PROBAS])
 
