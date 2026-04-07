@@ -98,9 +98,24 @@ class ModelManager:
         return model
 
     def initialize_training_components(self, model, outcomes):
-        """Initialize training components. If no model_path provided, optimizer and scheduler are initialized from scratch."""
-        if self.restart_model_path is None:
-            logger.info("Initializing optimizer and scheduler from scratch")
+        """Initialize training components.
+
+        By default, when restarting from a checkpoint we also restore optimizer and
+        scheduler state. For subpopulation fine-tuning this can be undesirable because
+        the loaded scheduler may have already decayed the LR close to zero.
+
+        Set ``trainer_args.restart_weights_only: true`` to load model weights from the
+        checkpoint but reinitialize optimizer/scheduler from scratch.
+        """
+        restart_weights_only = bool(
+            self.cfg.get("trainer_args", {}).get("restart_weights_only", False)
+        )
+
+        if self.restart_model_path is None or restart_weights_only:
+            logger.info(
+                "Initializing optimizer and scheduler from scratch"
+                + (" (restart_weights_only=true)" if restart_weights_only else "")
+            )
             self.initializer.checkpoint = None
         optimizer = self.initializer.initialize_optimizer(model)
         sampler, cfg = self.initializer.initialize_sampler(outcomes)

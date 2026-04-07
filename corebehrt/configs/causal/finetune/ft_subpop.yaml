@@ -26,6 +26,7 @@ model:
     pooling_strategy: gru
 
 trainer_args:
+  restart_weights_only: true
   loss_weight_function:
     _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt
   batch_size: 128
