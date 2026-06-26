@@ -14,6 +14,10 @@ from corebehrt.modules.simulation.config_semisynthetic import (
     SemiSyntheticSimulationConfig,
     TreatmentEffectConfig,
 )
+from corebehrt.modules.simulation.oracle_features import (
+    ORACLE_FEATURE_NAMES,
+    extract_oracle_features,
+)
 from corebehrt.modules.simulation.semisynthetic_simulator import (
     ASSIGNED_INDEX_DATE_COL,
     SemiSyntheticCausalSimulator,
@@ -233,6 +237,46 @@ class TestSemiSyntheticExposureFromData(unittest.TestCase):
         remaining_pids = set(cf_df[PID_COL].values)
         expected_in_remaining = expected_exposed & remaining_pids
         self.assertEqual(exposed_pids_from_sim, expected_in_remaining)
+
+
+class TestFeatureNameValidation(unittest.TestCase):
+    def test_extractor_produces_canonical_names(self):
+        """ORACLE_FEATURE_NAMES must stay in sync with the extractor output."""
+        shard = _make_test_shard(n_patients=10, n_exposed=4)
+        index_dates = pd.Series(
+            {pid: pd.Timestamp("2021-01-01") for pid in shard[PID_COL].unique()}
+        )
+        pids = np.array(sorted(index_dates.index))
+        features_df = extract_oracle_features(shard, pids, index_dates, FeatureConfig())
+        self.assertEqual(set(features_df.columns), set(ORACLE_FEATURE_NAMES))
+
+    def test_unknown_coefficient_raises(self):
+        """A misspelled coefficient name must fail fast, not be silently dropped."""
+        import tempfile
+
+        config = _make_config(tempfile.mkdtemp())
+        config.outcomes["OUTCOME_test"].outcome_model.coefficients = {
+            "disease_burden": 0.3,
+            "diseaze_burden": 0.5,  # typo
+        }
+        with self.assertRaises(ValueError):
+            SemiSyntheticCausalSimulator(config)
+
+    def test_unknown_interaction_feature_raises(self):
+        import tempfile
+
+        config = _make_config(tempfile.mkdtemp())
+        config.outcomes["OUTCOME_test"].outcome_model.interactions = [
+            {"features": ["age", "not_a_feature"], "coefficient": 0.1}
+        ]
+        with self.assertRaises(ValueError):
+            SemiSyntheticCausalSimulator(config)
+
+    def test_valid_config_does_not_raise(self):
+        import tempfile
+
+        # _make_config uses only valid feature names → must construct cleanly.
+        SemiSyntheticCausalSimulator(_make_config(tempfile.mkdtemp()))
 
 
 if __name__ == "__main__":

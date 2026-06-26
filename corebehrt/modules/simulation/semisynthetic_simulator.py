@@ -39,6 +39,7 @@ from corebehrt.modules.simulation.config_semisynthetic import (
     TreatmentEffectConfig,
 )
 from corebehrt.modules.simulation.oracle_features import (
+    ORACLE_FEATURE_NAMES,
     extract_oracle_features,
     standardize_features,
 )
@@ -66,6 +67,29 @@ class SemiSyntheticCausalSimulator:
         self.rng = np.random.default_rng(config.seed)
         self._global_means = None
         self._global_stds = None
+        self._validate_feature_references()
+
+    def _validate_feature_references(self):
+        """Fail fast if any outcome config references an unknown feature.
+
+        A misspelled coefficient name would otherwise be silently dropped,
+        changing the true data-generating process without warning.
+        """
+        known = set(ORACLE_FEATURE_NAMES)
+        unknown = set()
+        for outcome_cfg in self.config.outcomes.values():
+            outcome_model = outcome_cfg.outcome_model
+            unknown |= set(outcome_model.coefficients) - known
+            for interaction in outcome_model.interactions:
+                unknown |= {f for f in interaction.get("features", []) if f} - known
+            unknown |= (
+                set(outcome_cfg.treatment_effect.heterogeneous_coefficients) - known
+            )
+        if unknown:
+            raise ValueError(
+                f"Unknown feature name(s) in simulation config: {sorted(unknown)}. "
+                f"Available oracle features: {sorted(known)}."
+            )
 
     def compute_global_feature_stats(self, shard_loader):
         """Pass 1: compute global mean/std across all shards for standardization."""

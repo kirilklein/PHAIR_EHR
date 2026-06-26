@@ -10,6 +10,21 @@ from corebehrt.modules.simulation.config_semisynthetic import FeatureConfig
 
 logger = logging.getLogger("oracle_features")
 
+# Canonical names of every feature produced by extract_oracle_features.
+# Keep in sync with the `features` dict built below (guarded by a test).
+ORACLE_FEATURE_NAMES = (
+    "recent_event_count",
+    "disease_burden",
+    "medication_count",
+    "utilization_intensity",
+    "age",
+    "chronic_disease_count",
+    "code_diversity",
+    "event_recency",
+    "recent_burst_ratio",
+    "sequence_motif_count",
+)
+
 
 def extract_oracle_features(
     history_df: pd.DataFrame,
