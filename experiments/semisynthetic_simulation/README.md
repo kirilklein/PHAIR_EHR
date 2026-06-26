@@ -8,6 +8,7 @@ Semi-synthetic causal simulation where **treatment is kept from real data** and 
 |------|-------|
 | **How to run locally** | [docs/local.md](docs/local.md) |
 | **How to run on Azure** | [docs/azure.md](docs/azure.md) |
+| **How to run the multi-run study (N outer × K inner)** | [docs/study.md](docs/study.md) |
 | **How to run multiple replicates** | [docs/multiple_runs.md](docs/multiple_runs.md) |
 | **Feature definitions** | [docs/features.md](docs/features.md) |
 | **Calibrating parameters** | [docs/calibration.md](docs/calibration.md) |

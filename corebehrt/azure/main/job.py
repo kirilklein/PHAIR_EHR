@@ -62,6 +62,7 @@ def add_parser(subparsers) -> None:
             "evaluate_xgboost",
             "get_pat_counts_by_code",
             "run_batch_experiments",
+            "run_semisynthetic_study",
         },
         help="Job to run.",
     )

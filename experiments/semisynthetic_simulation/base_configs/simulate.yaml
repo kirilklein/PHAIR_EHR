@@ -1,0 +1,62 @@
+# Stage 1a: semi-synthetic simulation (real treatment, simulated outcome).
+# The double-brace placeholders are filled in per run by run_study.py.
+# `seed` and the `sampling` block are injected by the runner.
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  data: "{{MEDS}}"
+  splits: ["tuning"]
+  outcomes: "{{RUN_DIR}}/simulated_outcomes"
+  cohort: "{{RUN_DIR}}/cohort"
+
+min_num_codes: 3
+exposure_code: "EXPOSURE"
+
+features:
+  code_prefixes:
+    diagnosis: "D/"
+    medication: "M/"
+    procedure: "P/"
+    admission: "ADM/"
+  lookback_days: 365
+  recent_window_days: 90
+  burst_window_days: 30
+  motif_window_days: 30
+
+# Two outcomes sharing identical confounding, differing only in the treatment
+# effect: a null effect (delta=0) and a medium effect (delta=0.5, ~6pp risk
+# difference at a ~12% baseline). Add OUTCOME_LARGE (delta=1.0) for the full study.
+outcomes:
+  OUTCOME_NULL:
+    outcome_model:
+      run_in_days: 1
+      beta_0: -2.0
+      coefficients:
+        recent_event_count: 0.3
+        disease_burden: 0.2
+        medication_count: 0.15
+        age: 0.4
+        chronic_disease_count: 0.25
+        event_recency: -0.15
+      noise_scale: 0.1
+    treatment_effect:
+      mode: constant
+      delta: 0.0
+
+  OUTCOME_MEDIUM:
+    outcome_model:
+      run_in_days: 1
+      beta_0: -2.0
+      coefficients:
+        recent_event_count: 0.3
+        disease_burden: 0.2
+        medication_count: 0.15
+        age: 0.4
+        chronic_disease_count: 0.25
+        event_recency: -0.15
+      noise_scale: 0.1
+    treatment_effect:
+      mode: constant
+      delta: 0.5

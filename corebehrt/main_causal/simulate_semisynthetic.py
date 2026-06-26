@@ -8,11 +8,16 @@ from corebehrt.modules.simulation.semisynthetic_simulator import (
 from corebehrt.modules.simulation.config_semisynthetic import (
     create_semisynthetic_config,
 )
+from corebehrt.functional.causal.cohort_sampler import sample_cohort
+from corebehrt.constants.data import PID_COL
+from corebehrt.constants.paths import PID_FILE
 from collections import defaultdict
+import os
 import pandas as pd
 from os.path import join
 import logging
 from tqdm import tqdm
+import torch
 
 logger = logging.getLogger("simulate")
 
@@ -30,12 +35,58 @@ def main_simulate(config_path):
     simulation_config = create_semisynthetic_config(cfg)
     simulator = CausalSimulator(simulation_config)
 
+    # Optionally restrict to a sampled subset of patients (e.g. for smoke tests
+    # or per-run resampling). Disabled by default, so default behaviour is unchanged.
+    sampling_cfg = cfg.get("sampling", {})
+    if sampling_cfg.get("enabled", False):
+        shard_loader = _sample_patients(
+            shard_loader, sampling_cfg, cfg.get("seed", 42), cfg.paths.get("cohort")
+        )
+
     # Pass 1: compute global feature means/stds for standardization
     logger.info("--- Pass 1: computing global feature statistics ---")
     simulator.compute_global_feature_stats(shard_loader)
 
     # Pass 2: simulate outcomes using globally standardized features
     simulate(shard_loader, simulator, cfg.paths.outcomes)
+
+
+class SampledShardLoader:
+    """Wraps a ShardLoader and filters every shard to a fixed set of patient IDs."""
+
+    def __init__(self, shard_loader: ShardLoader, pids_set: set):
+        self.shard_loader = shard_loader
+        self.pids_set = pids_set
+
+    def __call__(self):
+        for shard, meta in self.shard_loader():
+            yield shard[shard[PID_COL].isin(self.pids_set)], meta
+
+
+def _sample_patients(
+    shard_loader: ShardLoader, sampling_cfg: dict, seed: int, cohort_dir: str
+) -> SampledShardLoader:
+    """Sample a subset of patient IDs and return a shard loader filtered to them."""
+    all_pids = set()
+    for shard, _ in tqdm(shard_loader(), desc="Scanning shards for sampling"):
+        all_pids.update(shard[PID_COL].unique())
+    full_pids = torch.tensor(sorted(all_pids))
+
+    sampled_pids = sample_cohort(
+        full_pids,
+        sample_fraction=sampling_cfg.get("fraction"),
+        sample_size=sampling_cfg.get("size"),
+        seed=seed,
+    )
+    logger.info(
+        f"Sampled {len(sampled_pids)} of {len(full_pids)} patients (seed={seed})"
+    )
+
+    if cohort_dir:
+        os.makedirs(cohort_dir, exist_ok=True)
+        torch.save(sampled_pids, join(cohort_dir, PID_FILE))
+
+    return SampledShardLoader(shard_loader, set(sampled_pids.tolist()))
 
 
 def simulate(shard_loader: ShardLoader, simulator: CausalSimulator, outcomes_dir: str):

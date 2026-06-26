@@ -1,0 +1,44 @@
+# Stage 1c: prepare finetuning data + cross-validation folds.
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  ## INPUTS
+  features: "{{FEATURES}}"
+  tokenized: "{{TOKENIZED}}"
+  cohort: "{{RUN_DIR}}/cohort"
+
+  outcomes: "{{RUN_DIR}}/simulated_outcomes"
+  outcome_files:
+    - OUTCOME_NULL.csv
+    - OUTCOME_MEDIUM.csv
+
+  exposures: "{{RUN_DIR}}/simulated_outcomes"
+  exposure: exposure.csv
+
+  ## OUTPUTS
+  prepared_data: "{{RUN_DIR}}/prepared_data"
+
+data:
+  type: finetune
+  truncation_len: 64
+  min_len: 2
+  cv_folds: 2
+  min_instances_per_class: 10
+  max_items_per_plot: 15
+  max_number_of_plots: 10
+  number_subjects_to_plot: 10
+  sample_num_patients: null
+  sample_seed: 42
+
+exposure:
+  n_hours_censoring: -10
+  n_hours_start_follow_up: -10
+  n_hours_end_follow_up: 1000
+
+outcome:
+  n_hours_start_follow_up: 0
+  n_hours_end_follow_up: null
+  n_hours_compliance: null
+  group_wise_follow_up: false

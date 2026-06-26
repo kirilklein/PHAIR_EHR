@@ -9,6 +9,7 @@ class PathsConfig:
     data: str
     splits: List[str]
     outcomes: str
+    cohort: str = None
 
 
 @dataclass

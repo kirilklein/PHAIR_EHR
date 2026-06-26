@@ -1,0 +1,34 @@
+# Stage 1b: select the analysis cohort from the simulated exposure.
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  ### Inputs
+  features: "{{FEATURES}}/"
+  meds: "{{MEDS}}"
+  splits: [tuning]
+  exposures: "{{RUN_DIR}}/simulated_outcomes/"
+  exposure: exposure.csv
+  criteria_config: ./corebehrt/configs/causal/select_cohort_full/definitions.yaml
+
+  ### Outputs
+  cohort: "{{RUN_DIR}}/cohort/"
+
+time_windows:
+  data_end:
+    year: 2025
+    month: 01
+    day: 01
+  data_start:
+    year: 1920
+    month: 1
+    day: 1
+  min_follow_up:
+    days: 1
+  min_lookback:
+    days: 365
+
+cv_folds: 2
+val_ratio: 0.1
+test_ratio: 0
