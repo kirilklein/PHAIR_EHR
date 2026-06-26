@@ -36,6 +36,7 @@ jobs:
 
       - name: Create Dynamic Coverage Badge
         if: always()  # Always try to create badge
+        continue-on-error: true  # Badge update (gist auth) must not fail the check
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
           auth: ${{ secrets.GIST_SECRET }}       # Your secret token with the gist scope
