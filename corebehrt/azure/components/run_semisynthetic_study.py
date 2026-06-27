@@ -9,6 +9,7 @@ INPUTS = {
     "features": {"type": "uri_folder"},
     "tokenized": {"type": "uri_folder"},
     "pretrain_model": {"type": "uri_folder"},
+    "cohort": {"type": "uri_folder"},
 }
 
 OUTPUTS = {
@@ -31,6 +32,8 @@ def main_run_study(config_path):
         cfg.paths.tokenized,
         "--pretrain-model",
         cfg.paths.pretrain_model,
+        "--cohort",
+        cfg.paths.cohort,
         "--experiment-dir",
         cfg.paths.results,
     ]

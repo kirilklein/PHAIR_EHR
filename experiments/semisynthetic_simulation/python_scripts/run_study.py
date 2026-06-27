@@ -2,15 +2,22 @@
 """
 Runner for the semi-synthetic simulation study.
 
-Structure (mirrors the resampling study, but with the semi-synthetic simulator):
+Design (see docs/study.md):
+- The cohort is FIXED and shared (a pre-existing select_cohort_full output).
+  Index dates and membership come from it; treatment is the real exposure.
+- Stage 1 (once per outer run): simulate outcomes -> prepare finetune data.
+- Stage 2 (K inner refits): fit -> calibrate -> estimate, for the causal model
+  (BERT) and/or the CatBoost baseline.
 
-    for each OUTER run (independent simulation, own seed):
-        Stage 1 (once):   simulate -> select_cohort -> prepare
-        Stage 2 (K times): finetune -> calibrate -> estimate   (folds reshuffled each time)
+Inner refits:
+- K=1  -> a single plain fit; estimate reports its internal-bootstrap CI
+         (quick "does it recover the effect" check).
+- K>1  -> each refit trains on a BOOTSTRAP resample of the cohort
+         (reshuffle + bootstrap); estimate gives a point per refit and the
+         summarizer combines the K into the SE/CI (the real-experiment variance).
 
-Each Azure job runs a single outer run (pass --run-id run_NN); the outer loop is
-the set of parallel jobs submitted by bash_scripts/submit_runs.sh. Run locally with
---n-runs for several outer runs in one process.
+Each Azure job runs one outer run (--run-id run_NN); the outer loop = the set
+of parallel jobs submitted by bash_scripts/submit_runs.sh.
 """
 
 import argparse
@@ -21,9 +28,9 @@ from pathlib import Path
 import yaml
 
 from corebehrt.main_causal.simulate_semisynthetic import main_simulate
-from corebehrt.main_causal.select_cohort_full import main as main_select_cohort
 from corebehrt.main_causal.prepare_ft_exp_y import main as main_prepare
 from corebehrt.main_causal.finetune_exp_y import main_finetune
+from corebehrt.main_causal.train_baseline import main_baseline
 from corebehrt.main_causal.calibrate_exp_y import main_calibrate
 from corebehrt.main_causal.estimate import main_estimate
 
@@ -33,6 +40,7 @@ logging.basicConfig(
 logger = logging.getLogger("semisynthetic_study")
 
 DEFAULT_BASE_CONFIGS = Path(__file__).resolve().parent.parent / "base_configs"
+SINGLE_FIT_BOOTSTRAP = 100  # estimate's internal bootstrap when K=1 (no refit variance)
 
 
 def fill_config(base_path: Path, replacements: dict, out_path: Path, edit=None) -> str:
@@ -49,7 +57,7 @@ def fill_config(base_path: Path, replacements: dict, out_path: Path, edit=None) 
 
 
 def run_outer(args, run_id: str, seed: int):
-    """Run one outer simulation followed by K inner reshuffle fits."""
+    """Run one outer simulation followed by K inner (bootstrap) refits."""
     run_dir = Path(args.experiment_dir) / run_id
     config_dir = run_dir / "_configs"
     base = Path(args.base_configs_dir)
@@ -59,77 +67,117 @@ def run_outer(args, run_id: str, seed: int):
         "{{FEATURES}}": args.features,
         "{{TOKENIZED}}": args.tokenized,
         "{{PRETRAIN_MODEL}}": args.pretrain_model,
+        "{{COHORT}}": args.cohort,
         "{{RUN_DIR}}": str(run_dir),
     }
+    do_bootstrap = args.inner_runs > 1
+    n_bootstrap = 0 if do_bootstrap else SINGLE_FIT_BOOTSTRAP
 
     logger.info("=" * 70)
-    logger.info(f"OUTER RUN {run_id} (seed={seed})")
+    logger.info(f"OUTER RUN {run_id} (seed={seed}, bootstrap_refits={do_bootstrap})")
     logger.info("=" * 70)
 
-    # ---- Stage 1: simulate -> select_cohort -> prepare (once) ----
-    def set_simulation(config):
-        config["seed"] = seed
-        if args.sample_fraction is not None or args.sample_size is not None:
-            config["sampling"] = {
-                "enabled": True,
-                "fraction": args.sample_fraction,
-                "size": args.sample_size,
-            }
-
+    # ---- Stage 1: simulate -> prepare (once) ----
     main_simulate(
         fill_config(
-            base / "simulate.yaml", shared, config_dir / "simulate.yaml", set_simulation
-        )
-    )
-    main_select_cohort(
-        fill_config(
-            base / "select_cohort.yaml", shared, config_dir / "select_cohort.yaml"
+            base / "simulate.yaml",
+            shared,
+            config_dir / "simulate.yaml",
+            lambda c: c.update(seed=seed),
         )
     )
     main_prepare(
         fill_config(base / "prepare.yaml", shared, config_dir / "prepare.yaml")
     )
 
-    # ---- Stage 2: K inner reshuffle fits ----
+    # ---- Stage 2: K inner refits ----
     for k in range(1, args.inner_runs + 1):
         inner_id = f"k_{k:02d}"
         inner_dir = run_dir / "reshuffles" / inner_id
         repl = {**shared, "{{INNER_DIR}}": str(inner_dir)}
-        logger.info(f"--- {run_id} / inner fit {k}/{args.inner_runs} ({inner_id}) ---")
+        logger.info(f"--- {run_id} / refit {k}/{args.inner_runs} ({inner_id}) ---")
 
-        def enable_reshuffle(config):
+        def bootstrap_fit(config, _seed=seed * 1000 + k):
+            """Train this refit on a bootstrap resample of the cohort."""
             config.setdefault("data", {})["reshuffle"] = True
+            config["data"]["reshuffle_seed"] = _seed
+            config["bootstrap"] = True
 
-        main_finetune(
-            fill_config(
-                base / "finetune.yaml",
+        def set_n_bootstrap(config):
+            config.setdefault("estimator", {})["n_bootstrap"] = n_bootstrap
+
+        fit_edit = bootstrap_fit if do_bootstrap else None
+
+        if not args.baseline_only:
+            _run_model(
+                "bert",
+                base,
                 repl,
-                config_dir / f"finetune_{inner_id}.yaml",
-                enable_reshuffle,
+                config_dir,
+                inner_id,
+                fit_edit,
+                set_n_bootstrap,
+                main_finetune,
+                "finetune.yaml",
+                "calibrate.yaml",
+                "estimate.yaml",
             )
-        )
-        main_calibrate(
-            fill_config(
-                base / "calibrate.yaml", repl, config_dir / f"calibrate_{inner_id}.yaml"
+        if not args.bert_only:
+            _run_model(
+                "baseline",
+                base,
+                repl,
+                config_dir,
+                inner_id,
+                fit_edit,
+                set_n_bootstrap,
+                main_baseline,
+                "train_baseline.yaml",
+                "calibrate_baseline.yaml",
+                "estimate_baseline.yaml",
             )
-        )
-        main_estimate(
-            fill_config(
-                base / "estimate.yaml", repl, config_dir / f"estimate_{inner_id}.yaml"
-            )
-        )
 
     logger.info(f"OUTER RUN {run_id} complete")
 
 
-def parse_arguments(argv=None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Run the semi-synthetic simulation study"
+def _run_model(
+    name,
+    base,
+    repl,
+    config_dir,
+    inner_id,
+    fit_edit,
+    est_edit,
+    fit_main,
+    fit_cfg,
+    cal_cfg,
+    est_cfg,
+):
+    """Run fit -> calibrate -> estimate for one model family on one refit."""
+    fit_main(
+        fill_config(
+            base / fit_cfg, repl, config_dir / f"{name}_fit_{inner_id}.yaml", fit_edit
+        )
     )
+    main_calibrate(
+        fill_config(base / cal_cfg, repl, config_dir / f"{name}_cal_{inner_id}.yaml")
+    )
+    main_estimate(
+        fill_config(
+            base / est_cfg, repl, config_dir / f"{name}_est_{inner_id}.yaml", est_edit
+        )
+    )
+
+
+def parse_arguments(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the semi-synthetic study")
     parser.add_argument("--meds", required=True)
     parser.add_argument("--features", required=True)
     parser.add_argument("--tokenized", required=True)
     parser.add_argument("--pretrain-model", dest="pretrain_model", required=True)
+    parser.add_argument(
+        "--cohort", required=True, help="Pre-existing cohort dir (fixed across runs)"
+    )
     parser.add_argument("--experiment-dir", dest="experiment_dir", required=True)
     parser.add_argument(
         "--base-configs-dir", dest="base_configs_dir", default=str(DEFAULT_BASE_CONFIGS)
@@ -139,37 +187,25 @@ def parse_arguments(argv=None) -> argparse.Namespace:
         "--run-id",
         dest="run_id",
         default=None,
-        help="Single outer run id, e.g. run_03 (seed = base-seed + 3). One Azure job = one run-id.",
+        help="Single outer run id, e.g. run_03 (seed = base-seed + 3).",
     )
-    parser.add_argument(
-        "--n-runs",
-        dest="n_runs",
-        type=int,
-        default=1,
-        help="Number of outer runs in this process (local use; ignored if --run-id is given).",
-    )
+    parser.add_argument("--n-runs", dest="n_runs", type=int, default=1)
     parser.add_argument(
         "--inner-runs",
         "-k",
         dest="inner_runs",
         type=int,
-        default=2,
-        help="Inner reshuffle fits per outer run (variance estimation).",
+        default=1,
+        help="Bootstrap refits per outer run (K=1 -> single fit + internal-bootstrap CI).",
     )
     parser.add_argument("--base-seed", dest="base_seed", type=int, default=42)
 
-    parser.add_argument(
-        "--sample-fraction",
-        dest="sample_fraction",
-        type=float,
-        default=None,
-        help="Sample this fraction of patients per run (smoke tests).",
-    )
-    parser.add_argument("--sample-size", dest="sample_size", type=int, default=None)
+    parser.add_argument("--bert-only", action="store_true")
+    parser.add_argument("--baseline-only", action="store_true")
 
     args = parser.parse_args(argv)
-    if args.sample_fraction is not None and args.sample_size is not None:
-        parser.error("Specify at most one of --sample-fraction / --sample-size")
+    if args.bert_only and args.baseline_only:
+        parser.error("Cannot specify both --bert-only and --baseline-only")
     return args
 
 

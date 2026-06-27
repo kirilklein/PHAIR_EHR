@@ -1,20 +1,18 @@
-# Stage 2c: estimate causal effects from calibrated predictions.
+# Stage 2c (baseline): estimate causal effects from calibrated baseline predictions.
+# n_bootstrap is set by the runner (0 for bootstrap-refit studies, >0 for single-fit CIs).
 logging:
   level: INFO
   path: ./outputs/logs/sim_study
 
 paths:
-  ## INPUTS
-  calibrated_predictions: "{{INNER_DIR}}/models/bert/calibrated/"
+  calibrated_predictions: "{{INNER_DIR}}/models/baseline/calibrated/"
   counterfactual_outcomes: "{{RUN_DIR}}/simulated_outcomes"
-
-  ## OUTPUTS
-  estimate: "{{INNER_DIR}}/estimate/bert"
+  estimate: "{{INNER_DIR}}/estimate/baseline"
 
 estimator:
   methods: ["IPW", "TMLE", "TMLE_TH"]
   effect_type: "ATE"
-  n_bootstrap: 100   # set by the runner: 0 for bootstrap-refit studies, >0 for single-fit CIs
+  n_bootstrap: 100
   clip_percentile: 0.99
 
 plot:
