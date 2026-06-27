@@ -9,7 +9,7 @@ paths:
   tokenized: "researcher_data:AKK/shared/features/trace/v01/tokenized"
   pretrain_model: "researcher_data:AKK/shared/pretrain/models/trace/small/len_512/v01"
   # Pre-existing cohort (its index_dates.csv + cohort_config.yaml define the fixed design)
-  cohort: "researcher_data:AKK/experiments/trace/semaglutide/cohort/adult_diab2"
+  cohort: "researcher_data:AKK/experiments/trace/semaglutide/cohort/adult_diab2/v01"
 
   ## OUTPUT (one dir per outer run; __RUN__ is filled in by submit_runs.sh)
   results: "researcher_data:AKK/experiments/trace/simulation/semisynthetic/smoketest/__RUN__"
