@@ -10,6 +10,7 @@ class PathsConfig:
     splits: List[str]
     outcomes: str
     cohort: str = None
+    index_dates: str = None
 
 
 @dataclass

@@ -24,6 +24,7 @@ from corebehrt.constants.causal.paths import (
     COUNTERFACTUALS_FILE,
     INDEX_DATE_MATCHING_FILE,
 )
+from corebehrt.constants.paths import INDEX_DATES_FILE
 from corebehrt.constants.data import (
     ABSPOS_COL,
     CONCEPT_COL,
@@ -68,6 +69,27 @@ class SemiSyntheticCausalSimulator:
         self._global_means = None
         self._global_stds = None
         self._validate_feature_references()
+        self._index_dates = self._load_index_dates()
+
+    def _load_index_dates(self):
+        """Load per-patient index dates from a cohort artifact, if configured.
+
+        Index dates are an analysis artifact (produced by cohort selection),
+        not raw MEDS. When ``paths.index_dates`` points to a cohort dir or an
+        ``index_dates.csv``, use it; otherwise fall back to an
+        ``assigned_index_date`` column in the data (e.g. the example data).
+        """
+        path = self.config.paths.index_dates
+        if not path:
+            return None
+        if os.path.isdir(path):
+            path = join(path, INDEX_DATES_FILE)
+        index_dates = pd.read_csv(
+            path, usecols=[PID_COL, TIMESTAMP_COL], parse_dates=[TIMESTAMP_COL]
+        )
+        index_dates = index_dates.set_index(PID_COL)[TIMESTAMP_COL]
+        logger.info(f"Loaded {len(index_dates)} index dates from {path}")
+        return index_dates
 
     def _validate_feature_references(self):
         """Fail fast if any outcome config references an unknown feature.
@@ -219,21 +241,27 @@ class SemiSyntheticCausalSimulator:
         self, shard_df: pd.DataFrame
     ) -> Tuple[np.ndarray, np.ndarray, pd.Series]:
         """Identify exposed/control patients and their index dates."""
-        # Drop patients without an assigned index date
-        valid = shard_df.dropna(subset=[ASSIGNED_INDEX_DATE_COL])
-        if valid.empty:
+        if self._index_dates is not None:
+            # Index dates come from the cohort artifact; restrict to this shard.
+            shard_pids = shard_df[PID_COL].unique()
+            index_dates = self._index_dates[self._index_dates.index.isin(shard_pids)]
+        else:
+            # Fall back to an assigned_index_date column in the data.
+            valid = shard_df.dropna(subset=[ASSIGNED_INDEX_DATE_COL])
+            index_dates = valid.groupby(PID_COL)[ASSIGNED_INDEX_DATE_COL].first()
+
+        if index_dates.empty:
             return (
                 np.array([]),
                 np.array([], dtype=bool),
                 pd.Series(dtype="datetime64[ns]"),
             )
 
-        # Per-patient index dates
-        index_dates = valid.groupby(PID_COL)[ASSIGNED_INDEX_DATE_COL].first()
-
-        # Patients with at least one exposure event
+        # Patients with at least one exposure event (treatment from the data)
         exposed_pids = set(
-            valid.loc[valid[CONCEPT_COL] == self.config.exposure_code, PID_COL].unique()
+            shard_df.loc[
+                shard_df[CONCEPT_COL] == self.config.exposure_code, PID_COL
+            ].unique()
         )
 
         pids = index_dates.index.values
