@@ -14,8 +14,8 @@ paths:
   index_dates: "{{COHORT}}"      # dir or index_dates.csv; index dates + membership
 
 min_num_codes: 3
-# Code marking a treated patient at index. Set to whatever marks exposure
-# in your MEDS (e.g. the semaglutide exposure code), not necessarily "EXPOSURE".
+# Treatment is read from the cohort (cohort/exposures.csv). exposure_code is only
+# a fallback used when no cohort exposures.csv is available (e.g. example data).
 exposure_code: "EXPOSURE"
 
 features:

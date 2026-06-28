@@ -22,6 +22,7 @@ from corebehrt.constants.causal.data import (
 )
 from corebehrt.constants.causal.paths import (
     COUNTERFACTUALS_FILE,
+    EXPOSURES_FILE,
     INDEX_DATE_MATCHING_FILE,
 )
 from corebehrt.constants.paths import INDEX_DATES_FILE
@@ -70,6 +71,26 @@ class SemiSyntheticCausalSimulator:
         self._global_stds = None
         self._validate_feature_references()
         self._index_dates = self._load_index_dates()
+        self._exposed_pids = self._load_exposed_pids()
+
+    def _load_exposed_pids(self):
+        """Load the set of exposed (treated) patient IDs from the cohort.
+
+        Treatment is observed: when ``paths.index_dates`` points to a cohort
+        dir containing ``exposures.csv``, the exposed are exactly its patients
+        (same source select_cohort/prepare use). Otherwise fall back to the
+        presence of ``exposure_code`` in the MEDS data.
+        """
+        path = self.config.paths.index_dates
+        if not path or not os.path.isdir(path):
+            return None
+        exposures_path = join(path, EXPOSURES_FILE)
+        if not os.path.exists(exposures_path):
+            return None
+        exposed = pd.read_csv(exposures_path, usecols=[PID_COL])
+        pids = set(exposed[PID_COL].unique())
+        logger.info(f"Loaded {len(pids)} exposed patient IDs from {exposures_path}")
+        return pids
 
     def _load_index_dates(self):
         """Load per-patient index dates from a cohort artifact, if configured.
@@ -257,12 +278,16 @@ class SemiSyntheticCausalSimulator:
                 pd.Series(dtype="datetime64[ns]"),
             )
 
-        # Patients with at least one exposure event (treatment from the data)
-        exposed_pids = set(
-            shard_df.loc[
-                shard_df[CONCEPT_COL] == self.config.exposure_code, PID_COL
-            ].unique()
-        )
+        # Observed treatment: from the cohort's exposed pids, or (fallback)
+        # the presence of the exposure code in the data.
+        if self._exposed_pids is not None:
+            exposed_pids = self._exposed_pids
+        else:
+            exposed_pids = set(
+                shard_df.loc[
+                    shard_df[CONCEPT_COL] == self.config.exposure_code, PID_COL
+                ].unique()
+            )
 
         pids = index_dates.index.values
         is_exposed = np.array([pid in exposed_pids for pid in pids])

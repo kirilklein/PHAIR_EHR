@@ -16,8 +16,7 @@ paths:
     - OUTCOME_MEDIUM.csv
     - OUTCOME_LARGE.csv
 
-  exposures: "{{RUN_DIR}}/simulated_outcomes"
-  exposure: exposure.csv
+  # Exposure is read from the cohort (cohort/exposures.csv), so it is not set here.
 
   ## OUTPUTS
   prepared_data: "{{RUN_DIR}}/prepared_data"
