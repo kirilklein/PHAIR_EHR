@@ -14,7 +14,7 @@ from corebehrt.constants.causal.paths import (
 
 MODEL_NAMES = ("bert", "baseline")
 GROUP_COLUMNS = ["model", "method", OUTCOME]
-REPLICATE_GROUP_COLUMNS = ["model", "run_id", "method", OUTCOME]
+REPLICATE_GROUP_COLUMNS = ["model", "run_id", "method", OUTCOME, E.effect_type]
 
 
 def _tag_from_path(path: Path) -> dict:
@@ -49,80 +49,43 @@ def load_bootstrap_results(study_dir: Path) -> pd.DataFrame:
     return load_tagged_results(study_dir, BOOTSTRAP_RESULTS_FILE)
 
 
-def aggregate_replicates(
-    results: pd.DataFrame, bootstrap_results: pd.DataFrame
-) -> pd.DataFrame:
-    """Combine K point estimates and K x B patient-bootstrap estimates per run."""
-    available = bootstrap_results[GROUP_COLUMNS].drop_duplicates()
-    results = results.merge(available, on=GROUP_COLUMNS, how="inner")
+def aggregate_replicates(results: pd.DataFrame) -> pd.DataFrame:
+    """Combine K bootstrap-refit point estimates into one estimate per run."""
+    results = results.dropna(subset=[E.true_effect, E.effect_type])
     rows = []
 
     for keys, group in results.groupby(REPLICATE_GROUP_COLUMNS):
         tags = dict(zip(REPLICATE_GROUP_COLUMNS, keys))
-        samples = _select_bootstrap_group(bootstrap_results, tags)
-        _validate_nested_samples(group, samples, tags)
-
-        effect_type = _single_value(samples["effect_type"], "effect_type", tags)
+        effect_type = tags[E.effect_type]
         point = group[E.effect].mean()
         true_effect = group[E.true_effect].mean()
 
         if effect_type in {"RR", "RRT"}:
-            uncertainty = _risk_ratio_uncertainty(group, samples)
+            uncertainty = _risk_ratio_uncertainty(group)
             point = uncertainty.pop("effect")
         else:
-            uncertainty = _difference_uncertainty(point, samples[E.effect])
+            uncertainty = _difference_uncertainty(point, group[E.effect])
+
+        lower = uncertainty[E.CI95_lower]
+        upper = uncertainty[E.CI95_upper]
+        covered = (
+            lower <= true_effect <= upper
+            if np.isfinite(lower) and np.isfinite(upper)
+            else np.nan
+        )
 
         rows.append(
             {
                 **tags,
-                "effect_type": effect_type,
                 "n_refits": group["inner_id"].nunique(),
-                "n_bootstrap_per_refit": samples.groupby("inner_id").size().iloc[0],
-                "n_bootstrap": len(samples),
                 E.true_effect: true_effect,
                 E.effect: point,
                 **uncertainty,
-                "covered": (
-                    uncertainty[E.CI95_lower]
-                    <= true_effect
-                    <= uncertainty[E.CI95_upper]
-                ),
+                "covered": covered,
             }
         )
 
     return pd.DataFrame(rows).sort_values([OUTCOME, "model", "method", "run_id"])
-
-
-def _select_bootstrap_group(samples: pd.DataFrame, tags: dict) -> pd.DataFrame:
-    mask = pd.Series(True, index=samples.index)
-    for column, value in tags.items():
-        mask &= samples[column] == value
-    return samples[mask]
-
-
-def _validate_nested_samples(
-    estimates: pd.DataFrame, samples: pd.DataFrame, tags: dict
-) -> None:
-    expected_refits = set(estimates["inner_id"])
-    actual_refits = set(samples["inner_id"])
-    if actual_refits != expected_refits:
-        raise ValueError(
-            f"Bootstrap refits do not match point-estimate refits for {tags}: "
-            f"{sorted(actual_refits)} != {sorted(expected_refits)}"
-        )
-
-    counts = samples.groupby("inner_id").size()
-    if counts.nunique() != 1:
-        raise ValueError(f"Unequal bootstrap counts across refits for {tags}: {counts}")
-    if not np.isfinite(samples[[E.effect, E.effect_1, E.effect_0]]).all().all():
-        raise ValueError(f"Non-finite bootstrap estimates found for {tags}")
-
-
-def _single_value(series: pd.Series, name: str, tags: dict):
-    values = series.drop_duplicates()
-    if len(values) != 1:
-        raise ValueError(f"Expected one {name} for {tags}, found {values.tolist()}")
-    return values.iloc[0]
 
 
 def _difference_uncertainty(point: float, samples: pd.Series) -> dict:
@@ -136,14 +99,14 @@ def _difference_uncertainty(point: float, samples: pd.Series) -> dict:
     }
 
 
-def _risk_ratio_uncertainty(estimates: pd.DataFrame, samples: pd.DataFrame) -> dict:
+def _risk_ratio_uncertainty(estimates: pd.DataFrame) -> dict:
     p1 = estimates[E.effect_1].mean()
     p0 = estimates[E.effect_0].mean()
     if not 0 < p1 < 1 or not 0 < p0 < 1:
         raise ValueError(f"Risk-ratio probabilities must lie in (0, 1): {p1=}, {p0=}")
 
-    sample_p1 = samples[E.effect_1]
-    sample_p0 = samples[E.effect_0]
+    sample_p1 = estimates[E.effect_1]
+    sample_p0 = estimates[E.effect_0]
     if (
         not sample_p1.between(0, 1, inclusive="neither").all()
         or not sample_p0.between(0, 1, inclusive="neither").all()

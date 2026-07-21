@@ -1,4 +1,4 @@
-"""Tests for baseline refit fold reshuffling."""
+"""Tests for baseline bootstrap-refit folds."""
 
 import logging
 import os
@@ -22,8 +22,8 @@ from corebehrt.main_causal.helper.train_baseline import handle_folds
 from corebehrt.modules.setup.config import Config
 
 
-class TestBaselineFoldReshuffling(unittest.TestCase):
-    def test_reshuffle_uses_configured_seed_and_all_patients(self):
+class TestBaselineBootstrapFolds(unittest.TestCase):
+    def test_bootstrap_resamples_training_and_keeps_validation_complete(self):
         prepared_dir = tempfile.mkdtemp()
         model_dir = tempfile.mkdtemp()
         pids = list(range(20))
@@ -35,18 +35,28 @@ class TestBaselineFoldReshuffling(unittest.TestCase):
         cfg = Config(
             {
                 "paths": {"prepared_data": prepared_dir, "model": model_dir},
-                "data": {"reshuffle": True, "reshuffle_seed": 123},
+                "data": {
+                    "reshuffle": False,
+                    "bootstrap_seed": 123,
+                },
+                "bootstrap": True,
             }
         )
 
-        reshuffled = handle_folds(cfg, logging.getLogger("test_baseline_folds"))
+        folds = handle_folds(cfg, logging.getLogger("test_baseline_folds"))
 
-        self.assertNotEqual(reshuffled, original)
-        for fold in reshuffled:
-            self.assertEqual(set(fold[TRAIN_KEY]) | set(fold[VAL_KEY]), set(pids))
-            self.assertTrue(
-                set(fold[TRAIN_KEY]).isdisjoint(set(fold[VAL_KEY]))
-            )
+        self.assertNotEqual(folds, original)
+        validation_pids = []
+        duplicate_training_found = False
+        for fold, original_fold in zip(folds, original):
+            validation_pids.extend(fold[VAL_KEY])
+            self.assertEqual(fold[VAL_KEY], original_fold[VAL_KEY])
+            self.assertEqual(len(fold[VAL_KEY]), len(set(fold[VAL_KEY])))
+            self.assertTrue(set(fold[TRAIN_KEY]).isdisjoint(set(fold[VAL_KEY])))
+            duplicate_training_found |= len(fold[TRAIN_KEY]) > len(set(fold[TRAIN_KEY]))
+        self.assertEqual(set(validation_pids), set(pids))
+        self.assertEqual(len(validation_pids), len(pids))
+        self.assertTrue(duplicate_training_found)
 
 
 if __name__ == "__main__":

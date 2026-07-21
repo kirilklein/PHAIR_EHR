@@ -28,13 +28,15 @@ from corebehrt.constants.data import PID_COL
 from corebehrt.constants.paths import (
     FOLDS_FILE,
 )
-from corebehrt.functional.features.split import create_folds
+from corebehrt.functional.features.split import (
+    bootstrap_training_folds,
+    create_folds,
+)
 from corebehrt.functional.preparation.causal.one_hot import (
     create_features_from_patients,
 )
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.config import Config
-
 
 # Cache for GPU detection to avoid repeated logging
 _CATBOOST_DEVICE_PARAMS_CACHE = None
@@ -178,7 +180,9 @@ def save_combined_predictions(
         return
 
     # Group predictions by fold and organize by target
-    fold_data = {}  # fold_idx -> {target_name: (pids, predictions, targets, cf_predictions)}
+    fold_data = (
+        {}
+    )  # fold_idx -> {target_name: (pids, predictions, targets, cf_predictions)}
 
     for pred_data in prediction_storage:
         fold_idx = pred_data.fold_idx
@@ -447,8 +451,9 @@ def _get_best_params_for_fold(
     logger.info(f"  Inner validation size: {inner_val_size}")
     logger.info(f"  Number of tuning trials: {n_trials}")
 
+    unique_outer_pids = list(dict.fromkeys(outer_train_data.get_pids()))
     inner_train_pids, inner_val_pids = train_test_split(
-        outer_train_data.get_pids(),
+        unique_outer_pids,
         test_size=inner_val_size,
         random_state=cfg.get("seed", 42),
     )
@@ -457,7 +462,7 @@ def _get_best_params_for_fold(
         f"  Split outer train into inner train ({len(inner_train_pids)} patients) and inner val ({len(inner_val_pids)} patients)"
     )
 
-    inner_train_data = data.filter_by_pids(inner_train_pids)
+    inner_train_data = outer_train_data.filter_by_pids(inner_train_pids)
     inner_val_data = data.filter_by_pids(inner_val_pids)
 
     X_inner_train, y_inner_train, X_inner_val, y_inner_val = _prepare_data_for_modeling(
@@ -647,7 +652,11 @@ def nested_cv_loop(
             logger.info(f"Train patients in this fold: {len(fold_dict['train'])}")
             logger.info(f"Test patients in this fold: {len(fold_dict['val'])}")
 
-            outer_train_data = data.filter_by_pids(fold_dict["train"])
+            outer_train_data = (
+                data.resample_by_pids(fold_dict["train"])
+                if cfg.get("bootstrap", False)
+                else data.filter_by_pids(fold_dict["train"])
+            )
             outer_test_data = data.filter_by_pids(fold_dict["val"])
             test_pids = outer_test_data.get_pids()
 
@@ -738,5 +747,10 @@ def handle_folds(cfg: Config, logger: logging.Logger) -> list:
         )
     else:
         logger.info(f"Using {n_folds} predefined folds")
+        seed = data_cfg.get("bootstrap_seed", 42)
+    if cfg.get("bootstrap", False):
+        bootstrap_seed = data_cfg.get("bootstrap_seed", seed)
+        folds = bootstrap_training_folds(folds, bootstrap_seed)
+        logger.info(f"Bootstrapped training folds with seed={bootstrap_seed}")
     torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
     return folds

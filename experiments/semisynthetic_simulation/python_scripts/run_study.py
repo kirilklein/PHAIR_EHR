@@ -10,9 +10,10 @@ Design (see docs/study.md):
   (BERT) and/or the CatBoost baseline.
 
 Inner refits:
-- Each refit uses a distinct model seed and fold reshuffling.
+- Each refit uses a distinct model seed and patient-bootstrap training sample.
+- Validation patients are not resampled, so every patient receives one OOF score.
 - Conditional on each fitted model, estimate draws B patient-level bootstrap
-  samples. The summarizer combines all K x B estimates.
+  samples for diagnostics. The main summary uses only the K refit estimates.
 
 Each Azure job runs one outer run (--run-id run_NN); the outer loop = the set
 of parallel jobs submitted by bash_scripts/submit_runs.sh.
@@ -100,10 +101,11 @@ def run_outer(args, run_id: str, seed: int):
         refit_seed = seed * 1000 + k
 
         def configure_refit(config, _seed=refit_seed):
-            """Apply the model seed and reshuffle folds without resampling patients."""
-            config.setdefault("data", {})["reshuffle"] = True
-            config["data"]["reshuffle_seed"] = _seed
+            """Apply the model seed and bootstrap each fold's training patients."""
+            config.setdefault("data", {})["reshuffle"] = False
+            config["data"]["bootstrap_seed"] = _seed
             config["seed"] = _seed
+            config["bootstrap"] = True
 
         def configure_estimation(config, _seed=refit_seed):
             estimator = config.setdefault("estimator", {})
@@ -200,7 +202,7 @@ def parse_arguments(argv=None) -> argparse.Namespace:
         dest="inner_runs",
         type=int,
         default=1,
-        help="Independently seeded model refits per outer run.",
+        help="Patient-bootstrap model refits per outer run.",
     )
     parser.add_argument(
         "--n-bootstrap",
@@ -208,7 +210,7 @@ def parse_arguments(argv=None) -> argparse.Namespace:
         dest="n_bootstrap",
         type=int,
         default=DEFAULT_BOOTSTRAPS,
-        help="Patient-level bootstrap samples per fitted propensity model.",
+        help="Diagnostic post-estimation bootstrap samples per fitted model.",
     )
     parser.add_argument("--base-seed", dest="base_seed", type=int, default=42)
 

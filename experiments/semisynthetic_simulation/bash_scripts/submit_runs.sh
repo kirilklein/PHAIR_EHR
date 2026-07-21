@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Submit N outer runs of the semi-synthetic study as parallel Azure jobs, on a
-# FIXED shared cohort. Each job = one outer simulation (own seed) + K refits.
+# FIXED shared cohort. Each job = one outer simulation + K bootstrap refits.
 #
 # Usage:
 #   ./submit_runs.sh                       # Phase 1: 1 run, K=1, B=100
 #   ./submit_runs.sh --baseline-only       # Phase 1, baseline only (CPU, fast)
-#   ./submit_runs.sh -n 5 -k 10 -b 100     # full: 5 runs, 10 refits, 100 bootstraps
+#   ./submit_runs.sh -n 5 -k 10 -b 100     # 5 runs, 10 refits, 100 diagnostics/refit
 #
 # Anything after the known flags is forwarded to the runner (e.g. --bert-only).
 # Override defaults via env: POOL=... EXPERIMENT=... TEMPLATE=... ./submit_runs.sh ...

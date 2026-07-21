@@ -148,6 +148,7 @@ class EffectEstimator:
 
             # 2. Estimate effects using the new logic
             effect_df = self._estimate_effects(df_for_outcome, outcome_name)
+            effect_df[EffectColumns.effect_type] = self.effect_type
 
             if self.ite_df is not None or self.counterfactual_df is not None:
                 effect_df = append_true_effect(
@@ -385,9 +386,11 @@ class EffectEstimator:
             if any(m.upper() in ["TMLE", "TMLE_TH"] for m in self.estimator_cfg.methods)
             else None
         )
-        save_tmle_analysis(
-            tmle_analysis_df, self.exp_dir
-        ) if tmle_analysis_df is not None else None
+        (
+            save_tmle_analysis(tmle_analysis_df, self.exp_dir)
+            if tmle_analysis_df is not None
+            else None
+        )
         return final_results_df, combined_stats_df, tmle_analysis_df
 
     def _build_estimators_for_methods(self, methods: list) -> list:
@@ -441,6 +444,10 @@ class EffectEstimator:
         self.common_support_threshold: float = cfg.get("common_support_threshold", None)
         self.common_support: bool = True if self.common_support_threshold else False
         self.n_bootstrap: int = cfg.get("n_bootstrap", 1)
+        if self.n_bootstrap < 1:
+            raise ValueError(
+                f"estimator.n_bootstrap must be >= 1, got {self.n_bootstrap}"
+            )
         self.clip_percentile: float = cfg.get("clip_percentile", 1)
         self.save_bootstrap_samples: bool = cfg.get("save_bootstrap_samples", False)
         self.use_observed_point_estimate: bool = cfg.get(
