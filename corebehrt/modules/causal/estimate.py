@@ -2,6 +2,7 @@ import logging
 import os
 from os.path import join
 
+import numpy as np
 import pandas as pd
 import torch
 from CausalEstimate import MultiEstimator
@@ -19,6 +20,7 @@ from corebehrt.constants.causal.data import (
     EFFECT_ROUND_DIGIT,
 )
 from corebehrt.constants.causal.paths import (
+    BOOTSTRAP_RESULTS_FILE,
     COMBINED_CALIBRATED_PREDICTIONS_FILE,
     COUNTERFACTUALS_FILE,
     PATIENTS_FILE,
@@ -78,6 +80,7 @@ class EffectEstimator:
         )
         self.estimator_cfg: dict = self.cfg.estimator
         self.init_estimator_args(self.estimator_cfg)
+        self.bootstrap_records = []
         self._init_plot_configs()
         self.effect_type: str = self.cfg.estimator.effect_type
         self.df = pd.read_csv(self.predictions_file)
@@ -144,14 +147,16 @@ class EffectEstimator:
             df_for_outcome = prepare_data_for_outcome(self.analysis_df, outcome_name)
 
             # 2. Estimate effects using the new logic
-            effect_df = self._estimate_effects(df_for_outcome)
+            effect_df = self._estimate_effects(df_for_outcome, outcome_name)
 
-            if self.ite_df is not None:
+            if self.ite_df is not None or self.counterfactual_df is not None:
                 effect_df = append_true_effect(
                     effect_df,
                     self.ite_df,
                     outcome_name,
                     self.analysis_df[PID_COL].values,
+                    effect_type=self.effect_type,
+                    counterfactual_df=self.counterfactual_df,
                 )
 
             effect_df = append_unadjusted_effect(df_for_outcome, effect_df)
@@ -176,10 +181,13 @@ class EffectEstimator:
         final_results_df, combined_stats_df, tmle_analysis_df = (
             self._process_and_save_results(all_effects, all_stats, initial_estimates)
         )
+        self._save_bootstrap_results()
         self._visualize_effects(final_results_df, combined_stats_df, tmle_analysis_df)
         self.logger.info("Effect estimation complete for all outcomes.")
 
-    def _estimate_effects(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _estimate_effects(
+        self, df: pd.DataFrame, outcome_name: str | None = None
+    ) -> pd.DataFrame:
         """
         Estimate effects, separating bootstrap methods from theoretical (single-shot) methods.
         """
@@ -218,26 +226,77 @@ class EffectEstimator:
             )
 
             if bootstrap_estimator_list:
+                observed_results = (
+                    {
+                        estimator.__class__.__name__: estimator.compute_effect(df)
+                        for estimator in bootstrap_estimator_list
+                    }
+                    if self.use_observed_point_estimate
+                    else {}
+                )
                 multi_estimator = MultiEstimator(
                     estimators=bootstrap_estimator_list, verbose=False
                 )
-                # Run with bootstrapping only if n_bootstrap is greater than 0
-                n_boot = self.n_bootstrap if self.n_bootstrap > 0 else 0
-                if n_boot == 0:
-                    self.logger.warning(
-                        "n_bootstrap is 0, running bootstrap methods without CI."
-                    )
-
                 effect_dict_bs = multi_estimator.compute_effects(
                     df,
-                    n_bootstraps=n_boot,
+                    n_bootstraps=self.n_bootstrap,
                     apply_common_support=False,
                     common_support_threshold=None,
-                    return_bootstrap_samples=False,
+                    return_bootstrap_samples=self.save_bootstrap_samples,
                 )
+                if self.save_bootstrap_samples:
+                    self._collect_bootstrap_results(effect_dict_bs, outcome_name)
+                for method, observed in observed_results.items():
+                    for key, value in observed.items():
+                        if key not in {
+                            EffectColumns.std_err,
+                            EffectColumns.CI95_lower,
+                            EffectColumns.CI95_upper,
+                        }:
+                            effect_dict_bs[method][key] = value
                 all_effect_dicts.update(effect_dict_bs)
 
         return convert_effect_to_dataframe(all_effect_dicts)
+
+    def _collect_bootstrap_results(
+        self, effect_results: dict, outcome_name: str | None
+    ) -> None:
+        """Collect patient-bootstrap draws for study-level aggregation."""
+        if outcome_name is None:
+            raise ValueError("outcome_name is required when saving bootstrap samples")
+
+        for method, result in effect_results.items():
+            samples = result.pop("bootstrap_samples", None)
+            if samples is None:
+                continue
+            for bootstrap_id, effect in enumerate(samples[EffectColumns.effect], 1):
+                self.bootstrap_records.append(
+                    {
+                        EffectColumns.method: method,
+                        OUTCOME: outcome_name,
+                        "effect_type": self.effect_type,
+                        "bootstrap_id": bootstrap_id,
+                        EffectColumns.effect: effect,
+                        EffectColumns.effect_1: samples[EffectColumns.effect_1][
+                            bootstrap_id - 1
+                        ],
+                        EffectColumns.effect_0: samples[EffectColumns.effect_0][
+                            bootstrap_id - 1
+                        ],
+                    }
+                )
+
+    def _save_bootstrap_results(self) -> None:
+        """Persist raw patient-bootstrap estimates when requested."""
+        if not self.save_bootstrap_samples:
+            return
+        if not self.bootstrap_records:
+            raise RuntimeError(
+                "Bootstrap samples were requested but none were produced"
+            )
+        pd.DataFrame(self.bootstrap_records).to_csv(
+            join(self.exp_dir, BOOTSTRAP_RESULTS_FILE), index=False
+        )
 
     def _visualize_effects(
         self,
@@ -381,8 +440,15 @@ class EffectEstimator:
         """
         self.common_support_threshold: float = cfg.get("common_support_threshold", None)
         self.common_support: bool = True if self.common_support_threshold else False
-        self.n_bootstrap: int = cfg.get("n_bootstrap", 0)
+        self.n_bootstrap: int = cfg.get("n_bootstrap", 1)
         self.clip_percentile: float = cfg.get("clip_percentile", 1)
+        self.save_bootstrap_samples: bool = cfg.get("save_bootstrap_samples", False)
+        self.use_observed_point_estimate: bool = cfg.get(
+            "use_observed_point_estimate", False
+        )
+        bootstrap_seed = cfg.get("bootstrap_seed")
+        if bootstrap_seed is not None:
+            np.random.seed(bootstrap_seed)
 
     def _get_analysis_cohort(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -463,6 +529,8 @@ class EffectEstimator:
                 self.ite_df,
                 outcome_name,
                 self.analysis_df[PID_COL].values,
+                effect_type=self.effect_type,
+                counterfactual_df=self.counterfactual_df,
             )
             true_effect_value = true_effect_df[EffectColumns.true_effect].iloc[0]
 
@@ -473,7 +541,7 @@ class EffectEstimator:
                 )
 
                 # UPDATED: Call the refactored estimation method
-                effect_df = self._estimate_effects(df_biased)
+                effect_df = self._estimate_effects(df_biased, outcome_name)
 
                 effect_df[EffectColumns.ps_bias] = ps_bias
                 effect_df[EffectColumns.y_bias] = y_bias

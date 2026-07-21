@@ -11,11 +11,11 @@ paths:
   # Splits must cover the patients in the cohort (filtered by index_dates).
   splits: ["tuning", "train"]
   outcomes: "{{RUN_DIR}}/simulated_outcomes"
-  index_dates: "{{COHORT}}"      # dir or index_dates.csv; index dates + membership
+  cohort: "{{COHORT}}"           # requires index_dates.csv and exposures.csv
 
 min_num_codes: 3
-# Treatment is read from the cohort (cohort/exposures.csv). exposure_code is only
-# a fallback used when no cohort exposures.csv is available (e.g. example data).
+# Treatment is read from cohort/exposures.csv. exposure_code is only used by
+# standalone example-data configs that do not configure a cohort.
 exposure_code: "EXPOSURE"
 
 features:

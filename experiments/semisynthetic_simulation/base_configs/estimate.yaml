@@ -12,10 +12,11 @@ paths:
   estimate: "{{INNER_DIR}}/estimate/bert"
 
 estimator:
-  methods: ["IPW", "TMLE", "TMLE_TH"]
+  methods: ["IPW", "TMLE"]
   effect_type: "ATE"
-  n_bootstrap: 100   # set by the runner: 0 for bootstrap-refit studies, >0 for single-fit CIs
-  clip_percentile: 0.99
+  n_bootstrap: 100
+  common_support_threshold: 0.001
+  clip_percentile: 1.0
 
 plot:
   contingency_table:

@@ -279,5 +279,47 @@ class TestFeatureNameValidation(unittest.TestCase):
         SemiSyntheticCausalSimulator(_make_config(tempfile.mkdtemp()))
 
 
+class TestCohortTreatmentLoading(unittest.TestCase):
+    def test_configured_cohort_requires_exposures(self):
+        import os
+        import tempfile
+
+        cohort_dir = tempfile.mkdtemp()
+        pd.DataFrame(
+            {
+                PID_COL: [1],
+                TIMESTAMP_COL: pd.to_datetime(["2020-01-01"]),
+            }
+        ).to_csv(os.path.join(cohort_dir, "index_dates.csv"), index=False)
+        config = _make_config(tempfile.mkdtemp())
+        config.paths.cohort = cohort_dir
+        with self.assertRaisesRegex(FileNotFoundError, "observed treatments"):
+            SemiSyntheticCausalSimulator(config)
+
+    def test_exposed_patients_come_from_cohort(self):
+        import os
+        import tempfile
+
+        cohort_dir = tempfile.mkdtemp()
+        pd.DataFrame({PID_COL: [1, 3]}).to_csv(
+            os.path.join(cohort_dir, "exposures.csv"), index=False
+        )
+        pd.DataFrame(
+            {
+                PID_COL: [1, 2, 3],
+                TIMESTAMP_COL: pd.to_datetime(["2020-01-01"] * 3),
+            }
+        ).to_csv(os.path.join(cohort_dir, "index_dates.csv"), index=False)
+        config = _make_config(tempfile.mkdtemp())
+        config.paths.cohort = cohort_dir
+
+        simulator = SemiSyntheticCausalSimulator(config)
+        pids, is_exposed, _ = simulator._extract_treatment_and_index_dates(
+            _make_test_shard(n_patients=3, n_exposed=0)
+        )
+
+        self.assertEqual(dict(zip(pids, is_exposed)), {1: True, 2: False, 3: True})
+
+
 if __name__ == "__main__":
     unittest.main()

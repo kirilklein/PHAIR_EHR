@@ -52,7 +52,7 @@ def compute_effect_from_counterfactuals(df: pd.DataFrame, effect_type: str) -> f
     y1_mean = df[SIMULATED_PROBAS_EXPOSED].mean()
     y0_mean = df[SIMULATED_PROBAS_CONTROL].mean()
 
-    if effect_type == "ATE":
+    if effect_type in {"ATE", "ARR"}:
         effect = y1_mean - y0_mean
     elif effect_type in ["ATT", "ATC"]:
         treated_flag = 1 if effect_type == "ATT" else 0
@@ -62,7 +62,7 @@ def compute_effect_from_counterfactuals(df: pd.DataFrame, effect_type: str) -> f
             - subset[SIMULATED_PROBAS_CONTROL].mean()
         )
     elif effect_type == "RR":
-        effect = (y1_mean + 1) / (y0_mean + 1)
+        effect = y1_mean / y0_mean
     elif effect_type == "OR":
         effect = (y1_mean / (1 - y1_mean)) / (y0_mean / (1 - y0_mean))
     else:

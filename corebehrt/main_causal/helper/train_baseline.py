@@ -28,6 +28,7 @@ from corebehrt.constants.data import PID_COL
 from corebehrt.constants.paths import (
     FOLDS_FILE,
 )
+from corebehrt.functional.features.split import create_folds
 from corebehrt.functional.preparation.causal.one_hot import (
     create_features_from_patients,
 )
@@ -246,6 +247,7 @@ def run_hyperparameter_tuning(
     config_params: Dict[str, Any],
     n_trials: int,
     scale_pos_weight: float,
+    random_seed: int = 42,
 ) -> Dict[str, Any]:
     """
     INNER LOOP: Performs hyperparameter tuning using Optuna on a given train/val split.
@@ -332,7 +334,7 @@ def run_hyperparameter_tuning(
         model = CatBoostClassifier(
             n_estimators=base_params["n_estimators"],
             scale_pos_weight=scale_pos_weight,
-            random_state=42,
+            random_state=random_seed,
             verbose=0,
             **device_params,
             **prepared_trial_params,
@@ -359,7 +361,9 @@ def run_hyperparameter_tuning(
         logging.info(
             f"  Running Optuna optimization for {len(params_to_tune)} parameters..."
         )
-        study = optuna.create_study(direction="maximize")
+        study = optuna.create_study(
+            direction="maximize", sampler=optuna.samplers.TPESampler(seed=random_seed)
+        )
         study.optimize(objective, n_trials=n_trials)
 
         logging.info(f"  Hyperparameter tuning completed!")
@@ -446,7 +450,7 @@ def _get_best_params_for_fold(
     inner_train_pids, inner_val_pids = train_test_split(
         outer_train_data.get_pids(),
         test_size=inner_val_size,
-        random_state=42,
+        random_state=cfg.get("seed", 42),
     )
 
     logger.info(
@@ -474,6 +478,7 @@ def _get_best_params_for_fold(
         config_params,
         n_trials,
         scale_pos_weight,
+        cfg.get("seed", 42),
     )
 
     logger.info("  Hyperparameter tuning completed for this fold")
@@ -520,6 +525,7 @@ def _train_and_evaluate_fold(
     target_name: str,
     fold_idx: int,
     prediction_storage: List[FoldPredictionData],
+    random_seed: int = 42,
 ) -> float:
     """Trains a final model and evaluates it on the holdout test set."""
     logger.info(f"  Training final model with outer train set size: {len(X_train)}")
@@ -540,7 +546,7 @@ def _train_and_evaluate_fold(
 
     final_model = CatBoostClassifier(
         scale_pos_weight=scale_pos_weight,
-        random_state=42,
+        random_state=random_seed,
         **device_params,
         **prepared_best_params,
     )
@@ -688,6 +694,7 @@ def nested_cv_loop(
                 target_name,
                 i,
                 prediction_storage,
+                cfg.get("seed", 42) + i,
             )
 
             all_unbiased_scores.append(unbiased_auc)
@@ -714,11 +721,22 @@ def nested_cv_loop(
 
 def handle_folds(cfg: Config, logger: logging.Logger) -> list:
     """
-    Load predefined folds, log and persist them into the model directory, and return.
+    Load predefined folds and optionally reshuffle patients across them.
     """
     folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
     folds = torch.load(folds_path)
     n_folds = len(folds)
-    logger.info(f"Using {n_folds} predefined folds")
+    data_cfg = cfg.get("data", {})
+    if data_cfg.get("reshuffle", False):
+        pids = sorted(
+            {pid for fold in folds for split in fold.values() for pid in split}
+        )
+        seed = data_cfg.get("reshuffle_seed", 42)
+        folds = create_folds(pids, n_folds, seed)
+        logger.info(
+            f"Reshuffled {len(pids)} patients into {n_folds} folds (seed={seed})"
+        )
+    else:
+        logger.info(f"Using {n_folds} predefined folds")
     torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
     return folds

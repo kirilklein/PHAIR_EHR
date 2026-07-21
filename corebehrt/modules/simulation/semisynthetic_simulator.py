@@ -76,17 +76,19 @@ class SemiSyntheticCausalSimulator:
     def _load_exposed_pids(self):
         """Load the set of exposed (treated) patient IDs from the cohort.
 
-        Treatment is observed: when ``paths.index_dates`` points to a cohort
-        dir containing ``exposures.csv``, the exposed are exactly its patients
-        (same source select_cohort/prepare use). Otherwise fall back to the
-        presence of ``exposure_code`` in the MEDS data.
+        A configured cohort must contain ``exposures.csv``. Without a cohort,
+        example data may still use the presence of ``exposure_code`` in MEDS.
         """
-        path = self.config.paths.index_dates
-        if not path or not os.path.isdir(path):
+        path = self.config.paths.cohort
+        if not path:
             return None
+        if not os.path.isdir(path):
+            raise NotADirectoryError(f"Cohort path is not a directory: {path}")
         exposures_path = join(path, EXPOSURES_FILE)
         if not os.path.exists(exposures_path):
-            return None
+            raise FileNotFoundError(
+                f"Configured cohort is missing observed treatments: {exposures_path}"
+            )
         exposed = pd.read_csv(exposures_path, usecols=[PID_COL])
         pids = set(exposed[PID_COL].unique())
         logger.info(f"Loaded {len(pids)} exposed patient IDs from {exposures_path}")
@@ -96,11 +98,11 @@ class SemiSyntheticCausalSimulator:
         """Load per-patient index dates from a cohort artifact, if configured.
 
         Index dates are an analysis artifact (produced by cohort selection),
-        not raw MEDS. When ``paths.index_dates`` points to a cohort dir or an
-        ``index_dates.csv``, use it; otherwise fall back to an
-        ``assigned_index_date`` column in the data (e.g. the example data).
+        not raw MEDS. Use ``paths.index_dates`` when provided, otherwise use
+        ``paths.cohort/index_dates.csv``. Example data may fall back to an
+        ``assigned_index_date`` column in MEDS.
         """
-        path = self.config.paths.index_dates
+        path = self.config.paths.index_dates or self.config.paths.cohort
         if not path:
             return None
         if os.path.isdir(path):

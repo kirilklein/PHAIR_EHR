@@ -10,17 +10,19 @@ Fixed shared cohort  →  index_dates.csv + cohort_config.yaml + pids
         │
    per outer run s (own seed):
         simulate outcomes  →  prepare
-        →  K refits:  fit → calibrate → estimate   (BERT and/or CatBoost baseline)
+        →  K refits:  fit → calibrate → B patient bootstraps
+                     (BERT and/or CatBoost baseline)
         │
         summarize.py → bias / SD / SE-calibration / coverage, per estimator × outcome
 ```
 
 - **Outer runs** redraw the simulated outcomes (Monte Carlo over the DGP). 1 is
   enough for "does it recover the effect"; ~10–20 for a coverage sanity check.
-- **Inner refits (`-k`)** estimate the SE the way the real experiments do:
-  - `k=1` → single fit; `estimate` reports its internal-bootstrap CI (quick check).
-  - `k>1` → each refit trains on a **bootstrap resample** of the cohort; the
-    summarizer combines the K point estimates into the SE/CI.
+- **Inner refits (`-k`)** use different model seeds and reshuffled CV folds,
+  yielding K independently fitted propensity-score models.
+- **Patient bootstraps (`-b`, default 100)** resample the original analysis
+  cohort with replacement conditional on each fitted model. The summarizer
+  combines the K × B draws into one SE and CI per outer simulation replicate.
 
 ## What to set (once)
 
@@ -51,10 +53,10 @@ python -m experiments.semisynthetic_simulation.python_scripts.summarize \
 
 ### 2. Full run
 
-A few outer runs, K bootstrap refits each (the real variance procedure):
+A few outer runs, K seeded refits and B patient bootstraps each:
 
 ```bash
-./experiments/semisynthetic_simulation/bash_scripts/submit_runs.sh -n 5 -k 10
+./experiments/semisynthetic_simulation/bash_scripts/submit_runs.sh -n 5 -k 10 -b 100
 ```
 (rename `smoketest`→`full` in the template's `results` first). Then
 `summarize.py --study-dir <results>` over all runs for the full table.
@@ -64,7 +66,8 @@ A few outer runs, K bootstrap refits each (the real variance procedure):
 | flag | meaning | default |
 |------|---------|---------|
 | `-n` | outer runs (parallel jobs) | 1 |
-| `-k` | bootstrap refits per run | 1 |
+| `-k` | independently seeded model refits per run | 1 |
+| `-b` | patient bootstrap samples per refit | 100 |
 | `--baseline-only` / `--bert-only` | restrict to one model | both |
 
 Override compute/experiment via env: `POOL=<gpu> EXPERIMENT=my_exp ./submit_runs.sh ...`
@@ -79,5 +82,12 @@ Override compute/experiment via env: `POOL=<gpu> EXPERIMENT=my_exp ./submit_runs
 ├── _configs/             exact per-step configs used
 └── reshuffles/k_NN/
     ├── models/{bert,baseline}/...
-    └── estimate/{bert,baseline}/estimate_results.csv   ← point estimate + CI + true_effect
+    └── estimate/{bert,baseline}/
+        ├── estimate_results.csv
+        └── bootstrap_results.csv   ← B patient-level bootstrap estimates
 ```
+
+Running `summarize.py` writes `replicate_estimates.csv` (one K × B aggregate
+per outer run) and `summary.csv` (bias, empirical SD, mean SE, SE calibration,
+and coverage across outer runs). Common support is trimmed at the 0.1st and
+99.9th percentiles within treatment arms before patient resampling.

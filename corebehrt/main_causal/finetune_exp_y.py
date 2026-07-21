@@ -6,6 +6,7 @@ from os.path import join
 import torch
 import time
 import numpy as np
+from transformers import set_seed
 
 from corebehrt.constants.paths import (
     FOLDS_FILE,
@@ -33,6 +34,8 @@ CONFIG_PATH = "./corebehrt/configs/causal/finetune/ft_exp_y.yaml"
 
 def main_finetune(config_path):
     cfg = load_config(config_path)
+    if (seed := cfg.get("seed")) is not None:
+        set_seed(seed)
 
     # Setup directories
     DirectoryPreparer(cfg).setup_finetune()
