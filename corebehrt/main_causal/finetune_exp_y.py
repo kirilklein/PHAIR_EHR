@@ -120,9 +120,9 @@ def validate_folds(
         val_pids = set(fold[VAL_KEY])
 
         if not bootstrap:
-            assert len(train_pids) == len(
-                fold[TRAIN_KEY]
-            ), f"Fold {i}: Duplicate train PIDs"
+            assert len(train_pids) == len(fold[TRAIN_KEY]), (
+                f"Fold {i}: Duplicate train PIDs"
+            )
         assert len(val_pids) == len(fold[VAL_KEY]), f"Fold {i}: Duplicate val PIDs"
 
         # Check: No overlap between train and val (unique PIDs)
@@ -146,9 +146,9 @@ def validate_folds(
             fold_total = train_pids | val_pids
             assert fold_total == expected_pids, f"Fold {i}: Missing or extra PIDs"
 
-        assert val_pids.isdisjoint(
-            all_val_pids
-        ), f"Fold {i}: Val PIDs overlap with other folds"
+        assert val_pids.isdisjoint(all_val_pids), (
+            f"Fold {i}: Val PIDs overlap with other folds"
+        )
         all_val_pids.update(val_pids)
 
     assert all_val_pids == expected_pids, "Not all PIDs covered in validation sets"
