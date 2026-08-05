@@ -26,6 +26,7 @@ include_age: true # If true, include age-based features (mean, min, max, std, ra
 # ==============================================================================
 # These are the base parameters for the CatBoost model.
 # They are used directly if tuning is disabled, or as a starting point for tuning.
+model: catboost
 catboost:
   n_estimators: 100 # Max number of trees. Training will likely stop early.
   learning_rate: 0.03 # Step size shrinkage to prevent overfitting.

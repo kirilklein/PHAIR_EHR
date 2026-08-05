@@ -20,6 +20,7 @@ include_age: true
 # Note: Parameters specified here will be FIXED (not tuned by Optuna)
 # Parameters not specified will be tuned within predefined ranges
 # ==============================================================================
+model: catboost
 catboost:
   n_estimators: 100
   task_type: GPU # Enable GPU

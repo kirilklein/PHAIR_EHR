@@ -10,7 +10,6 @@ import numpy as np
 import optuna
 import pandas as pd
 import torch
-from catboost import CatBoostClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
@@ -31,63 +30,9 @@ from corebehrt.constants.paths import (
 from corebehrt.functional.preparation.causal.one_hot import (
     create_features_from_patients,
 )
+from corebehrt.main_causal.helper import baseline_models
 from corebehrt.modules.preparation.causal.dataset import CausalPatientDataset
 from corebehrt.modules.setup.config import Config
-
-
-# Cache for GPU detection to avoid repeated logging
-_CATBOOST_DEVICE_PARAMS_CACHE = None
-
-
-def _get_catboost_device_params() -> Dict[str, Any]:
-    """
-    Detect GPU availability and return appropriate CatBoost parameters.
-    Returns task_type and devices parameters for CatBoost.
-    Logs only on first call (cached).
-    """
-    global _CATBOOST_DEVICE_PARAMS_CACHE
-
-    if _CATBOOST_DEVICE_PARAMS_CACHE is None:
-        if torch.cuda.is_available():
-            logging.info("GPU detected. CatBoost will use GPU for training.")
-            _CATBOOST_DEVICE_PARAMS_CACHE = {"task_type": "GPU", "devices": "0"}
-        else:
-            logging.info("No GPU detected. CatBoost will use CPU for training.")
-            _CATBOOST_DEVICE_PARAMS_CACHE = {"task_type": "CPU"}
-
-    return _CATBOOST_DEVICE_PARAMS_CACHE
-
-
-def _prepare_catboost_params(
-    params: Dict[str, Any], device_params: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Prepare CatBoost parameters by:
-    1. Adding bootstrap_type if subsample is used (Bayesian bootstrap doesn't support subsample)
-    2. Removing GPU-incompatible parameters when using GPU mode
-
-    GPU limitations:
-    - colsample_bylevel (RSM) is only supported in pairwise ranking modes, not classification
-    """
-    params_copy = params.copy()
-
-    # Handle bootstrap type for subsample
-    if "subsample" in params_copy and "bootstrap_type" not in params_copy:
-        params_copy["bootstrap_type"] = "Bernoulli"
-
-    # Remove GPU-incompatible parameters
-    if device_params.get("task_type") == "GPU":
-        gpu_incompatible_params = [
-            "colsample_bylevel",
-            "colsample_bynode",
-            "colsample_bytree",
-        ]
-        for param in gpu_incompatible_params:
-            if param in params_copy:
-                logging.debug(f"Removing GPU-incompatible parameter: {param}")
-                params_copy.pop(param)
-
-    return params_copy
 
 
 @dataclass
@@ -246,6 +191,7 @@ def run_hyperparameter_tuning(
     config_params: Dict[str, Any],
     n_trials: int,
     scale_pos_weight: float,
+    model_name: str,
 ) -> Dict[str, Any]:
     """
     INNER LOOP: Performs hyperparameter tuning using Optuna on a given train/val split.
@@ -260,26 +206,7 @@ def run_hyperparameter_tuning(
     logging.info(f"  Val class distribution: {np.bincount(y_val)}")
     logging.info(f"  Scale pos weight: {scale_pos_weight:.4f}")
 
-    # Detect device type for GPU compatibility
-    device_params = _get_catboost_device_params()
-    is_gpu = device_params.get("task_type") == "GPU"
-
-    # Define default tuning ranges for each parameter
-    TUNING_RANGES = {
-        "learning_rate": ("float", 0.01, 0.3, True),  # (type, min, max, log_scale)
-        "max_depth": ("int", 4, 10),  # (type, min, max)
-        "subsample": ("float", 0.6, 1.0, False),
-        "l2_leaf_reg": ("float", 1e-8, 10.0, True),
-        "min_data_in_leaf": ("int", 1, 100),
-    }
-
-    # Add colsample_bylevel only if NOT using GPU (GPU doesn't support it for classification)
-    if not is_gpu:
-        TUNING_RANGES["colsample_bylevel"] = ("float", 0.6, 1.0, False)
-    else:
-        logging.info(
-            "  GPU mode detected: skipping colsample_bylevel from tuning (GPU incompatible)"
-        )
+    tuning_ranges = baseline_models.get_tuning_ranges(model_name)
 
     # Determine which parameters to tune vs. fix
     # RULE: If parameter is explicitly in CONFIG → FIXED
@@ -287,7 +214,7 @@ def run_hyperparameter_tuning(
     params_to_tune = {}
     fixed_params = {}
 
-    for param_name, range_info in TUNING_RANGES.items():
+    for param_name, range_info in tuning_ranges.items():
         if param_name in config_params:
             # Parameter explicitly set in config → FIXED
             fixed_params[param_name] = config_params[param_name]
@@ -323,27 +250,20 @@ def run_hyperparameter_tuning(
                     param_name, range_info[1], range_info[2]
                 )
 
-        # Get GPU/CPU parameters
-        device_params = _get_catboost_device_params()
-
-        # Prepare trial params with proper bootstrap type and GPU compatibility
-        prepared_trial_params = _prepare_catboost_params(trial_params, device_params)
-
-        model = CatBoostClassifier(
-            n_estimators=base_params["n_estimators"],
-            scale_pos_weight=scale_pos_weight,
-            random_state=42,
-            verbose=0,
-            **device_params,
-            **prepared_trial_params,
+        model = baseline_models.build_model(
+            model_name,
+            {**base_params, **trial_params},
+            scale_pos_weight,
+            random_seed=42,
         )
-
-        model.fit(
+        baseline_models.fit_model(
+            model,
+            model_name,
+            base_params,
             X_train,
             y_train,
-            eval_set=[(X_val, y_val)],
-            early_stopping_rounds=base_params["early_stopping_rounds"],
-            verbose=0,
+            X_val,
+            y_val,
         )
 
         preds = model.predict_proba(X_val)[:, 1]
@@ -375,17 +295,11 @@ def run_hyperparameter_tuning(
     return final_params
 
 
-def _setup_model_parameters(cfg: Config) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Loads and merges CatBoost and tuning parameters from the config."""
-    # Only include defaults for parameters that are NEVER tuned
-    NON_TUNABLE_DEFAULTS = {
-        "n_estimators": 1000,
-        "early_stopping_rounds": 50,
-    }
-
-    config_params = cfg.get("catboost", {})
-    # Only use config params + non-tunable defaults
-    base_params = {**NON_TUNABLE_DEFAULTS, **config_params}
+def _setup_model_parameters(
+    cfg: Config, model_name: str
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Loads and merges model and tuning parameters from the config."""
+    base_params, _ = baseline_models.get_base_params(cfg, model_name)
     tuning_cfg = cfg.get("tuning", {})
     return base_params, tuning_cfg
 
@@ -433,6 +347,7 @@ def _get_best_params_for_fold(
     tuning_cfg: Dict,
     data: CausalPatientDataset,
     cfg: Config,
+    model_name: str,
 ) -> Dict[str, Any]:
     """Performs inner-loop splitting and hyperparameter tuning."""
     logger = logging.getLogger("train_baseline")
@@ -463,7 +378,7 @@ def _get_best_params_for_fold(
     scale_pos_weight = (y_inner_train == 0).sum() / max((y_inner_train == 1).sum(), 1)
 
     # Get config parameters for this tuning session
-    config_params = cfg.get("catboost", {})
+    _, config_params = baseline_models.get_base_params(cfg, model_name)
 
     tuned_params = run_hyperparameter_tuning(
         X_inner_train,
@@ -474,6 +389,7 @@ def _get_best_params_for_fold(
         config_params,
         n_trials,
         scale_pos_weight,
+        model_name,
     )
 
     logger.info("  Hyperparameter tuning completed for this fold")
@@ -481,7 +397,7 @@ def _get_best_params_for_fold(
 
 
 def _generate_counterfactual_predictions(
-    model: CatBoostClassifier,
+    model: Any,
     X_test: pd.DataFrame,
     target_name: str,
     logger: logging.Logger,
@@ -520,6 +436,7 @@ def _train_and_evaluate_fold(
     target_name: str,
     fold_idx: int,
     prediction_storage: List[FoldPredictionData],
+    model_name: str,
 ) -> float:
     """Trains a final model and evaluates it on the holdout test set."""
     logger.info(f"  Training final model with outer train set size: {len(X_train)}")
@@ -532,21 +449,15 @@ def _train_and_evaluate_fold(
     scale_pos_weight = (y_train == 0).sum() / max((y_train == 1).sum(), 1)
     logger.info(f"  Scale pos weight for final model: {scale_pos_weight:.4f}")
 
-    # Get GPU/CPU parameters
-    device_params = _get_catboost_device_params()
-
-    # Prepare best params with proper bootstrap type and GPU compatibility
-    prepared_best_params = _prepare_catboost_params(best_params, device_params)
-
-    final_model = CatBoostClassifier(
-        scale_pos_weight=scale_pos_weight,
-        random_state=42,
-        **device_params,
-        **prepared_best_params,
+    final_model = baseline_models.build_model(
+        model_name,
+        best_params,
+        scale_pos_weight,
+        random_seed=42,
     )
 
     logger.info("  Fitting final model...")
-    final_model.fit(X_train, y_train, verbose=0)
+    baseline_models.fit_model(final_model, model_name, best_params, X_train, y_train)
 
     logger.info("  Generating predictions on test set...")
     y_pred_proba = final_model.predict_proba(X_test)[:, 1]
@@ -617,7 +528,10 @@ def nested_cv_loop(
     targets_to_train = cfg.get("targets", [EXPOSURE] + data.get_outcome_names())
     logger.info(f"Starting Nested Cross-Validation for targets: {targets_to_train}")
 
-    base_params, tuning_cfg = _setup_model_parameters(cfg)
+    model_name = baseline_models.get_model_name(cfg)
+    logger.info(f"Baseline model: {model_name}")
+
+    base_params, tuning_cfg = _setup_model_parameters(cfg, model_name)
     should_tune = tuning_cfg.get("tune_hyperparameters", True)
     reuse_hyperparameters = tuning_cfg.get("reuse_hyperparameters", True)
 
@@ -656,6 +570,7 @@ def nested_cv_loop(
                         tuning_cfg,
                         data,
                         cfg,
+                        model_name,
                     )
                     best_params = tuned_params
                     if reuse_hyperparameters:
@@ -688,6 +603,7 @@ def nested_cv_loop(
                 target_name,
                 i,
                 prediction_storage,
+                model_name,
             )
 
             all_unbiased_scores.append(unbiased_auc)
