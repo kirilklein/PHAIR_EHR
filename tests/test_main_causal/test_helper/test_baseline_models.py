@@ -36,11 +36,28 @@ class TestBaselineModels(unittest.TestCase):
         self.assertEqual(config_params, {"max_iter": 50})
 
     def test_tuning_ranges_are_model_specific(self):
-        logistic_ranges = baseline_models.get_tuning_ranges(baseline_models.LOGISTIC)
-        catboost_ranges = baseline_models.get_tuning_ranges(baseline_models.CATBOOST)
+        logistic_ranges = baseline_models.get_tuning_ranges(
+            baseline_models.LOGISTIC, {}
+        )
+        catboost_ranges = baseline_models.get_tuning_ranges(
+            baseline_models.CATBOOST, {}
+        )
         self.assertEqual(list(logistic_ranges), ["C"])
         self.assertIn("learning_rate", catboost_ranges)
         self.assertNotIn("C", catboost_ranges)
+
+    def test_configured_gpu_excludes_gpu_incompatible_parameters(self):
+        """colsample_bylevel is unsupported on GPU, also when GPU comes from the config."""
+        ranges = baseline_models.get_tuning_ranges(
+            baseline_models.CATBOOST, {"task_type": "GPU", "devices": "0"}
+        )
+        self.assertNotIn("colsample_bylevel", ranges)
+
+        params = {"n_estimators": 10, "task_type": "GPU", "colsample_bylevel": 0.8}
+        prepared = baseline_models._prepare_catboost_params(
+            params, baseline_models._effective_device_params(params)
+        )
+        self.assertNotIn("colsample_bylevel", prepared)
 
     def test_logistic_fits_and_predicts(self):
         features, targets = make_separable_data()

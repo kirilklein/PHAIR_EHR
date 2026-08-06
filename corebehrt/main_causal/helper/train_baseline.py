@@ -206,7 +206,7 @@ def run_hyperparameter_tuning(
     logging.info(f"  Val class distribution: {np.bincount(y_val)}")
     logging.info(f"  Scale pos weight: {scale_pos_weight:.4f}")
 
-    tuning_ranges = baseline_models.get_tuning_ranges(model_name)
+    tuning_ranges = baseline_models.get_tuning_ranges(model_name, config_params)
 
     # Determine which parameters to tune vs. fix
     # RULE: If parameter is explicitly in CONFIG → FIXED

@@ -73,11 +73,15 @@ def get_base_params(cfg, model_name: str) -> Tuple[Dict[str, Any], Dict[str, Any
     return base_params, config_params
 
 
-def get_tuning_ranges(model_name: str) -> Dict[str, tuple]:
+def get_tuning_ranges(
+    model_name: str, config_params: Dict[str, Any]
+) -> Dict[str, tuple]:
     """Returns the tunable parameters and their ranges for the selected model."""
     ranges = dict(TUNING_RANGES[model_name])
-    if model_name == CATBOOST and not _is_gpu():
-        ranges["colsample_bylevel"] = ("float", 0.6, 1.0, False)
+    if model_name == CATBOOST:
+        # colsample_bylevel is only supported on CPU for classification.
+        if _effective_device_params(config_params)["task_type"] != "GPU":
+            ranges["colsample_bylevel"] = ("float", 0.6, 1.0, False)
     return ranges
 
 
@@ -98,11 +102,10 @@ def build_model(
             ),
         )
 
-    device_params = _get_catboost_device_params()
+    device_params = _effective_device_params(params)
     catboost_params = _prepare_catboost_params(params, device_params)
     # early_stopping_rounds is passed to fit, not to the constructor.
     catboost_params.pop("early_stopping_rounds", None)
-    # An explicit task_type/devices in the config wins over the detected device.
     return CatBoostClassifier(
         scale_pos_weight=scale_pos_weight,
         random_state=random_seed,
@@ -139,8 +142,13 @@ def fit_model(
     return model
 
 
-def _is_gpu() -> bool:
-    return _get_catboost_device_params().get("task_type") == "GPU"
+def _effective_device_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """An explicit task_type/devices in the config wins over the detected device."""
+    device_params = dict(_get_catboost_device_params())
+    for key in ("task_type", "devices"):
+        if key in params:
+            device_params[key] = params[key]
+    return device_params
 
 
 def _get_catboost_device_params() -> Dict[str, Any]:
