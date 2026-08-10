@@ -1,0 +1,69 @@
+# Stage 1a: semi-synthetic simulation on a FIXED, pre-existing cohort.
+# Index dates + cohort membership come from the cohort artifact ({{COHORT}});
+# treatment is the real exposure (presence of `exposure_code` in MEDS).
+# Only the outcome is simulated. noise_scale=0 -> a single fixed true effect.
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  data: "{{MEDS}}"
+  # Splits must cover the patients in the cohort (filtered by index_dates).
+  splits: ["tuning", "train"]
+  outcomes: "{{RUN_DIR}}/simulated_outcomes"
+  cohort: "{{COHORT}}"           # requires index_dates.csv and exposures.csv
+
+min_num_codes: 3
+# Treatment is read from cohort/exposures.csv. exposure_code is only used by
+# standalone example-data configs that do not configure a cohort.
+exposure_code: "EXPOSURE"
+
+features:
+  code_prefixes:
+    diagnosis: "D/"
+    medication: "M/"
+    procedure: "P/"
+    admission: "ADM/"
+  lookback_days: 365
+  recent_window_days: 90
+  burst_window_days: 30
+  motif_window_days: 30
+
+# Three effect sizes sharing identical confounding; only delta differs.
+# delta is on the logit scale: ~0.5 -> medium (~6pp RD @12% base), 1.0 -> large.
+outcomes:
+  OUTCOME_NULL:
+    outcome_model:
+      run_in_days: 1
+      beta_0: -2.0
+      coefficients: &coeffs
+        recent_event_count: 0.3
+        disease_burden: 0.2
+        medication_count: 0.15
+        age: 0.4
+        chronic_disease_count: 0.25
+        event_recency: -0.15
+      noise_scale: 0.0
+    treatment_effect:
+      mode: constant
+      delta: 0.0
+
+  OUTCOME_MEDIUM:
+    outcome_model:
+      run_in_days: 1
+      beta_0: -2.0
+      coefficients: *coeffs
+      noise_scale: 0.0
+    treatment_effect:
+      mode: constant
+      delta: 0.5
+
+  OUTCOME_LARGE:
+    outcome_model:
+      run_in_days: 1
+      beta_0: -2.0
+      coefficients: *coeffs
+      noise_scale: 0.0
+    treatment_effect:
+      mode: constant
+      delta: 1.0

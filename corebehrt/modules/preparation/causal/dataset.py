@@ -62,6 +62,14 @@ class CausalPatientDataset(PatientDataset):
             [p for p in self.patients if p.pid in pids_set], self.vocab
         )
 
+    def resample_by_pids(self, pids: List[str]) -> "CausalPatientDataset":
+        """Select patients in the requested order while preserving duplicate IDs."""
+        patients_by_pid = {patient.pid: patient for patient in self.patients}
+        missing = set(pids) - patients_by_pid.keys()
+        if missing:
+            raise KeyError(f"Patient IDs not found in dataset: {sorted(missing)}")
+        return CausalPatientDataset([patients_by_pid[pid] for pid in pids], self.vocab)
+
     def get_exposures(self):
         return [p.exposure for p in self.patients]
 

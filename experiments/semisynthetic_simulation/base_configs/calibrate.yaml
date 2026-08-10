@@ -1,0 +1,11 @@
+# Stage 2b: calibrate predictions (isotonic regression on validation folds).
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  ## INPUTS
+  finetune_model: "{{INNER_DIR}}/models/bert"
+
+  ## OUTPUTS
+  calibrated_predictions: "{{INNER_DIR}}/models/bert/calibrated"

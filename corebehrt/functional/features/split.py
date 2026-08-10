@@ -187,3 +187,24 @@ def create_folds(
             folds[i][VAL_KEY] = val_pids
 
     return folds
+
+
+def bootstrap_training_folds(
+    folds: List[Dict[str, list]], seed: int = 42
+) -> List[Dict[str, list]]:
+    """Resample each training fold with replacement, keeping validation fixed."""
+    rng = np.random.default_rng(seed)
+    bootstrapped = []
+    for fold in folds:
+        train_pids = fold[TRAIN_KEY]
+        if not train_pids:
+            raise ValueError("Cannot bootstrap an empty training fold")
+        bootstrapped.append(
+            {
+                TRAIN_KEY: rng.choice(
+                    train_pids, size=len(train_pids), replace=True
+                ).tolist(),
+                VAL_KEY: list(fold[VAL_KEY]),
+            }
+        )
+    return bootstrapped

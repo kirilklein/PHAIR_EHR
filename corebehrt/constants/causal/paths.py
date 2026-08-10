@@ -23,6 +23,7 @@ SIMULATION_RESULTS_FILE = "probas_and_outcomes.csv"
 EXPERIMENT_DATA_FILE = "experiment_data.parquet"
 EXPERIMENT_STATS_FILE = "experiment_stats.csv"
 ESTIMATE_RESULTS_FILE = "estimate_results.csv"
+BOOTSTRAP_RESULTS_FILE = "bootstrap_results.csv"
 
 SKS_DUMP_DIR = "corebehrt/main_causal/helper/data/sks_dumps"
 SKS_TREES_DIR = "corebehrt/main_causal/helper/data/sks_trees"

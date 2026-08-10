@@ -11,7 +11,10 @@ from corebehrt.constants.causal.data import (
     EffectColumns,
 )
 from corebehrt.constants.data import PID_COL
-from corebehrt.functional.causal.effect import compute_effect_from_ite
+from corebehrt.functional.causal.effect import (
+    compute_effect_from_counterfactuals,
+    compute_effect_from_ite,
+)
 from corebehrt.functional.causal.estimate import (
     calculate_risk_difference,
     calculate_risk_ratio,
@@ -42,6 +45,8 @@ def append_true_effect(
     ite_df: pd.DataFrame,
     outcome_name: str,
     analysis_pids: np.ndarray,
+    effect_type: str = "ATE",
+    counterfactual_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Add ground truth effect estimates from simulated counterfactual outcomes.
@@ -51,9 +56,15 @@ def append_true_effect(
 
     Adds the true effect to the effect_df. (TRUE_EFFECT_COL)
     """
-    effect_df[EffectColumns.true_effect] = compute_effect_from_ite(
-        ite_df, analysis_pids, outcome_name
-    )
+    if counterfactual_df is not None:
+        counterfactuals = prepare_counterfactual_data_for_outcome(
+            counterfactual_df, outcome_name
+        )
+        counterfactuals = counterfactuals[counterfactuals[PID_COL].isin(analysis_pids)]
+        true_effect = compute_effect_from_counterfactuals(counterfactuals, effect_type)
+    else:
+        true_effect = compute_effect_from_ite(ite_df, analysis_pids, outcome_name)
+    effect_df[EffectColumns.true_effect] = true_effect
     return effect_df
 
 

@@ -1,0 +1,72 @@
+# --------------------------------------------------------------------------
+# Semi-Synthetic Simulation: Observed Treatment, Simulated Outcome
+# --------------------------------------------------------------------------
+# Treatment assignment (A_i) and index dates are taken from the real data.
+# Only the outcome is simulated from hand-crafted oracle features.
+
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  data: ./example_data/synthea_meds_causal
+  splits: ["tuning"]
+  outcomes: ./outputs/causal/semisynthetic_outcomes
+
+seed: 42
+debug: false
+min_num_codes: 3
+exposure_code: "EXPOSURE"
+
+# --------------------------------------------------------------------------
+# Oracle Feature Extraction
+# --------------------------------------------------------------------------
+features:
+  code_prefixes:
+    diagnosis: "D/"
+    medication: "M/"
+    procedure: "P/"
+    admission: "ADM/"
+  lookback_days: 365
+  recent_window_days: 90
+  burst_window_days: 30
+  motif_window_days: 30
+
+# --------------------------------------------------------------------------
+# Outcomes
+# --------------------------------------------------------------------------
+outcomes:
+  OUTCOME:
+    outcome_model:
+      run_in_days: 1
+      beta_0: -2.0
+      coefficients:
+        recent_event_count: 0.3
+        disease_burden: 0.2
+        medication_count: 0.15
+        utilization_intensity: 0.1
+        age: 0.4
+        chronic_disease_count: 0.25
+        code_diversity: 0.1
+        event_recency: -0.15
+        recent_burst_ratio: 0.2
+        sequence_motif_count: 0.1
+      interactions:
+        - features: [disease_burden, age]
+          coefficient: 0.1
+      noise_scale: 0.1
+    treatment_effect:
+      mode: constant
+      delta: 1.0
+
+  OUTCOME_NULL:
+    outcome_model:
+      run_in_days: 1
+      beta_0: -2.0
+      coefficients:
+        disease_burden: 0.2
+        age: 0.4
+      noise_scale: 0.1
+    treatment_effect:
+      mode: constant
+      delta: 0.0

@@ -71,6 +71,7 @@ STATUS = "status"
 
 class EffectColumns:
     method = "method"
+    effect_type = "effect_type"
     effect = "effect"
     true_effect = "true_effect"
     ps_bias = "ps_bias"

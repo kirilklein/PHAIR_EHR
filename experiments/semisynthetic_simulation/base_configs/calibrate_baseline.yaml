@@ -1,0 +1,8 @@
+# Stage 2b (baseline): calibrate baseline predictions.
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  finetune_model: "{{INNER_DIR}}/models/baseline"
+  calibrated_predictions: "{{INNER_DIR}}/models/baseline/calibrated"
