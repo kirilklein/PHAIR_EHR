@@ -152,7 +152,13 @@ def run_main(
     """
     # Parse command line args
     args = parse_args(inputs | outputs)
-    with log.start_run(log_system_metrics=args.get("log_system_metrics", False)) as run:
+
+    nested = log.is_mlflow_available() and log.get_run_and_prefix()[0] is not None
+    with log.start_run(
+        name=job_name,
+        nested=nested,
+        log_system_metrics=args.get("log_system_metrics", False),
+    ) as run:
         run_id = run.info.run_id
         cfg_path = prepare_config(args, inputs, outputs)
         main(cfg_path)

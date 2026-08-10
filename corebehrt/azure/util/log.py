@@ -15,7 +15,7 @@ try:
 
     MLFLOW_AVAILABLE = True
     MLFLOW_CLIENT = MlflowClient()
-except:
+except ImportError:
     pass
 
 
@@ -79,9 +79,14 @@ def get_run_and_prefix():
     prefix = ""
     # Check if run has valid info before accessing it
     if run and hasattr(run, "info") and run.info:
-        while (parent := mlflow.get_parent_run(run.info.run_id)) is not None:
-            prefix = parent.info.run_name + "/" + prefix
-            run = parent
+        temp_run = run
+        while (parent := mlflow.get_parent_run(temp_run.info.run_id)) is not None:
+            parent_name = parent.info.run_name or ""
+            if parent_name:
+                prefix = parent_name + "/" + prefix
+            temp_run = parent
+        # The top-level run is the one we want to log to.
+        run = temp_run
 
     return run, prefix
 
@@ -118,10 +123,10 @@ def log_metric(key: str, *args, **kwargs):
         if run is None:
             # Skip logging if no run is active
             return
-        mlflow.log_metric(prefix + key, *args, run_id=run.info.run_id, **kwargs)
+        MLFLOW_CLIENT.log_metric(run.info.run_id, prefix + key, *args, **kwargs)
 
 
-def log_metrics(key: str, *args, **kwargs):
+def log_metrics(metrics: dict, *args, **kwargs):
     """
     Log multiple metrics
 
@@ -133,7 +138,9 @@ def log_metrics(key: str, *args, **kwargs):
         if run is None:
             # Skip logging if no run is active
             return
-        mlflow.log_metrics(prefix + key, *args, run_id=run.info.run_id, **kwargs)
+        # Prefix each metric key
+        prefixed_metrics = {prefix + k: v for k, v in metrics.items()}
+        MLFLOW_CLIENT.log_metrics(run.info.run_id, prefixed_metrics, *args, **kwargs)
 
 
 def log_param(key: str, value: Any) -> None:
@@ -143,10 +150,10 @@ def log_param(key: str, value: Any) -> None:
         if run is None:
             # Skip logging if no run is active
             return
-        mlflow.log_param(prefix + key, value)  # Remove run_id parameter
+        MLFLOW_CLIENT.log_param(run.info.run_id, prefix + key, value)
 
 
-def log_params(key: str, *args, **kwargs):
+def log_params(params: dict, *args, **kwargs):
     """
     Log multiple parameters.
 
@@ -157,10 +164,11 @@ def log_params(key: str, *args, **kwargs):
         if run is None:
             # Skip logging if no run is active
             return
-        mlflow.log_params(prefix + key, *args, run_id=run.info.run_id, **kwargs)
+        prefixed_params = {prefix + k: v for k, v in params.items()}
+        MLFLOW_CLIENT.log_params(run.info.run_id, prefixed_params, *args, **kwargs)
 
 
-def log_image(key: str, *args, **kwargs):
+def log_image(image, *args, **kwargs):
     """
     Log an image
 
@@ -172,10 +180,13 @@ def log_image(key: str, *args, **kwargs):
         if run is None:
             # Skip logging if no run is active
             return
-        mlflow.log_image(prefix + key, *args, run_id=run.info.run_id, **kwargs)
+        # Prefix the artifact_file path
+        if "artifact_file" in kwargs:
+            kwargs["artifact_file"] = prefix + kwargs["artifact_file"]
+        MLFLOW_CLIENT.log_image(run.info.run_id, image, *args, **kwargs)
 
 
-def log_figure(key: str, *args, **kwargs):
+def log_figure(figure, *args, **kwargs):
     """
     Log a figure (e.g. matplotlib)
 
@@ -187,7 +198,10 @@ def log_figure(key: str, *args, **kwargs):
         if run is None:
             # Skip logging if no run is active
             return
-        mlflow.log_figure(prefix + key, *args, run_id=run.info.run_id, **kwargs)
+        # Prefix the artifact_file path
+        if "artifact_file" in kwargs:
+            kwargs["artifact_file"] = prefix + kwargs["artifact_file"]
+        MLFLOW_CLIENT.log_figure(run.info.run_id, figure, *args, **kwargs)
 
 
 def log_batch(*args, **kwargs):
