@@ -109,9 +109,7 @@ def compute_and_save_combined_scores_mean_std(
                         log_metric(f"{row['metric']} std {row['outcome']}", row["std"])
             else:
                 for _, row in scores_mean_std.iterrows():
-                    log_metric(
-                        f"{row['metric']} mean {row['outcome']}", row["mean"]
-                    )
+                    log_metric(f"{row['metric']} mean {row['outcome']}", row["mean"])
                     log_metric(f"{row['metric']} std {row['outcome']}", row["std"])
 
         logger.info("Finished combined scores for mode=%s", mode)

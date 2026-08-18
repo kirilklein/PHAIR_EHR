@@ -19,9 +19,7 @@ def _manual_treatment_outcome_table(
     for exp_val, label in ((0, "Untreated"), (1, "Treated")):
         n0 = int(ct.loc[exp_val, 0])
         n1 = int(ct.loc[exp_val, 1])
-        rows.append(
-            {STATUS: label, "No Outcome": n0, "Outcome": n1, "Total": n0 + n1}
-        )
+        rows.append({STATUS: label, "No Outcome": n0, "Outcome": n1, "Total": n0 + n1})
     rows.append(
         {
             STATUS: "Total",

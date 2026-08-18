@@ -83,6 +83,26 @@ def finetune_fold(
     train_dataset = ExposureOutcomesDataset(train_data.patients)
     val_dataset = ExposureOutcomesDataset(val_data.patients)
 
+    train_exposures = train_data.get_exposures()
+    n_train_exposed = sum(1 for e in train_exposures if e == 1)
+    n_train_unexposed = sum(1 for e in train_exposures if e == 0)
+    logger.info(
+        "Train exposure: exposed=%d, unexposed=%d, total=%d",
+        n_train_exposed,
+        n_train_unexposed,
+        len(train_exposures),
+    )
+
+    val_exposures = val_data.get_exposures()
+    n_val_exposed = sum(1 for e in val_exposures if e == 1)
+    n_val_unexposed = sum(1 for e in val_exposures if e == 0)
+    logger.info(
+        "Val exposure: exposed=%d, unexposed=%d, total=%d",
+        n_val_exposed,
+        n_val_unexposed,
+        len(val_exposures),
+    )
+
     modelmanager = CausalModelManager(cfg, fold)
     checkpoint = modelmanager.load_checkpoint()
     outcomes: Dict[str, List[int]] = (

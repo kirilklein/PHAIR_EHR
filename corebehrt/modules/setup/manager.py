@@ -126,9 +126,7 @@ class ModelManager:
         """Get epoch from model_path (None => trainer starts at continue_epoch 0)."""
         if self.restart_model_path is None:
             return 0
-        ep = get_last_checkpoint_epoch(
-            join(self.restart_model_path, CHECKPOINTS_DIR)
-        )
+        ep = get_last_checkpoint_epoch(join(self.restart_model_path, CHECKPOINTS_DIR))
         # Match causal trainer BEST_MODEL_ID: filename id 999 is the best-weights slot,
         # not a real resume index (would give continue_epoch 1000 and skip training).
         if ep == 999:

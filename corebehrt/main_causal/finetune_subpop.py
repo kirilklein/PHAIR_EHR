@@ -51,6 +51,17 @@ def main_finetune_subpop(config_path):
     train_val_pids = data.get_pids()
     logger.info(f"Filtered to {len(train_val_pids)} patients in prepared data")
 
+    exposures = data.get_exposures()
+    n_positive = sum(1 for e in exposures if e == 1)
+    n_negative = sum(1 for e in exposures if e == 0)
+    n_other = len(exposures) - n_positive - n_negative
+    logger.info(
+        "Exposure after filter: positive (exposed, y=1)=%d, negative (unexposed, y=0)=%d%s",
+        n_positive,
+        n_negative,
+        f", other/missing={n_other}" if n_other else "",
+    )
+
     # Create fresh bootstrap folds from subpopulation
     data_cfg = cfg.get("data", {})
     n_folds = data_cfg.get("n_folds", 5)
