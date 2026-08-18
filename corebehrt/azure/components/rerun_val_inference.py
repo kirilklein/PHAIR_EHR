@@ -9,13 +9,11 @@ OUTPUTS = {"model": {"type": "uri_folder"}}
 
 
 if __name__ == "__main__":
-    from corebehrt.main_causal.rerun_clean_val_inference import (
-        main_rerun_clean_val_inference,
-    )
+    from corebehrt.main_causal.rerun_val_inference import main_rerun_val_inference
 
     job.run_main(
-        "rerun_clean_val_inference",
-        main_rerun_clean_val_inference,
+        "rerun_val_inference",
+        main_rerun_val_inference,
         INPUTS,
         OUTPUTS,
     )

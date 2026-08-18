@@ -108,7 +108,7 @@ def _resolve_prepared_data(cfg: Config, override: str | None) -> str:
     return override if override is not None else cfg.paths.prepared_data
 
 
-def _run_rerun_clean_val_inference(
+def _run_rerun_val_inference(
     finetune_model: str,
     prepared_data: str | None,
     subpopulation_pids: str | None,
@@ -237,10 +237,10 @@ def _run_rerun_clean_val_inference(
     logger.info("Clean validation inference complete. Output model dir: %s", output_dir)
 
 
-def main_rerun_clean_val_inference(config_path: str) -> None:
+def main_rerun_val_inference(config_path: str) -> None:
     cfg = load_config(config_path)
-    logger = logging.getLogger("rerun_clean_val_inference")
-    _run_rerun_clean_val_inference(
+    logger = logging.getLogger("rerun_val_inference")
+    _run_rerun_val_inference(
         finetune_model=cfg.paths.finetune_model,
         prepared_data=cfg.paths.prepared_data,
         subpopulation_pids=cfg.paths.get("subpopulation_pids", None),
@@ -256,8 +256,8 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
-    logger = logging.getLogger("rerun_clean_val_inference")
-    _run_rerun_clean_val_inference(
+    logger = logging.getLogger("rerun_val_inference")
+    _run_rerun_val_inference(
         finetune_model=args.finetune_model,
         prepared_data=args.prepared_data,
         subpopulation_pids=args.subpopulation_pids,

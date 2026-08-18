@@ -70,7 +70,7 @@ def create(component: callable):
             rerun_kwargs["subpopulation_pids"] = subpopulation_pids
 
         rerun_inference = component(
-            "rerun_clean_val_inference",
+            "rerun_val_inference",
         )(**rerun_kwargs)
 
         calibrate_exp_y = component(
