@@ -17,7 +17,7 @@ from corebehrt.constants.paths import (
 )
 from corebehrt.functional.features.split import create_folds
 from corebehrt.functional.io_operations.load import load_vocabulary
-from corebehrt.main_causal.helper.finetune_exp_y import validate_folds
+from corebehrt.main_causal.finetune_exp_y import validate_folds
 from corebehrt.modules.monitoring.causal.metric_aggregation import (
     compute_and_save_combined_scores_mean_std,
 )
@@ -159,17 +159,20 @@ def _run_rerun_val_inference(
             len(subpop_pids),
         )
         train_val_data = train_val_data.filter_by_pids(subpop_pids)
-        folds = create_folds(
-            train_val_data.get_pids(),
-            n_folds,
-            seed,
-            val_ratio=val_ratio,
-            bootstrap=False,
-        )
-    else:
-        prepared_folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
-        folds = torch.load(prepared_folds_path)
-        logger.info("Loaded clean prepared-data folds from %s", prepared_folds_path)
+
+    folds = create_folds(
+        train_val_data.get_pids(),
+        n_folds,
+        seed,
+        val_ratio=val_ratio,
+        bootstrap=False,
+    )
+    logger.info(
+        "Generated %d clean folds (bootstrap=False, seed=%s, val_ratio=%s)",
+        len(folds),
+        seed,
+        val_ratio,
+    )
 
     expected_pids = set(train_val_data.get_pids())
     validate_folds(folds, expected_pids, logger, bootstrap=False)
