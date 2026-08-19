@@ -128,7 +128,8 @@ def _run_rerun_val_inference(
     logger.info("Rerun output directory: %s", output_dir)
 
     cfg = _load_finetune_cfg(finetune_model)
-    cfg.paths.model = str(finetune_model)
+    cfg.paths.model = str(output_dir)
+    cfg.paths.restart_model = str(finetune_model)
     cfg.paths.prepared_data = _resolve_prepared_data(cfg, prepared_data)
     subpopulation_pids = _resolve_subpopulation_pids(cfg, subpopulation_pids)
     cfg.logging.path = str(output_dir / "logs")
