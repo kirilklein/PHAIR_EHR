@@ -204,26 +204,28 @@ def _run_rerun_val_inference(
         outcomes: Dict[str, List[int]] = train_data.get_outcomes()
         exposures = train_data.get_exposures()
         model = modelmanager.initialize_finetune_model(checkpoint, outcomes, exposures)
-        optimizer, sampler, scheduler, trainer_cfg = modelmanager.initialize_training_components(
-            model, outcomes
-        )
-        epoch = modelmanager.get_epoch()
+
+        # Inference only: skip optimizer/scheduler setup (would require
+        # replace_steps_with_epochs for epoch-based scheduler configs).
+        trainer_args = dict(cfg.get("trainer_args", {}))
+        trainer_args["use_pcgrad"] = False
+        trainer_args["freeze_encoder_at_init"] = False
 
         trainer = CausalEHRTrainer(
             model=model,
-            optimizer=optimizer,
+            optimizer=None,
             train_dataset=train_dataset,
             val_dataset=val_dataset,
             test_dataset=None,
-            args=trainer_cfg.trainer_args,
-            metrics=getattr(trainer_cfg, "metrics", {}),
-            sampler=sampler,
-            scheduler=scheduler,
-            cfg=trainer_cfg,
+            args=trainer_args,
+            metrics=getattr(cfg, "metrics", {}),
+            sampler=None,
+            scheduler=None,
+            cfg=cfg,
             logger=logger,
             accumulate_logits=True,
             run_folder=str(fold_output_dir),
-            last_epoch=epoch,
+            last_epoch=None,
         )
 
         logger.info("Evaluating on validation set")
