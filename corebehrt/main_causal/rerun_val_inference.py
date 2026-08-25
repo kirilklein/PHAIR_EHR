@@ -235,6 +235,13 @@ def _run_rerun_val_inference(
         trainer.process_causal_classification_results(
             val_prediction_data, mode="val", save_results=True
         )
+        # PredictionAccumulator finds the epoch via checkpoint_epoch*_end.pt.
+        # Eval saves predictions as *_999.npz (BEST_MODEL_ID); write a matching
+        # placeholder so accumulate_and_save_predictions can locate them.
+        torch.save(
+            {"epoch": 999},
+            fold_output_dir / "checkpoints" / "checkpoint_epoch999_end.pt",
+        )
 
     PredictionAccumulator(str(output_dir), outcome_names).accumulate_and_save_predictions()
     compute_and_save_combined_scores_mean_std(
