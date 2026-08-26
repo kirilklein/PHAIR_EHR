@@ -181,6 +181,7 @@ def _run_rerun_val_inference(
     output_dir.mkdir(parents=True, exist_ok=True)
     outcome_names = train_val_data.get_outcome_names()
     torch.save(outcome_names, join(output_dir, OUTCOME_NAMES_FILE))
+    torch.save(folds, join(output_dir, FOLDS_FILE))
     cfg.save_to_yaml(join(output_dir, FINETUNE_CFG))
 
     for fold_idx, fold_dict in enumerate(folds, start=1):
