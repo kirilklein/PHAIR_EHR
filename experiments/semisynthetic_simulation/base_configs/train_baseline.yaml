@@ -1,0 +1,22 @@
+# Stage 2a (baseline): CatBoost baseline model. Runs on CPU.
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  prepared_data: "{{RUN_DIR}}/prepared_data"
+  model: "{{INNER_DIR}}/models/baseline"
+
+multihot: false
+include_age: true
+
+catboost:
+  n_estimators: 100
+  l2_leaf_reg: 0.00
+  early_stopping_rounds: 10
+
+tuning:
+  tune_hyperparameters: true
+  n_trials: 10
+  inner_val_size: 0.2
+  reuse_hyperparameters: true

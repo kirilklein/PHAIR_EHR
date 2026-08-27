@@ -43,7 +43,11 @@ def cv_loop(
         val_pids = fold_dict[VAL_KEY]
         logger.info(f"Training fold {fold}/{len(folds)}")
 
-        train_data = data.filter_by_pids(train_pids)
+        train_data = (
+            data.resample_by_pids(train_pids)
+            if cfg.get("bootstrap", False)
+            else data.filter_by_pids(train_pids)
+        )
         val_data = data.filter_by_pids(val_pids)
 
         with setup_metrics_dir(f"Fold {fold}"):

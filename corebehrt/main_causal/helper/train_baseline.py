@@ -27,6 +27,10 @@ from corebehrt.constants.data import PID_COL
 from corebehrt.constants.paths import (
     FOLDS_FILE,
 )
+from corebehrt.functional.features.split import (
+    bootstrap_training_folds,
+    create_folds,
+)
 from corebehrt.functional.preparation.causal.one_hot import (
     create_features_from_patients,
 )
@@ -192,6 +196,7 @@ def run_hyperparameter_tuning(
     n_trials: int,
     scale_pos_weight: float,
     model_name: str,
+    random_seed: int = 42,
 ) -> Dict[str, Any]:
     """
     INNER LOOP: Performs hyperparameter tuning using Optuna on a given train/val split.
@@ -254,7 +259,7 @@ def run_hyperparameter_tuning(
             model_name,
             {**base_params, **trial_params},
             scale_pos_weight,
-            random_seed=42,
+            random_seed=random_seed,
         )
         baseline_models.fit_model(
             model,
@@ -279,7 +284,9 @@ def run_hyperparameter_tuning(
         logging.info(
             f"  Running Optuna optimization for {len(params_to_tune)} parameters..."
         )
-        study = optuna.create_study(direction="maximize")
+        study = optuna.create_study(
+            direction="maximize", sampler=optuna.samplers.TPESampler(seed=random_seed)
+        )
         study.optimize(objective, n_trials=n_trials)
 
         logging.info(f"  Hyperparameter tuning completed!")
@@ -358,17 +365,18 @@ def _get_best_params_for_fold(
     logger.info(f"  Inner validation size: {inner_val_size}")
     logger.info(f"  Number of tuning trials: {n_trials}")
 
+    unique_outer_pids = list(dict.fromkeys(outer_train_data.get_pids()))
     inner_train_pids, inner_val_pids = train_test_split(
-        outer_train_data.get_pids(),
+        unique_outer_pids,
         test_size=inner_val_size,
-        random_state=42,
+        random_state=cfg.get("seed", 42),
     )
 
     logger.info(
         f"  Split outer train into inner train ({len(inner_train_pids)} patients) and inner val ({len(inner_val_pids)} patients)"
     )
 
-    inner_train_data = data.filter_by_pids(inner_train_pids)
+    inner_train_data = outer_train_data.filter_by_pids(inner_train_pids)
     inner_val_data = data.filter_by_pids(inner_val_pids)
 
     X_inner_train, y_inner_train, X_inner_val, y_inner_val = _prepare_data_for_modeling(
@@ -390,6 +398,7 @@ def _get_best_params_for_fold(
         n_trials,
         scale_pos_weight,
         model_name,
+        cfg.get("seed", 42),
     )
 
     logger.info("  Hyperparameter tuning completed for this fold")
@@ -437,6 +446,7 @@ def _train_and_evaluate_fold(
     fold_idx: int,
     prediction_storage: List[FoldPredictionData],
     model_name: str,
+    random_seed: int = 42,
 ) -> float:
     """Trains a final model and evaluates it on the holdout test set."""
     logger.info(f"  Training final model with outer train set size: {len(X_train)}")
@@ -453,7 +463,7 @@ def _train_and_evaluate_fold(
         model_name,
         best_params,
         scale_pos_weight,
-        random_seed=42,
+        random_seed=random_seed,
     )
 
     logger.info("  Fitting final model...")
@@ -555,7 +565,11 @@ def nested_cv_loop(
             logger.info(f"Train patients in this fold: {len(fold_dict['train'])}")
             logger.info(f"Test patients in this fold: {len(fold_dict['val'])}")
 
-            outer_train_data = data.filter_by_pids(fold_dict["train"])
+            outer_train_data = (
+                data.resample_by_pids(fold_dict["train"])
+                if cfg.get("bootstrap", False)
+                else data.filter_by_pids(fold_dict["train"])
+            )
             outer_test_data = data.filter_by_pids(fold_dict["val"])
             test_pids = outer_test_data.get_pids()
 
@@ -604,6 +618,7 @@ def nested_cv_loop(
                 i,
                 prediction_storage,
                 model_name,
+                cfg.get("seed", 42) + i,
             )
 
             all_unbiased_scores.append(unbiased_auc)
@@ -630,11 +645,27 @@ def nested_cv_loop(
 
 def handle_folds(cfg: Config, logger: logging.Logger) -> list:
     """
-    Load predefined folds, log and persist them into the model directory, and return.
+    Load predefined folds and optionally reshuffle patients across them.
     """
     folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
     folds = torch.load(folds_path)
     n_folds = len(folds)
-    logger.info(f"Using {n_folds} predefined folds")
+    data_cfg = cfg.get("data", {})
+    if data_cfg.get("reshuffle", False):
+        pids = sorted(
+            {pid for fold in folds for split in fold.values() for pid in split}
+        )
+        seed = data_cfg.get("reshuffle_seed", 42)
+        folds = create_folds(pids, n_folds, seed)
+        logger.info(
+            f"Reshuffled {len(pids)} patients into {n_folds} folds (seed={seed})"
+        )
+    else:
+        logger.info(f"Using {n_folds} predefined folds")
+        seed = data_cfg.get("bootstrap_seed", 42)
+    if cfg.get("bootstrap", False):
+        bootstrap_seed = data_cfg.get("bootstrap_seed", seed)
+        folds = bootstrap_training_folds(folds, bootstrap_seed)
+        logger.info(f"Bootstrapped training folds with seed={bootstrap_seed}")
     torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
     return folds

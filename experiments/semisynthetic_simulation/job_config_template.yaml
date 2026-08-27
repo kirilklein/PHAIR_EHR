@@ -1,0 +1,15 @@
+# Azure job config for one outer run of the semi-synthetic study.
+# submit_runs.sh clones this per run, replacing __RUN__ with run_01, run_02, ...
+# Edit the paths below to your datastore locations, then run submit_runs.sh.
+
+paths:
+  ## INPUTS (shared and FIXED across every run)
+  meds: "researcher_data:AKK/shared/MEDS/TRACE/v01/data"
+  features: "researcher_data:AKK/shared/features/trace/v01/features"
+  tokenized: "researcher_data:AKK/shared/features/trace/v01/tokenized"
+  pretrain_model: "researcher_data:AKK/shared/pretrain/models/trace/small/len_512/v01"
+  # Pre-existing cohort (its index_dates.csv + cohort_config.yaml define the fixed design)
+  cohort: "researcher_data:AKK/experiments/trace/semaglutide/cohorts/adult_diab2/v01"
+
+  ## OUTPUT (one dir per outer run; __RUN__ is filled in by submit_runs.sh)
+  results: "researcher_data:AKK/experiments/trace/simulation/semisynthetic/smoketest/__RUN__"

@@ -1,0 +1,29 @@
+# Stage 2c (baseline): estimate causal effects from calibrated baseline predictions.
+# n_bootstrap and its seed are set by the study runner.
+logging:
+  level: INFO
+  path: ./outputs/logs/sim_study
+
+paths:
+  calibrated_predictions: "{{INNER_DIR}}/models/baseline/calibrated/"
+  counterfactual_outcomes: "{{RUN_DIR}}/simulated_outcomes"
+  estimate: "{{INNER_DIR}}/estimate/baseline"
+
+estimator:
+  methods: ["IPW", "TMLE"]
+  effect_type: "ATE"
+  n_bootstrap: 100
+  common_support_threshold: 0.001
+  clip_percentile: 1.0
+
+plot:
+  contingency_table:
+    max_outcomes_per_figure: 10
+    max_number_of_figures: 10
+  effect_size:
+    max_outcomes_per_figure: 10
+    max_number_of_figures: 10
+    plot_individual_effects: false
+  adjustment:
+    max_outcomes_per_figure: 8
+    max_number_of_figures: 10
