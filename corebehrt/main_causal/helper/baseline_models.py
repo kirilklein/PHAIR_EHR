@@ -90,17 +90,18 @@ def build_model(
     params: Dict[str, Any],
     scale_pos_weight: float,
     random_seed: int,
+    prescaled: bool = False,
 ) -> Any:
-    """Builds an unfitted estimator with a `predict_proba` interface."""
+    """
+    Builds an unfitted estimator with a `predict_proba` interface.
+
+    The logistic model is unweighted so `predict_proba` estimates P(T=1|X);
+    `scale_pos_weight` only applies to CatBoost. Set `prescaled=True` when the
+    features have already been standardised (see `standardize`).
+    """
     if model_name == LOGISTIC:
-        return make_pipeline(
-            StandardScaler(),
-            LogisticRegression(
-                class_weight="balanced",
-                random_state=random_seed,
-                **params,
-            ),
-        )
+        clf = LogisticRegression(random_state=random_seed, **params)
+        return clf if prescaled else make_pipeline(StandardScaler(), clf)
 
     device_params = _effective_device_params(params)
     catboost_params = _prepare_catboost_params(params, device_params)
@@ -142,12 +143,25 @@ def fit_model(
     return model
 
 
+def standardize(
+    X_train: pd.DataFrame, X_val: pd.DataFrame
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Fits a scaler on X_train once and transforms both sets."""
+    scaler = StandardScaler().fit(X_train)
+    return scaler.transform(X_train), scaler.transform(X_val)
+
+
 def _effective_device_params(params: Dict[str, Any]) -> Dict[str, Any]:
     """An explicit task_type/devices in the config wins over the detected device."""
     device_params = dict(_get_catboost_device_params())
-    for key in ("task_type", "devices"):
-        if key in params:
-            device_params[key] = params[key]
+    if "task_type" in params:
+        device_params["task_type"] = params["task_type"]
+    if "devices" in params:
+        devices = params["devices"]
+        # Config coerces "0" to 0.0; CatBoost needs the string form.
+        if isinstance(devices, float) and devices.is_integer():
+            devices = int(devices)
+        device_params["devices"] = str(devices)
     return device_params
 
 

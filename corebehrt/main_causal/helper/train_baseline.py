@@ -126,7 +126,9 @@ def save_combined_predictions(
         return
 
     # Group predictions by fold and organize by target
-    fold_data = {}  # fold_idx -> {target_name: (pids, predictions, targets, cf_predictions)}
+    fold_data = (
+        {}
+    )  # fold_idx -> {target_name: (pids, predictions, targets, cf_predictions)}
 
     for pred_data in prediction_storage:
         fold_idx = pred_data.fold_idx
@@ -240,6 +242,10 @@ def run_hyperparameter_tuning(
         )
         return base_params
 
+    prescaled = model_name == baseline_models.LOGISTIC
+    if prescaled:
+        X_train, X_val = baseline_models.standardize(X_train, X_val)
+
     def objective(trial: optuna.Trial):
         trial_params = {}
 
@@ -260,6 +266,7 @@ def run_hyperparameter_tuning(
             {**base_params, **trial_params},
             scale_pos_weight,
             random_seed=random_seed,
+            prescaled=prescaled,
         )
         baseline_models.fit_model(
             model,
@@ -304,11 +311,11 @@ def run_hyperparameter_tuning(
 
 def _setup_model_parameters(
     cfg: Config, model_name: str
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
     """Loads and merges model and tuning parameters from the config."""
-    base_params, _ = baseline_models.get_base_params(cfg, model_name)
+    base_params, config_params = baseline_models.get_base_params(cfg, model_name)
     tuning_cfg = cfg.get("tuning", {})
-    return base_params, tuning_cfg
+    return base_params, config_params, tuning_cfg
 
 
 def _prepare_data_for_modeling(
@@ -351,6 +358,7 @@ def _get_best_params_for_fold(
     outer_train_data: CausalPatientDataset,
     target_name: str,
     base_params: Dict,
+    config_params: Dict,
     tuning_cfg: Dict,
     data: CausalPatientDataset,
     cfg: Config,
@@ -384,9 +392,6 @@ def _get_best_params_for_fold(
     )
 
     scale_pos_weight = (y_inner_train == 0).sum() / max((y_inner_train == 1).sum(), 1)
-
-    # Get config parameters for this tuning session
-    _, config_params = baseline_models.get_base_params(cfg, model_name)
 
     tuned_params = run_hyperparameter_tuning(
         X_inner_train,
@@ -541,7 +546,7 @@ def nested_cv_loop(
     model_name = baseline_models.get_model_name(cfg)
     logger.info(f"Baseline model: {model_name}")
 
-    base_params, tuning_cfg = _setup_model_parameters(cfg, model_name)
+    base_params, config_params, tuning_cfg = _setup_model_parameters(cfg, model_name)
     should_tune = tuning_cfg.get("tune_hyperparameters", True)
     reuse_hyperparameters = tuning_cfg.get("reuse_hyperparameters", True)
 
@@ -581,6 +586,7 @@ def nested_cv_loop(
                         outer_train_data,
                         target_name,
                         base_params,
+                        config_params,
                         tuning_cfg,
                         data,
                         cfg,

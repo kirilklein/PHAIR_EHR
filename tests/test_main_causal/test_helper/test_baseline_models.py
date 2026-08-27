@@ -59,6 +59,13 @@ class TestBaselineModels(unittest.TestCase):
         )
         self.assertNotIn("colsample_bylevel", prepared)
 
+    def test_numeric_devices_from_config_is_passed_as_string(self):
+        """Config coerces `devices: "0"` to 0.0, which CatBoost rejects."""
+        device_params = baseline_models._effective_device_params(
+            {"task_type": "GPU", "devices": 0.0}
+        )
+        self.assertEqual(device_params["devices"], "0")
+
     def test_logistic_fits_and_predicts(self):
         features, targets = make_separable_data()
         params, _ = baseline_models.get_base_params({}, baseline_models.LOGISTIC)
