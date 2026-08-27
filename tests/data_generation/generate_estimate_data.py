@@ -1,4 +1,5 @@
 import os
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -97,7 +98,7 @@ def generate_combined_predictions(
     for outcome_name in OUTCOME_NAMES:
         # Generate potential outcome probabilities for this outcome
         # Each outcome may have slightly different characteristics
-        outcome_seed = seed + hash(outcome_name) % 1000
+        outcome_seed = seed + zlib.crc32(outcome_name.encode()) % 1000
         np.random.seed(outcome_seed)
 
         # Vary the effect sizes slightly for different outcomes
