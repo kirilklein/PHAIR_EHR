@@ -3,7 +3,7 @@ import logging
 import os
 from os.path import join
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Sequence, Set
 
 import torch
 
@@ -63,6 +63,15 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--include-test-in-val",
+        action="store_true",
+        help=(
+            "If prepared_data contains test_pids.pt, include those patients in "
+            "fold creation so each appears in exactly one validation fold "
+            "instead of being excluded."
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Allow reusing an existing output directory.",
@@ -108,6 +117,61 @@ def _resolve_prepared_data(cfg: Config, override: str | None) -> str:
     return override if override is not None else cfg.paths.prepared_data
 
 
+def _load_test_pids(prepared_data: str, all_pids: Sequence, logger: logging.Logger) -> Set:
+    test_path = join(prepared_data, TEST_PIDS_FILE)
+    if not os.path.exists(test_path):
+        logger.info("No %s found in prepared_data — no held-out test set", TEST_PIDS_FILE)
+        return set()
+
+    raw_test_pids = torch.load(test_path)
+    test_pids = set(raw_test_pids)
+    all_pid_set = set(all_pids)
+    overlap = test_pids & all_pid_set
+    missing = test_pids - all_pid_set
+
+    logger.info(
+        "Found %s: file_count=%d, overlap_with_prepared=%d, not_in_prepared=%d",
+        TEST_PIDS_FILE,
+        len(test_pids),
+        len(overlap),
+        len(missing),
+    )
+    if missing:
+        logger.warning(
+            "%d test PIDs are not present in prepared patients and will be ignored",
+            len(missing),
+        )
+    return overlap
+
+
+def _log_fold_summary(
+    folds: List[Dict[str, list]],
+    logger: logging.Logger,
+    test_pids: Optional[Set] = None,
+) -> None:
+    test_pids = test_pids or set()
+    all_val = []
+    for i, fold in enumerate(folds, start=1):
+        train_n = len(fold[TRAIN_KEY])
+        val_n = len(fold[VAL_KEY])
+        n_test_in_val = sum(1 for pid in fold[VAL_KEY] if pid in test_pids)
+        n_test_in_train = sum(1 for pid in fold[TRAIN_KEY] if pid in test_pids)
+        all_val.extend(fold[VAL_KEY])
+        logger.info(
+            "Fold %d: train=%d (test=%d), val=%d (test=%d)",
+            i,
+            train_n,
+            n_test_in_train,
+            val_n,
+            n_test_in_val,
+        )
+    logger.info(
+        "Validation coverage across folds: unique_val_pids=%d, total_val_slots=%d",
+        len(set(all_val)),
+        len(all_val),
+    )
+
+
 def _run_rerun_val_inference(
     finetune_model: str,
     prepared_data: str | None,
@@ -115,6 +179,7 @@ def _run_rerun_val_inference(
     output_model: str | None,
     overwrite: bool,
     logger: logging.Logger,
+    include_test_in_val: bool = False,
 ) -> None:
     finetune_model = Path(finetune_model).resolve()
     output_dir = _build_output_dir(finetune_model, output_model).resolve()
@@ -126,6 +191,7 @@ def _run_rerun_val_inference(
     logger.info("=" * 80)
     logger.info("Processing finetune model: %s", finetune_model)
     logger.info("Rerun output directory: %s", output_dir)
+    logger.info("include_test_in_val=%s", include_test_in_val)
 
     cfg = _load_finetune_cfg(finetune_model)
     cfg.paths.model = str(output_dir)
@@ -137,16 +203,36 @@ def _run_rerun_val_inference(
     loaded_data = torch.load(join(cfg.paths.prepared_data, PREPARED_ALL_PATIENTS))
     vocab = load_vocabulary(cfg.paths.prepared_data)
     data = CausalPatientDataset(loaded_data, vocab)
+    all_pids = data.get_pids()
+    logger.info("Prepared patients loaded: %d", len(all_pids))
 
-    if os.path.exists(join(cfg.paths.prepared_data, TEST_PIDS_FILE)):
-        test_pids = set(torch.load(join(cfg.paths.prepared_data, TEST_PIDS_FILE)))
-        logger.info("Excluding %d held-out test PIDs from fold validation", len(test_pids))
-    else:
-        test_pids = set()
-
-    train_val_data = data.filter_by_pids(
-        [pid for pid in data.get_pids() if pid not in test_pids]
+    test_pids = _load_test_pids(cfg.paths.prepared_data, all_pids, logger)
+    non_test_pids = [pid for pid in all_pids if pid not in test_pids]
+    logger.info(
+        "Cohort split: prepared=%d, test_in_prepared=%d, non_test=%d",
+        len(all_pids),
+        len(test_pids),
+        len(non_test_pids),
     )
+
+    if test_pids and include_test_in_val:
+        logger.info(
+            "include_test_in_val=true: including %d test PIDs in fold creation "
+            "(each will appear in exactly one validation fold)",
+            len(test_pids),
+        )
+        train_val_data = data
+    elif test_pids:
+        logger.info(
+            "Excluding %d held-out test PIDs from fold validation "
+            "(set include_test_in_val=true / --include-test-in-val to keep them)",
+            len(test_pids),
+        )
+        train_val_data = data.filter_by_pids(non_test_pids)
+    else:
+        train_val_data = data
+
+    logger.info("Patients after test handling: %d", len(train_val_data.get_pids()))
 
     data_cfg = cfg.get("data", {})
     n_folds = data_cfg.get("n_folds", data_cfg.get("cv_folds", 5))
@@ -155,27 +241,37 @@ def _run_rerun_val_inference(
 
     if subpopulation_pids:
         subpop_pids = torch.load(subpopulation_pids)
-        logger.info(
-            "Filtering to %d subpopulation PIDs and regenerating clean folds",
-            len(subpop_pids),
-        )
+        before = len(train_val_data.get_pids())
+        logger.info("Filtering to subpopulation: file_count=%d", len(subpop_pids))
         train_val_data = train_val_data.filter_by_pids(subpop_pids)
+        after = len(train_val_data.get_pids())
+        logger.info("Patients after subpopulation filter: %d → %d", before, after)
+        if test_pids:
+            test_pids = set(train_val_data.get_pids()) & test_pids
+            logger.info(
+                "Test PIDs remaining after subpopulation filter: %d", len(test_pids)
+            )
 
+    fold_pids = train_val_data.get_pids()
     folds = create_folds(
-        train_val_data.get_pids(),
+        fold_pids,
         n_folds,
         seed,
         val_ratio=val_ratio,
         bootstrap=False,
     )
     logger.info(
-        "Generated %d clean folds (bootstrap=False, seed=%s, val_ratio=%s)",
+        "Generated %d clean folds from %d PIDs "
+        "(bootstrap=False, seed=%s, val_ratio=%s, include_test_in_val=%s)",
         len(folds),
+        len(fold_pids),
         seed,
         val_ratio,
+        include_test_in_val,
     )
+    _log_fold_summary(folds, logger, test_pids=test_pids)
 
-    expected_pids = set(train_val_data.get_pids())
+    expected_pids = set(fold_pids)
     validate_folds(folds, expected_pids, logger, bootstrap=False)
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -183,7 +279,14 @@ def _run_rerun_val_inference(
     torch.save(outcome_names, join(output_dir, OUTCOME_NAMES_FILE))
     torch.save(folds, join(output_dir, FOLDS_FILE))
     cfg.save_to_yaml(join(output_dir, FINETUNE_CFG))
+    logger.info(
+        "Saved folds.pt / outcome_names / finetune_config; "
+        "n_outcomes=%d, n_patients_for_inference=%d",
+        len(outcome_names),
+        len(expected_pids),
+    )
 
+    total_val_evaluated = 0
     for fold_idx, fold_dict in enumerate(folds, start=1):
         train_data = train_val_data.filter_by_pids(fold_dict[TRAIN_KEY])
         val_data = train_val_data.filter_by_pids(fold_dict[VAL_KEY])
@@ -191,11 +294,19 @@ def _run_rerun_val_inference(
         os.makedirs(fold_output_dir, exist_ok=True)
         os.makedirs(fold_output_dir / "checkpoints", exist_ok=True)
 
-        logger.info("Re-running validation inference for fold %d/%d", fold_idx, len(folds))
+        logger.info(
+            "Re-running validation inference for fold %d/%d "
+            "(train_pids=%d, val_pids=%d)",
+            fold_idx,
+            len(folds),
+            len(train_data),
+            len(val_data),
+        )
         torch.save(train_data.get_pids(), fold_output_dir / "train_pids.pt")
         torch.save(val_data.get_pids(), fold_output_dir / "val_pids.pt")
         _log_exposure_counts(logger, "Train", train_data.get_exposures())
         _log_exposure_counts(logger, "Val", val_data.get_exposures())
+        total_val_evaluated += len(val_data)
 
         train_dataset = ExposureOutcomesDataset(train_data.patients)
         val_dataset = ExposureOutcomesDataset(val_data.patients)
@@ -244,6 +355,11 @@ def _run_rerun_val_inference(
             fold_output_dir / "checkpoints" / "checkpoint_epoch999_end.pt",
         )
 
+    logger.info(
+        "Finished fold inference: sum_of_val_sizes=%d, unique_patients=%d",
+        total_val_evaluated,
+        len(expected_pids),
+    )
     PredictionAccumulator(str(output_dir), outcome_names).accumulate_and_save_predictions()
     compute_and_save_combined_scores_mean_std(
         len(folds), str(output_dir), mode="val", outcome_names=outcome_names
@@ -261,6 +377,7 @@ def main_rerun_val_inference(config_path: str) -> None:
         output_model=cfg.paths.model,
         overwrite=True,
         logger=logger,
+        include_test_in_val=bool(cfg.get("include_test_in_val", False)),
     )
 
 
@@ -278,6 +395,7 @@ def main() -> None:
         output_model=args.output_model,
         overwrite=args.overwrite,
         logger=logger,
+        include_test_in_val=args.include_test_in_val,
     )
 
 
