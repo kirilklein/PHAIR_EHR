@@ -1,9 +1,9 @@
 """
-Baseline training script for causal inference using CatBoost with one-hot/multi-hot encoding.
+Baseline training script for causal inference on one-hot/multi-hot encoded features.
 
-This script is an updated version that uses CatBoost, includes robust parameter handling
-with defaults, and integrates Optuna for automated hyperparameter tuning. It includes age
-features and supports cross-validation with the same directory structure and configuration system.
+Trains a tabular baseline (logistic regression by default, or CatBoost via `model: catboost`)
+with robust parameter handling and Optuna hyperparameter tuning. It includes age features and
+supports cross-validation with the same directory structure and configuration system.
 """
 
 import logging

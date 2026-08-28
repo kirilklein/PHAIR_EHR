@@ -1,0 +1,32 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  prepared_data: ./outputs/causal/finetune/prepared_data
+
+  ## OUTPUTS
+  model: ./outputs/causal/finetune/models/baseline
+
+# Which baseline to train: logistic (L2 logistic regression) or catboost
+model: logistic
+
+# Feature encoding of the tokenized sequences
+multihot: false # false -> binary code presence; true -> code counts
+include_age: true
+
+# Parameters set here are FIXED; the remaining tunable ones are searched by Optuna.
+logistic:
+  max_iter: 1000
+  # C: 1.0 # regularisation strength; TUNED in [1e-4, 1e2] if not set
+
+# catboost:
+#   n_estimators: 1000
+#   early_stopping_rounds: 50
+
+tuning:
+  tune_hyperparameters: true
+  n_trials: 10
+  inner_val_size: 0.2
+  reuse_hyperparameters: true

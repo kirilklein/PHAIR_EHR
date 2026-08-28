@@ -57,6 +57,7 @@ def add_parser(subparsers) -> None:
             "get_stats",
             "prepare_ft_exp_y",
             "finetune_exp_y",
+            "train_baseline",
             "calibrate_exp_y",
             "xgboost_cv",
             "evaluate_xgboost",

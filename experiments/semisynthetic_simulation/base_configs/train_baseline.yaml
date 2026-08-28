@@ -10,6 +10,7 @@ paths:
 multihot: false
 include_age: true
 
+model: catboost
 catboost:
   n_estimators: 100
   l2_leaf_reg: 0.00
