@@ -379,7 +379,7 @@ class DirectoryPreparer:
             self.write_config("prepared_data", name=name)
         self.write_config("prepared_data", source="features", name=DATA_CFG)
 
-    def setup_finetune(self) -> None:
+    def setup_finetune(self, check_pretrain: bool = True) -> None:
         """
         Validates path config and sets up directories for finetune.
         """
@@ -388,12 +388,14 @@ class DirectoryPreparer:
 
         # Validate and create directories
         self.check_directory("prepared_data")
-        self.check_directory("pretrain_model")
+        if check_pretrain:
+            self.check_directory("pretrain_model")
         self.create_run_directory("model", base="runs")
 
         # Write config in output directory.
-        self.write_config("model", source="pretrain_model", name=PRETRAIN_CFG)
         self.write_config("model", name=FINETUNE_CFG)
+        if check_pretrain:
+            self.write_config("model", source="pretrain_model", name=PRETRAIN_CFG)
 
         # Add pretrain info to config
         data_cfg = self.get_config("prepared_data", name=DATA_CFG)

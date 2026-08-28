@@ -60,6 +60,8 @@ class CausalEHRTrainer(EHRTrainer):
         self.update_step = 0
         if self.use_pcgrad:
             self.optimizer = PCGrad(self.optimizer)
+        if self.args.get("freeze_encoder_at_init", False):
+            self._freeze_encoder()
 
     def _set_plateau_parameters(self):
         self.freeze_encoder_on_plateau = self.args.get(

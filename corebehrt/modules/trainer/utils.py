@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -5,6 +6,8 @@ import pandas as pd
 from torch.utils.data import WeightedRandomSampler
 
 from corebehrt.modules.setup.config import instantiate_function
+
+logger = logging.getLogger(__name__)
 
 
 def get_sampler(cfg, outcomes: List[int]) -> Optional[WeightedRandomSampler]:
@@ -85,16 +88,31 @@ class Sampling:
         return [class_probs[outcome] / labels[outcome] for outcome in outcomes]
 
 
-def get_loss_weight(cfg, outcomes: List[int]) -> Optional[List[float]]:
+def get_loss_weight(
+    cfg,
+    outcomes: List[int],
+    *,
+    log_name: str | None = None,
+) -> Optional[float]:
     """Get weights for weighted loss function.
     If loss_weight_function is false or undefined, then no positive weight is used.
     If loss_weight_function is defined then the function is used to calculate the weights.
-    """
+    If the function raises a ValueError, then the function is not used and no positive weight is used."""
     if cfg.trainer_args.get("loss_weight_function") is None or len(outcomes) == 0:
         return None
 
     weight_func = instantiate_function(cfg.trainer_args.get("loss_weight_function"))
-    return weight_func(outcomes)
+    try:
+        return weight_func(outcomes)
+    except ValueError as e:
+        where = f" for {log_name}" if log_name else ""
+        logger.warning(
+            "Skipping class-balanced loss weight%s (%s); using unweighted BCE. %s",
+            where,
+            getattr(weight_func, "__name__", weight_func),
+            e,
+        )
+        return None
 
 
 class PositiveWeight:

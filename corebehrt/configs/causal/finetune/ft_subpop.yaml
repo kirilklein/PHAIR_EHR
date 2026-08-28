@@ -1,0 +1,67 @@
+logging:
+  level: INFO
+  path: ./outputs/logs/causal
+
+paths:
+  ## INPUTS
+  restart_model: ./outputs/causal/finetune/models/simple  # Main run's model output
+  prepared_data: ./outputs/causal/finetune/prepared_data   # Same prepared data as main run
+  subpopulation_pids: ./outputs/causal/finetune/subpopulation_pids.pt
+
+  ## OUTPUTS
+  model: ./outputs/causal/finetune/models/subpop
+
+bootstrap: true
+
+data:
+  n_folds: 5
+  seed: 42
+
+model:
+  head:
+    shared_representation: true
+    bidirectional: true
+    bottleneck_dim: 64
+    l1_lambda: 0.2
+    pooling_strategy: gru
+
+trainer_args:
+  restart_weights_only: true
+  loss_weight_function:
+    _target_: corebehrt.modules.trainer.utils.PositiveWeight.sqrt
+  batch_size: 128
+  val_batch_size: 256
+  effective_batch_size: 128
+  epochs: 3
+  info: true
+  shuffle: true
+  checkpoint_frequency: 1
+  use_pcgrad: true
+
+  early_stopping: 3
+  stopping_criterion: roc_auc
+
+  # Freeze encoder from the start — only train pooler/cls/heads
+  freeze_encoder_at_init: true
+  freeze_encoder_on_plateau: false
+  n_layers_to_freeze: 0
+
+  plot_histograms: true
+  plot_all_targets: false
+  num_targets_to_log: 3
+  save_curves: false
+
+optimizer:
+  lr: 1e-3
+  eps: 1e-6
+
+scheduler:
+  _target_: transformers.get_linear_schedule_with_warmup
+  num_training_epochs: 5
+  num_warmup_epochs: 1
+
+metrics:
+  roc_auc:
+    _target_: corebehrt.modules.monitoring.metrics.ROC_AUC
+  pr_auc:
+    _target_: corebehrt.modules.monitoring.metrics.PR_AUC

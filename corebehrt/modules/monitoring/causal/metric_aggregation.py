@@ -1,10 +1,15 @@
+import logging
 import os
 from datetime import datetime
 from os.path import join
 
 import pandas as pd
 from corebehrt.constants.causal.data import EXPOSURE, OUTCOME
-from corebehrt.azure import log_metric, setup_metrics_dir
+from corebehrt.azure import is_mlflow_available, log_metric, setup_metrics_dir
+
+logger = logging.getLogger(__name__)
+
+_PROGRESS_EVERY_N_OUTCOMES = 50
 
 
 def compute_and_save_combined_scores_mean_std(
@@ -14,21 +19,36 @@ def compute_and_save_combined_scores_mean_std(
     outcome_names: list = None,
 ) -> None:
     """Compute mean and std of test/val scores for all targets and save to single file."""
-    print("Save combined aggregated scores")
+    n_out = len(outcome_names) if outcome_names else 0
+    msg = (
+        f"Save combined aggregated scores ({n_splits} folds, "
+        f"{n_out} outcomes + exposure; this can take several minutes on remote storage)"
+    )
+    print(msg, flush=True)
+    logger.info(msg)
 
     all_scores = []
 
-    # Collect exposure scores
+    logger.info("Collecting score CSVs for exposure...")
+    print("  [combined scores] exposure...", flush=True)
     exposure_scores = _collect_single_target_scores(
         n_splits, finetune_folder, mode, EXPOSURE
     )
     if exposure_scores is not None:
         exposure_scores[OUTCOME] = EXPOSURE
         all_scores.append(exposure_scores)
+        logger.info("Exposure: collected %d score rows", len(exposure_scores))
 
-    # Collect outcome scores
     if outcome_names:
-        for outcome_name in outcome_names:
+        for i, outcome_name in enumerate(outcome_names, start=1):
+            if i == 1 or i % _PROGRESS_EVERY_N_OUTCOMES == 0 or i == n_out:
+                logger.info(
+                    "Collecting score CSVs: outcome %d / %d (current=%r)",
+                    i,
+                    n_out,
+                    outcome_name,
+                )
+                print(f"  [combined scores] outcomes {i} / {n_out}", flush=True)
             outcome_scores = _collect_single_target_scores(
                 n_splits, finetune_folder, mode, outcome_name
             )
@@ -36,12 +56,19 @@ def compute_and_save_combined_scores_mean_std(
                 outcome_scores[OUTCOME] = outcome_name
                 all_scores.append(outcome_scores)
 
-    # Combine all scores
     if not all_scores:
-        print(f"Warning: No score files found for {mode}")
+        w = f"Warning: No score files found for {mode}"
+        print(w, flush=True)
+        logger.warning(w)
         return
 
     try:
+        logger.info(
+            "Concatenating %d score tables (~%d rows total)...",
+            len(all_scores),
+            sum(len(x) for x in all_scores),
+        )
+        print("  [combined scores] concatenating and aggregating...", flush=True)
         combined_scores = pd.concat(all_scores, ignore_index=True)
         scores_mean_std = (
             combined_scores.groupby(["metric", "outcome"])["value"]
@@ -54,17 +81,46 @@ def compute_and_save_combined_scores_mean_std(
         os.makedirs(scores_dir, exist_ok=True)
         output_path = join(scores_dir, f"scores_{date}.csv")
         scores_mean_std.to_csv(output_path, index=False)
+        logger.info("Wrote %s (%d rows)", output_path, len(scores_mean_std))
+        print(f"  [combined scores] wrote {output_path}", flush=True)
 
-        # Log to Azure
         with setup_metrics_dir(f"{mode} combined scores"):
-            for _, row in scores_mean_std.iterrows():
-                metric_name = row["metric"]
-                outcome_name = row["outcome"]
-                log_metric(f"{metric_name} mean {outcome_name}", row["mean"])
-                log_metric(f"{metric_name} std {outcome_name}", row["std"])
+            if is_mlflow_available():
+                from corebehrt.azure.util.log import get_run_and_prefix
 
-    except Exception as e:
-        print(f"Error processing combined scores for {mode}: {e}")
+                run, prefix = get_run_and_prefix()
+                if run is not None:
+                    import mlflow
+
+                    batch = {}
+                    for _, row in scores_mean_std.iterrows():
+                        m, o = row["metric"], row["outcome"]
+                        batch[f"{prefix}{m} mean {o}"] = float(row["mean"])
+                        batch[f"{prefix}{m} std {o}"] = float(row["std"])
+                    logger.info(
+                        "Logging %d metrics to MLflow (single batch)...", len(batch)
+                    )
+                    mlflow.log_metrics(batch, run_id=run.info.run_id)
+                else:
+                    for _, row in scores_mean_std.iterrows():
+                        log_metric(
+                            f"{row['metric']} mean {row['outcome']}", row["mean"]
+                        )
+                        log_metric(f"{row['metric']} std {row['outcome']}", row["std"])
+            else:
+                for _, row in scores_mean_std.iterrows():
+                    log_metric(
+                        f"{row['metric']} mean {row['outcome']}", row["mean"]
+                    )
+                    log_metric(f"{row['metric']} std {row['outcome']}", row["std"])
+
+        logger.info("Finished combined scores for mode=%s", mode)
+        print("  [combined scores] done", flush=True)
+
+    except Exception:
+        logger.exception("Error processing combined scores for %s", mode)
+        print(f"Error processing combined scores for {mode}: (see logs)", flush=True)
+        raise
 
 
 def _collect_single_target_scores(
@@ -82,12 +138,10 @@ def _collect_single_target_scores(
         if not os.path.exists(fold_checkpoints_folder):
             continue
 
-        # Look for files with BEST_MODEL_ID (999) first, then try epoch numbers
         possible_files = [
-            f"{mode}_{target_type}_scores_999.csv",  # BEST_MODEL_ID format
+            f"{mode}_{target_type}_scores_999.csv",
         ]
 
-        # Also try to find files with actual epoch numbers
         try:
             checkpoint_files = [
                 f
@@ -102,7 +156,6 @@ def _collect_single_target_scores(
         except (ValueError, IndexError):
             pass
 
-        # Try to find any of the possible files
         fold_scores = None
         for filename in possible_files:
             table_path = join(fold_checkpoints_folder, filename)
@@ -111,20 +164,22 @@ def _collect_single_target_scores(
                     fold_scores = pd.read_csv(table_path)
                     break
                 except Exception as e:
-                    print(f"Error reading {table_path}: {e}")
+                    logger.warning("Error reading %s: %s", table_path, e)
                     continue
 
         if fold_scores is not None:
             scores.append(fold_scores)
 
-    # Return concatenated scores or None if no scores found
     if not scores:
-        print(f"Warning: No score files found for {mode}_{target_type}")
+        logger.debug("No score files for %s_%s", mode, target_type)
+        print(
+            f"Warning: No score files found for {mode}_{target_type}",
+            flush=True,
+        )
         return None
 
     combined_scores = pd.concat(scores, ignore_index=True)
 
-    # Clean metric names by removing target_type prefix
     combined_scores["metric"] = combined_scores["metric"].str.replace(
         f"{target_type}_", "", regex=False
     )

@@ -4,6 +4,35 @@ from CausalEstimate.stats.stats import compute_treatment_outcome_table
 from corebehrt.constants.causal.data import EXPOSURE_COL, OUTCOME, STATUS
 
 
+def _manual_treatment_outcome_table(
+    df: pd.DataFrame, exposure_col: str, outcome_col: str
+) -> pd.DataFrame:
+    """
+    Build the same shape as CausalEstimate's treatment-outcome table when the
+    cross-tab is degenerate (constant outcome and/or exposure), which breaks
+    ``compute_treatment_outcome_table`` (expects three count columns).
+    """
+    ct = pd.crosstab(df[exposure_col], df[outcome_col], dropna=False)
+    ct = ct.reindex(columns=[0, 1], fill_value=0)
+    ct = ct.reindex(index=[0, 1], fill_value=0)
+    rows = []
+    for exp_val, label in ((0, "Untreated"), (1, "Treated")):
+        n0 = int(ct.loc[exp_val, 0])
+        n1 = int(ct.loc[exp_val, 1])
+        rows.append(
+            {STATUS: label, "No Outcome": n0, "Outcome": n1, "Total": n0 + n1}
+        )
+    rows.append(
+        {
+            STATUS: "Total",
+            "No Outcome": int(ct[0].sum()),
+            "Outcome": int(ct[1].sum()),
+            "Total": len(df),
+        }
+    )
+    return pd.DataFrame(rows)
+
+
 def convert_effect_to_dataframe(effect: dict) -> pd.DataFrame:
     """
     Convert a dictionary of effects to a pandas DataFrame.
@@ -68,8 +97,17 @@ def compute_outcome_stats(analysis_df: pd.DataFrame, outcome_name: str) -> pd.Da
         1    Treated         2        2      4  diabetes
         2      Total         4        4      8  diabetes
     """
-    stats_table = compute_treatment_outcome_table(analysis_df, EXPOSURE_COL, OUTCOME)
-    stats_table = stats_table.reset_index(drop=False)
-    stats_table.rename(columns={"index": STATUS}, inplace=True)
+    try:
+        stats_table = compute_treatment_outcome_table(
+            analysis_df, EXPOSURE_COL, OUTCOME
+        )
+        stats_table = stats_table.reset_index(drop=False)
+        stats_table.rename(columns={"index": STATUS}, inplace=True)
+    except ValueError:
+        # Constant outcome or exposure => incomplete crosstab; CausalEstimate assigns
+        # three column names to two columns (Length mismatch).
+        stats_table = _manual_treatment_outcome_table(
+            analysis_df, EXPOSURE_COL, OUTCOME
+        )
     stats_table[OUTCOME] = outcome_name
     return stats_table
