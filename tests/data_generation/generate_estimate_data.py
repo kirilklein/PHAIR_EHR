@@ -1,4 +1,5 @@
 import os
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -48,7 +49,7 @@ def create_directories():
 
 def generate_combined_predictions(
     n_samples=NUM_SAMPLES,
-    seed=42,
+    seed=43,
     exposure_noise=EXPOSURE_NOISE,
     outcome_noise=OUTCOME_NOISE,
     weight=OUTCOME_PS_WEIGHT,
@@ -97,7 +98,7 @@ def generate_combined_predictions(
     for outcome_name in OUTCOME_NAMES:
         # Generate potential outcome probabilities for this outcome
         # Each outcome may have slightly different characteristics
-        outcome_seed = seed + hash(outcome_name) % 1000
+        outcome_seed = seed + zlib.crc32(outcome_name.encode()) % 1000
         np.random.seed(outcome_seed)
 
         # Vary the effect sizes slightly for different outcomes
@@ -163,7 +164,7 @@ def generate_combined_predictions(
     return df, counterfactual_df
 
 
-def generate_counterfactual_outcomes_legacy(df, counterfactual_df, seed=42):
+def generate_counterfactual_outcomes_legacy(df, counterfactual_df, seed=43):
     """
     Generate legacy simulation results files for backwards compatibility.
     Creates separate files for each outcome.
