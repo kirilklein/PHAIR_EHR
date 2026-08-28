@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from os.path import join
 
 from corebehrt.constants.causal.paths import (
@@ -8,6 +9,7 @@ from corebehrt.constants.causal.paths import (
     ESTIMATE_CFG,
     EXTRACT_CRITERIA_CFG,
     GET_STATS_CFG,
+    RERUN_VAL_INFERENCE_CFG,
     SIMULATE_CFG,
     GET_PAT_COUNTS_BY_CODE_CFG,
 )
@@ -104,6 +106,43 @@ class CausalDirectoryPreparer(DirectoryPreparer):
         else:
             raise ValueError("No finetune or baseline config found")
         self.write_config("calibrated_predictions", name=CALIBRATE_CFG)
+
+    def setup_rerun_val_inference(self) -> None:
+        """
+        Validates path config and sets up directories for rerun_val_inference.
+        """
+        self.check_directory("finetune_model")
+        self.check_directory("prepared_data")
+        if self.cfg.paths.get("subpopulation_pids", False):
+            self.check_file("subpopulation_pids")
+
+        model_dir = self.create_directory("model")
+        self.setup_logging(
+            "rerun_val_inference",
+            log_dir=join(model_dir, "logs"),
+        )
+        self._add_console_logging()
+
+        self.write_config("model", name=RERUN_VAL_INFERENCE_CFG)
+        if os.path.exists(join(self.cfg.paths.finetune_model, FINETUNE_CFG)):
+            self.write_config("model", source="finetune_model", name=FINETUNE_CFG)
+
+    @staticmethod
+    def _add_console_logging() -> None:
+        """Mirror log output to stdout (visible in Azure job console)."""
+        root = logging.getLogger()
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        has_console = any(
+            isinstance(handler, logging.StreamHandler)
+            and not isinstance(handler, logging.FileHandler)
+            for handler in root.handlers
+        )
+        if not has_console:
+            stream_handler = logging.StreamHandler(sys.stdout)
+            stream_handler.setFormatter(formatter)
+            root.addHandler(stream_handler)
 
     def setup_estimate(self) -> None:
         """

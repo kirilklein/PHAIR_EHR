@@ -2,6 +2,7 @@
 ENCODE_CFG = "encode_config.yaml"
 SIMULATE_CFG = "simulate_config.yaml"
 CALIBRATE_CFG = "calibrate_config.yaml"
+RERUN_VAL_INFERENCE_CFG = "rerun_val_inference_config.yaml"
 ESTIMATE_CFG = "estimate_config.yaml"
 EXTRACT_CRITERIA_CFG = "extract_criteria_config.yaml"
 CRITERIA_DEFINITIONS_CFG = "criteria_definitions_config.yaml"

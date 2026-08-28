@@ -12,6 +12,7 @@ from corebehrt.constants.causal.data import EXPOSURE_COL
 from corebehrt.constants.causal.paths import (
     BINARY_EXPOSURE_FILE,
     COMBINED_PREDICTIONS_FILE,
+    RERUN_VAL_INFERENCE_CFG,
 )
 from corebehrt.constants.data import PID_COL, TRAIN_KEY, VAL_KEY
 from corebehrt.constants.paths import (
@@ -31,10 +32,59 @@ from corebehrt.modules.preparation.causal.dataset import (
     CausalPatientDataset,
     ExposureOutcomesDataset,
 )
+from corebehrt.modules.setup.causal.directory import CausalDirectoryPreparer
 from corebehrt.modules.setup.causal.manager import CausalModelManager
 from corebehrt.modules.setup.causal.prediction_accumulator import PredictionAccumulator
 from corebehrt.modules.setup.config import Config, load_config
 from corebehrt.modules.trainer.causal.trainer import CausalEHRTrainer
+
+COHORT_AUDIT_FILE = "cohort_audit.txt"
+LOG_NAME = "rerun_val_inference"
+
+
+def _save_cohort_audit(output_dir: Path, audit: Dict[str, object]) -> str:
+    """Persist cohort audit summary alongside model outputs."""
+    audit_path = output_dir / COHORT_AUDIT_FILE
+    lines = [f"{key}: {value}" for key, value in audit.items()]
+    audit_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(audit_path)
+
+
+def _prepare_job_cfg(config_path: str) -> Config:
+    """Load the Azure/job config and fill in default paths when needed."""
+    job_cfg = load_config(config_path)
+    finetune_model = Path(job_cfg.paths.finetune_model).resolve()
+
+    if not job_cfg.paths.get("model"):
+        job_cfg.paths.model = str(_build_output_dir(finetune_model, None))
+
+    if not job_cfg.paths.get("prepared_data"):
+        finetune_cfg = _load_finetune_cfg(finetune_model)
+        job_cfg.paths.prepared_data = finetune_cfg.paths.prepared_data
+
+    return job_cfg
+
+
+def _build_cli_job_cfg(args: argparse.Namespace) -> Config:
+    """Build a job config from CLI args for local runs."""
+    finetune_model = Path(args.finetune_model).resolve()
+    finetune_cfg = _load_finetune_cfg(finetune_model)
+    prepared_data = args.prepared_data or finetune_cfg.paths.prepared_data
+    paths = {
+        "finetune_model": str(finetune_model),
+        "prepared_data": prepared_data,
+        "model": str(_build_output_dir(finetune_model, args.output_model)),
+    }
+    if args.subpopulation_pids:
+        paths["subpopulation_pids"] = args.subpopulation_pids
+
+    return Config(
+        {
+            "paths": paths,
+            "logging": {"level": logging.INFO},
+            "include_test_in_val": args.include_test_in_val,
+        }
+    )
 
 
 def _parse_args() -> argparse.Namespace:
@@ -114,16 +164,6 @@ def _log_exposure_counts(logger: logging.Logger, prefix: str, exposures: List[in
     )
 
 
-def _resolve_subpopulation_pids(cfg: Config, override: str | None) -> str | None:
-    if override is not None:
-        return override
-    return cfg.paths.get("subpopulation_pids", None)
-
-
-def _resolve_prepared_data(cfg: Config, override: str | None) -> str:
-    return override if override is not None else cfg.paths.prepared_data
-
-
 def _load_test_pids(prepared_data: str, all_pids: Sequence, logger: logging.Logger) -> Set:
     test_path = join(prepared_data, TEST_PIDS_FILE)
     if not os.path.exists(test_path):
@@ -153,12 +193,13 @@ def _load_test_pids(prepared_data: str, all_pids: Sequence, logger: logging.Logg
 
 def _log_prepared_label_audit(
     prepared_data: str, all_pids: Sequence, logger: logging.Logger
-) -> None:
+) -> Dict[str, int]:
     """Compare prepared label files to the loaded patient cohort."""
+    audit: Dict[str, int] = {"prepared_patients": len(all_pids)}
     exposure_path = join(prepared_data, BINARY_EXPOSURE_FILE)
     if not os.path.exists(exposure_path):
         logger.warning("No %s in prepared_data — skipping label audit", BINARY_EXPOSURE_FILE)
-        return
+        return audit
 
     binary_exposure = pd.read_csv(exposure_path, index_col=0).squeeze("columns")
     label_pids = set(binary_exposure.index.astype(int))
@@ -168,6 +209,16 @@ def _log_prepared_label_audit(
     only_in_prepared = prepared_pid_set - label_pids
 
     exposed_in_labels = int((binary_exposure == 1).sum())
+    audit.update(
+        {
+            "binary_exposure_rows": len(binary_exposure),
+            "binary_exposure_exposed": exposed_in_labels,
+            "binary_exposure_unexposed": int((binary_exposure == 0).sum()),
+            "label_prepared_overlap": len(overlap),
+            "only_in_binary_exposure": len(only_in_labels),
+            "only_in_prepared_patients": len(only_in_prepared),
+        }
+    )
     logger.info(
         "%s audit: rows=%d, exposed=%d, unexposed=%d, "
         "prepared_patients=%d, overlap=%d, only_in_labels=%d, only_in_prepared=%d",
@@ -180,6 +231,7 @@ def _log_prepared_label_audit(
         len(only_in_labels),
         len(only_in_prepared),
     )
+    return audit
 
 
 def _log_combined_predictions_audit(
@@ -188,23 +240,42 @@ def _log_combined_predictions_audit(
     test_pids: Set,
     prepared_data: str,
     logger: logging.Logger,
-) -> None:
+) -> Dict[str, int]:
     """Reconcile combined_predictions.csv against the expected inference cohort."""
+    audit: Dict[str, int] = {
+        "expected_inference_patients": len(expected_pids),
+        "test_pids_in_prepared": len(test_pids),
+    }
     if not os.path.exists(combined_path):
         logger.warning("Combined predictions file not found: %s", combined_path)
-        return
+        audit["combined_predictions_rows"] = 0
+        return audit
 
     combined = pd.read_csv(combined_path)
     combined_pids = set(combined[PID_COL].astype(int))
     missing = expected_pids - combined_pids
     extra = combined_pids - expected_pids
+    exposed_in_combined = (
+        int((combined[EXPOSURE_COL] == 1).sum())
+        if EXPOSURE_COL in combined.columns
+        else -1
+    )
+
+    audit.update(
+        {
+            "combined_predictions_rows": len(combined),
+            "combined_predictions_exposed": exposed_in_combined,
+            "combined_missing_from_expected": len(missing),
+            "combined_extra_vs_expected": len(extra),
+        }
+    )
 
     logger.info(
         "Combined predictions audit (%s): rows=%d, exposed=%d, expected=%d, "
         "missing=%d, extra=%d",
         combined_path,
         len(combined),
-        int((combined[EXPOSURE_COL] == 1).sum()) if EXPOSURE_COL in combined.columns else -1,
+        exposed_in_combined,
         len(expected_pids),
         len(missing),
         len(extra),
@@ -212,6 +283,7 @@ def _log_combined_predictions_audit(
 
     if missing:
         missing_test = missing & test_pids
+        audit["combined_missing_test_pids"] = len(missing_test)
         logger.warning(
             "%d patients missing from combined_predictions; %d overlap with test_pids.pt",
             len(missing),
@@ -232,6 +304,8 @@ def _log_combined_predictions_audit(
             missing_exposed = sum(
                 1 for pid in missing_from_labels if binary_exposure.loc[pid] == 1
             )
+            audit["missing_from_binary_exposure"] = len(missing_from_labels)
+            audit["missing_exposed_from_binary_exposure"] = missing_exposed
             logger.warning(
                 "Compared to %s: %d labeled patients missing from combined_predictions "
                 "(%d exposed)",
@@ -239,6 +313,8 @@ def _log_combined_predictions_audit(
                 len(missing_from_labels),
                 missing_exposed,
             )
+
+    return audit
 
 
 def _log_fold_summary(
@@ -270,20 +346,26 @@ def _log_fold_summary(
 
 
 def _run_rerun_val_inference(
-    finetune_model: str,
-    prepared_data: str | None,
-    subpopulation_pids: str | None,
-    output_model: str | None,
+    job_cfg: Config,
     overwrite: bool,
     logger: logging.Logger,
-    include_test_in_val: bool = True,
-) -> None:
-    finetune_model = Path(finetune_model).resolve()
-    output_dir = _build_output_dir(finetune_model, output_model).resolve()
+) -> Dict[str, object]:
+    finetune_model = Path(job_cfg.paths.finetune_model).resolve()
+    output_dir = Path(job_cfg.paths.model).resolve()
+    include_test_in_val = bool(job_cfg.get("include_test_in_val", True))
+    prepared_data = job_cfg.paths.prepared_data
+    subpopulation_pids = job_cfg.paths.get("subpopulation_pids", None)
     if output_dir.exists() and not overwrite:
         raise FileExistsError(
             f"Output directory already exists: {output_dir}. Use --overwrite to reuse it."
         )
+
+    audit: Dict[str, object] = {
+        "finetune_model": str(finetune_model),
+        "output_dir": str(output_dir),
+        "include_test_in_val": include_test_in_val,
+        "prepared_data": prepared_data,
+    }
 
     logger.info("=" * 80)
     logger.info("Processing finetune model: %s", finetune_model)
@@ -293,19 +375,21 @@ def _run_rerun_val_inference(
     cfg = _load_finetune_cfg(finetune_model)
     cfg.paths.model = str(output_dir)
     cfg.paths.restart_model = str(finetune_model)
-    cfg.paths.prepared_data = _resolve_prepared_data(cfg, prepared_data)
-    subpopulation_pids = _resolve_subpopulation_pids(cfg, subpopulation_pids)
-    cfg.logging.path = str(output_dir / "logs")
+    cfg.paths.prepared_data = prepared_data
+    if subpopulation_pids:
+        cfg.paths.subpopulation_pids = subpopulation_pids
 
     loaded_data = torch.load(join(cfg.paths.prepared_data, PREPARED_ALL_PATIENTS))
     vocab = load_vocabulary(cfg.paths.prepared_data)
     data = CausalPatientDataset(loaded_data, vocab)
     all_pids = data.get_pids()
     logger.info("Prepared patients loaded: %d", len(all_pids))
-    _log_prepared_label_audit(cfg.paths.prepared_data, all_pids, logger)
+    audit.update(_log_prepared_label_audit(cfg.paths.prepared_data, all_pids, logger))
 
     test_pids = _load_test_pids(cfg.paths.prepared_data, all_pids, logger)
     non_test_pids = [pid for pid in all_pids if pid not in test_pids]
+    audit["test_pids_count"] = len(test_pids)
+    audit["non_test_pids_count"] = len(non_test_pids)
     logger.info(
         "Cohort split: prepared=%d, test_in_prepared=%d, non_test=%d",
         len(all_pids),
@@ -331,6 +415,7 @@ def _run_rerun_val_inference(
         train_val_data = data
 
     logger.info("Patients after test handling: %d", len(train_val_data.get_pids()))
+    audit["patients_after_test_handling"] = len(train_val_data.get_pids())
 
     data_cfg = cfg.get("data", {})
     n_folds = data_cfg.get("n_folds", data_cfg.get("cv_folds", 5))
@@ -370,6 +455,7 @@ def _run_rerun_val_inference(
     _log_fold_summary(folds, logger, test_pids=test_pids)
 
     expected_pids = set(fold_pids)
+    audit["patients_for_inference"] = len(expected_pids)
     validate_folds(folds, expected_pids, logger, bootstrap=False)
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -458,50 +544,59 @@ def _run_rerun_val_inference(
         total_val_evaluated,
         len(expected_pids),
     )
+    audit["sum_of_val_sizes"] = total_val_evaluated
     PredictionAccumulator(str(output_dir), outcome_names).accumulate_and_save_predictions()
     combined_path = join(output_dir, COMBINED_PREDICTIONS_FILE)
-    _log_combined_predictions_audit(
-        combined_path,
-        expected_pids,
-        test_pids,
-        cfg.paths.prepared_data,
-        logger,
+    audit.update(
+        _log_combined_predictions_audit(
+            combined_path,
+            expected_pids,
+            test_pids,
+            cfg.paths.prepared_data,
+            logger,
+        )
     )
+    audit_path = _save_cohort_audit(output_dir, audit)
+    logger.info("Cohort audit saved to: %s", audit_path)
+    job_cfg.save_to_yaml(join(output_dir, RERUN_VAL_INFERENCE_CFG))
     compute_and_save_combined_scores_mean_std(
         len(folds), str(output_dir), mode="val", outcome_names=outcome_names
     )
     logger.info("Clean validation inference complete. Output model dir: %s", output_dir)
+    return audit
 
 
 def main_rerun_val_inference(config_path: str) -> None:
-    cfg = load_config(config_path)
-    logger = logging.getLogger("rerun_val_inference")
+    job_cfg = _prepare_job_cfg(config_path)
+    CausalDirectoryPreparer(job_cfg).setup_rerun_val_inference()
+
+    logger = logging.getLogger(LOG_NAME)
+    logger.info(
+        "Logging to %s/logs/rerun_val_inference.log",
+        job_cfg.paths.model,
+    )
+
     _run_rerun_val_inference(
-        finetune_model=cfg.paths.finetune_model,
-        prepared_data=cfg.paths.prepared_data,
-        subpopulation_pids=cfg.paths.get("subpopulation_pids", None),
-        output_model=cfg.paths.model,
+        job_cfg=job_cfg,
         overwrite=True,
         logger=logger,
-        include_test_in_val=bool(cfg.get("include_test_in_val", True)),
     )
 
 
 def main() -> None:
     args = _parse_args()
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    job_cfg = _build_cli_job_cfg(args)
+    CausalDirectoryPreparer(job_cfg).setup_rerun_val_inference()
+
+    logger = logging.getLogger(LOG_NAME)
+    logger.info(
+        "Logging to %s/logs/rerun_val_inference.log",
+        job_cfg.paths.model,
     )
-    logger = logging.getLogger("rerun_val_inference")
     _run_rerun_val_inference(
-        finetune_model=args.finetune_model,
-        prepared_data=args.prepared_data,
-        subpopulation_pids=args.subpopulation_pids,
-        output_model=args.output_model,
+        job_cfg=job_cfg,
         overwrite=args.overwrite,
         logger=logger,
-        include_test_in_val=args.include_test_in_val,
     )
 
 
