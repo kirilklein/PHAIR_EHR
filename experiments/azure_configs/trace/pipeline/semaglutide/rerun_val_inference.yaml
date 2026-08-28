@@ -8,6 +8,6 @@ logging:
 # Trainer/model settings are loaded from finetune_model/finetune_config.yaml.
 paths: {}
 
-# If prepared_data/test_pids.pt exists, include those patients in fold creation
-# (each appears in exactly one val fold) instead of excluding them.
+# By default test PIDs are included in CV folds (include_test_in_val: true).
+# Set to false only if you intentionally want to exclude prepared_data/test_pids.pt.
 include_test_in_val: true

@@ -117,7 +117,20 @@ class PredictionAccumulator:
         df_cf = pd.DataFrame({PID_COL: cf_pids, CF_PROBAS: cf_preds})
 
         # Combine factual and counterfactual predictions
+        before_cf_merge = len(df_outcome)
         combined = pd.merge(df_outcome, df_cf, on=PID_COL, how="inner", validate="1:1")
+        cf_drop = before_cf_merge - len(combined)
+        if cf_drop:
+            missing_cf = set(df_outcome[PID_COL]) - set(df_cf[PID_COL])
+            self.logger.warning(
+                "Outcome %s: dropped %d patients missing counterfactual predictions "
+                "(factual=%d, cf=%d, sample_missing=%s)",
+                outcome_name,
+                cf_drop,
+                before_cf_merge,
+                len(df_cf),
+                sorted(missing_cf)[:5],
+            )
 
         self.logger.info(
             f"Outcome {outcome_name} predictions: {len(combined)} patients"
@@ -145,6 +158,9 @@ class PredictionAccumulator:
 
         # Start with exposure dataframe
         combined_df = exposure_df.copy()
+        self.logger.info(
+            "Starting combine from exposure predictions: %d patients", len(combined_df)
+        )
 
         # Merge each outcome dataframe
         for outcome_name, outcome_df in outcome_dataframes.items():
@@ -158,9 +174,23 @@ class PredictionAccumulator:
             )
 
             # Merge with combined dataframe
+            before_merge = len(combined_df)
+            before_pids = set(combined_df[PID_COL])
             combined_df = pd.merge(
                 combined_df, outcome_df, on=PID_COL, how="inner", validate="1:1"
             )
+            merge_drop = before_merge - len(combined_df)
+            if merge_drop:
+                missing = before_pids - set(outcome_df[PID_COL])
+                self.logger.warning(
+                    "Merge with outcome %s dropped %d patients "
+                    "(before=%d, outcome=%d, sample_missing=%s)",
+                    outcome_name,
+                    merge_drop,
+                    before_merge,
+                    len(outcome_df),
+                    sorted(missing)[:5],
+                )
 
         self.logger.info(f"Final combined predictions: {len(combined_df)} patients")
         return combined_df

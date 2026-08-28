@@ -5,9 +5,15 @@ from os.path import join
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set
 
+import pandas as pd
 import torch
 
-from corebehrt.constants.data import TRAIN_KEY, VAL_KEY
+from corebehrt.constants.causal.data import EXPOSURE_COL
+from corebehrt.constants.causal.paths import (
+    BINARY_EXPOSURE_FILE,
+    COMBINED_PREDICTIONS_FILE,
+)
+from corebehrt.constants.data import PID_COL, TRAIN_KEY, VAL_KEY
 from corebehrt.constants.paths import (
     FINETUNE_CFG,
     FOLDS_FILE,
@@ -64,11 +70,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--include-test-in-val",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
             "If prepared_data contains test_pids.pt, include those patients in "
-            "fold creation so each appears in exactly one validation fold "
-            "instead of being excluded."
+            "fold creation so each appears in exactly one validation fold. "
+            "Use --no-include-test-in-val to exclude them."
         ),
     )
     parser.add_argument(
@@ -144,6 +151,96 @@ def _load_test_pids(prepared_data: str, all_pids: Sequence, logger: logging.Logg
     return overlap
 
 
+def _log_prepared_label_audit(
+    prepared_data: str, all_pids: Sequence, logger: logging.Logger
+) -> None:
+    """Compare prepared label files to the loaded patient cohort."""
+    exposure_path = join(prepared_data, BINARY_EXPOSURE_FILE)
+    if not os.path.exists(exposure_path):
+        logger.warning("No %s in prepared_data — skipping label audit", BINARY_EXPOSURE_FILE)
+        return
+
+    binary_exposure = pd.read_csv(exposure_path, index_col=0).squeeze("columns")
+    label_pids = set(binary_exposure.index.astype(int))
+    prepared_pid_set = set(all_pids)
+    overlap = label_pids & prepared_pid_set
+    only_in_labels = label_pids - prepared_pid_set
+    only_in_prepared = prepared_pid_set - label_pids
+
+    exposed_in_labels = int((binary_exposure == 1).sum())
+    logger.info(
+        "%s audit: rows=%d, exposed=%d, unexposed=%d, "
+        "prepared_patients=%d, overlap=%d, only_in_labels=%d, only_in_prepared=%d",
+        BINARY_EXPOSURE_FILE,
+        len(binary_exposure),
+        exposed_in_labels,
+        int((binary_exposure == 0).sum()),
+        len(prepared_pid_set),
+        len(overlap),
+        len(only_in_labels),
+        len(only_in_prepared),
+    )
+
+
+def _log_combined_predictions_audit(
+    combined_path: str,
+    expected_pids: Set,
+    test_pids: Set,
+    prepared_data: str,
+    logger: logging.Logger,
+) -> None:
+    """Reconcile combined_predictions.csv against the expected inference cohort."""
+    if not os.path.exists(combined_path):
+        logger.warning("Combined predictions file not found: %s", combined_path)
+        return
+
+    combined = pd.read_csv(combined_path)
+    combined_pids = set(combined[PID_COL].astype(int))
+    missing = expected_pids - combined_pids
+    extra = combined_pids - expected_pids
+
+    logger.info(
+        "Combined predictions audit (%s): rows=%d, exposed=%d, expected=%d, "
+        "missing=%d, extra=%d",
+        combined_path,
+        len(combined),
+        int((combined[EXPOSURE_COL] == 1).sum()) if EXPOSURE_COL in combined.columns else -1,
+        len(expected_pids),
+        len(missing),
+        len(extra),
+    )
+
+    if missing:
+        missing_test = missing & test_pids
+        logger.warning(
+            "%d patients missing from combined_predictions; %d overlap with test_pids.pt",
+            len(missing),
+            len(missing_test),
+        )
+        if len(missing_test) == len(missing) and test_pids:
+            logger.warning(
+                "All missing patients are test PIDs — set include_test_in_val=true "
+                "(default) or remove prepared_data/test_pids.pt"
+            )
+
+    exposure_path = join(prepared_data, BINARY_EXPOSURE_FILE)
+    if os.path.exists(exposure_path):
+        binary_exposure = pd.read_csv(exposure_path, index_col=0).squeeze("columns")
+        label_pids = set(binary_exposure.index.astype(int))
+        missing_from_labels = label_pids - combined_pids
+        if missing_from_labels:
+            missing_exposed = sum(
+                1 for pid in missing_from_labels if binary_exposure.loc[pid] == 1
+            )
+            logger.warning(
+                "Compared to %s: %d labeled patients missing from combined_predictions "
+                "(%d exposed)",
+                BINARY_EXPOSURE_FILE,
+                len(missing_from_labels),
+                missing_exposed,
+            )
+
+
 def _log_fold_summary(
     folds: List[Dict[str, list]],
     logger: logging.Logger,
@@ -179,7 +276,7 @@ def _run_rerun_val_inference(
     output_model: str | None,
     overwrite: bool,
     logger: logging.Logger,
-    include_test_in_val: bool = False,
+    include_test_in_val: bool = True,
 ) -> None:
     finetune_model = Path(finetune_model).resolve()
     output_dir = _build_output_dir(finetune_model, output_model).resolve()
@@ -205,6 +302,7 @@ def _run_rerun_val_inference(
     data = CausalPatientDataset(loaded_data, vocab)
     all_pids = data.get_pids()
     logger.info("Prepared patients loaded: %d", len(all_pids))
+    _log_prepared_label_audit(cfg.paths.prepared_data, all_pids, logger)
 
     test_pids = _load_test_pids(cfg.paths.prepared_data, all_pids, logger)
     non_test_pids = [pid for pid in all_pids if pid not in test_pids]
@@ -361,6 +459,14 @@ def _run_rerun_val_inference(
         len(expected_pids),
     )
     PredictionAccumulator(str(output_dir), outcome_names).accumulate_and_save_predictions()
+    combined_path = join(output_dir, COMBINED_PREDICTIONS_FILE)
+    _log_combined_predictions_audit(
+        combined_path,
+        expected_pids,
+        test_pids,
+        cfg.paths.prepared_data,
+        logger,
+    )
     compute_and_save_combined_scores_mean_std(
         len(folds), str(output_dir), mode="val", outcome_names=outcome_names
     )
@@ -377,7 +483,7 @@ def main_rerun_val_inference(config_path: str) -> None:
         output_model=cfg.paths.model,
         overwrite=True,
         logger=logger,
-        include_test_in_val=bool(cfg.get("include_test_in_val", False)),
+        include_test_in_val=bool(cfg.get("include_test_in_val", True)),
     )
 
 
