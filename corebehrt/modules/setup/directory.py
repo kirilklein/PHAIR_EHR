@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import uuid
 from os.path import basename, join, splitext
 from shutil import copyfile, rmtree
@@ -61,6 +62,58 @@ class DirectoryPreparer:
             level=log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
+
+    def ensure_file_logging(self, log_name: str, log_dir: str = None) -> str:
+        """
+        Ensure logs are written to a file even if logging was already configured
+        (e.g. by MLflow on Azure before the job main runs).
+        """
+        log_dir = (
+            log_dir
+            or self.cfg.logging.get("path")
+            or self.cfg.paths.get("root")
+            or "./logs"
+        )
+        log_level = self.cfg.logging.level if hasattr(self.cfg, "logging") else logging.INFO
+        if isinstance(log_level, str):
+            log_level = getattr(logging, log_level.upper(), logging.INFO)
+
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.abspath(join(log_dir, f"{log_name}.log"))
+
+        root = logging.getLogger()
+        if not root.level:
+            root.setLevel(log_level)
+
+        for handler in root.handlers:
+            if isinstance(handler, logging.FileHandler) and os.path.abspath(
+                handler.baseFilename
+            ) == log_path:
+                return log_path
+
+        handler = logging.FileHandler(log_path)
+        handler.setLevel(log_level)
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
+        root.addHandler(handler)
+        return log_path
+
+    def ensure_console_logging(self) -> None:
+        """Mirror log output to stdout (visible in Azure job console)."""
+        root = logging.getLogger()
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        has_console = any(
+            isinstance(handler, logging.StreamHandler)
+            and not isinstance(handler, logging.FileHandler)
+            for handler in root.handlers
+        )
+        if not has_console:
+            stream_handler = logging.StreamHandler(sys.stdout)
+            stream_handler.setFormatter(formatter)
+            root.addHandler(stream_handler)
 
     def get_config_path(self, directory: str, name: str = None) -> str:
         """

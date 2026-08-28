@@ -370,6 +370,9 @@ def _run_rerun_val_inference(
     logger.info("=" * 80)
     logger.info("Processing finetune model: %s", finetune_model)
     logger.info("Rerun output directory: %s", output_dir)
+    logger.info("Output directory exists: %s", output_dir.exists())
+    if output_dir.exists():
+        logger.info("Output directory contents: %s", os.listdir(output_dir))
     logger.info("include_test_in_val=%s", include_test_in_val)
 
     cfg = _load_finetune_cfg(finetune_model)
@@ -576,13 +579,14 @@ def _run_rerun_val_inference(
 
 def main_rerun_val_inference(config_path: str) -> None:
     job_cfg = _prepare_job_cfg(config_path)
-    CausalDirectoryPreparer(job_cfg).setup_rerun_val_inference()
+    job_cfg.logging.path = join(job_cfg.paths.model, "logs")
+
+    preparer = CausalDirectoryPreparer(job_cfg)
+    preparer.setup_rerun_val_inference()
 
     logger = logging.getLogger(LOG_NAME)
-    logger.info(
-        "Logging to %s/logs/rerun_val_inference.log",
-        job_cfg.paths.model,
-    )
+    logger.info("Output directory: %s", job_cfg.paths.model)
+    logger.info("Log file: %s/rerun_val_inference.log", job_cfg.logging.path)
 
     _run_rerun_val_inference(
         job_cfg=job_cfg,
@@ -594,13 +598,13 @@ def main_rerun_val_inference(config_path: str) -> None:
 def main() -> None:
     args = _parse_args()
     job_cfg = _build_cli_job_cfg(args)
+    job_cfg.logging.path = join(job_cfg.paths.model, "logs")
+
     CausalDirectoryPreparer(job_cfg).setup_rerun_val_inference()
 
     logger = logging.getLogger(LOG_NAME)
-    logger.info(
-        "Logging to %s/logs/rerun_val_inference.log",
-        job_cfg.paths.model,
-    )
+    logger.info("Output directory: %s", job_cfg.paths.model)
+    logger.info("Log file: %s/rerun_val_inference.log", job_cfg.logging.path)
     _run_rerun_val_inference(
         job_cfg=job_cfg,
         overwrite=args.overwrite,

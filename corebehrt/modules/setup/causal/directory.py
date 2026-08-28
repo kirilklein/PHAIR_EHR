@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 from os.path import join
 
 from corebehrt.constants.causal.paths import (
@@ -110,39 +109,36 @@ class CausalDirectoryPreparer(DirectoryPreparer):
     def setup_rerun_val_inference(self) -> None:
         """
         Validates path config and sets up directories for rerun_val_inference.
+        Mirrors setup_finetune: logging, model output dir, config copies.
         """
         self.check_directory("finetune_model")
         self.check_directory("prepared_data")
         if self.cfg.paths.get("subpopulation_pids", False):
             self.check_file("subpopulation_pids")
 
-        model_dir = self.create_directory("model")
-        self.setup_logging(
-            "rerun_val_inference",
-            log_dir=join(model_dir, "logs"),
+        if not getattr(self.cfg.paths, "model", None):
+            raise ValueError("paths.model must be set to the rerun output directory")
+
+        # Match finetune: logs under the model output folder (Azure artifact path)
+        self.cfg.logging.path = join(self.cfg.paths.model, "logs")
+        self.setup_logging("rerun_val_inference", log_dir=self.cfg.logging.path)
+        log_path = self.ensure_file_logging(
+            "rerun_val_inference", log_dir=self.cfg.logging.path
         )
-        self._add_console_logging()
+        self.ensure_console_logging()
+
+        run_dir = self.create_run_directory("model")
 
         self.write_config("model", name=RERUN_VAL_INFERENCE_CFG)
         if os.path.exists(join(self.cfg.paths.finetune_model, FINETUNE_CFG)):
             self.write_config("model", source="finetune_model", name=FINETUNE_CFG)
 
-    @staticmethod
-    def _add_console_logging() -> None:
-        """Mirror log output to stdout (visible in Azure job console)."""
-        root = logging.getLogger()
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        has_console = any(
-            isinstance(handler, logging.StreamHandler)
-            and not isinstance(handler, logging.FileHandler)
-            for handler in root.handlers
-        )
-        if not has_console:
-            stream_handler = logging.StreamHandler(sys.stdout)
-            stream_handler.setFormatter(formatter)
-            root.addHandler(stream_handler)
+        setup_marker = join(run_dir, "rerun_setup_complete.txt")
+        with open(setup_marker, "w", encoding="utf-8") as marker:
+            marker.write(f"output_dir={run_dir}\nlog_file={log_path}\n")
+
+        logger.info("Rerun output directory: %s", run_dir)
+        logger.info("Log file: %s", log_path)
 
     def setup_estimate(self) -> None:
         """

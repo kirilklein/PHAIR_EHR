@@ -1,7 +1,6 @@
 logging:
   level: INFO
-  # Written via CausalDirectoryPreparer.setup_rerun_val_inference():
-  #   <model output>/logs/rerun_val_inference.log
+  # Overridden at runtime to <paths.model>/logs (same pattern as finetune model output)
 
 # Paths are injected by the Azure pipeline:
 #   inputs:  prepared_data, finetune_model, subpopulation_pids (optional)
