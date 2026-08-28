@@ -354,6 +354,28 @@ def _prepare_data_for_modeling(
     return X_train, y_train, X_test, y_test
 
 
+def split_inner_data(
+    outer_train_data: CausalPatientDataset,
+    data: CausalPatientDataset,
+    inner_val_size: float,
+    seed: int,
+) -> Tuple[CausalPatientDataset, CausalPatientDataset]:
+    """Split by unique patient so no patient sits in both halves, but keep every
+    bootstrap duplicate of the inner-train patients."""
+    unique_outer_pids = list(dict.fromkeys(outer_train_data.get_pids()))
+    inner_train_pids, inner_val_pids = train_test_split(
+        unique_outer_pids, test_size=inner_val_size, random_state=seed
+    )
+    inner_train_set = set(inner_train_pids)
+    inner_train_rows = [
+        pid for pid in outer_train_data.get_pids() if pid in inner_train_set
+    ]
+    return (
+        outer_train_data.resample_by_pids(inner_train_rows),
+        data.filter_by_pids(inner_val_pids),
+    )
+
+
 def _get_best_params_for_fold(
     outer_train_data: CausalPatientDataset,
     target_name: str,
@@ -373,19 +395,12 @@ def _get_best_params_for_fold(
     logger.info(f"  Inner validation size: {inner_val_size}")
     logger.info(f"  Number of tuning trials: {n_trials}")
 
-    unique_outer_pids = list(dict.fromkeys(outer_train_data.get_pids()))
-    inner_train_pids, inner_val_pids = train_test_split(
-        unique_outer_pids,
-        test_size=inner_val_size,
-        random_state=cfg.get("seed", 42),
+    inner_train_data, inner_val_data = split_inner_data(
+        outer_train_data, data, inner_val_size, cfg.get("seed", 42)
     )
-
     logger.info(
-        f"  Split outer train into inner train ({len(inner_train_pids)} patients) and inner val ({len(inner_val_pids)} patients)"
+        f"  Split outer train into inner train ({len(inner_train_data)} rows) and inner val ({len(inner_val_data)} patients)"
     )
-
-    inner_train_data = outer_train_data.filter_by_pids(inner_train_pids)
-    inner_val_data = data.filter_by_pids(inner_val_pids)
 
     X_inner_train, y_inner_train, X_inner_val, y_inner_val = _prepare_data_for_modeling(
         target_name, inner_train_data, inner_val_data, cfg
