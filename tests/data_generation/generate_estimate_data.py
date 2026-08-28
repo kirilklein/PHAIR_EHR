@@ -49,7 +49,7 @@ def create_directories():
 
 def generate_combined_predictions(
     n_samples=NUM_SAMPLES,
-    seed=42,
+    seed=43,
     exposure_noise=EXPOSURE_NOISE,
     outcome_noise=OUTCOME_NOISE,
     weight=OUTCOME_PS_WEIGHT,
@@ -164,7 +164,7 @@ def generate_combined_predictions(
     return df, counterfactual_df
 
 
-def generate_counterfactual_outcomes_legacy(df, counterfactual_df, seed=42):
+def generate_counterfactual_outcomes_legacy(df, counterfactual_df, seed=43):
     """
     Generate legacy simulation results files for backwards compatibility.
     Creates separate files for each outcome.
