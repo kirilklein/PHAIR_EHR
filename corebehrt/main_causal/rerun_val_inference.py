@@ -476,7 +476,6 @@ def _run_rerun_val_inference(
         val_data = train_val_data.filter_by_pids(fold_dict[VAL_KEY])
         fold_output_dir = output_dir / f"fold_{fold_idx}"
         os.makedirs(fold_output_dir, exist_ok=True)
-        os.makedirs(fold_output_dir / "checkpoints", exist_ok=True)
 
         logger.info(
             "Re-running validation inference for fold %d/%d "
@@ -496,11 +495,20 @@ def _run_rerun_val_inference(
         val_dataset = ExposureOutcomesDataset(val_data.patients)
 
         modelmanager = CausalModelManager(cfg, fold_idx)
-        checkpoint = modelmanager.load_checkpoint(checkpoints=True)
+        # Always load fold weights from the source finetune model (restart_model),
+        # not from the rerun output dir which may contain placeholder checkpoints.
+        checkpoint = modelmanager.load_checkpoint(checkpoints=False)
+        if "model_state_dict" not in checkpoint:
+            raise KeyError(
+                "Checkpoint loaded from "
+                f"{modelmanager.checkpoint_model_path} is missing 'model_state_dict'. "
+                f"Available keys: {list(checkpoint.keys())}"
+            )
         outcomes: Dict[str, List[int]] = train_data.get_outcomes()
         exposures = train_data.get_exposures()
         model = modelmanager.initialize_finetune_model(checkpoint, outcomes, exposures)
 
+        os.makedirs(fold_output_dir / "checkpoints", exist_ok=True)
         # Inference only: skip optimizer/scheduler setup (would require
         # replace_steps_with_epochs for epoch-based scheduler configs).
         trainer_args = dict(cfg.get("trainer_args", {}))
