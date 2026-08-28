@@ -126,9 +126,7 @@ def save_combined_predictions(
         return
 
     # Group predictions by fold and organize by target
-    fold_data = (
-        {}
-    )  # fold_idx -> {target_name: (pids, predictions, targets, cf_predictions)}
+    fold_data = {}  # fold_idx -> {target_name: (pids, predictions, targets, cf_predictions)}
 
     for pred_data in prediction_storage:
         fold_idx = pred_data.fold_idx
