@@ -8,7 +8,7 @@
 ![Doc Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kirilklein/9414903a757f9536ee69438142b66184/raw/docstr-coverage.json)
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kirilklein/9414903a757f9536ee69438142b66184/raw/covbadge.json)
 
-> **Transformer-based EHR modeling (BONSAI) extended with a full causal-inference pipeline: cohort matching, joint exposure/outcome finetuning, calibration, and IPW/AIPW/TMLE effect estimation with bootstrap CIs and semi-synthetic validation.**
+> **Transformer-based EHR modeling (BONSAI) extended with a full causal-inference pipeline: cohort matching, joint exposure/outcome finetuning, calibration, and effect estimation (IPW, AIPW, TMLE) with bootstrap or analytic CIs, plus semi-synthetic validation.**
 
 **BONSAI Causal** is the causal-inference extension of [BONSAI](https://github.com/FGA-DIKU/EHR), a ModernBERT pipeline for Electronic Health Records in [MEDS](https://github.com/Medical-Event-Data-Standard/meds) format. BONSAI answers *"will this patient have outcome Y?"*; this repo additionally answers *"what is the effect of exposure A on outcome Y?"* by using the transformer as a propensity and outcome model inside standard causal estimators. It powers the [semaglutide target trial emulation](https://github.com/kirilklein/semaglutide-tte).
 
@@ -40,7 +40,7 @@
 - **End-to-end EHR Pipeline**: Tools for data ingestion, cleaning, and feature extraction.
 - **BERT-based Modeling**: Pretraining on massive EHR corpora followed by task-specific finetuning.
 - **Cohort Management**: Flexible inclusion/exclusion logic, temporal alignment, outcome definition.
-- **Causal Inference**: Exposure/control cohort selection with index-date matching, joint exposure–outcome finetuning, probability calibration, and effect estimation (IPW, AIPW, TMLE) via [CausalEstimate](https://github.com/kirilklein/CausalEstimate).
+- **Causal Inference**: Exposure/control cohort selection with index-date matching, joint exposure–outcome finetuning, probability calibration, and effect estimation via [CausalEstimate](https://github.com/kirilklein/CausalEstimate): IPW, AIPW and TMLE with bootstrap CIs, or `TMLE_TH` for a single-shot TMLE with analytic (influence-curve) CIs; chosen per run via `methods` in the estimate config.
 - **Validation**: Cross-validation and out-of-time evaluation; semi-synthetic and fully simulated outcomes with known effects to check the estimators end to end.
 - **Scalable**: Runs locally on the bundled synthetic data or on Azure ML for full-scale data.
 
@@ -157,14 +157,14 @@ C=corebehrt/configs/causal
 (.venv) python -m corebehrt.main_causal.prepare_ft_exp_y    --config_path $C/finetune/prepare/simple.yaml     # sequences with exposure + outcome targets
 (.venv) python -m corebehrt.main_causal.finetune_exp_y      --config_path $C/finetune/simple.yaml             # joint propensity + outcome model
 (.venv) python -m corebehrt.main_causal.calibrate_exp_y     --config_path $C/finetune/calibrate.yaml          # calibrate predicted probabilities
-(.venv) python -m corebehrt.main_causal.estimate            --config_path $C/estimate.yaml                    # IPW / AIPW / TMLE, bootstrap CIs
+(.venv) python -m corebehrt.main_causal.estimate            --config_path $C/estimate.yaml                    # IPW + TMLE (bootstrap CIs) and TMLE_TH (analytic CI)
 ```
 
 Effect estimates land in `outputs/causal/estimate/simple/` as a CSV with one row per method and outcome.
 
 - **Cohort selection**: inclusion/exclusion criteria as logical expressions over codes, ages and lab values; control index dates drawn from the exposed distribution with optional age matching.
 - **Joint finetuning**: one transformer predicts exposure propensity and (counterfactual) outcome probabilities from the same representation.
-- **Estimation**: predicted propensities and outcomes are passed to [CausalEstimate](https://github.com/kirilklein/CausalEstimate) for IPW, AIPW and TMLE with confidence intervals.
+- **Estimation**: predicted propensities and outcomes are passed to [CausalEstimate](https://github.com/kirilklein/CausalEstimate). The default `estimate.yaml` runs `IPW`, `TMLE` (bootstrap CIs) and `TMLE_TH` (analytic CI); `AIPW` is available by adding it to `methods` (see `estimate_generated_data.yaml`).
 - **Validation with known effects**: `simulate_semisynthetic` / `simulate_from_sequence` generate outcomes with a specified true effect on real patient histories, so the whole chain can be checked for bias before use on real outcomes.
 
 See the [causal pipeline README](corebehrt/main_causal/README.md) and the [config guide](corebehrt/configs/causal/README.md) for details.
