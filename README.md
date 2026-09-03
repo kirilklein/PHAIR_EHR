@@ -193,13 +193,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Citation
 
-The BONSAI paper is in preparation. Until then, please cite the CORE-BEHRT paper this framework builds on:
+If you use BONSAI Causal in your research, please cite this repository:
 
 ```bibtex
-@article{odgaard2024core,
-  title={CORE-BEHRT: A carefully optimized and rigorously evaluated BEHRT},
-  author={Odgaard, Mikkel and Klein, Kiril Vadimovic and Thysen, Sanne M{\o}ller and Jimenez-Solem, Espen and Sillesen, Martin and Nielsen, Mads},
-  journal={arXiv preprint arXiv:2404.15201},
-  year={2024}
+@software{klein2025bonsaicausal,
+  author = {Klein, Kiril Vadimovic},
+  title  = {BONSAI Causal: transformer-based causal inference on electronic health records},
+  year   = {2025},
+  url    = {https://github.com/kirilklein/bonsai-causal}
 }
 ```
+
+The underlying sequence model builds on [BONSAI](https://github.com/FGA-DIKU/EHR) and the [CORE-BEHRT](https://arxiv.org/abs/2404.15201) paper (Odgaard, Klein et al., 2024); please cite those as well when using the modeling pipeline.
