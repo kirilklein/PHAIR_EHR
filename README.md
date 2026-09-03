@@ -1,10 +1,10 @@
 <p align="center"><img src="docs/logo.png" width="480" alt="BONSAI Causal"></p>
 
-[![Pipeline tests](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/pipeline.yml/badge.svg)](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/pipeline.yml)
-[![Causal pipeline tests](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/causal_pipeline.yml/badge.svg)](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/causal_pipeline.yml)
-[![Unittests](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/unittests.yml/badge.svg)](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/unittests.yml)
-[![Format](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/format.yml/badge.svg)](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/format.yml)
-[![Lint](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/lint.yml/badge.svg)](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/lint.yml)
+[![Pipeline tests](https://github.com/kirilklein/bonsai-causal/actions/workflows/pipeline.yml/badge.svg)](https://github.com/kirilklein/bonsai-causal/actions/workflows/pipeline.yml)
+[![Causal pipeline tests](https://github.com/kirilklein/bonsai-causal/actions/workflows/causal_pipeline.yml/badge.svg)](https://github.com/kirilklein/bonsai-causal/actions/workflows/causal_pipeline.yml)
+[![Unittests](https://github.com/kirilklein/bonsai-causal/actions/workflows/unittests.yml/badge.svg)](https://github.com/kirilklein/bonsai-causal/actions/workflows/unittests.yml)
+[![Format](https://github.com/kirilklein/bonsai-causal/actions/workflows/format.yml/badge.svg)](https://github.com/kirilklein/bonsai-causal/actions/workflows/format.yml)
+[![Lint](https://github.com/kirilklein/bonsai-causal/actions/workflows/lint.yml/badge.svg)](https://github.com/kirilklein/bonsai-causal/actions/workflows/lint.yml)
 ![Doc Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kirilklein/9414903a757f9536ee69438142b66184/raw/docstr-coverage.json)
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kirilklein/9414903a757f9536ee69438142b66184/raw/covbadge.json)
 
