@@ -1,4 +1,4 @@
-# PHAIR-EHR: BONSAI for causal inference
+<p align="center"><img src="docs/logo.png" width="420" alt="PHAIR"></p>
 
 [![Pipeline tests](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/pipeline.yml/badge.svg)](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/pipeline.yml)
 [![Causal pipeline tests](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/causal_pipeline.yml/badge.svg)](https://github.com/kirilklein/PHAIR_EHR/actions/workflows/causal_pipeline.yml)
@@ -16,24 +16,22 @@ This repository is the PHAIR project's causal-inference extension of [BONSAI](ht
 
 ## Table of Contents
 
-- [PHAIR-EHR: BONSAI for causal inference](#phair-ehr-bonsai-for-causal-inference)
-  - [Table of Contents](#table-of-contents)
-  - [Key Features](#key-features)
-  - [Directory Overview](#directory-overview)
-  - [Getting Started](#getting-started)
-    - [Virtual Environment Setup](#virtual-environment-setup)
-  - [Pipeline](#pipeline)
-    - [Converting to MEDS](#converting-to-meds)
-    - [1. Create Data](#1-create-data)
-    - [2. Pretrain](#2-pretrain)
-    - [3. Create Outcomes](#3-create-outcomes)
-    - [3.1 Create Cohort](#31-create-cohort)
-    - [4. Finetune](#4-finetune)
-  - [Causal Inference Pipeline](#causal-inference-pipeline)
-  - [Azure Integration](#azure-integration)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Citation](#citation)
+- [Key Features](#key-features)
+- [Directory Overview](#directory-overview)
+- [Getting Started](#getting-started)
+  - [Virtual Environment Setup](#virtual-environment-setup)
+- [Pipeline](#pipeline)
+  - [Converting to MEDS](#converting-to-meds)
+  - [1. Create Data](#1-create-data)
+  - [2. Pretrain](#2-pretrain)
+  - [3. Create Outcomes](#3-create-outcomes)
+  - [3.1 Create Cohort](#31-create-cohort)
+  - [4. Finetune](#4-finetune)
+- [Causal Inference Pipeline](#causal-inference-pipeline)
+- [Azure Integration](#azure-integration)
+- [Contributing](#contributing)
+- [License](#license)
+- [Citation](#citation)
 
 ---
 
