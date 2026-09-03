@@ -3,6 +3,12 @@ name: 'Pipeline test'
 on:
     workflow_dispatch:
     pull_request:
+      paths-ignore:
+        - '**.md'
+        - 'docs/**'
+        - 'paper/**'
+        - 'LICENSE'
+        - '.github/workflows/draft-pdf.yml'
 
 permissions:
   contents: read
