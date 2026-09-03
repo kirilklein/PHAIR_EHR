@@ -196,10 +196,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If you use BONSAI Causal in your research, please cite this repository:
 
 ```bibtex
-@software{klein2025bonsaicausal,
+@software{klein2026bonsaicausal,
   author = {Klein, Kiril Vadimovic},
   title  = {BONSAI Causal: transformer-based causal inference on electronic health records},
-  year   = {2025},
+  year   = {2026},
   url    = {https://github.com/kirilklein/bonsai-causal}
 }
 ```
