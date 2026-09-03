@@ -3,6 +3,12 @@ name: Unittest
 on:
   workflow_dispatch:
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'paper/**'
+      - 'LICENSE'
+      - '.github/workflows/draft-pdf.yml'
 
 jobs:
   unittests:
