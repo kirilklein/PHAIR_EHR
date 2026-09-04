@@ -5,10 +5,11 @@ from os.path import join
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set
 
+import numpy as np
 import pandas as pd
 import torch
 
-from corebehrt.constants.causal.data import EXPOSURE_COL
+from corebehrt.constants.causal.data import EXPOSURE, EXPOSURE_COL
 from corebehrt.constants.causal.paths import (
     BINARY_EXPOSURE_FILE,
     COMBINED_PREDICTIONS_FILE,
@@ -22,9 +23,9 @@ from corebehrt.constants.paths import (
     PREPARED_ALL_PATIENTS,
     TEST_PIDS_FILE,
 )
-from corebehrt.functional.features.split import create_folds
 from corebehrt.functional.io_operations.load import load_vocabulary
-from corebehrt.main_causal.finetune_exp_y import validate_folds
+from corebehrt.main.helper.finetune_cv import check_for_overlap
+from corebehrt.main_causal.finetune_exp_y import handle_folds, validate_folds
 from corebehrt.modules.monitoring.causal.metric_aggregation import (
     compute_and_save_combined_scores_mean_std,
 )
@@ -85,6 +86,58 @@ def _build_cli_job_cfg(args: argparse.Namespace) -> Config:
             "include_test_in_val": args.include_test_in_val,
         }
     )
+
+
+def _normalize_fold_pids(folds: List[Dict[str, list]]) -> None:
+    """Convert fold PID arrays to lists in place."""
+    for fold in folds:
+        if isinstance(fold[TRAIN_KEY], np.ndarray):
+            fold[TRAIN_KEY] = fold[TRAIN_KEY].tolist()
+        if isinstance(fold[VAL_KEY], np.ndarray):
+            fold[VAL_KEY] = fold[VAL_KEY].tolist()
+
+
+def _load_folds_for_rerun(
+    cfg: Config,
+    finetune_model: Path,
+    train_val_pids: List,
+    test_pids: Set,
+    subpopulation_pids: Optional[str],
+    logger: logging.Logger,
+) -> List[Dict[str, list]]:
+    """
+    Load the same CV folds the finetune model was trained on.
+
+    Main runs: prepared_data/folds.pt (via handle_folds, same as finetune_exp_y).
+    Subpopulation runs: folds.pt from the source finetune model directory.
+    """
+    expected_pids = set(train_val_pids)
+
+    if subpopulation_pids:
+        folds_path = join(finetune_model, FOLDS_FILE)
+        if not os.path.exists(folds_path):
+            raise FileNotFoundError(
+                f"Subpopulation rerun requires folds in the finetune model: {folds_path}"
+            )
+        folds = torch.load(folds_path)
+        _normalize_fold_pids(folds)
+        bootstrap = cfg.get("bootstrap", True)
+        logger.info(
+            "Loaded %d folds from finetune model (bootstrap=%s): %s",
+            len(folds),
+            bootstrap,
+            folds_path,
+        )
+        validate_folds(folds, expected_pids, logger, bootstrap=bootstrap)
+        check_for_overlap(folds, list(test_pids), logger)
+        torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
+        return folds
+
+    logger.info(
+        "Loading folds from prepared_data (same splits as finetune training; "
+        "no reshuffle unless cfg.data.reshuffle=true)"
+    )
+    return handle_folds(cfg, list(test_pids), train_val_pids, logger)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -317,32 +370,79 @@ def _log_combined_predictions_audit(
     return audit
 
 
+def _build_exposure_map(data: CausalPatientDataset) -> Dict:
+    """Map pid -> exposure label from the prepared patient objects."""
+    return {p.pid: int(p.exposure) for p in data.patients}
+
+
+def _count_exposed_pids(pids: Sequence, exposure_map: Dict) -> int:
+    return sum(1 for pid in pids if exposure_map.get(pid) == 1)
+
+
 def _log_fold_summary(
     folds: List[Dict[str, list]],
     logger: logging.Logger,
     test_pids: Optional[Set] = None,
-) -> None:
+    exposure_map: Optional[Dict] = None,
+) -> Dict[str, int]:
     test_pids = test_pids or set()
+    exposure_map = exposure_map or {}
     all_val = []
+    sum_val_exposed = 0
+    sum_train_exposed = 0
     for i, fold in enumerate(folds, start=1):
         train_n = len(fold[TRAIN_KEY])
         val_n = len(fold[VAL_KEY])
         n_test_in_val = sum(1 for pid in fold[VAL_KEY] if pid in test_pids)
         n_test_in_train = sum(1 for pid in fold[TRAIN_KEY] if pid in test_pids)
+        train_exposed = _count_exposed_pids(fold[TRAIN_KEY], exposure_map)
+        val_exposed = _count_exposed_pids(fold[VAL_KEY], exposure_map)
+        sum_val_exposed += val_exposed
+        sum_train_exposed += train_exposed
         all_val.extend(fold[VAL_KEY])
         logger.info(
-            "Fold %d: train=%d (test=%d), val=%d (test=%d)",
+            "Fold %d: train=%d (test=%d, exposed=%d), val=%d (test=%d, exposed=%d)",
             i,
             train_n,
             n_test_in_train,
+            train_exposed,
             val_n,
             n_test_in_val,
+            val_exposed,
         )
+        print(
+            f"[fold_audit] fold={i} train={train_n} train_exposed={train_exposed} "
+            f"val={val_n} val_exposed={val_exposed}",
+            flush=True,
+        )
+
+    unique_val = set(all_val)
+    cohort_exposed = sum(1 for v in exposure_map.values() if v == 1)
     logger.info(
-        "Validation coverage across folds: unique_val_pids=%d, total_val_slots=%d",
-        len(set(all_val)),
+        "Validation coverage across folds: unique_val_pids=%d, total_val_slots=%d, "
+        "sum_val_exposed=%d, cohort_exposed=%d",
+        len(unique_val),
         len(all_val),
+        sum_val_exposed,
+        cohort_exposed,
     )
+    print(
+        f"[fold_audit] unique_val={len(unique_val)} total_val_slots={len(all_val)} "
+        f"sum_val_exposed={sum_val_exposed} cohort_exposed={cohort_exposed}",
+        flush=True,
+    )
+    if exposure_map and sum_val_exposed != cohort_exposed:
+        logger.warning(
+            "sum_val_exposed (%d) != cohort_exposed (%d) — fold val sets do not "
+            "cover all exposed patients (or exposure_map is incomplete)",
+            sum_val_exposed,
+            cohort_exposed,
+        )
+    return {
+        "sum_val_exposed": sum_val_exposed,
+        "cohort_exposed": cohort_exposed,
+        "unique_val_pids": len(unique_val),
+    }
 
 
 def _run_rerun_val_inference(
@@ -420,11 +520,6 @@ def _run_rerun_val_inference(
     logger.info("Patients after test handling: %d", len(train_val_data.get_pids()))
     audit["patients_after_test_handling"] = len(train_val_data.get_pids())
 
-    data_cfg = cfg.get("data", {})
-    n_folds = data_cfg.get("n_folds", data_cfg.get("cv_folds", 5))
-    seed = data_cfg.get("seed", 42)
-    val_ratio = data_cfg.get("val_ratio", 0.2)
-
     if subpopulation_pids:
         subpop_pids = torch.load(subpopulation_pids)
         before = len(train_val_data.get_pids())
@@ -438,47 +533,64 @@ def _run_rerun_val_inference(
                 "Test PIDs remaining after subpopulation filter: %d", len(test_pids)
             )
 
-    fold_pids = train_val_data.get_pids()
-    folds = create_folds(
-        fold_pids,
-        n_folds,
-        seed,
-        val_ratio=val_ratio,
-        bootstrap=False,
+    train_val_pids = train_val_data.get_pids()
+    folds = _load_folds_for_rerun(
+        cfg=cfg,
+        finetune_model=finetune_model,
+        train_val_pids=train_val_pids,
+        test_pids=test_pids,
+        subpopulation_pids=subpopulation_pids,
+        logger=logger,
     )
-    logger.info(
-        "Generated %d clean folds from %d PIDs "
-        "(bootstrap=False, seed=%s, val_ratio=%s, include_test_in_val=%s)",
-        len(folds),
-        len(fold_pids),
-        seed,
-        val_ratio,
-        include_test_in_val,
+    audit["n_folds"] = len(folds)
+    audit["folds_source"] = (
+        "finetune_model" if subpopulation_pids else "prepared_data"
     )
-    _log_fold_summary(folds, logger, test_pids=test_pids)
+    exposure_map = _build_exposure_map(train_val_data)
+    audit.update(
+        _log_fold_summary(
+            folds, logger, test_pids=test_pids, exposure_map=exposure_map
+        )
+    )
 
-    expected_pids = set(fold_pids)
+    expected_pids = set(train_val_pids)
     audit["patients_for_inference"] = len(expected_pids)
-    validate_folds(folds, expected_pids, logger, bootstrap=False)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     outcome_names = train_val_data.get_outcome_names()
     torch.save(outcome_names, join(output_dir, OUTCOME_NAMES_FILE))
-    torch.save(folds, join(output_dir, FOLDS_FILE))
     cfg.save_to_yaml(join(output_dir, FINETUNE_CFG))
     logger.info(
-        "Saved folds.pt / outcome_names / finetune_config; "
-        "n_outcomes=%d, n_patients_for_inference=%d",
+        "Saved outcome_names / finetune_config; "
+        "n_outcomes=%d, n_patients_for_inference=%d, n_folds=%d",
         len(outcome_names),
         len(expected_pids),
+        len(folds),
     )
 
     total_val_evaluated = 0
+    total_val_exposed_from_data = 0
+    total_val_exposed_from_preds = 0
     for fold_idx, fold_dict in enumerate(folds, start=1):
         train_data = train_val_data.filter_by_pids(fold_dict[TRAIN_KEY])
         val_data = train_val_data.filter_by_pids(fold_dict[VAL_KEY])
         fold_output_dir = output_dir / f"fold_{fold_idx}"
         os.makedirs(fold_output_dir, exist_ok=True)
+
+        fold_train_pids = set(fold_dict[TRAIN_KEY])
+        fold_val_pids = set(fold_dict[VAL_KEY])
+        missing_from_data_train = fold_train_pids - set(train_data.get_pids())
+        missing_from_data_val = fold_val_pids - set(val_data.get_pids())
+        if missing_from_data_train or missing_from_data_val:
+            logger.warning(
+                "Fold %d filter_by_pids dropped patients: "
+                "train_missing=%d (exposed=%d), val_missing=%d (exposed=%d)",
+                fold_idx,
+                len(missing_from_data_train),
+                _count_exposed_pids(missing_from_data_train, exposure_map),
+                len(missing_from_data_val),
+                _count_exposed_pids(missing_from_data_val, exposure_map),
+            )
 
         logger.info(
             "Re-running validation inference for fold %d/%d "
@@ -492,7 +604,9 @@ def _run_rerun_val_inference(
         torch.save(val_data.get_pids(), fold_output_dir / "val_pids.pt")
         _log_exposure_counts(logger, "Train", train_data.get_exposures())
         _log_exposure_counts(logger, "Val", val_data.get_exposures())
+        val_exposed_data = sum(1 for e in val_data.get_exposures() if e == 1)
         total_val_evaluated += len(val_data)
+        total_val_exposed_from_data += val_exposed_data
 
         train_dataset = ExposureOutcomesDataset(train_data.patients)
         val_dataset = ExposureOutcomesDataset(val_data.patients)
@@ -539,6 +653,36 @@ def _run_rerun_val_inference(
         *_, val_prediction_data = trainer.evaluate(mode="val")
         if val_prediction_data is None:
             raise ValueError(f"No validation predictions produced for fold {fold_idx}")
+
+        pred_targets = torch.cat(val_prediction_data[EXPOSURE].targets_list)
+        n_pred = len(pred_targets)
+        n_pred_exposed = int((pred_targets == 1).sum().item())
+        total_val_exposed_from_preds += n_pred_exposed
+        if n_pred != len(val_data):
+            logger.warning(
+                "Fold %d: evaluated %d patients but val_data has %d "
+                "(exposed_in_preds=%d, exposed_in_data=%d)",
+                fold_idx,
+                n_pred,
+                len(val_data),
+                n_pred_exposed,
+                val_exposed_data,
+            )
+        else:
+            logger.info(
+                "Fold %d eval check: preds=%d matches val_data; "
+                "exposed_preds=%d, exposed_data=%d",
+                fold_idx,
+                n_pred,
+                n_pred_exposed,
+                val_exposed_data,
+            )
+        print(
+            f"[fold_eval] fold={fold_idx} n_pred={n_pred} n_val={len(val_data)} "
+            f"exposed_preds={n_pred_exposed} exposed_data={val_exposed_data}",
+            flush=True,
+        )
+
         trainer.process_causal_classification_results(
             val_prediction_data, mode="val", save_results=True
         )
@@ -551,11 +695,22 @@ def _run_rerun_val_inference(
         )
 
     logger.info(
-        "Finished fold inference: sum_of_val_sizes=%d, unique_patients=%d",
+        "Finished fold inference: sum_of_val_sizes=%d, unique_patients=%d, "
+        "sum_val_exposed_data=%d, sum_val_exposed_preds=%d",
         total_val_evaluated,
         len(expected_pids),
+        total_val_exposed_from_data,
+        total_val_exposed_from_preds,
+    )
+    print(
+        f"[fold_eval] DONE sum_val={total_val_evaluated} "
+        f"sum_val_exposed_data={total_val_exposed_from_data} "
+        f"sum_val_exposed_preds={total_val_exposed_from_preds}",
+        flush=True,
     )
     audit["sum_of_val_sizes"] = total_val_evaluated
+    audit["sum_val_exposed_from_data"] = total_val_exposed_from_data
+    audit["sum_val_exposed_from_preds"] = total_val_exposed_from_preds
     PredictionAccumulator(str(output_dir), outcome_names).accumulate_and_save_predictions()
     combined_path = join(output_dir, COMBINED_PREDICTIONS_FILE)
     audit.update(

@@ -50,6 +50,17 @@ def collect_fold_data(
         fold_predictions, fold_targets = load_fold_predictions(
             fold_dir, prediction_type, mode, last_epoch, collect_targets
         )
+        if len(fold_predictions) != len(fold_pids):
+            raise ValueError(
+                f"{fold_folder}/{prediction_type}: prediction count ({len(fold_predictions)}) "
+                f"!= {mode}_pids count ({len(fold_pids)}). "
+                "val_pids.pt and prediction npz are out of sync."
+            )
+        if collect_targets and len(fold_targets) != len(fold_pids):
+            raise ValueError(
+                f"{fold_folder}/{prediction_type}: target count ({len(fold_targets)}) "
+                f"!= {mode}_pids count ({len(fold_pids)})."
+            )
         predictions.append(fold_predictions)
 
         if collect_targets:
