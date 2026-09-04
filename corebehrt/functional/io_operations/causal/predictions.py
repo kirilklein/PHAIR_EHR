@@ -92,7 +92,7 @@ def load_fold_predictions(
 def load_fold_pids(fold_dir: str, mode: str) -> List[int]:
     """Construct pid file path based on fold directory and data split mode."""
     pids_file = get_pids_file(fold_dir, mode)
-    return torch.load(pids_file)
+    return torch.load(pids_file, weights_only=False)
 
 
 def load_flattened_array_from_npz(file_path: str, field: str) -> np.ndarray:

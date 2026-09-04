@@ -39,7 +39,7 @@ def load_train_val_split(
     The split files should be PyTorch tensors containing patient IDs for each split.
     The function expects files named 'train_pids.pt' and 'val_pids.pt' in the split_path directory.
     """
-    splits = torch.load(split_path)[0]
+    splits = torch.load(split_path, weights_only=False)[0]
     train_pids, val_pids = splits[TRAIN_KEY], splits[VAL_KEY]
     train_dataset = data.filter_by_pids(train_pids)
     val_dataset = data.filter_by_pids(val_pids)

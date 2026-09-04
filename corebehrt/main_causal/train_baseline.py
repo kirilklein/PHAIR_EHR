@@ -52,7 +52,9 @@ def main_baseline(config_path: str):
             f"Prepared data path {prepared_data_path} does not exist"
         )
 
-    patients = torch.load(join(prepared_data_path, PREPARED_ALL_PATIENTS))
+    patients = torch.load(
+        join(prepared_data_path, PREPARED_ALL_PATIENTS), weights_only=False
+    )
     vocab = load_vocabulary(prepared_data_path)
     data = CausalPatientDataset(patients, vocab)
 

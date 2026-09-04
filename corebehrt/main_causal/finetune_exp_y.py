@@ -46,7 +46,9 @@ def main_finetune(config_path):
     # Logger
     logger = logging.getLogger("finetune_exp_y")
 
-    loaded_data = torch.load(join(cfg.paths.prepared_data, PREPARED_ALL_PATIENTS))
+    loaded_data = torch.load(
+        join(cfg.paths.prepared_data, PREPARED_ALL_PATIENTS), weights_only=False
+    )
     vocab = load_vocabulary(cfg.paths.prepared_data)
     data = CausalPatientDataset(loaded_data, vocab)
     test_data = CausalPatientDataset([], vocab)
@@ -58,7 +60,9 @@ def main_finetune(config_path):
     # If evaluation is desired, then:
     if cfg.get("evaluate", False):
         if os.path.exists(join(cfg.paths.prepared_data, TEST_PIDS_FILE)):
-            test_pids = torch.load(join(cfg.paths.prepared_data, TEST_PIDS_FILE))
+            test_pids = torch.load(
+                join(cfg.paths.prepared_data, TEST_PIDS_FILE), weights_only=False
+            )
             test_data = data.filter_by_pids(test_pids)
 
     # Exclude test pids from train_val_pids
@@ -172,7 +176,7 @@ def handle_folds(
     """
     # Always load folds from prepared data
     folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
-    folds = torch.load(folds_path)
+    folds = torch.load(folds_path, weights_only=False)
     n_folds = len(folds)
     logger.info(f"Loaded {n_folds} folds from prepared data")
 

@@ -47,7 +47,7 @@ def main(config_path: str):
         join(cohort_path, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
     )
     logger.info("Loading patient IDs")
-    pids = torch.load(join(cohort_path, PID_FILE))
+    pids = torch.load(join(cohort_path, PID_FILE), weights_only=False)
     logger.info(f"Loaded {len(pids)} patient IDs")
 
     logger.info("Loading criteria config")

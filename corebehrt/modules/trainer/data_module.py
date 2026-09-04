@@ -129,7 +129,7 @@ class EncodedDataModule:
             join(self.cfg.paths.cohort, INDEX_DATES_FILE), parse_dates=[TIMESTAMP_COL]
         )
         index_dates[ABSPOS_COL] = get_hours_since_epoch(index_dates[TIMESTAMP_COL])
-        folds = torch.load(join(self.cfg.paths.cohort, FOLDS_FILE))
+        folds = torch.load(join(self.cfg.paths.cohort, FOLDS_FILE), weights_only=False)
         _, pids = load_encodings_and_pids_from_encoded_dir(self.cfg.paths.encoded_data)
         return index_dates, folds, pids
 

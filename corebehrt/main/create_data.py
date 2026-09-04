@@ -72,7 +72,7 @@ def main_data(config_path):
     code_mapping = None
     if "code_mapping" in cfg.paths:
         logger.info(f"Loading code mapping from {cfg.paths.code_mapping}")
-        code_mapping = torch.load(cfg.paths.code_mapping)
+        code_mapping = torch.load(cfg.paths.code_mapping, weights_only=False)
     tokenizer = EHRTokenizer(
         vocabulary=vocabulary, code_mapping=code_mapping, **cfg.tokenizer
     )
