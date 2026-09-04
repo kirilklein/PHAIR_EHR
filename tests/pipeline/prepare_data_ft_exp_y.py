@@ -107,7 +107,7 @@ def get_fold_pids(processed_data_dir: str) -> Set[int]:
         return set()
 
     try:
-        folds = torch.load(folds_path)
+        folds = torch.load(folds_path, weights_only=False)
         all_pids = set()
         for fold in folds:
             all_pids.update(fold.get(TRAIN_KEY, []))

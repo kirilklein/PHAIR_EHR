@@ -281,8 +281,12 @@ def main(args: argparse.Namespace):
     print("MULTI-TARGET BASELINE CLASSIFICATION - PREPARED DATA")
     print("=" * 60)
 
-    patients = torch.load(os.path.join(args.data_path, "patients.pt"))
-    vocabulary = torch.load(os.path.join(args.data_path, "vocabulary.pt"))
+    patients = torch.load(
+        os.path.join(args.data_path, "patients.pt"), weights_only=False
+    )
+    vocabulary = torch.load(
+        os.path.join(args.data_path, "vocabulary.pt"), weights_only=False
+    )
 
     feature_df, targets_dict = create_multihot_features_from_patients(
         patients, vocabulary, args.multihot

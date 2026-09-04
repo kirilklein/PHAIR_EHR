@@ -6,8 +6,10 @@ from os.path import join
 def main(
     processed_data_dir: str, exposure_code: str = "EXPOSURE", tolerance: float = 0.05
 ):
-    patients = torch.load(join(processed_data_dir, "patients.pt"))
-    vocabulary = torch.load(join(processed_data_dir, "vocabulary.pt"))
+    patients = torch.load(join(processed_data_dir, "patients.pt"), weights_only=False)
+    vocabulary = torch.load(
+        join(processed_data_dir, "vocabulary.pt"), weights_only=False
+    )
 
     # Check exposure consistency
     exposure_token = vocabulary[exposure_code]

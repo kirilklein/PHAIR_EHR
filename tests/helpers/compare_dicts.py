@@ -39,7 +39,7 @@ def load_dict(path: str) -> Dict[str, Any]:
         raise FileNotFoundError(f"File not found: {path}")
 
     if path.suffix == ".pt":
-        data = torch.load(path)
+        data = torch.load(path, weights_only=False)
     elif path.suffix == ".json":
         with open(path, "r") as f:
             data = json.load(f)

@@ -38,7 +38,7 @@ from corebehrt.functional.setup.model import get_last_checkpoint_epoch
 def check_fold_pids_match(finetune_dir: str, fold_name: str, mode: str) -> bool:
     """Check if PIDs in folds file match the PIDs saved in each fold directory."""
     # Load main folds file
-    folds = torch.load(join(finetune_dir, FOLDS_FILE))
+    folds = torch.load(join(finetune_dir, FOLDS_FILE), weights_only=False)
 
     # Map fold_1 naming to 0-indexed fold list
     fold_idx = int(fold_name.split("_")[-1]) - 1
@@ -59,7 +59,7 @@ def check_fold_pids_match(finetune_dir: str, fold_name: str, mode: str) -> bool:
         print(f"Error: {actual_pids_path} not found")
         return False
 
-    actual_pids = torch.load(actual_pids_path)
+    actual_pids = torch.load(actual_pids_path, weights_only=False)
 
     # Compare PIDs
     expected_set = set(expected_pids)
@@ -85,7 +85,7 @@ def check_predictions_match_pids(
         print(f"Error: {pids_path} not found")
         return False
 
-    pids = torch.load(pids_path)
+    pids = torch.load(pids_path, weights_only=False)
 
     # Build prediction file name
     if outcome_name and pred_type == CF_OUTCOME:
@@ -144,7 +144,7 @@ def main(finetune_dir: str):
         print(f"Error: Outcome names file {outcome_names_path} not found")
         return False
 
-    outcome_names = torch.load(outcome_names_path)
+    outcome_names = torch.load(outcome_names_path, weights_only=False)
     print(f"Loaded outcome names: {outcome_names}")
 
     # Get fold directories
