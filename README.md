@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo.png" width="480" alt="BONSAI Causal"></p>
+<p align="center"><img src="docs/logo_light.png" width="480" alt="BONSAI Causal"></p>
 
 [![Pipeline tests](https://github.com/kirilklein/bonsai-causal/actions/workflows/pipeline.yml/badge.svg)](https://github.com/kirilklein/bonsai-causal/actions/workflows/pipeline.yml)
 [![Causal pipeline tests](https://github.com/kirilklein/bonsai-causal/actions/workflows/causal_pipeline.yml/badge.svg)](https://github.com/kirilklein/bonsai-causal/actions/workflows/causal_pipeline.yml)
