@@ -432,6 +432,7 @@ class EffectEstimator:
                         ps_col=PS_COL,
                         probas_t1_col=PROBAS_EXPOSED,
                         probas_t0_col=PROBAS_CONTROL,
+                        clip_percentile=self.clip_percentile,
                     )
                 )
         return estimators
