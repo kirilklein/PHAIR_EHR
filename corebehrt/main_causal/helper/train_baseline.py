@@ -667,7 +667,7 @@ def handle_folds(cfg: Config, logger: logging.Logger) -> list:
     Load predefined folds and optionally reshuffle patients across them.
     """
     folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
-    folds = torch.load(folds_path)
+    folds = torch.load(folds_path, weights_only=False)
     n_folds = len(folds)
     data_cfg = cfg.get("data", {})
     if data_cfg.get("reshuffle", False):

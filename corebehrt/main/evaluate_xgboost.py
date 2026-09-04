@@ -30,11 +30,15 @@ def main_evaluate(config_path):
     logger = logging.getLogger("evaluate")
 
     # Load data
-    loaded_data = torch.load(join(cfg.paths.test_data_dir, PREPARED_ALL_PATIENTS))
-    vocab = torch.load(join(cfg.paths.test_data_dir, VOCABULARY_FILE))
+    loaded_data = torch.load(
+        join(cfg.paths.test_data_dir, PREPARED_ALL_PATIENTS), weights_only=False
+    )
+    vocab = torch.load(
+        join(cfg.paths.test_data_dir, VOCABULARY_FILE), weights_only=False
+    )
     test_data = PatientDataset(loaded_data)
     test_pids = test_data.get_pids()
-    folds = torch.load(join(cfg.paths.folds_dir, FOLDS_FILE))
+    folds = torch.load(join(cfg.paths.folds_dir, FOLDS_FILE), weights_only=False)
     check_for_overlap(folds, test_pids, logger)
     targets = test_data.get_outcomes()
 

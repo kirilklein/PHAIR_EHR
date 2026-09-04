@@ -22,7 +22,7 @@ def load_pids(directory: str) -> List[int]:
     pid_path = os.path.join(directory, "pids.pt")
     if not os.path.exists(pid_path):
         raise FileNotFoundError(f"PID file not found at {pid_path}")
-    pids = torch.load(pid_path)
+    pids = torch.load(pid_path, weights_only=False)
     if not isinstance(pids, list) or not all(isinstance(pid, int) for pid in pids):
         raise TypeError("PIDs file should contain a list of integers")
     return pids

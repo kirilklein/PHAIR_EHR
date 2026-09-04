@@ -21,8 +21,8 @@ def load_encodings_and_pids_from_encoded_dir(
     Returns:
         Tuple of (encodings array, patient IDs array)
     """
-    encodings = torch.load(join(encoded_dir, ENCODINGS_FILE))
-    pids = torch.load(join(encoded_dir, PID_FILE))
+    encodings = torch.load(join(encoded_dir, ENCODINGS_FILE), weights_only=False)
+    pids = torch.load(join(encoded_dir, PID_FILE), weights_only=False)
     return encodings, pids
 
 

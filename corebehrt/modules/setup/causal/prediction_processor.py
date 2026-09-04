@@ -30,8 +30,10 @@ class CalibrationProcessor:
     def __init__(self, path_manager: CalibrationPathManager, finetune_dir: str):
         self.paths = path_manager
         self.finetune_dir = finetune_dir
-        self.folds = torch.load(self.paths.get_folds_path())
-        self.outcome_names = torch.load(self.paths.get_outcome_names_path())
+        self.folds = torch.load(self.paths.get_folds_path(), weights_only=False)
+        self.outcome_names = torch.load(
+            self.paths.get_outcome_names_path(), weights_only=False
+        )
 
     def load_and_save_predictions(self):
         """

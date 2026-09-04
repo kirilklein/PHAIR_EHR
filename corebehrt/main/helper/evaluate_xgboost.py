@@ -45,7 +45,9 @@ def xgb_inference_fold(
     model.load_model(model_path)
 
     # Load the encoding mapping used during training
-    encoding_vocab = torch.load(join(model_folder, f"fold_{fold}", "encoding_vocab.pt"))
+    encoding_vocab = torch.load(
+        join(model_folder, f"fold_{fold}", "encoding_vocab.pt"), weights_only=False
+    )
     encoder = OneHotEncoder(vocabulary=vocab, encoding_vocab=encoding_vocab)
     (
         X_test,

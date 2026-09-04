@@ -102,7 +102,9 @@ class PatientDataset:
 
     @classmethod
     def load(cls, load_dir: str, suffix: str = "") -> "PatientDataset":
-        patients = torch.load(join(load_dir, f"patients{suffix}.pt"))
+        patients = torch.load(
+            join(load_dir, f"patients{suffix}.pt"), weights_only=False
+        )
         return cls(patients)
 
     def filter_by_pids(self, pids: List[str]) -> "PatientDataset":

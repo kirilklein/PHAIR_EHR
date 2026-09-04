@@ -239,7 +239,7 @@ def load_data(
 
     if cohort_path:
         logger.info("Cohort path provided - filtering criteria")
-        pids = torch.load(join(cohort_path, PID_FILE))
+        pids = torch.load(join(cohort_path, PID_FILE), weights_only=False)
         logger.info(f"Loaded {len(pids)} patient IDs")
         criteria = criteria[criteria[PID_COL].isin(pids)]
         logger.info(f"Filtered criteria to {len(criteria)} patients")

@@ -202,7 +202,7 @@ def load_true_ites_from_file(
             print(f"❌ Error: patients.pt not found in {estimate_dir}")
             return {}
 
-        patient_ids = torch.load(patients_file)
+        patient_ids = torch.load(patients_file, weights_only=False)
         print(f"Loaded {len(patient_ids)} patient IDs from common support filtering")
 
         # Find .ite.csv file
@@ -322,7 +322,7 @@ def load_true_ate_from_ite(
             print(f"❌ Error: patients.pt not found in {estimate_dir}")
             return None
 
-        patient_ids = torch.load(patients_file)
+        patient_ids = torch.load(patients_file, weights_only=False)
         print(f"Loaded {len(patient_ids)} patient IDs from common support filtering")
 
         # Find .ite.csv file
