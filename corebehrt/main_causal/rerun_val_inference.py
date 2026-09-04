@@ -23,9 +23,10 @@ from corebehrt.constants.paths import (
     PREPARED_ALL_PATIENTS,
     TEST_PIDS_FILE,
 )
+from corebehrt.functional.features.split import create_folds
 from corebehrt.functional.io_operations.load import load_vocabulary
 from corebehrt.main.helper.finetune_cv import check_for_overlap
-from corebehrt.main_causal.finetune_exp_y import handle_folds, validate_folds
+from corebehrt.main_causal.finetune_exp_y import validate_folds
 from corebehrt.modules.monitoring.causal.metric_aggregation import (
     compute_and_save_combined_scores_mean_std,
 )
@@ -97,6 +98,16 @@ def _normalize_fold_pids(folds: List[Dict[str, list]]) -> None:
             fold[VAL_KEY] = fold[VAL_KEY].tolist()
 
 
+def _folds_have_duplicate_pids(folds: List[Dict[str, list]]) -> bool:
+    """True if any fold train/val list contains repeated PIDs (bootstrap signature)."""
+    for fold in folds:
+        train = fold[TRAIN_KEY]
+        val = fold[VAL_KEY]
+        if len(train) != len(set(train)) or len(val) != len(set(val)):
+            return True
+    return False
+
+
 def _load_folds_for_rerun(
     cfg: Config,
     finetune_model: Path,
@@ -106,12 +117,17 @@ def _load_folds_for_rerun(
     logger: logging.Logger,
 ) -> List[Dict[str, list]]:
     """
-    Load the same CV folds the finetune model was trained on.
+    Load folds for clean validation inference.
 
-    Main runs: prepared_data/folds.pt (via handle_folds, same as finetune_exp_y).
-    Subpopulation runs: folds.pt from the source finetune model directory.
+    Prefer prepared_data/folds.pt (or finetune_model/folds.pt for subpop).
+    If those folds were bootstrapped (duplicate PIDs) — which is what caused
+    incomplete unique-val coverage and the 9930 exposed drop — regenerate
+    clean non-bootstrap folds so every patient appears in exactly one val fold.
     """
     expected_pids = set(train_val_pids)
+    data_cfg = cfg.get("data", {}) or {}
+    seed = data_cfg.get("seed", cfg.get("seed", 42))
+    val_ratio = data_cfg.get("val_ratio", 0.2)
 
     if subpopulation_pids:
         folds_path = join(finetune_model, FOLDS_FILE)
@@ -119,25 +135,69 @@ def _load_folds_for_rerun(
             raise FileNotFoundError(
                 f"Subpopulation rerun requires folds in the finetune model: {folds_path}"
             )
-        folds = torch.load(folds_path)
-        _normalize_fold_pids(folds)
-        bootstrap = cfg.get("bootstrap", True)
-        logger.info(
-            "Loaded %d folds from finetune model (bootstrap=%s): %s",
-            len(folds),
-            bootstrap,
-            folds_path,
-        )
-        validate_folds(folds, expected_pids, logger, bootstrap=bootstrap)
-        check_for_overlap(folds, list(test_pids), logger)
-        torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
-        return folds
+        source = "finetune_model"
+    else:
+        folds_path = join(cfg.paths.prepared_data, FOLDS_FILE)
+        if not os.path.exists(folds_path):
+            raise FileNotFoundError(f"Missing folds file: {folds_path}")
+        source = "prepared_data"
+
+    folds = torch.load(folds_path)
+    _normalize_fold_pids(folds)
+    n_folds = len(folds)
+    has_dupes = _folds_have_duplicate_pids(folds)
+    bootstrap_cfg = bool(cfg.get("bootstrap", False))
 
     logger.info(
-        "Loading folds from prepared_data (same splits as finetune training; "
-        "no reshuffle unless cfg.data.reshuffle=true)"
+        "Loaded %d folds from %s (%s); has_duplicate_pids=%s, cfg.bootstrap=%s",
+        n_folds,
+        source,
+        folds_path,
+        has_dupes,
+        bootstrap_cfg,
     )
-    return handle_folds(cfg, list(test_pids), train_val_pids, logger)
+    print(
+        f"[folds] loaded from {source}: n_folds={n_folds} "
+        f"has_duplicate_pids={has_dupes} cfg.bootstrap={bootstrap_cfg}",
+        flush=True,
+    )
+
+    if has_dupes or bootstrap_cfg:
+        msg = (
+            f"Source folds are bootstrapped/have duplicate PIDs "
+            f"(has_duplicates={has_dupes}, cfg.bootstrap={bootstrap_cfg}). "
+            f"Regenerating {n_folds} clean folds "
+            f"(bootstrap=False, seed={seed}, val_ratio={val_ratio}) "
+            f"so every patient appears in exactly one validation fold."
+        )
+        logger.warning(msg)
+        print(f"[folds] {msg}", flush=True)
+        folds = create_folds(
+            list(train_val_pids),
+            n_folds,
+            seed,
+            val_ratio=val_ratio,
+            bootstrap=False,
+        )
+        _normalize_fold_pids(folds)
+        logger.info(
+            "Generated %d clean folds from %d PIDs "
+            "(bootstrap=False, seed=%s, val_ratio=%s)",
+            n_folds,
+            len(train_val_pids),
+            seed,
+            val_ratio,
+        )
+    else:
+        logger.info(
+            "Using clean folds from %s (no duplicates; bootstrap=False validation)",
+            source,
+        )
+
+    validate_folds(folds, expected_pids, logger, bootstrap=False)
+    check_for_overlap(folds, list(test_pids), logger)
+    torch.save(folds, join(cfg.paths.model, FOLDS_FILE))
+    return folds
 
 
 def _parse_args() -> argparse.Namespace:
@@ -544,7 +604,7 @@ def _run_rerun_val_inference(
     )
     audit["n_folds"] = len(folds)
     audit["folds_source"] = (
-        "finetune_model" if subpopulation_pids else "prepared_data"
+        "finetune_model" if subpopulation_pids else "prepared_data_or_regenerated_clean"
     )
     exposure_map = _build_exposure_map(train_val_data)
     audit.update(

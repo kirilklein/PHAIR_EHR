@@ -186,9 +186,25 @@ def handle_folds(
     expected_pids = set(train_val_pids)
     bootstrap = cfg.get("bootstrap", False)
 
+    # Bootstrapped folds have duplicate PIDs; auto-detect if cfg flag is wrong/missing
+    if not bootstrap:
+        for i, fold in enumerate(folds):
+            train_list = fold[TRAIN_KEY]
+            val_list = fold[VAL_KEY]
+            if len(train_list) != len(set(train_list)) or len(val_list) != len(
+                set(val_list)
+            ):
+                logger.warning(
+                    "Fold %d has duplicate PIDs but cfg.bootstrap=False; "
+                    "treating folds as bootstrap=True for validation",
+                    i,
+                )
+                bootstrap = True
+                break
+
     # Validate loaded folds — pass bootstrap flag so that duplicate PIDs
     # (expected with bootstrap sampling) don't cause validation to fail
-    logger.info("Validating loaded folds...")
+    logger.info("Validating loaded folds (bootstrap=%s)...", bootstrap)
     validate_folds(folds, expected_pids, logger, bootstrap=bootstrap)
 
     data_cfg = cfg.get("data", {})
