@@ -8,7 +8,7 @@
 ![Doc Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kirilklein/9414903a757f9536ee69438142b66184/raw/docstr-coverage.json)
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kirilklein/9414903a757f9536ee69438142b66184/raw/covbadge.json)
 
-**BONSAI Causal** extends [BONSAI](https://github.com/FGA-DIKU/BONSAI), a ModernBERT pipeline for Electronic Health Records in [MEDS](https://github.com/Medical-Event-Data-Standard/meds) format, with a full causal-inference chain. BONSAI answers *"will this patient have outcome Y?"*; this repo answers *"what is the effect of exposure A on outcome Y?"* by using the same transformer as propensity and outcome model inside standard causal estimators. It powers the [semaglutide target trial emulation](https://github.com/kirilklein/semaglutide-tte).
+**BONSAI Causal** extends [BONSAI](https://github.com/FGA-DIKU/BONSAI), a ModernBERT pipeline for Electronic Health Records in [MEDS](https://github.com/Medical-Event-Data-Standard/meds) format, with a full causal-inference chain. BONSAI answers *"will this patient have outcome Y?"*; this repo answers *"what is the effect of exposure A on outcome Y?"* by using the same transformer as propensity and outcome model inside standard causal estimators.
 
 ## What it does
 
